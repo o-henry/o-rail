@@ -6057,7 +6057,7 @@ h3 {
   grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 12px;
   overflow: hidden;
-  padding: 6px 0 0;
+  padding: 0;
   border-radius: 0;
   background: transparent;
 }
@@ -7061,10 +7061,10 @@ html[data-locale="ko"] .agents-grid-card :lang(en) {
 .bridge-view.workspace-tab-panel,
 .childview-view.workspace-tab-panel,
 .dev-layout.workspace-tab-panel {
-  padding-bottom: var(--workspace-tab-bottom-inset) !important;
-}
-
-.settings-view.data-intelligence-view.workspace-tab-panel {
+  margin: 0 10px 10px !important;
+  min-height: 0 !important;
+  height: 100% !important;
+  box-sizing: border-box;
   padding-bottom: 0 !important;
 }
 

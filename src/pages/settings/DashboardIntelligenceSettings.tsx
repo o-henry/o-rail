@@ -14,7 +14,6 @@ type DashboardIntelligenceSettingsProps = {
   snapshotsByTopic: Partial<Record<DashboardTopicId, DashboardTopicSnapshot>>;
   disabled?: boolean;
   onRequestRunInAgents: (topic: DashboardTopicId, followupInstruction?: string) => void;
-  onOpenAgentsWorkspace: () => void;
 };
 
 function formatTopicId(topic: DashboardTopicId): string {
@@ -95,11 +94,6 @@ export default function DashboardIntelligenceSettings(props: DashboardIntelligen
             <h3 className="settings-dashboard-intelligence-title">데이터 파이프라인</h3>
             <p>{t("settings.dashboardIntelligence.description")}</p>
           </div>
-          <div className="settings-dashboard-intelligence-actions">
-            <button disabled={props.disabled} onClick={props.onOpenAgentsWorkspace} type="button">
-              에이전트 실행 탭 열기
-            </button>
-          </div>
         </header>
         <div className="settings-dashboard-topic-columns" role="presentation">
           <span>TOPIC</span>
@@ -147,6 +141,7 @@ export default function DashboardIntelligenceSettings(props: DashboardIntelligen
             <code>{formatTopicId(activeTopic)}</code>
           </div>
           <button
+            className="settings-dashboard-request-button"
             disabled={props.disabled}
             onClick={() => props.onRequestRunInAgents(activeTopic)}
             type="button"
@@ -249,7 +244,6 @@ export default function DashboardIntelligenceSettings(props: DashboardIntelligen
             value={followupDraft}
           />
           <div className="question-input-footer">
-            <span className="data-topic-followup-label">추가 요청</span>
             <button
               className="primary-action question-create-button agents-send-button data-topic-followup-send"
               disabled={!followupDraft.trim() || props.disabled}

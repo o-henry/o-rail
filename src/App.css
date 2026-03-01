@@ -3355,6 +3355,16 @@ h3 {
   background: var(--surface-panel);
 }
 
+.settings-dashboard-topic-detail-head > .settings-dashboard-request-button {
+  background: #d8f3df;
+  color: #1f6d43;
+  border: 0;
+}
+
+.settings-dashboard-topic-detail-head > .settings-dashboard-request-button:hover:not(:disabled) {
+  background: #c9ecda;
+}
+
 .settings-dashboard-topic-detail-scroll {
   min-height: 0;
   overflow: auto;
@@ -3427,6 +3437,12 @@ h3 {
 
 .settings-dashboard-topic-detail-links a:hover {
   text-decoration: underline;
+}
+
+.data-topic-followup-composer textarea {
+  border: 1px solid var(--surface-strong);
+  border-radius: 4px;
+  background: #ffffff;
 }
 
 .data-topic-followup-label {

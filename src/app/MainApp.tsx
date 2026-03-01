@@ -2098,10 +2098,6 @@ function App() {
     },
     [appendWorkspaceEvent, setStatus, t],
   );
-  const onOpenAgentsWorkspaceFromData = useCallback(() => {
-    setWorkspaceTab("agents");
-    setStatus("에이전트 탭에서 데이터 파이프라인 실행을 시작할 수 있습니다.");
-  }, [setStatus]);
   const onRequestDashboardTopicRunInAgents = useCallback(
     (topic: DashboardTopicId, followupInstruction?: string) => {
       openAgentWorkspaceForTopic(topic, followupInstruction);
@@ -2485,7 +2481,6 @@ function App() {
             <DashboardIntelligenceSettings
               config={dashboardIntelligenceConfig}
               disabled={running || isGraphRunning}
-              onOpenAgentsWorkspace={onOpenAgentsWorkspaceFromData}
               onRequestRunInAgents={onRequestDashboardTopicRunInAgents}
               runStateByTopic={dashboardIntelligenceRunStateByTopic}
               snapshotsByTopic={dashboardSnapshotsByTopic}

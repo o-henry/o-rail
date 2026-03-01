@@ -2953,25 +2953,6 @@
   font-family: "BasicallyAMono", "Noto Sans KR", monospace;
 }
 
-.settings-dashboard-topic-detail-allowlist-brief {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin-top: 2px;
-}
-
-.settings-dashboard-topic-detail-allowlist-brief span {
-  display: inline-flex;
-  align-items: center;
-  min-height: 18px;
-  padding: 0 6px;
-  border-radius: 4px;
-  font-size: 10px;
-  line-height: 1;
-  color: var(--text-muted);
-  background: color-mix(in srgb, var(--surface-strong) 28%, var(--surface));
-}
-
 .settings-dashboard-topic-detail-head > button {
   min-height: 30px;
   height: 30px;

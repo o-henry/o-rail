@@ -2580,6 +2580,8 @@ h3 {
 .settings-dashboard-topic-select.fancy-select.is-open .fancy-select-trigger,
 .settings-dashboard-topic-select .fancy-select-trigger:focus,
 .settings-dashboard-topic-select .fancy-select-trigger:focus-visible {
+  min-height: 30px !important;
+  height: 30px !important;
   border: 0 !important;
   border-radius: 4px !important;
   background: color-mix(in srgb, var(--surface-soft) 74%, var(--surface-elevated)) !important;
@@ -3235,8 +3237,8 @@ h3 {
 }
 
 .settings-dashboard-topic-row > button {
-  min-height: 36px;
-  height: 36px;
+  min-height: 30px;
+  height: 30px;
   border-radius: 5px;
   padding: 0 10px;
   font-size: 12px;
@@ -5096,7 +5098,7 @@ h3 {
   width: 100%;
   max-width: 720px;
   margin-inline: auto;
-  margin-top: 2.5rem;
+  margin-top: 4.5rem;
 }
 
 .panel-card.settings-view {
@@ -5326,7 +5328,7 @@ h3 {
 
 .dashboard-terminal-workspace {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
 }
 
 .dashboard-terminal-workspace-head {
@@ -5392,6 +5394,35 @@ h3 {
   font-weight: 700;
 }
 
+.dashboard-terminal-runtime-banner {
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  border-bottom: 0;
+  background: color-mix(in srgb, var(--surface-soft) 44%, var(--surface-elevated));
+}
+
+.dashboard-terminal-runtime-banner span {
+  font-size: 12px;
+  color: var(--text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dashboard-terminal-runtime-banner.running {
+  background: color-mix(in srgb, #4fa3ff 16%, var(--surface-soft));
+}
+
+.dashboard-terminal-runtime-banner.error {
+  background: color-mix(in srgb, #d85656 12%, var(--surface-soft));
+}
+
+.dashboard-terminal-runtime-banner.done {
+  background: color-mix(in srgb, #3e9a62 16%, var(--surface-soft));
+}
+
 .dashboard-terminal-editor {
   min-height: 0;
   display: grid;
@@ -5426,10 +5457,9 @@ h3 {
 .dashboard-terminal-editor pre {
   margin: 0;
   max-height: none;
-  /* background: transparent; */
-  background: white;
+  background: color-mix(in srgb, var(--surface) 86%, var(--surface-elevated));
   border-radius: 0;
-  color: #c4d2e8;
+  color: var(--text-main);
   padding: 14px;
   font-size: 12px;
   line-height: 1.55;

@@ -209,6 +209,34 @@ export default function DashboardPage(props: DashboardPageProps) {
     [props.runStateByTopic],
   );
   const runningTopicCount = topicRunStateRows.filter((row) => row.running).length;
+  const runningTopicLabels = topicRunStateRows.filter((row) => row.running).map((row) => t(topicTitleKey(row.topic)));
+  const latestErroredTopic = topicRunStateRows.find((row) => row.statusText === "ERROR");
+  const latestDoneTopic = topicRunStateRows.find((row) => row.statusText === "DONE");
+
+  const runtimeBanner = useMemo(() => {
+    if (runningTopicLabels.length > 0) {
+      return {
+        tone: "running" as const,
+        text: `실행 중: ${runningTopicLabels.join(", ")}`,
+      };
+    }
+    if (latestErroredTopic) {
+      return {
+        tone: "error" as const,
+        text: `실행 실패: ${t(topicTitleKey(latestErroredTopic.topic))}`,
+      };
+    }
+    if (latestDoneTopic) {
+      return {
+        tone: "done" as const,
+        text: `최근 완료: ${t(topicTitleKey(latestDoneTopic.topic))}`,
+      };
+    }
+    return {
+      tone: "idle" as const,
+      text: "대기 중: 실행 기록이 없습니다.",
+    };
+  }, [latestDoneTopic, latestErroredTopic, runningTopicLabels, t]);
 
   return (
     <section className="dashboard-layout dashboard-terminal-layout workspace-tab-panel">
@@ -245,7 +273,7 @@ export default function DashboardPage(props: DashboardPageProps) {
           <header className="dashboard-terminal-workspace-head">
             <strong>{t("dashboard.card.workflow")}</strong>
             <div className="dashboard-terminal-head-meta">
-              <span>{runningTopicCount > 0 ? `RUNNING ${runningTopicCount}` : resourceLines.length}</span>
+              <span>{runningTopicCount > 0 ? `RUNNING ${runningTopicCount}` : "IDLE"}</span>
               <div className="dashboard-terminal-head-metrics">
                 {cards.map((card) => (
                   <article className="dashboard-terminal-head-metric" key={card.id}>
@@ -256,6 +284,9 @@ export default function DashboardPage(props: DashboardPageProps) {
               </div>
             </div>
           </header>
+          <div className={`dashboard-terminal-runtime-banner ${runtimeBanner.tone}`} role="status">
+            <span>{runtimeBanner.text}</span>
+          </div>
 
           <section className="dashboard-terminal-editor">
             <pre>{terminalLines.map((line, index) => `[${String(index + 1).padStart(2, "0")}] ${line}`).join("\n")}</pre>

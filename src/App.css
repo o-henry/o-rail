@@ -6374,11 +6374,11 @@ h3 {
 }
 
 .agents-data-run-controls {
+  display: none;
   margin-top: 6px;
   width: fit-content;
   max-width: 100%;
   min-width: 0;
-  display: grid;
   gap: 6px;
   padding: 8px 10px;
   border-radius: 6px;

@@ -4035,6 +4035,7 @@
 }
 
 .feed-card-avatar {
+  display: none;
   width: 34px;
   min-width: 34px;
   height: 34px;
@@ -4138,7 +4139,7 @@
   font-size: 14px;
   border-radius: 4px;
   background: #ffffff;
-  padding: 8px 0;
+  padding: 8px;
 }
 
 .feed-card-input-sources {
@@ -4766,10 +4767,7 @@
 }
 
 .feed-reply-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px;
-  align-items: center;
+  display: none;
 }
 
 .feed-reply-row input {

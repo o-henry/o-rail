@@ -95,8 +95,6 @@ export default function FeedPage({ vm }: FeedPageProps) {
     hashStringToHue,
     buildFeedAvatarLabel,
     pendingNodeRequests,
-    feedReplyDraftByPost,
-    feedReplySubmittingByPost,
     feedReplyFeedbackByPost,
     feedExpandedByPost,
     onSelectFeedInspectorPost,
@@ -108,20 +106,10 @@ export default function FeedPage({ vm }: FeedPageProps) {
     formatRelativeFeedTime,
     formatDuration,
     formatUsage,
-    setFeedReplyDraftByPost,
-    onSubmitFeedAgentRequest,
     onOpenFeedMarkdownFile,
   } = vm;
-  const replyDraftMap =
-    feedReplyDraftByPost && typeof feedReplyDraftByPost === "object" ? feedReplyDraftByPost : {};
-  const replySubmittingMap =
-    feedReplySubmittingByPost && typeof feedReplySubmittingByPost === "object"
-      ? feedReplySubmittingByPost
-      : {};
   const replyFeedbackMap =
     feedReplyFeedbackByPost && typeof feedReplyFeedbackByPost === "object" ? feedReplyFeedbackByPost : {};
-  const safeSetFeedReplyDraftByPost =
-    typeof setFeedReplyDraftByPost === "function" ? setFeedReplyDraftByPost : null;
   const isFeedbackErrorMessage = (feedback: string) =>
     /(실패|불가|오류|error|failed|failure|不可|失败|失敗|エラー|失敗)/i.test(feedback);
   const hasFeedEntries =
@@ -611,8 +599,6 @@ export default function FeedPage({ vm }: FeedPageProps) {
                               };
                               const avatarLabel = buildFeedAvatarLabel(post);
                               const pendingRequestCount = (pendingNodeRequests[post.nodeId] ?? []).length;
-                              const requestDraft = String(replyDraftMap[postId] ?? "");
-                              const requestSubmitting = Boolean(replySubmittingMap[postId]);
                               const requestFeedback = String(replyFeedbackMap[postId] ?? "");
                               const requestFeedbackError = isFeedbackErrorMessage(requestFeedback);
                               const isExpanded = feedExpandedByPost[postId] === true;
@@ -815,42 +801,6 @@ export default function FeedPage({ vm }: FeedPageProps) {
                                         <span>{t("feed.pendingRequests", { count: pendingRequestCount })}</span>
                                       )}
                                     </div>
-                                    {canRequest && (
-                                      <div className="feed-reply-row">
-                                        <input
-                                          onClick={(event) => event.stopPropagation()}
-                                          onFocus={(event) => event.stopPropagation()}
-                                          onChange={(event) => {
-                                            if (!safeSetFeedReplyDraftByPost || !postId) {
-                                              return;
-                                            }
-                                            try {
-                                              const nextValue = String(event.currentTarget?.value ?? "");
-                                              safeSetFeedReplyDraftByPost((prev: any) => ({
-                                                ...(prev && typeof prev === "object" ? prev : {}),
-                                                [postId]: nextValue,
-                                              }));
-                                            } catch (error) {
-                                              console.error("[feed-reply-input-change-error]", { postId, error });
-                                            }
-                                          }}
-                                          placeholder={t("feed.followup.placeholder")}
-                                          disabled={requestSubmitting}
-                                          value={requestDraft}
-                                        />
-                                        <button
-                                          aria-label={
-                                            requestSubmitting ? t("feed.followup.sending") : t("feed.followup.send")
-                                          }
-                                          className="primary-action question-create-button feed-reply-send-button"
-                                          disabled={requestSubmitting || !requestDraft.trim()}
-                                          onClick={() => onSubmitFeedAgentRequest(post)}
-                                          type="button"
-                                        >
-                                          <img alt="" aria-hidden="true" className="question-create-icon" src="/up.svg" />
-                                        </button>
-                                      </div>
-                                    )}
                                     {canRequest && requestFeedback && (
                                       <div
                                         className={`feed-reply-feedback ${

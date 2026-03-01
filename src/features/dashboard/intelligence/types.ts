@@ -40,6 +40,7 @@ export type DashboardTopicEvent = {
 
 export type DashboardTopicSnapshot = {
   topic: DashboardTopicId;
+  runId?: string;
   model: string;
   generatedAt: string;
   summary: string;

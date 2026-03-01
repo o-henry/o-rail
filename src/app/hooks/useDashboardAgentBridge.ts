@@ -17,7 +17,7 @@ type UseDashboardAgentBridgeParams = {
   t: (key: string) => string;
   loginCompleted: boolean;
   setError: (message: string) => void;
-  runDashboardTopic: (topic: DashboardTopicId, followupInstruction?: string) => Promise<void>;
+  runDashboardTopic: (topic: DashboardTopicId, followupInstruction?: string) => Promise<unknown>;
   refreshDashboardSnapshots: () => Promise<void>;
   dispatchAction?: (action: AgenticAction) => void;
 };

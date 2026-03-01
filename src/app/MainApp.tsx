@@ -1640,10 +1640,13 @@ function App() {
         setId,
         queue: agenticQueue,
         invokeFn: invoke,
-        execute: async () => {
-          await runDashboardTopic(topic, followupInstruction);
+        execute: async ({ runId, onProgress }) => {
+          const result = await runDashboardTopic(topic, followupInstruction, {
+            runId,
+            onProgress,
+          });
           await refreshDashboardSnapshots();
-          return null;
+          return result;
         },
         appendWorkspaceEvent,
       });

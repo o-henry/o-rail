@@ -150,6 +150,7 @@ export default function DashboardIntelligenceSettings(props: DashboardIntelligen
 
           <section className="settings-dashboard-topic-detail-section">
             <h5>실행 메타</h5>
+            <small>{`runId ${activeSnapshot?.runId || "미실행"}`}</small>
             <small>{`model ${activeSnapshot?.model || "미실행"}`}</small>
             <small>{`references ${activeSnapshot?.references?.length ?? 0}`}</small>
           </section>

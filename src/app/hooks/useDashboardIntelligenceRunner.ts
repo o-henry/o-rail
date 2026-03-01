@@ -10,6 +10,7 @@ import {
   loadDashboardSnapshots,
   runDashboardCrawlerOnly,
   runDashboardTopicIntelligence,
+  type RunDashboardTopicResult,
 } from "../main/runtime/dashboardIntelligenceRunner";
 import type { DashboardTopicRunState } from "../../features/dashboard/intelligence";
 
@@ -68,11 +69,18 @@ export function useDashboardIntelligenceRunner(params: UseDashboardIntelligenceR
   }, [refreshSnapshots]);
 
   const runTopic = useCallback(
-    async (topic: DashboardTopicId, followupInstruction?: string) => {
+    async (
+      topic: DashboardTopicId,
+      followupInstruction?: string,
+      options?: {
+        runId?: string;
+        onProgress?: (stage: string, message: string) => void;
+      },
+    ): Promise<RunDashboardTopicResult | null> => {
       const topicConfig = config[topic];
       if (!hasTauriRuntime) {
         setError("Dashboard Intelligence는 Tauri 런타임에서만 실행할 수 있습니다.");
-        return;
+        return null;
       }
       updateRunState(setRunStateByTopic, topic, {
         running: true,
@@ -85,6 +93,7 @@ export function useDashboardIntelligenceRunner(params: UseDashboardIntelligenceR
           cwd,
           topic,
           config: topicConfig,
+          runId: options?.runId,
           invokeFn,
           previousSnapshot: snapshotsByTopic[topic],
           followupInstruction,
@@ -94,6 +103,7 @@ export function useDashboardIntelligenceRunner(params: UseDashboardIntelligenceR
               progressText: message,
             });
             setStatus(`Dashboard Intelligence(${topic}): ${message}`);
+            options?.onProgress?.(stage, message);
           },
         });
         setSnapshotsByTopic((prev) => ({
@@ -108,6 +118,7 @@ export function useDashboardIntelligenceRunner(params: UseDashboardIntelligenceR
           progressText: "완료",
         });
         setStatus(`Dashboard Intelligence 완료: ${topic}`);
+        return result;
       } catch (error) {
         updateRunState(setRunStateByTopic, topic, {
           running: false,
@@ -117,6 +128,7 @@ export function useDashboardIntelligenceRunner(params: UseDashboardIntelligenceR
           progressText: `실패: ${String(error)}`,
         });
         setError(`Dashboard Intelligence 실행 실패(${topic}): ${String(error)}`);
+        return null;
       }
     },
     [config, cwd, hasTauriRuntime, invokeFn, setError, setRunStateByTopic, setStatus, snapshotsByTopic],

@@ -2,6 +2,7 @@ import type { DashboardTopicId, DashboardTopicSnapshot } from "./types";
 
 type DashboardSnapshotLike = Partial<DashboardTopicSnapshot> & {
   topic?: unknown;
+  runId?: unknown;
   model?: unknown;
   generatedAt?: unknown;
   summary?: unknown;
@@ -107,6 +108,7 @@ export function normalizeDashboardSnapshot(
   const summary = String(row.summary ?? "").trim();
   return {
     topic,
+    runId: String(row.runId ?? "").trim() || undefined,
     model: String(row.model ?? model).trim() || model,
     generatedAt: String(row.generatedAt ?? fallbackGeneratedAt).trim() || fallbackGeneratedAt,
     summary: summary || "No summary generated.",

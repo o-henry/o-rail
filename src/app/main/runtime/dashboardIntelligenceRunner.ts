@@ -32,16 +32,18 @@ type RunDashboardTopicParams = {
   topic: DashboardTopicId;
   config: DashboardTopicAgentConfig;
   invokeFn: InvokeFn;
+  runId?: string;
   previousSnapshot?: DashboardTopicSnapshot;
   followupInstruction?: string;
   onProgress?: (stage: string, message: string) => void;
 };
 
-type RunDashboardTopicResult = {
+export type RunDashboardTopicResult = {
   snapshot: DashboardTopicSnapshot;
   crawlResult: DashboardCrawlRunResult;
   rawPaths: string[];
   warnings: string[];
+  snapshotPath: string | null;
 };
 
 function emitProgress(params: RunDashboardTopicParams, stage: string, message: string): void {
@@ -261,8 +263,16 @@ export async function runDashboardTopicIntelligence(params: RunDashboardTopicPar
     });
   }
 
+  const runId = String(params.runId ?? "").trim();
+  if (runId) {
+    snapshot = {
+      ...snapshot,
+      runId,
+    };
+  }
+
   emitProgress(params, "save", "스냅샷 저장 중");
-  await params.invokeFn<string>("dashboard_snapshot_save", {
+  const snapshotPath = await params.invokeFn<string>("dashboard_snapshot_save", {
     cwd: params.cwd,
     topic: params.topic,
     snapshotJson: snapshot,
@@ -274,6 +284,7 @@ export async function runDashboardTopicIntelligence(params: RunDashboardTopicPar
     crawlResult,
     rawPaths: knowledge.rawPaths,
     warnings,
+    snapshotPath: String(snapshotPath ?? "").trim() || null,
   };
 }
 

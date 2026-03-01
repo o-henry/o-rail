@@ -2481,7 +2481,7 @@ h3 {
 }
 
 .settings-view .controls {
-  gap: 14px;
+  gap: 21px;
 }
 
 .settings-view .controls > h3 + .settings-badges {
@@ -7280,7 +7280,7 @@ pre {
 .bridge-provider-panel,
 .bridge-log-panel {
   display: grid;
-  gap: 6px;
+  gap: 10px;
 }
 
 .bridge-head-panel > .web-automation-head + .settings-badges {

@@ -296,6 +296,26 @@ import type {
   RunRecord,
 } from "./main";
 
+function saveToLocalStorageSafely(key: string, value: string): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    // Ignore quota/security failures so UI interaction remains available.
+  }
+}
+
+function toCssBackgroundImageValue(raw: string): string {
+  const value = String(raw ?? "").trim();
+  if (!value) {
+    return "none";
+  }
+  const escaped = value.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\r?\n/g, "");
+  return `url("${escaped}")`;
+}
+
 function App() {
   const USER_BG_IMAGE_STORAGE_KEY = "rail.settings.user_bg_image";
   const USER_BG_OPACITY_STORAGE_KEY = "rail.settings.user_bg_opacity";
@@ -2038,15 +2058,15 @@ function App() {
     }
   }, [canvasFullscreen]);
   useEffect(() => {
-    window.localStorage.setItem(USER_BG_IMAGE_STORAGE_KEY, userBackgroundImage);
+    saveToLocalStorageSafely(USER_BG_IMAGE_STORAGE_KEY, userBackgroundImage);
   }, [USER_BG_IMAGE_STORAGE_KEY, userBackgroundImage]);
   useEffect(() => {
-    window.localStorage.setItem(USER_BG_OPACITY_STORAGE_KEY, String(userBackgroundOpacity));
+    saveToLocalStorageSafely(USER_BG_OPACITY_STORAGE_KEY, String(userBackgroundOpacity));
   }, [USER_BG_OPACITY_STORAGE_KEY, userBackgroundOpacity]);
   const appShellStyle = useMemo(
     () =>
       ({
-        "--user-bg-image": userBackgroundImage ? `url(${JSON.stringify(userBackgroundImage)})` : "none",
+        "--user-bg-image": toCssBackgroundImageValue(userBackgroundImage),
         "--user-bg-opacity": userBackgroundImage ? String(userBackgroundOpacity) : "0",
       }) as CSSProperties,
     [userBackgroundImage, userBackgroundOpacity],

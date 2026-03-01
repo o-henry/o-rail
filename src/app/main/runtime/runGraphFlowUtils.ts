@@ -77,9 +77,10 @@ export function createRunRecord(params: {
   workflowGroupName?: string;
   workflowGroupKind?: RunRecord["workflowGroupKind"];
   workflowPresetKind?: RunRecord["workflowPresetKind"];
+  runId?: string;
 }): RunRecord {
   return {
-    runId: `${Date.now()}`,
+    runId: String(params.runId ?? `${Date.now()}`),
     question: params.question,
     startedAt: new Date().toISOString(),
     workflowGroupName: params.workflowGroupName,

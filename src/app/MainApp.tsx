@@ -245,7 +245,7 @@ import { createRunGraphRunner } from "./main/runtime/runGraphRunner";
 import { createWorkflowPresetHandlers } from "./main/runtime/workflowPresetHandlers";
 import { createWebTurnRunHandlers } from "./main/runtime/webTurnRunHandlers";
 import { createAgenticQueue } from "./main/runtime/agenticQueue";
-import { runTopicWithCoordinator } from "./main/runtime/agenticCoordinator";
+import { runGraphWithCoordinator, runTopicWithCoordinator } from "./main/runtime/agenticCoordinator";
 import {
   createWorkspaceEventEntry,
   type WorkspaceEventEntry,
@@ -343,6 +343,7 @@ function App() {
   const [dashboardDetailTopic, setDashboardDetailTopic] = useState<DashboardDetailTopic | null>(null);
   const [agentLaunchRequest, setAgentLaunchRequest] = useState<AgentWorkspaceLaunchRequest | null>(null);
   const agentLaunchRequestSeqRef = useRef(0);
+  const graphRunOverrideIdRef = useRef<string | null>(null);
   const [workspaceEvents, setWorkspaceEvents] = useState<WorkspaceEventEntry[]>([]);
   const {
     config: dashboardIntelligenceConfig,
@@ -1512,7 +1513,11 @@ function App() {
     graph,
     runLogCollectorRef,
     setNodeStates,
-    createRunRecord,
+    createRunRecord: (params: Parameters<typeof createRunRecord>[0]) =>
+      createRunRecord({
+        ...params,
+        runId: graphRunOverrideIdRef.current ?? undefined,
+      }),
     workflowQuestion,
     locale,
     setActiveFeedRunMeta,
@@ -1577,9 +1582,48 @@ function App() {
     markCodexNodesStatusOnEngineIssue,
     cleanupRunGraphExecutionState,
   });
+  const runGraphWithAgenticCoordinator = useCallback(
+    async (skipWebConnectPreflight = false) => {
+      await runGraphWithCoordinator({
+        cwd,
+        sourceTab: "workflow",
+        graphId: selectedGraphFileName || graphFileName || "default",
+        queue: agenticQueue,
+        invokeFn: invoke,
+        execute: async ({ runId }) => {
+          graphRunOverrideIdRef.current = runId;
+          try {
+            batchScheduler.triggerByUserEvent();
+            await onRunGraphCore(skipWebConnectPreflight);
+          } finally {
+            graphRunOverrideIdRef.current = null;
+          }
+        },
+        appendWorkspaceEvent,
+      });
+    },
+    [
+      agenticQueue,
+      appendWorkspaceEvent,
+      batchScheduler,
+      cwd,
+      graphFileName,
+      invoke,
+      onRunGraphCore,
+      selectedGraphFileName,
+    ],
+  );
   const onRunGraph = async (skipWebConnectPreflight = false) => {
-    batchScheduler.triggerByUserEvent();
-    await onRunGraphCore(skipWebConnectPreflight);
+    if (skipWebConnectPreflight) {
+      await runGraphWithAgenticCoordinator(true);
+      return;
+    }
+    publishAction({
+      type: "run_graph",
+      payload: {
+        graphId: selectedGraphFileName || graphFileName || "default",
+      },
+    });
   };
   const runDashboardTopicDirect = useCallback(
     async (topic: DashboardTopicId, followupInstruction?: string, setId?: string) => {
@@ -2025,7 +2069,7 @@ function App() {
         return;
       }
       if (action.type === "run_graph") {
-        void onRunGraph();
+        void runGraphWithAgenticCoordinator(false);
         return;
       }
       if (action.type === "open_graph") {
@@ -2053,7 +2097,15 @@ function App() {
         applyPreset(action.payload.presetKind);
       }
     });
-  }, [applyPreset, onRunGraph, onSelectWorkspaceTab, runDashboardTopicDirect, setNodeSelection, setStatus, subscribeAction]);
+  }, [
+    applyPreset,
+    onSelectWorkspaceTab,
+    runDashboardTopicDirect,
+    runGraphWithAgenticCoordinator,
+    setNodeSelection,
+    setStatus,
+    subscribeAction,
+  ]);
   const workspaceTopbarTabs = WORKSPACE_TOPBAR_TABS;
 
   const {

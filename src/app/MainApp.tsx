@@ -30,6 +30,10 @@ import { useWorkflowGraphActions } from "./hooks/useWorkflowGraphActions";
 import { useWorkflowShortcuts } from "./hooks/useWorkflowShortcuts";
 import { useDashboardIntelligenceConfig } from "./hooks/useDashboardIntelligenceConfig";
 import { useDashboardIntelligenceRunner } from "./hooks/useDashboardIntelligenceRunner";
+import { useWorkspaceNavigation } from "./hooks/useWorkspaceNavigation";
+import { useWorkspaceQuickPanel } from "./hooks/useWorkspaceQuickPanel";
+import { useDashboardAgentBridge } from "./hooks/useDashboardAgentBridge";
+import { useWorkspaceEventPersistence } from "./hooks/useWorkspaceEventPersistence";
 import {
   COST_PRESET_DEFAULT_MODEL,
   DEFAULT_TURN_MODEL,
@@ -108,7 +112,6 @@ import {
 import type {
   GraphNode,
 } from "../features/workflow/types";
-import { type DashboardTopicId } from "../features/dashboard/intelligence";
 import {
   AUTH_MODE_STORAGE_KEY,
   CODEX_MULTI_AGENT_MODE_STORAGE_KEY,
@@ -241,8 +244,6 @@ import { createWorkflowPresetHandlers } from "./main/runtime/workflowPresetHandl
 import { createWebTurnRunHandlers } from "./main/runtime/webTurnRunHandlers";
 import {
   createWorkspaceEventEntry,
-  workspaceEventLogFileName,
-  workspaceEventLogToMarkdown,
   type WorkspaceEventEntry,
 } from "./main/runtime/workspaceEventLog";
 import { useBatchScheduler } from "./main/runtime/useBatchScheduler";
@@ -324,6 +325,8 @@ function toCssBackgroundImageValue(raw: string): string {
   return `url("${escaped}")`;
 }
 
+const WORKSPACE_TOPBAR_TABS: Array<{ tab: WorkspaceTab; label: string }> = [{ tab: "dashboard", label: "대시보드" }, { tab: "intelligence", label: "데이터" }, { tab: "agents", label: "에이전트" }, { tab: "workflow", label: "그래프" }, { tab: "feed", label: "피드" }, { tab: "settings", label: "설정" }];
+
 function App() {
   const USER_BG_IMAGE_STORAGE_KEY = "rail.settings.user_bg_image";
   const USER_BG_OPACITY_STORAGE_KEY = "rail.settings.user_bg_opacity";
@@ -337,19 +340,11 @@ function App() {
   const [agentLaunchRequest, setAgentLaunchRequest] = useState<AgentWorkspaceLaunchRequest | null>(null);
   const agentLaunchRequestSeqRef = useRef(0);
   const [workspaceEvents, setWorkspaceEvents] = useState<WorkspaceEventEntry[]>([]);
-  const workspaceEventPersistTimerRef = useRef<number | null>(null);
-  const lastLoggedStatusRef = useRef("");
-  const lastLoggedErrorRef = useRef("");
-  const workspaceBackStackRef = useRef<WorkspaceTab[]>([]);
-  const workspaceForwardStackRef = useRef<WorkspaceTab[]>([]);
-  const suppressWorkspaceHistoryPushRef = useRef(false);
   const {
     config: dashboardIntelligenceConfig,
     runStateByTopic: dashboardIntelligenceRunStateByTopic,
     setRunStateByTopic: setDashboardIntelligenceRunStateByTopic,
   } = useDashboardIntelligenceConfig();
-  const [quickPanelOpen, setQuickPanelOpen] = useState(false);
-  const [quickPanelQuery, setQuickPanelQuery] = useState("");
   const [pendingWebConnectCheck, setPendingWebConnectCheck] = useState<{
     providers: WebProvider[];
     reason: string;
@@ -839,7 +834,6 @@ function App() {
     persistRunRecordFile,
   });
 
-
   const {
     ensureEngineStarted,
     refreshAuthStateFromEngine,
@@ -984,7 +978,6 @@ function App() {
     setUsageInfoText,
     setApprovalSubmitting,
   });
-
 
   useMainAppRuntimeEffects({
     webBridgeStageWarnTimerRef,
@@ -1153,7 +1146,6 @@ function App() {
     applyGraphChange,
     getNodeVisualSize,
   });
-
 
   const {
     clampCanvasZoom,
@@ -1910,126 +1902,13 @@ function App() {
     setFeedInspectorPostId,
     setNodeSelection,
   });
-  const onSelectWorkspaceTab = (tab: WorkspaceTab) => {
-    const nextTab = tab === "bridge" ? "settings" : tab;
-    if (nextTab !== workspaceTab) {
-      workspaceForwardStackRef.current = [];
-    }
-    if (nextTab !== workspaceTab) {
-      appendWorkspaceEvent({
-        source: "navigation",
-        message: `탭 이동: ${workspaceTab} -> ${nextTab}`,
-        actor: "user",
-        level: "info",
-      });
-    }
-    setWorkspaceTab(nextTab);
-    if (nextTab !== "dashboard") {
-      setDashboardDetailTopic(null);
-    }
-  };
-  useEffect(() => {
-    const next = String(status ?? "").trim();
-    if (!next || lastLoggedStatusRef.current === next) {
-      return;
-    }
-    lastLoggedStatusRef.current = next;
-    appendWorkspaceEvent({
-      source: "status",
-      message: next,
-      actor: "ai",
-      level: "info",
-    });
-  }, [appendWorkspaceEvent, status]);
-  useEffect(() => {
-    const next = String(error ?? "").trim();
-    if (!next || lastLoggedErrorRef.current === next) {
-      return;
-    }
-    lastLoggedErrorRef.current = next;
-    appendWorkspaceEvent({
-      source: "error",
-      message: next,
-      actor: "system",
-      level: "error",
-    });
-  }, [appendWorkspaceEvent, error]);
-  useEffect(() => {
-    if (suppressWorkspaceHistoryPushRef.current) {
-      suppressWorkspaceHistoryPushRef.current = false;
-      return;
-    }
-    workspaceForwardStackRef.current = [];
-    const stack = workspaceBackStackRef.current;
-    if (stack.length === 0 || stack[stack.length - 1] !== workspaceTab) {
-      stack.push(workspaceTab);
-      if (stack.length > 40) {
-        stack.splice(0, stack.length - 40);
-      }
-    }
-  }, [workspaceTab]);
-  const onNavigateWorkspaceBack = useCallback(() => {
-    if (dashboardDetailTopic) {
-      setDashboardDetailTopic(null);
-      return;
-    }
-    const forwardStack = workspaceForwardStackRef.current;
-    const stack = workspaceBackStackRef.current;
-    if (stack.length <= 1) {
-      return;
-    }
-    const current = stack.pop();
-    if (current && (forwardStack.length === 0 || forwardStack[forwardStack.length - 1] !== current)) {
-      forwardStack.push(current);
-      if (forwardStack.length > 40) {
-        forwardStack.splice(0, forwardStack.length - 40);
-      }
-    }
-    let previous = stack[stack.length - 1];
-    while (previous === current && stack.length > 1) {
-      stack.pop();
-      previous = stack[stack.length - 1];
-    }
-    if (!previous) {
-      return;
-    }
-    suppressWorkspaceHistoryPushRef.current = true;
-    setWorkspaceTab(previous);
-  }, [dashboardDetailTopic]);
-  const onNavigateWorkspaceForward = useCallback(() => {
-    const forwardStack = workspaceForwardStackRef.current;
-    if (forwardStack.length === 0) {
-      return;
-    }
-    const next = forwardStack.pop();
-    if (!next) {
-      return;
-    }
-    const backStack = workspaceBackStackRef.current;
-    if (backStack.length === 0 || backStack[backStack.length - 1] !== next) {
-      backStack.push(next);
-      if (backStack.length > 40) {
-        backStack.splice(0, backStack.length - 40);
-      }
-    }
-    suppressWorkspaceHistoryPushRef.current = true;
-    setWorkspaceTab(next);
-  }, []);
-  useEffect(() => {
-    const onMouseHistoryButton = (event: MouseEvent) => {
-      if (event.button === 3) {
-        event.preventDefault();
-        onNavigateWorkspaceBack();
-        return;
-      }
-      if (event.button === 4) {
-        event.preventDefault();
-        onNavigateWorkspaceForward();
-      }
-    };
-    window.addEventListener("mousedown", onMouseHistoryButton);
-    return () => window.removeEventListener("mousedown", onMouseHistoryButton);
-  }, [onNavigateWorkspaceBack, onNavigateWorkspaceForward]);
+  const { onSelectWorkspaceTab } = useWorkspaceNavigation({
+    workspaceTab,
+    setWorkspaceTab,
+    dashboardDetailTopic,
+    setDashboardDetailTopic,
+    appendWorkspaceEvent,
+  });
   const applyTurnExecutionFromModelSelection = useCallback(
     (selection: {
       executor: TurnExecutor;
@@ -2079,130 +1958,46 @@ function App() {
     setWorkflowQuestion(request.prompt);
     setWorkspaceTab("workflow");
   };
-  const openAgentWorkspaceForTopic = useCallback(
-    (topic: DashboardTopicId, draft?: string) => {
-      agentLaunchRequestSeqRef.current += 1;
-      setAgentLaunchRequest({
-        id: agentLaunchRequestSeqRef.current,
-        setId: `data-${topic}`,
-        draft,
-      });
-      setWorkspaceTab("agents");
-      appendWorkspaceEvent({
-        source: "data",
-        message: `에이전트 실행 요청: ${topic}`,
-        actor: "user",
-        level: "info",
-      });
-      setStatus(`${t(`dashboard.widget.${topic}.title`)} 실행 요청을 에이전트 탭으로 전달했습니다.`);
-    },
-    [appendWorkspaceEvent, setStatus, t],
-  );
-  const onRequestDashboardTopicRunInAgents = useCallback(
-    (topic: DashboardTopicId, followupInstruction?: string) => {
-      openAgentWorkspaceForTopic(topic, followupInstruction);
-    },
-    [openAgentWorkspaceForTopic],
-  );
-  const onRunDashboardTopicFromAgents = useCallback(
-    async (topic: DashboardTopicId, followupInstruction?: string) => {
-      if (!loginCompleted) {
-        setError("Codex 로그인이 필요합니다. 설정에서 먼저 로그인해 주세요.");
-        setWorkspaceTab("settings");
-        return;
-      }
-      setStatus(`에이전트 실행: ${t(`dashboard.widget.${topic}.title`)} 파이프라인 시작`);
-      await runDashboardTopic(topic, followupInstruction);
-      await refreshDashboardSnapshots();
-    },
-    [loginCompleted, refreshDashboardSnapshots, runDashboardTopic, setError, setStatus, t],
-  );
-  const workspaceTopbarTabs = useMemo(
-    () => [
-      { tab: "dashboard" as WorkspaceTab, label: "대시보드" },
-      { tab: "intelligence" as WorkspaceTab, label: "데이터" },
-      { tab: "agents" as WorkspaceTab, label: "에이전트" },
-      { tab: "workflow" as WorkspaceTab, label: "그래프" },
-      { tab: "feed" as WorkspaceTab, label: "피드" },
-      { tab: "settings" as WorkspaceTab, label: "설정" },
-    ],
-    [],
-  );
+  const {
+    onRequestDashboardTopicRunInAgents,
+    onRunDashboardTopicFromAgents,
+  } = useDashboardAgentBridge({
+    setAgentLaunchRequest,
+    agentLaunchRequestSeqRef,
+    setWorkspaceTab: (next) => setWorkspaceTab(next),
+    appendWorkspaceEvent,
+    setStatus,
+    t,
+    loginCompleted,
+    setError,
+    runDashboardTopic,
+    refreshDashboardSnapshots,
+  });
+  const workspaceTopbarTabs = WORKSPACE_TOPBAR_TABS;
 
-  const quickPanelWorkspaceLabel = useMemo(() => {
-    const byTab: Record<WorkspaceTab, string> = {
-      dashboard: "홈 오버뷰",
-      intelligence: "대시보드 인텔리전스",
-      agents: "에이전트 채팅",
-      workflow: "워크플로우",
-      feed: "요점 정리",
-      settings: "설정",
-      bridge: "설정",
-    };
-    return byTab[workspaceTab] ?? "워크스페이스";
-  }, [workspaceTab]);
-  const quickPanelRecentPosts = useMemo(
-    () =>
-      [...feedPosts]
-        .sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt))
-        .slice(0, 5)
-        .map((post) => ({
-          id: post.id,
-          title: post.summary.trim().slice(0, 90) || ("[" + post.agentName + "] " + post.status),
-          meta: post.agentName + " · " + formatRelativeFeedTime(post.createdAt),
-        })),
-    [feedPosts],
-  );
-  const onToggleQuickPanel = () => {
-    setQuickPanelOpen((prev) => !prev);
-  };
-  const onCloseQuickPanel = () => {
-    setQuickPanelOpen(false);
-  };
-  const onOpenQuickPanelFeed = () => {
-    setWorkspaceTab("feed");
-    setFeedCategory("all_posts");
-    setFeedStatusFilter("all");
-    setFeedKeyword("");
-    setQuickPanelOpen(false);
-  };
-  const onOpenQuickPanelAgents = () => {
-    setWorkspaceTab("agents");
-    setQuickPanelOpen(false);
-  };
-  const onSubmitQuickPanelQuery = () => {
-    const next = quickPanelQuery.trim();
-    if (!next) {
-      setWorkspaceTab("agents");
-      setQuickPanelOpen(false);
-      return;
-    }
-    setWorkflowQuestion(next);
-    setWorkspaceTab("workflow");
-    setStatus("우측 패널 입력이 워크플로우에 반영되었습니다.");
-    setQuickPanelQuery("");
-    setQuickPanelOpen(false);
-  };
-  useEffect(() => {
-    const onQuickPanelHotkey = (event: KeyboardEvent) => {
-      const key = event.key.toLowerCase();
-      if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && key === "k") {
-        event.preventDefault();
-        setQuickPanelOpen((prev) => !prev);
-        return;
-      }
-      if (event.key === "Escape") {
-        setQuickPanelOpen(false);
-      }
-    };
-    window.addEventListener("keydown", onQuickPanelHotkey);
-    return () => window.removeEventListener("keydown", onQuickPanelHotkey);
-  }, []);
-  useEffect(() => {
-    if (canvasFullscreen) {
-      setQuickPanelOpen(false);
-    }
-  }, [canvasFullscreen]);
+  const {
+    quickPanelOpen,
+    quickPanelQuery,
+    setQuickPanelQuery,
+    quickPanelWorkspaceLabel,
+    quickPanelRecentPosts,
+    onToggleQuickPanel,
+    onCloseQuickPanel,
+    onOpenQuickPanelFeed,
+    onOpenQuickPanelAgents,
+    onSubmitQuickPanelQuery,
+  } = useWorkspaceQuickPanel({
+    workspaceTab,
+    setWorkspaceTab,
+    feedPosts,
+    formatRelativeFeedTime,
+    setFeedCategory,
+    setFeedStatusFilter,
+    setFeedKeyword,
+    setWorkflowQuestion,
+    setStatus,
+    canvasFullscreen,
+  });
   useEffect(() => {
     saveToLocalStorageSafely(USER_BG_IMAGE_STORAGE_KEY, userBackgroundImage);
   }, [USER_BG_IMAGE_STORAGE_KEY, userBackgroundImage]);
@@ -2217,37 +2012,15 @@ function App() {
       }) as CSSProperties,
     [userBackgroundImage, userBackgroundOpacity],
   );
-  useEffect(() => {
-    if (!hasTauriRuntime) {
-      return;
-    }
-    const baseCwd = String(cwd ?? "").trim();
-    if (!baseCwd || workspaceEvents.length === 0) {
-      return;
-    }
-    if (workspaceEventPersistTimerRef.current != null) {
-      window.clearTimeout(workspaceEventPersistTimerRef.current);
-      workspaceEventPersistTimerRef.current = null;
-    }
-    workspaceEventPersistTimerRef.current = window.setTimeout(() => {
-      const eventsDir = `${baseCwd.replace(/[\\/]+$/, "")}/.rail/dashboard/events`;
-      const fileName = workspaceEventLogFileName();
-      const markdown = workspaceEventLogToMarkdown(workspaceEvents);
-      void invoke<string>("workspace_write_markdown", {
-        cwd: eventsDir,
-        name: fileName,
-        content: markdown,
-      }).catch(() => {
-        // Ignore persistence failures to avoid blocking UI interactions.
-      });
-    }, 450);
-    return () => {
-      if (workspaceEventPersistTimerRef.current != null) {
-        window.clearTimeout(workspaceEventPersistTimerRef.current);
-        workspaceEventPersistTimerRef.current = null;
-      }
-    };
-  }, [cwd, hasTauriRuntime, workspaceEvents]);
+  useWorkspaceEventPersistence({
+    status,
+    error,
+    appendWorkspaceEvent,
+    workspaceEvents,
+    cwd,
+    hasTauriRuntime,
+    invokeFn: invoke,
+  });
   return (
     <main className={`app-shell ${canvasFullscreen ? "canvas-fullscreen-mode" : ""}`} style={appShellStyle}>
       <div aria-hidden="true" className="window-drag-region" data-tauri-drag-region />

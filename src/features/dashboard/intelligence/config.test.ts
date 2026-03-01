@@ -17,6 +17,9 @@ describe("dashboard intelligence config", () => {
     expect(defaults.devCommunityHotTopics.allowlist).toEqual(
       expect.arrayContaining(["csdn.net", "juejin.cn", "qiita.com", "zenn.dev", "news.ycombinator.com"]),
     );
+    expect(defaults.industryTrendRadar.allowlist).toEqual(
+      expect.arrayContaining(["x.com", "threads.net", "technologyreview.com", "venturebeat.com"]),
+    );
     expect(defaults.devEcosystem.allowlist).toEqual(
       expect.arrayContaining([
         "openai.com",

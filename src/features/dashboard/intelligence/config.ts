@@ -23,7 +23,17 @@ const DEFAULT_CADENCE_BY_TOPIC: Record<DashboardTopicId, number> = {
 const DEFAULT_ALLOWLIST_BY_TOPIC: Record<DashboardTopicId, string[]> = {
   marketSummary: ["finance.yahoo.com", "stooq.com", "investing.com"],
   globalHeadlines: ["reuters.com", "apnews.com", "ft.com", "wsj.com"],
-  industryTrendRadar: ["mckinsey.com", "gartner.com", "cbinsights.com", "statista.com"],
+  industryTrendRadar: [
+    "mckinsey.com",
+    "gartner.com",
+    "cbinsights.com",
+    "statista.com",
+    "technologyreview.com",
+    "venturebeat.com",
+    "worldeconomicforum.org",
+    "x.com",
+    "threads.net",
+  ],
   communityHotTopics: [
     "reddit.com",
     "dcinside.com",
@@ -97,7 +107,7 @@ const DEFAULT_PROMPT_BY_TOPIC: Record<DashboardTopicId, string> = {
   globalHeadlines:
     "You are the global headlines analyst. Prioritize high-impact verified headlines and explain why they matter.",
   industryTrendRadar:
-    "You are the trend analyst. Extract validated trend signals, momentum changes, and uncertainty notes.",
+    "You are the trend analyst. Extract validated trend signals across diverse categories (technology, economy, policy, society, and culture), highlight momentum changes, and add uncertainty notes.",
   communityHotTopics:
     "You are the general community intelligence analyst. Surface fast-rising topics, cluster duplicates, and highlight representative links.",
   devCommunityHotTopics:

@@ -34,40 +34,6 @@ type DashboardTopicStatusInfo = {
   tone: DashboardTopicStatusTone;
 };
 
-function hasHangulText(value: string): boolean {
-  return /[가-힣]/.test(value);
-}
-
-function toKoreanRiskText(value: string): string {
-  const trimmed = String(value ?? "").trim();
-  if (!trimmed) {
-    return "-";
-  }
-  if (hasHangulText(trimmed)) {
-    return trimmed;
-  }
-  const lower = trimmed.toLowerCase();
-  if (lower.includes("empty codex response")) {
-    return "Codex 응답이 비어 있어 스니펫 기반 대체 요약으로 처리되었습니다.";
-  }
-  if (lower.includes("raw files not found")) {
-    return "수집된 원문 파일을 찾지 못했습니다.";
-  }
-  if (lower.includes("knowledge probe returned no valid files")) {
-    return "RAG에 사용할 유효한 원문 파일이 없습니다.";
-  }
-  if (lower.includes("rag snippet was empty")) {
-    return "RAG 스니펫이 비어 있어 근거가 부족합니다.";
-  }
-  if (lower.includes("codex error")) {
-    return "Codex 처리 중 오류가 발생했습니다.";
-  }
-  if (lower.includes("auth") || lower.includes("401") || lower.includes("unauthorized")) {
-    return "Codex 인증이 필요합니다.";
-  }
-  return `리스크 항목: ${trimmed}`;
-}
-
 function formatTopicId(topic: DashboardTopicId): string {
   return topic.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase();
 }
@@ -111,6 +77,7 @@ function resolveTopicStatusInfo(
 export default function DashboardIntelligenceSettings(props: DashboardIntelligenceSettingsProps) {
   const { t } = useI18n();
   const [activeTopic, setActiveTopic] = useState<DashboardTopicId>(DASHBOARD_TOPIC_IDS[0]);
+  const [followupDraft, setFollowupDraft] = useState("");
 
   useEffect(() => {
     if (DASHBOARD_TOPIC_IDS.includes(activeTopic)) {
@@ -120,26 +87,8 @@ export default function DashboardIntelligenceSettings(props: DashboardIntelligen
   }, [activeTopic]);
 
   const activeTopicConfig = props.config[activeTopic];
-  const activeTopicRunState = props.runStateByTopic[activeTopic];
   const activeSnapshot = props.snapshotsByTopic[activeTopic];
   const activeRunId = String(activeSnapshot?.runId ?? "").trim();
-
-  const activeTopicStatus = useMemo(
-    () => resolveTopicStatusInfo(activeTopicRunState, activeSnapshot),
-    [activeSnapshot, activeTopicRunState],
-  );
-
-  const activeTopicUpdatedAtText = useMemo(() => {
-    const source = activeSnapshot?.generatedAt || activeTopicRunState?.lastRunAt;
-    if (!source) {
-      return "아직 실행 기록이 없습니다.";
-    }
-    const parsed = new Date(source);
-    if (Number.isNaN(parsed.getTime())) {
-      return source;
-    }
-    return parsed.toLocaleString();
-  }, [activeSnapshot?.generatedAt, activeTopicRunState?.lastRunAt]);
 
   const activeBriefingDocuments = useMemo(() => {
     if (!activeRunId) {
@@ -157,6 +106,7 @@ export default function DashboardIntelligenceSettings(props: DashboardIntelligen
 
   const onSelectTopic = (topic: DashboardTopicId) => {
     setActiveTopic(topic);
+    setFollowupDraft("");
   };
 
   const onSelectTopicByKeyboard = (
@@ -168,6 +118,24 @@ export default function DashboardIntelligenceSettings(props: DashboardIntelligen
     }
     event.preventDefault();
     setActiveTopic(topic);
+    setFollowupDraft("");
+  };
+
+  const onSubmitFollowup = () => {
+    const next = followupDraft.trim();
+    if (!next) {
+      return;
+    }
+    props.onRunTopic(activeTopic, next);
+    setFollowupDraft("");
+  };
+
+  const onFollowupKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key !== "Enter" || event.shiftKey) {
+      return;
+    }
+    event.preventDefault();
+    onSubmitFollowup();
   };
 
   return (
@@ -242,18 +210,6 @@ export default function DashboardIntelligenceSettings(props: DashboardIntelligen
         </header>
 
         <div className="settings-dashboard-topic-detail-scroll">
-          <section className="settings-dashboard-topic-detail-section settings-dashboard-topic-status-section">
-            <h5>실행 상태</h5>
-            <div className="settings-dashboard-topic-status-group">
-              <div className="settings-dashboard-topic-status-line">
-                <span className={`settings-dashboard-status-badge is-${activeTopicStatus.tone}`}>{activeTopicStatus.label}</span>
-                <small className="settings-dashboard-date-pill">{activeTopicUpdatedAtText}</small>
-              </div>
-              {activeTopicRunState?.progressText ? <small>{activeTopicRunState.progressText}</small> : null}
-            </div>
-            {activeTopicRunState?.lastError ? <small>{activeTopicRunState.lastError}</small> : null}
-          </section>
-
           <section className="settings-dashboard-topic-detail-section">
             <h5>실행 메타</h5>
             <div className="settings-dashboard-topic-doc-actions">
@@ -277,31 +233,16 @@ export default function DashboardIntelligenceSettings(props: DashboardIntelligen
           </section>
 
           <section className="settings-dashboard-topic-detail-section">
-            <h5>리스크</h5>
-            {activeSnapshot?.risks?.length ? (
-              <ul>
-                {activeSnapshot.risks.map((item, index) => (
-                  <li key={`${index}-${item}`}>{toKoreanRiskText(item)}</li>
-                ))}
-              </ul>
-            ) : (
-              <p>리스크 없음</p>
-            )}
-          </section>
-
-          <section className="settings-dashboard-topic-detail-section">
             <h5>브리핑 문서</h5>
             {!activeRunId ? <small>실행 후 브리핑 문서가 생성됩니다.</small> : null}
             {activeBriefingDocuments.length > 0 ? (
-              <ul className="settings-dashboard-topic-doc-list">
+              <div className="settings-dashboard-topic-doc-flat">
                 {activeBriefingDocuments.slice(0, 6).map((doc) => (
-                  <li className="settings-dashboard-topic-doc-item" key={doc.id}>
-                    <div className="settings-dashboard-topic-doc-copy">
-                      <strong>{doc.isFinalDocument ? "최종 문서" : "생성 문서"}</strong>
-                      <small>{`${doc.agentName} · ${formatDateTimeText(doc.createdAt)}`}</small>
-                      <p>{doc.summary || "요약이 없는 문서입니다."}</p>
-                      <code>{doc.sourceFile}</code>
-                    </div>
+                  <article className="settings-dashboard-topic-doc-row" key={doc.id}>
+                    <strong>{doc.isFinalDocument ? "최종 문서" : "생성 문서"}</strong>
+                    <small>{`${doc.agentName} · ${formatDateTimeText(doc.createdAt)}`}</small>
+                    <p>{doc.summary || "요약이 없는 문서입니다."}</p>
+                    <code>{doc.sourceFile}</code>
                     <button
                       className="settings-dashboard-topic-doc-open"
                       onClick={() => props.onOpenBriefingDocument(doc.runId, doc.id)}
@@ -309,9 +250,9 @@ export default function DashboardIntelligenceSettings(props: DashboardIntelligen
                     >
                       문서 열기
                     </button>
-                  </li>
+                  </article>
                 ))}
-              </ul>
+              </div>
             ) : (
               <p>해당 실행의 브리핑 문서가 아직 없습니다.</p>
             )}
@@ -321,32 +262,29 @@ export default function DashboardIntelligenceSettings(props: DashboardIntelligen
             <h5>구현 내용</h5>
             <p className="settings-dashboard-topic-implementation-copy">{activeTopicImplementationText}</p>
             <div className="settings-dashboard-topic-allowlist-block">
-              <small>{`ALLOWLIST ${activeTopicConfig.allowlist.length}개`}</small>
-              {activeTopicConfig.allowlist.length > 0 ? (
-                <ul className="settings-dashboard-topic-detail-links">
-                  {activeTopicConfig.allowlist.map((source) => (
-                    <li key={source}>{source}</li>
-                  ))}
-                </ul>
-              ) : null}
+              <div className="settings-dashboard-topic-allowlist-head">
+                <small>{`ALLOWLIST ${activeTopicConfig.allowlist.length}개`}</small>
+                <button
+                  aria-label="ALLOWLIST 링크 보기"
+                  className="settings-dashboard-allowlist-help"
+                  type="button"
+                >
+                  ?
+                </button>
+                <div className="settings-dashboard-allowlist-tooltip" role="tooltip">
+                  {activeTopicConfig.allowlist.length > 0 ? (
+                    <ul>
+                      {activeTopicConfig.allowlist.map((source) => (
+                        <li key={source}>{source}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p>등록된 링크가 없습니다.</p>
+                  )}
+                </div>
+              </div>
             </div>
           </section>
-
-          <section className="settings-dashboard-topic-detail-section">
-            <h5>요약</h5>
-            <p>{activeSnapshot?.summary || "스냅샷이 없습니다. 토픽 실행 후 결과가 표시됩니다."}</p>
-          </section>
-
-          {activeSnapshot?.highlights?.length ? (
-            <section className="settings-dashboard-topic-detail-section">
-              <h5>핵심 포인트</h5>
-              <ul>
-                {activeSnapshot.highlights.map((item, index) => (
-                  <li key={`${index}-${item}`}>{item}</li>
-                ))}
-              </ul>
-            </section>
-          ) : null}
 
           {activeSnapshot?.events?.length ? (
             <section className="settings-dashboard-topic-detail-section">
@@ -377,7 +315,27 @@ export default function DashboardIntelligenceSettings(props: DashboardIntelligen
             </section>
           ) : null}
         </div>
-
+        <section className="settings-dashboard-topic-request question-input workflow-question-input">
+          <textarea
+            onChange={(event) => setFollowupDraft(event.currentTarget.value)}
+            onKeyDown={onFollowupKeyDown}
+            placeholder="추가 요청을 입력하면 현재 구현 내용에 반영해 실행합니다."
+            rows={1}
+            value={followupDraft}
+          />
+          <div className="question-input-footer">
+            <div className="settings-dashboard-topic-request-copy">추가 요청</div>
+            <button
+              aria-label="추가 요청 실행"
+              className="primary-action question-create-button settings-dashboard-topic-request-send"
+              disabled={!followupDraft.trim() || Boolean(props.disabled)}
+              onClick={onSubmitFollowup}
+              type="button"
+            >
+              <img alt="" aria-hidden="true" className="question-create-icon" src="/up.svg" />
+            </button>
+          </div>
+        </section>
       </aside>
     </section>
   );

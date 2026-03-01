@@ -3121,8 +3121,72 @@
 
 .settings-dashboard-topic-allowlist-block {
   margin-top: 8px;
+  position: relative;
+}
+
+.settings-dashboard-topic-allowlist-head {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.settings-dashboard-allowlist-help {
+  width: 18px;
+  min-width: 18px;
+  height: 18px;
+  min-height: 18px;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+}
+
+.settings-dashboard-allowlist-tooltip {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 10px;
+  right: 10px;
+  z-index: 30;
+  border-radius: 6px;
+  background: #111418;
+  color: #e9eef5;
+  padding: 8px 10px;
+  box-shadow: 0 8px 24px rgba(9, 13, 20, 0.24);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-4px);
+  transition:
+    opacity 140ms ease,
+    transform 140ms ease;
+}
+
+.settings-dashboard-allowlist-tooltip ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
   display: grid;
   gap: 4px;
+}
+
+.settings-dashboard-allowlist-tooltip li,
+.settings-dashboard-allowlist-tooltip p {
+  margin: 0;
+  font-size: 11px;
+  color: inherit;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.settings-dashboard-topic-allowlist-head:hover .settings-dashboard-allowlist-tooltip,
+.settings-dashboard-topic-allowlist-head:focus-within .settings-dashboard-allowlist-tooltip {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
 }
 
 .settings-dashboard-topic-detail-section small {
@@ -3168,29 +3232,38 @@
   gap: 8px;
 }
 
-.settings-dashboard-topic-doc-item {
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--surface) 88%, var(--surface-panel));
-  padding: 8px;
+.settings-dashboard-topic-doc-flat {
   display: grid;
-  gap: 7px;
+  gap: 8px;
 }
 
-.settings-dashboard-topic-doc-copy {
+.settings-dashboard-topic-doc-row {
   display: grid;
   gap: 4px;
+  padding: 0 0 8px;
+  border-bottom: 1px solid color-mix(in srgb, var(--surface-strong) 52%, transparent);
 }
 
-.settings-dashboard-topic-doc-copy strong {
+.settings-dashboard-topic-doc-row:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.settings-dashboard-topic-doc-row strong {
   font-size: 12px;
   color: var(--text-main);
   line-height: 1.35;
 }
 
-.settings-dashboard-topic-doc-copy code {
+.settings-dashboard-topic-doc-row code {
   font-size: 10px;
   color: var(--text-muted);
   font-family: "BasicallyAMono", "Noto Sans KR", monospace;
+  padding-left: 0;
+}
+
+.settings-dashboard-topic-doc-row p {
+  padding-left: 0;
 }
 
 .settings-dashboard-topic-doc-open,
@@ -3220,6 +3293,31 @@
 .settings-dashboard-topic-doc-open:disabled,
 .settings-dashboard-topic-doc-open-all:disabled {
   opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.settings-dashboard-topic-request {
+  margin-top: 2px;
+  padding: 8px 10px 8px;
+}
+
+.settings-dashboard-topic-request textarea {
+  min-height: 34px;
+  max-height: 96px;
+}
+
+.settings-dashboard-topic-request .question-input-footer {
+  min-height: 30px;
+}
+
+.settings-dashboard-topic-request-copy {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: "Galmuri11", "DialogNanumBody1984", "Noto Sans KR", sans-serif;
+}
+
+.settings-dashboard-topic-request-send:disabled {
+  opacity: 0.5;
   cursor: not-allowed;
 }
 

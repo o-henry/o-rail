@@ -110,6 +110,38 @@ describe("pipeline stage mapping", () => {
     expect(ragStatus).toBe("running");
   });
 
+  it("ignores run state when expected runId does not match", () => {
+    const status = resolveAgentPipelineStatus(
+      {
+        id: "marketSummary-rag",
+        name: "rag-analyst",
+        role: "RAG",
+        guidance: [],
+        starterPrompt: "",
+        status: "preset",
+      },
+      "marketSummary",
+      { running: true, progressStage: "rag", runId: "topic-20260302-aaa111" },
+      "topic-20260302-bbb222",
+    );
+    const steps = buildProcessSteps(
+      {
+        id: "marketSummary-rag",
+        name: "rag-analyst",
+        role: "RAG",
+        guidance: [],
+        starterPrompt: "",
+        status: "preset",
+      },
+      false,
+      "marketSummary",
+      { running: true, progressStage: "rag", runId: "topic-20260302-aaa111" },
+      "topic-20260302-bbb222",
+    );
+    expect(status).toBe("pending");
+    expect(steps.every((step) => step.state === "pending")).toBe(true);
+  });
+
   it("keeps non-data agents as pending before explicit runtime state", () => {
     const status = resolveAgentPipelineStatus(
       {

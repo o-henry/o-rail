@@ -145,12 +145,31 @@ function aggregateAgentPipelineStatus(states: ProcessStepState[]): AgentPipeline
   return "pending";
 }
 
+function shouldIgnoreRunStateByRunId(
+  runState: DashboardTopicRunState | null,
+  expectedRunId?: string | null,
+): boolean {
+  const expected = String(expectedRunId ?? "").trim();
+  if (!expected) {
+    return false;
+  }
+  const actual = String(runState?.runId ?? "").trim();
+  if (!actual) {
+    return false;
+  }
+  return actual !== expected;
+}
+
 export function resolveAgentPipelineStatus(
   thread: AgentThread,
   dataTopicId: DashboardTopicId | null,
   dataTopicRunState: DashboardTopicRunState | null,
+  expectedRunId?: string | null,
 ): AgentPipelineStatus {
   if (!dataTopicId) {
+    return "pending";
+  }
+  if (shouldIgnoreRunStateByRunId(dataTopicRunState, expectedRunId)) {
     return "pending";
   }
   const scopes = resolveThreadPipelineScopes(thread);
@@ -167,8 +186,16 @@ export function buildProcessSteps(
   _isSelected: boolean,
   dataTopicId: DashboardTopicId | null,
   dataTopicRunState: DashboardTopicRunState | null,
+  expectedRunId?: string | null,
 ): ProcessStep[] {
   if (dataTopicId) {
+    if (shouldIgnoreRunStateByRunId(dataTopicRunState, expectedRunId)) {
+      return resolveThreadPipelineScopes(thread).map((scope) => ({
+        id: `${thread.id}-pipeline-${scope}`,
+        label: PIPELINE_STEP_LABELS[scope].pending,
+        state: "pending",
+      }));
+    }
     const scopes = resolveThreadPipelineScopes(thread);
     const stepStates = resolvePipelineStepStates(dataTopicRunState);
     return scopes.map((scope) => {
@@ -208,7 +235,7 @@ export function formatAgentRuntimeText(
   }
   if (agentStatus === "running") {
     const base = String(runState?.progressText ?? "").trim();
-    return base.length > 0 ? base : "작업중";
+    return base.length > 0 ? base : "작업 중";
   }
   return "대기";
 }

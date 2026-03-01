@@ -121,7 +121,10 @@ export function AgentsWorkspaceSidebar({
                     const enabled = enabledDataSourceIds.includes(item.id);
                     return (
                       <li key={item.id}>
-                        <span>{item.detail}</span>
+                        <div className="agents-rag-source-copy">
+                          <span>{item.detail}</span>
+                          <small className="agents-rag-source-meta">{`${item.topic} · ${item.runId || "no-runid"}`}</small>
+                        </div>
                         <button
                           aria-pressed={enabled}
                           className={`agents-rag-toggle${enabled ? " is-on" : " is-off"}`}

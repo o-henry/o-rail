@@ -6560,6 +6560,18 @@
   overflow-wrap: anywhere;
 }
 
+.agents-rag-source-copy {
+  display: grid;
+  gap: 2px;
+}
+
+.agents-rag-source-meta {
+  margin: 0;
+  font-size: 10px;
+  color: var(--text-muted);
+  font-family: "BasicallyAMono", "Noto Sans KR", monospace;
+}
+
 .agents-rag-toggle {
   min-width: 44px;
   height: 22px;
@@ -6833,6 +6845,27 @@ html[data-locale="ko"] .agents-grid-card :lang(en) {
   min-height: 30px;
   height: 30px;
   margin-bottom: 10px;
+  gap: 2px;
+}
+
+.agents-grid-card-running-ellipsis {
+  display: inline-flex;
+  min-width: 14px;
+  gap: 1px;
+}
+
+.agents-grid-card-running-ellipsis span {
+  display: inline-block;
+  opacity: 0.25;
+  animation: agents-running-dot 1.2s infinite;
+}
+
+.agents-grid-card-running-ellipsis span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.agents-grid-card-running-ellipsis span:nth-child(3) {
+  animation-delay: 0.4s;
 }
 
 .agents-grid-card p {

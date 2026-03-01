@@ -123,21 +123,22 @@ export default function AgentsPage({
       };
     });
   }, [launchRequest, setOptions]);
-
   const currentSetState = useMemo(() => {
     if (!activeSetId) {
       return null;
     }
     return setStateMap[activeSetId] ?? createFallbackSetState();
   }, [activeSetId, setStateMap]);
-
   const activeSetOption = useMemo(
     () => (activeSetId ? setOptions.find((option) => option.id === activeSetId) ?? null : null),
     [activeSetId, setOptions],
   );
   const activeDataTopicId = useMemo(() => topicFromSetId(activeSetOption?.id ?? null), [activeSetOption?.id]);
   const activeDataRunState = activeDataTopicId ? runStateByTopic[activeDataTopicId] : undefined;
-
+  const activeDataSnapshotRunId = useMemo(
+    () => (activeDataTopicId ? String(topicSnapshots[activeDataTopicId]?.runId ?? "").trim() || null : null),
+    [activeDataTopicId, topicSnapshots],
+  );
   const threads = currentSetState?.threads ?? [];
   const activeThreadId = currentSetState?.activeThreadId ?? "";
   const draft = currentSetState?.draft ?? "";
@@ -162,6 +163,9 @@ export default function AgentsPage({
           id: `${topic}:${runId || summary.slice(0, 24)}`,
           label: t(`dashboard.widget.${topic}.title`),
           detail: `${formatTopicToken(topic)} · ${summary}`,
+          topic,
+          runId,
+          snapshotAt: String(snapshot.generatedAt ?? "").trim(),
         } satisfies AgentDataSourceItem;
       })
         .filter((item): item is AgentDataSourceItem => item !== null)
@@ -169,11 +173,7 @@ export default function AgentsPage({
     [t, topicSnapshots],
   );
 
-  const activeThread = useMemo(
-    () => threads.find((thread) => thread.id === activeThreadId) ?? threads[0] ?? null,
-    [activeThreadId, threads],
-  );
-
+  const activeThread = useMemo(() => threads.find((thread) => thread.id === activeThreadId) ?? threads[0] ?? null, [activeThreadId, threads]);
   const updateActiveSetState = (updater: (current: AgentSetState) => AgentSetState) => {
     if (!activeSetId) {
       return;
@@ -209,7 +209,6 @@ export default function AgentsPage({
       };
     });
   }, [activeSetId, recentDataSources]);
-
   useEffect(() => {
     if (!modelOptions.some((option) => option.value === selectedModel)) {
       setSelectedModel(modelOptions[0].value);
@@ -340,7 +339,9 @@ export default function AgentsPage({
       }
       return;
     }
-    const selectedDataSources = recentDataSources.filter((item) => enabledDataSourceIds.includes(item.id));
+    const selectedDataSources = recentDataSources
+      .filter((item) => enabledDataSourceIds.includes(item.id))
+      .filter((item) => (activeDataTopicId ? item.topic === activeDataTopicId : true));
     const selectedAttachedFiles = attachedFiles.filter((file) => enabledAttachedFileNames.includes(file.name));
     const payload = buildAgentDispatchPayload({
       threadName: activeThread?.name,
@@ -350,11 +351,10 @@ export default function AgentsPage({
       selectedModel,
       selectedReasonLevel,
       isReasonLevelSelectable,
-      text:
-        selectedDataSources.length > 0
-          ? `RAG SOURCES\n${selectedDataSources.map((item) => `- ${item.detail}`).join("\n")}\n\n${text}`
-          : text,
+      text,
       attachedFileNames: selectedAttachedFiles.map((file) => file.name),
+      selectedDataSourceIds: selectedDataSources.map((item) => item.id),
+      selectedDataSourceDetails: selectedDataSources.map((item) => item.detail),
       codexMultiAgentMode,
     });
     onQuickAction({
@@ -363,6 +363,8 @@ export default function AgentsPage({
       modelLabel: selectedModelOption?.label ?? selectedModel,
       executor: selectedModelOption?.executor ?? "codex",
       turnModel: selectedModelOption?.turnModel,
+      selectedDataSourceIds: selectedDataSources.map((item) => item.id),
+      selectedDataSourceDetails: selectedDataSources.map((item) => item.detail),
     });
     updateActiveSetState((current) => ({
       ...current,
@@ -487,6 +489,7 @@ export default function AgentsPage({
       setMission={setMission}
       dataTopicId={activeDataTopicId}
       dataTopicRunState={activeDataRunState ?? null}
+      dataTopicRunId={activeDataRunState?.runId ?? activeDataSnapshotRunId}
       t={(key) => t(key)}
       threads={threads}
     />

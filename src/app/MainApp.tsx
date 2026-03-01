@@ -2043,9 +2043,13 @@ function App() {
   );
 
   const onAgentQuickAction = (request: AgentQuickActionRequest) => {
+    const ragSourceCount = request.selectedDataSourceIds?.length ?? 0;
     appendWorkspaceEvent({
       source: "agents",
-      message: `에이전트 요청 전송: ${request.modelLabel}`,
+      message:
+        ragSourceCount > 0
+          ? `에이전트 요청 전송: ${request.modelLabel} (RAG ${ragSourceCount}개)`
+          : `에이전트 요청 전송: ${request.modelLabel}`,
       actor: "user",
       level: "info",
     });

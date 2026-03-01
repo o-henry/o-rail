@@ -1,6 +1,11 @@
 import type { DashboardTopicId, DashboardTopicRunState } from "../../../features/dashboard/intelligence";
 import type { AgentThread } from "../agentTypes";
-import { type ProcessStep, buildProcessSteps, resolveAgentPipelineStatus } from "./pipelineStage";
+import {
+  type ProcessStep,
+  buildProcessSteps,
+  formatAgentRuntimeText,
+  resolveAgentPipelineStatus,
+} from "./pipelineStage";
 import { detectTextLang, toKoreanThreadName, uppercaseEnglishTokens } from "./textUtils";
 
 type AgentGridCardProps = {
@@ -11,6 +16,7 @@ type AgentGridCardProps = {
   onClose: () => void;
   dataTopicId: DashboardTopicId | null;
   dataTopicRunState: DashboardTopicRunState | null;
+  dataTopicRunId: string | null;
 };
 
 export function AgentGridCard({
@@ -21,8 +27,9 @@ export function AgentGridCard({
   onClose,
   dataTopicId,
   dataTopicRunState,
+  dataTopicRunId,
 }: AgentGridCardProps) {
-  const resolvedStatus = resolveAgentPipelineStatus(thread, dataTopicId, dataTopicRunState);
+  const resolvedStatus = resolveAgentPipelineStatus(thread, dataTopicId, dataTopicRunState, dataTopicRunId);
   const pipelineStatus = dataTopicId ? resolvedStatus : "pending";
   const displayThreadName = toKoreanThreadName(thread.name);
   const processSteps: ProcessStep[] = buildProcessSteps(
@@ -30,16 +37,11 @@ export function AgentGridCard({
     isSelected,
     dataTopicId,
     dataTopicRunState,
+    dataTopicRunId,
   );
   const isRunning = pipelineStatus === "running";
-  const chipText =
-    pipelineStatus === "running"
-      ? "실행 중"
-      : pipelineStatus === "done"
-        ? "완료"
-        : pipelineStatus === "error"
-          ? "실패"
-          : "대기";
+  const runtimeText = formatAgentRuntimeText(dataTopicRunState, pipelineStatus);
+  const chipText = pipelineStatus === "running" ? "작업 중" : runtimeText;
   const roleLang = detectTextLang(thread.role);
   const starterPromptLang = detectTextLang(thread.starterPrompt ?? "");
   const nameLang = detectTextLang(displayThreadName);
@@ -93,7 +95,16 @@ export function AgentGridCard({
         ) : null}
       </div>
       <div className="agents-grid-card-foot">
-        <span className={`agents-grid-card-chip agents-grid-card-foot-chip is-${pipelineStatus}`}>{chipText}</span>
+        <span className={`agents-grid-card-chip agents-grid-card-foot-chip is-${pipelineStatus}`}>
+          <span>{chipText}</span>
+          {pipelineStatus === "running" ? (
+            <span aria-hidden="true" className="agents-grid-card-running-ellipsis">
+              <span>.</span>
+              <span>.</span>
+              <span>.</span>
+            </span>
+          ) : null}
+        </span>
         <span
           aria-label={pipelineStatus === "running" ? "실행 중" : pipelineStatus === "done" ? "완료" : pipelineStatus === "error" ? "실패" : "대기"}
           className={`agents-grid-card-status-dot is-${pipelineStatus}`}

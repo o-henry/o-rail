@@ -14,6 +14,8 @@ export type AgentQuickActionRequest = {
   modelLabel: string;
   executor: TurnExecutor;
   turnModel?: string;
+  selectedDataSourceIds?: string[];
+  selectedDataSourceDetails?: string[];
 };
 
 export type AgentsPageProps = {
@@ -72,4 +74,7 @@ export type AgentDataSourceItem = {
   id: string;
   label: string;
   detail: string;
+  topic: DashboardTopicId;
+  runId: string;
+  snapshotAt: string;
 };

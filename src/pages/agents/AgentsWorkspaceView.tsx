@@ -56,6 +56,7 @@ type AgentsWorkspaceViewProps = {
   onToggleDataSource: (sourceId: string) => void;
   dataTopicId: DashboardTopicId | null;
   dataTopicRunState: DashboardTopicRunState | null;
+  dataTopicRunId: string | null;
   onOpenDataTab: () => void;
 };
 
@@ -103,6 +104,7 @@ export function AgentsWorkspaceView({
   onToggleDataSource,
   dataTopicId,
   dataTopicRunState,
+  dataTopicRunId,
   onOpenDataTab,
 }: AgentsWorkspaceViewProps) {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -139,6 +141,7 @@ export function AgentsWorkspaceView({
                   onClose={() => onCloseThread(thread.id)}
                   dataTopicId={dataTopicId}
                   dataTopicRunState={dataTopicRunState}
+                  dataTopicRunId={dataTopicRunId}
                 />
               );
             })}

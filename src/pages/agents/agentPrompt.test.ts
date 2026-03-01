@@ -1,56 +1,45 @@
 import { describe, expect, it } from "vitest";
 import { buildAgentDispatchPayload } from "./agentPrompt";
 
-describe("agent prompt dispatcher", () => {
-  it("includes codex multi-agent directive for codex models", () => {
+describe("buildAgentDispatchPayload", () => {
+  it("injects selected data source ids/details as RAG source block", () => {
     const payload = buildAgentDispatchPayload({
-      threadName: "snapshot-synthesizer",
-      threadRole: "Snapshot Synthesizer",
-      threadGuidance: ["근거 중심으로 요약", "리스크 분리 보고"],
-      threadStarterPrompt: "최종 스냅샷 JSON 생성",
-      selectedModel: "5.3-Codex",
+      threadName: "spec-architect",
+      threadRole: "Spec Architect",
+      threadGuidance: ["요구사항 분해", "수용 기준 정리"],
+      threadStarterPrompt: "요구사항 기준으로 명세를 작성해줘.",
+      selectedModel: "gpt-5.2-codex",
       selectedReasonLevel: "보통",
       isReasonLevelSelectable: true,
-      text: "시장 요약 실행",
-      attachedFileNames: [],
+      text: "이번 작업 명세를 작성해줘.",
+      attachedFileNames: ["design.md"],
+      selectedDataSourceIds: ["marketSummary:topic-1", "devEcosystem:topic-2"],
+      selectedDataSourceDetails: ["MARKET_SUMMARY · 변동성 확대", "DEV_ECOSYSTEM · 릴리스 노트 업데이트"],
       codexMultiAgentMode: "balanced",
     });
 
-    expect(payload).toContain("[CODEx MULTI-AGENT ORCHESTRATION]");
-    expect(payload).toContain("[AGENT ROLE]");
-    expect(payload).toContain("[model=5.3-Codex, reason=보통]");
+    expect(payload).toContain("[RAG SOURCES]");
+    expect(payload).toContain("SOURCE IDS: marketSummary:topic-1, devEcosystem:topic-2");
+    expect(payload).toContain("MARKET_SUMMARY · 변동성 확대");
+    expect(payload).toContain("DEV_ECOSYSTEM · 릴리스 노트 업데이트");
   });
 
-  it("does not include codex directive for non-codex models", () => {
-    const payload = buildAgentDispatchPayload({
-      threadName: "search-agent",
-      threadRole: "Web Researcher",
-      threadGuidance: [],
-      threadStarterPrompt: "",
-      selectedModel: "Gemini",
-      selectedReasonLevel: "보통",
-      isReasonLevelSelectable: false,
-      text: "핵심 뉴스 찾아줘",
-      attachedFileNames: [],
-      codexMultiAgentMode: "max",
-    });
-
-    expect(payload).not.toContain("[CODEx MULTI-AGENT ORCHESTRATION]");
-    expect(payload).toContain("[model=Gemini, reason=N/A]");
-  });
-
-  it("injects attached files list into payload", () => {
+  it("omits RAG source block when no selected data source exists", () => {
     const payload = buildAgentDispatchPayload({
       threadName: "implementation-agent",
-      selectedModel: "5.2-Codex",
-      selectedReasonLevel: "높음",
+      threadRole: "Implementation Agent",
+      threadGuidance: [],
+      threadStarterPrompt: "",
+      selectedModel: "gpt-5.2-codex",
+      selectedReasonLevel: "보통",
       isReasonLevelSelectable: true,
-      text: "테스트 보강",
-      attachedFileNames: ["a.ts", "b.test.ts"],
-      codexMultiAgentMode: "off",
+      text: "코드를 구현해줘.",
+      attachedFileNames: [],
+      selectedDataSourceIds: [],
+      selectedDataSourceDetails: [],
+      codexMultiAgentMode: "balanced",
     });
 
-    expect(payload).toContain("files: a.ts, b.test.ts");
-    expect(payload).toContain("[model=5.2-Codex, reason=높음]");
+    expect(payload).not.toContain("[RAG SOURCES]");
   });
 });

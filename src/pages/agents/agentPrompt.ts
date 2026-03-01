@@ -12,6 +12,8 @@ type BuildAgentDispatchPayloadParams = {
   isReasonLevelSelectable: boolean;
   text: string;
   attachedFileNames: string[];
+  selectedDataSourceIds?: string[];
+  selectedDataSourceDetails?: string[];
   codexMultiAgentMode: CodexMultiAgentMode;
 };
 
@@ -21,11 +23,25 @@ export function isCodexModel(model: string): boolean {
 
 export function buildAgentDispatchPayload(params: BuildAgentDispatchPayloadParams): string {
   const trimmedText = String(params.text ?? "").trim();
+  const selectedDataSourceIds = (params.selectedDataSourceIds ?? [])
+    .map((id) => String(id ?? "").trim())
+    .filter((id) => id.length > 0);
+  const selectedDataSourceDetails = (params.selectedDataSourceDetails ?? [])
+    .map((detail) => String(detail ?? "").trim())
+    .filter((detail) => detail.length > 0);
+  const ragSourcesBlock =
+    selectedDataSourceDetails.length > 0
+      ? [
+          "[RAG SOURCES]",
+          `- SOURCE IDS: ${selectedDataSourceIds.join(", ") || "N/A"}`,
+          ...selectedDataSourceDetails.map((detail) => `- ${detail}`),
+        ].join("\n")
+      : "";
   const attachedFileNames = params.attachedFileNames
     .map((name) => String(name ?? "").trim())
     .filter((name) => name.length > 0);
   const filePrefix = attachedFileNames.length > 0 ? `files: ${attachedFileNames.join(", ")}\n` : "";
-  const content = `${filePrefix}${trimmedText}`.trim();
+  const content = [ragSourcesBlock, `${filePrefix}${trimmedText}`.trim()].filter((line) => line.length > 0).join("\n\n");
   const reasonTag = params.isReasonLevelSelectable ? params.selectedReasonLevel : "N/A";
   const corePrompt = `[model=${params.selectedModel}, reason=${reasonTag}] ${content}`.trim();
 

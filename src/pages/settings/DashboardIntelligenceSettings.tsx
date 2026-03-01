@@ -265,7 +265,7 @@ export default function DashboardIntelligenceSettings(props: DashboardIntelligen
                 <small>{`ALLOWLIST ${activeTopicConfig.allowlist.length}개`}</small>
                 <button
                   aria-label="ALLOWLIST 링크 보기"
-                  className="settings-dashboard-allowlist-help"
+                  className="settings-dashboard-allowlist-help help-tooltip"
                   type="button"
                 >
                   ?
@@ -325,7 +325,9 @@ export default function DashboardIntelligenceSettings(props: DashboardIntelligen
           <div className="question-input-footer">
             <button
               aria-label="추가 요청 실행"
-              className="question-create-button settings-dashboard-topic-request-send"
+              className={`question-create-button settings-dashboard-topic-request-send${
+                followupDraft.trim().length > 0 ? " primary-action" : ""
+              }`}
               disabled={!followupDraft.trim() || Boolean(props.disabled)}
               onClick={onSubmitFollowup}
               type="button"

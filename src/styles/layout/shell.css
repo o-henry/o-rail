@@ -3131,16 +3131,17 @@
 }
 
 .settings-dashboard-allowlist-help {
-  width: 18px;
-  min-width: 18px;
-  height: 18px;
-  min-height: 18px;
+  width: 16px;
+  min-width: 16px;
+  height: 16px;
+  min-height: 16px;
   border: 0;
-  background: transparent;
+  background: #e8edf4;
   color: #5b6573;
-  font-size: 12px;
+  font-size: 11px;
   line-height: 1;
   padding: 0;
+  border-radius: 999px;
   display: inline-grid;
   place-items: center;
   cursor: help;
@@ -3151,13 +3152,13 @@
 .settings-dashboard-allowlist-tooltip {
   position: absolute;
   top: calc(100% + 8px);
-  left: 10px;
-  right: 10px;
+  left: 0;
+  right: 0;
   z-index: 30;
   border-radius: 6px;
   background: #111418;
   color: #e9eef5;
-  padding: 8px 10px;
+  padding: 8px 0;
   box-shadow: 0 8px 24px rgba(9, 13, 20, 0.24);
   opacity: 0;
   pointer-events: none;
@@ -3179,7 +3180,7 @@
 .settings-dashboard-allowlist-tooltip p {
   margin: 0;
   font-size: 11px;
-  color: inherit;
+  color: #ffffff;
   line-height: 1.35;
   overflow-wrap: anywhere;
 }
@@ -3214,6 +3215,11 @@
   font-size: 12px;
   color: var(--text-main);
   line-height: 1.35;
+}
+
+.settings-dashboard-topic-detail-section .settings-dashboard-allowlist-tooltip li,
+.settings-dashboard-topic-detail-section .settings-dashboard-allowlist-tooltip p {
+  color: #ffffff;
 }
 
 .settings-dashboard-topic-detail-links {
@@ -3326,6 +3332,11 @@
   background: color-mix(in srgb, var(--surface-soft) 76%, var(--surface));
   border: 0;
   box-shadow: none;
+}
+
+.settings-dashboard-topic-request-send.primary-action {
+  background: #1d7cff;
+  color: #ffffff;
 }
 
 .settings-dashboard-topic-request-send:disabled {

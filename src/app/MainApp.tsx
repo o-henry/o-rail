@@ -94,10 +94,12 @@ import {
   buildCanvasEdgeLines,
   buildRoundedEdgePath,
   cloneGraph,
+  defaultNodeConfig,
   getAutoConnectionSides,
   getGraphEdgeKey,
   getNodeAnchorPoint,
   graphEquals,
+  makeNodeId,
   nodeCardSummary,
   snapToLayoutGrid,
   snapToNearbyNodeAxis,
@@ -237,6 +239,12 @@ import { createRunGraphControlHandlers } from "./main/runtime/runGraphControlHan
 import { createRunGraphRunner } from "./main/runtime/runGraphRunner";
 import { createWorkflowPresetHandlers } from "./main/runtime/workflowPresetHandlers";
 import { createWebTurnRunHandlers } from "./main/runtime/webTurnRunHandlers";
+import {
+  createWorkspaceEventEntry,
+  workspaceEventLogFileName,
+  workspaceEventLogToMarkdown,
+  type WorkspaceEventEntry,
+} from "./main/runtime/workspaceEventLog";
 import { useBatchScheduler } from "./main/runtime/useBatchScheduler";
 import { useCanvasGraphDerivedState } from "./main/canvas/useCanvasGraphDerivedState";
 import { MainAppModals } from "./main/presentation/MainAppModals";
@@ -328,6 +336,10 @@ function App() {
   const [dashboardDetailTopic, setDashboardDetailTopic] = useState<DashboardDetailTopic | null>(null);
   const [agentLaunchRequest, setAgentLaunchRequest] = useState<AgentWorkspaceLaunchRequest | null>(null);
   const agentLaunchRequestSeqRef = useRef(0);
+  const [workspaceEvents, setWorkspaceEvents] = useState<WorkspaceEventEntry[]>([]);
+  const workspaceEventPersistTimerRef = useRef<number | null>(null);
+  const lastLoggedStatusRef = useRef("");
+  const lastLoggedErrorRef = useRef("");
   const workspaceBackStackRef = useRef<WorkspaceTab[]>([]);
   const workspaceForwardStackRef = useRef<WorkspaceTab[]>([]);
   const suppressWorkspaceHistoryPushRef = useRef(false);
@@ -632,8 +644,8 @@ function App() {
   });
 
   const {
-    setStatus,
-    setError,
+    setStatus: setStatusCore,
+    setError: setErrorCore,
     persistRunRecordFile,
     getNodeVisualSize,
     setNodeSelection,
@@ -684,6 +696,33 @@ function App() {
     webBridgeStageWarnTimerRef,
     activeWebNodeByProviderRef,
   });
+
+  const appendWorkspaceEvent = useCallback((params: {
+    source: string;
+    message: string;
+    actor?: "user" | "ai" | "system";
+    level?: "info" | "error";
+  }) => {
+    const message = String(params.message ?? "").trim();
+    if (!message) {
+      return;
+    }
+    const next = createWorkspaceEventEntry({
+      source: params.source,
+      message,
+      actor: params.actor,
+      level: params.level,
+    });
+    setWorkspaceEvents((prev) => [next, ...prev].slice(0, 300));
+  }, []);
+
+  const setStatus = useCallback((message: string) => {
+    setStatusCore(message);
+  }, [setStatusCore]);
+
+  const setError = useCallback((message: string) => {
+    setErrorCore(message);
+  }, [setErrorCore]);
 
   let webTurnRunHandlers: ReturnType<typeof createWebTurnRunHandlers> | null = null;
 
@@ -1684,6 +1723,40 @@ function App() {
     loadAgentRuleDocsForCwd: loadFeedInspectorRuleDocs,
   });
 
+  const onAddCrawlerNode = useCallback(() => {
+    const nodeId = makeNodeId("turn");
+    const maxX = graph.nodes.reduce((max, node) => Math.max(max, Number(node.position?.x ?? 0)), 40);
+    const maxY = graph.nodes.reduce((max, node) => Math.max(max, Number(node.position?.y ?? 0)), 40);
+    const nextNode: GraphNode = {
+      id: nodeId,
+      type: "turn",
+      position: {
+        x: maxX + 300,
+        y: Math.max(40, maxY),
+      },
+      config: {
+        ...defaultNodeConfig("turn"),
+        role: "Crawler Operator",
+        promptTemplate:
+          "Allowlist 소스를 기준으로 최신 데이터를 수집하고 핵심 시그널/출처를 간결하게 정리해줘.",
+        qualityProfile: "research_evidence",
+        artifactType: "EvidenceArtifact",
+      },
+    };
+    applyGraphChange((prev) => ({
+      ...prev,
+      nodes: [...prev.nodes, nextNode],
+    }));
+    setNodeSelection([nodeId], nodeId);
+    appendWorkspaceEvent({
+      source: "workflow",
+      message: "크롤러 노드 추가",
+      actor: "user",
+      level: "info",
+    });
+    setStatus("그래프에 크롤러 노드를 추가했습니다.");
+  }, [appendWorkspaceEvent, applyGraphChange, graph.nodes, setNodeSelection, setStatus]);
+
   const viewportWidth = Math.ceil(canvasLogicalViewport.width);
   const viewportHeight = Math.ceil(canvasLogicalViewport.height);
   const stagePadding = canvasNodes.length > 0 ? STAGE_GROW_MARGIN : 0;
@@ -1725,6 +1798,7 @@ function App() {
     },
     toolsProps: {
       addNode,
+      addCrawlerNode: onAddCrawlerNode,
       applyCostPreset,
       applyGraphChange,
       applyPreset,
@@ -1840,11 +1914,45 @@ function App() {
     if (nextTab !== workspaceTab) {
       workspaceForwardStackRef.current = [];
     }
+    if (nextTab !== workspaceTab) {
+      appendWorkspaceEvent({
+        source: "navigation",
+        message: `탭 이동: ${workspaceTab} -> ${nextTab}`,
+        actor: "user",
+        level: "info",
+      });
+    }
     setWorkspaceTab(nextTab);
     if (nextTab !== "dashboard") {
       setDashboardDetailTopic(null);
     }
   };
+  useEffect(() => {
+    const next = String(status ?? "").trim();
+    if (!next || lastLoggedStatusRef.current === next) {
+      return;
+    }
+    lastLoggedStatusRef.current = next;
+    appendWorkspaceEvent({
+      source: "status",
+      message: next,
+      actor: "ai",
+      level: "info",
+    });
+  }, [appendWorkspaceEvent, status]);
+  useEffect(() => {
+    const next = String(error ?? "").trim();
+    if (!next || lastLoggedErrorRef.current === next) {
+      return;
+    }
+    lastLoggedErrorRef.current = next;
+    appendWorkspaceEvent({
+      source: "error",
+      message: next,
+      actor: "system",
+      level: "error",
+    });
+  }, [appendWorkspaceEvent, error]);
   useEffect(() => {
     if (suppressWorkspaceHistoryPushRef.current) {
       suppressWorkspaceHistoryPushRef.current = false;
@@ -1955,6 +2063,12 @@ function App() {
   );
 
   const onAgentQuickAction = (request: AgentQuickActionRequest) => {
+    appendWorkspaceEvent({
+      source: "agents",
+      message: `에이전트 요청 전송: ${request.modelLabel}`,
+      actor: "user",
+      level: "info",
+    });
     applyTurnExecutionFromModelSelection({
       executor: request.executor,
       turnModel: request.turnModel,
@@ -1973,9 +2087,15 @@ function App() {
         draft,
       });
       setWorkspaceTab("agents");
+      appendWorkspaceEvent({
+        source: "data",
+        message: `에이전트 실행 요청: ${topic}`,
+        actor: "user",
+        level: "info",
+      });
       setStatus(`${t(`dashboard.widget.${topic}.title`)} 실행 요청을 에이전트 탭으로 전달했습니다.`);
     },
-    [setStatus, t],
+    [appendWorkspaceEvent, setStatus, t],
   );
   const onOpenAgentsWorkspaceFromData = useCallback(() => {
     setWorkspaceTab("agents");
@@ -2100,6 +2220,37 @@ function App() {
       }) as CSSProperties,
     [userBackgroundImage, userBackgroundOpacity],
   );
+  useEffect(() => {
+    if (!hasTauriRuntime) {
+      return;
+    }
+    const baseCwd = String(cwd ?? "").trim();
+    if (!baseCwd || workspaceEvents.length === 0) {
+      return;
+    }
+    if (workspaceEventPersistTimerRef.current != null) {
+      window.clearTimeout(workspaceEventPersistTimerRef.current);
+      workspaceEventPersistTimerRef.current = null;
+    }
+    workspaceEventPersistTimerRef.current = window.setTimeout(() => {
+      const eventsDir = `${baseCwd.replace(/[\\/]+$/, "")}/.rail/dashboard/events`;
+      const fileName = workspaceEventLogFileName();
+      const markdown = workspaceEventLogToMarkdown(workspaceEvents);
+      void invoke<string>("workspace_write_markdown", {
+        cwd: eventsDir,
+        name: fileName,
+        content: markdown,
+      }).catch(() => {
+        // Ignore persistence failures to avoid blocking UI interactions.
+      });
+    }, 450);
+    return () => {
+      if (workspaceEventPersistTimerRef.current != null) {
+        window.clearTimeout(workspaceEventPersistTimerRef.current);
+        workspaceEventPersistTimerRef.current = null;
+      }
+    };
+  }, [cwd, hasTauriRuntime, workspaceEvents]);
   return (
     <main className={`app-shell ${canvasFullscreen ? "canvas-fullscreen-mode" : ""}`} style={appShellStyle}>
       <div aria-hidden="true" className="window-drag-region" data-tauri-drag-region />
@@ -2268,6 +2419,7 @@ function App() {
             stockDocumentPosts={feedPosts}
             topicSnapshots={dashboardSnapshotsByTopic}
             webBridgeRunning={webBridgeStatus.running}
+            workspaceEvents={workspaceEvents}
           />
         )}
 
@@ -2279,7 +2431,7 @@ function App() {
             codexMultiAgentMode={codexMultiAgentMode}
             launchRequest={agentLaunchRequest}
             onQuickAction={onAgentQuickAction}
-            onOpenDataTab={() => setWorkspaceTab("intelligence")}
+            onOpenDataTab={() => onSelectWorkspaceTab("intelligence")}
             onRunDataTopic={onRunDashboardTopicFromAgents}
             runStateByTopic={dashboardIntelligenceRunStateByTopic}
             topicSnapshots={dashboardSnapshotsByTopic}

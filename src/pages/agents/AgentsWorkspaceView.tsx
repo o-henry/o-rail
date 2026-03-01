@@ -194,22 +194,22 @@ export function AgentsWorkspaceView({
         <div className="agents-thread-list agents-thread-brief" aria-label="세트 브리핑">
           <strong lang="ko">{activeSetOption?.label ?? "세트 미선택"}</strong>
           <p lang="ko">{renderMixedLangText(setMission || activeSetOption?.description || "세트 설명이 없습니다.")}</p>
+          {dataTopicId ? (
+            <section className="agents-data-run-controls" aria-label="데이터 파이프라인 실행">
+              <div className="agents-data-run-meta">
+                <strong>{`topic · ${dataTopicId}`}</strong>
+                <span>{`status · ${dataTopicStatusLabel}`}</span>
+                {dataTopicRunState?.progressText ? <small>{dataTopicRunState.progressText}</small> : null}
+                <small>메시지 전송 버튼으로 실행 요청이 전달됩니다.</small>
+              </div>
+              <div className="agents-data-run-actions">
+                <button onClick={onOpenDataTab} type="button">
+                  데이터 보기
+                </button>
+              </div>
+            </section>
+          ) : null}
         </div>
-        {dataTopicId ? (
-          <section className="agents-data-run-controls" aria-label="데이터 파이프라인 실행">
-            <div className="agents-data-run-meta">
-              <strong>{`topic · ${dataTopicId}`}</strong>
-              <span>{`status · ${dataTopicStatusLabel}`}</span>
-              {dataTopicRunState?.progressText ? <small>{dataTopicRunState.progressText}</small> : null}
-              <small>메시지 전송 버튼으로 실행 요청이 전달됩니다.</small>
-            </div>
-            <div className="agents-data-run-actions">
-              <button onClick={onOpenDataTab} type="button">
-                데이터 보기
-              </button>
-            </div>
-          </section>
-        ) : null}
         <div className="agents-topbar-actions">
           <button
             aria-label="템플릿 복원"

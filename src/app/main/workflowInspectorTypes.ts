@@ -9,6 +9,7 @@ export type SelectOption = {
 export type WorkflowInspectorToolsProps = {
   simpleWorkflowUI: boolean;
   addNode: (type: NodeType) => void;
+  addCrawlerNode: () => void;
   applyPreset: (preset: PresetKind) => void;
   applyCostPreset: (preset: CostPreset) => void;
   isPresetKind: (value: string) => value is PresetKind;

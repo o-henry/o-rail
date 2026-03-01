@@ -21,6 +21,14 @@ type DashboardPageProps = {
   stockDocumentPosts: DashboardStockDocumentPost[];
   topicSnapshots: Partial<Record<DashboardTopicId, DashboardTopicSnapshot>>;
   runStateByTopic: Record<DashboardTopicId, DashboardTopicRunState>;
+  workspaceEvents: Array<{
+    id: string;
+    at: string;
+    source: string;
+    actor: string;
+    level: string;
+    message: string;
+  }>;
 };
 
 type DashboardCard = {
@@ -33,7 +41,7 @@ type DashboardCard = {
 type DashboardResourceLine = {
   id: string;
   topic: DashboardTopicId | "feed";
-  kind: "reference" | "event" | "highlight" | "summary";
+  kind: "reference" | "event" | "highlight" | "summary" | "log";
   text: string;
 };
 
@@ -106,6 +114,13 @@ export default function DashboardPage(props: DashboardPageProps) {
   const workSummaryItems = snapshotSummaries.length > 0 ? snapshotSummaries : fallbackFeedSummaries;
   const terminalLines = workSummaryItems.length > 0 ? workSummaryItems : [t("dashboard.value.none")];
   const resourceLines = useMemo<DashboardResourceLine[]>(() => {
+    const eventLines: DashboardResourceLine[] = props.workspaceEvents.slice(0, 10).map((entry) => ({
+      id: `log-${entry.id}`,
+      topic: "feed",
+      kind: "log",
+      text: `${entry.source} · ${entry.message}`,
+    }));
+
     const snapshots = Object.values(props.topicSnapshots)
       .filter((snapshot): snapshot is DashboardTopicSnapshot => Boolean(snapshot))
       .sort((left, right) => new Date(right.generatedAt).getTime() - new Date(left.generatedAt).getTime());
@@ -153,8 +168,9 @@ export default function DashboardPage(props: DashboardPageProps) {
       });
     });
 
-    if (collected.length > 0) {
-      return collected.slice(0, 12);
+    const merged = [...eventLines, ...collected];
+    if (merged.length > 0) {
+      return merged.slice(0, 12);
     }
 
     const fallback: DashboardResourceLine[] = fallbackFeedSummaries.slice(0, 12).map((summary, index) => ({
@@ -174,7 +190,7 @@ export default function DashboardPage(props: DashboardPageProps) {
         text: t("dashboard.value.none"),
       },
     ];
-  }, [fallbackFeedSummaries, props.topicSnapshots]);
+  }, [fallbackFeedSummaries, props.topicSnapshots, props.workspaceEvents]);
 
   const latestSnapshotText = useMemo(() => {
     const snapshots = Object.values(props.topicSnapshots).filter(
@@ -262,7 +278,7 @@ export default function DashboardPage(props: DashboardPageProps) {
             {resourceLines.map((line) => (
               <li key={line.id}>
                 <span aria-hidden="true">
-                  {line.kind === "reference" ? "REF" : line.kind === "event" ? "EVT" : line.kind === "highlight" ? "HLT" : "SUM"}
+                  {line.kind === "reference" ? "REF" : line.kind === "event" ? "EVT" : line.kind === "highlight" ? "HLT" : line.kind === "log" ? "LOG" : "SUM"}
                 </span>
                 <p>{line.topic === "feed" ? line.text : `${t(topicTitleKey(line.topic))} · ${line.text}`}</p>
               </li>

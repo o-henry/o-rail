@@ -15,6 +15,9 @@ export default function WorkflowInspectorTools({
         <button className="mini-action-button workflow-add-agent-button" onClick={() => props.addNode("turn")} type="button">
           <span className="mini-action-button-label">{tp("에이전트 추가")}</span>
         </button>
+        <button className="mini-action-button workflow-add-agent-button" onClick={props.addCrawlerNode} type="button">
+          <span className="mini-action-button-label">{tp("크롤러 추가")}</span>
+        </button>
       </div>
 
       <div className="tool-dropdown-group">

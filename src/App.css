@@ -6374,6 +6374,9 @@ h3 {
 }
 
 .agents-data-run-controls {
+  margin-top: 6px;
+  width: fit-content;
+  max-width: 100%;
   min-width: 0;
   display: grid;
   gap: 6px;

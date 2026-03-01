@@ -40,6 +40,9 @@ describe("dashboard intelligence config", () => {
         "reliefweb.int",
       ]),
     );
+    expect(defaults.marketSummary.allowlist).toEqual(
+      expect.arrayContaining(["coindesk.com", "cointelegraph.com", "bitcoinmagazine.com", "finance.naver.com/sise/"]),
+    );
   });
 
   it("normalizes invalid topic config values", () => {
@@ -80,6 +83,10 @@ describe("dashboard intelligence config", () => {
       "finance.yahoo.com",
       "stooq.com",
       "investing.com",
+      "coindesk.com",
+      "cointelegraph.com",
+      "bitcoinmagazine.com",
+      "finance.naver.com/sise/",
     ]);
     expect(normalized.globalHeadlines.model.length).toBeGreaterThan(0);
   });

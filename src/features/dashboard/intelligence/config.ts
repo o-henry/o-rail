@@ -21,7 +21,15 @@ const DEFAULT_CADENCE_BY_TOPIC: Record<DashboardTopicId, number> = {
 };
 
 const DEFAULT_ALLOWLIST_BY_TOPIC: Record<DashboardTopicId, string[]> = {
-  marketSummary: ["finance.yahoo.com", "stooq.com", "investing.com"],
+  marketSummary: [
+    "finance.yahoo.com",
+    "stooq.com",
+    "investing.com",
+    "coindesk.com",
+    "cointelegraph.com",
+    "bitcoinmagazine.com",
+    "finance.naver.com/sise/",
+  ],
   globalHeadlines: ["reuters.com", "apnews.com", "ft.com", "wsj.com"],
   industryTrendRadar: [
     "mckinsey.com",

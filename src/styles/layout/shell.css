@@ -979,7 +979,11 @@
   color: #6d7a8a;
   background: #f7f9fc;
   border-radius: 6px;
-  padding: 8px 10px;
+  min-height: 36px;
+  height: 36px;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
 }
 
 .knowledge-file-item {
@@ -2724,7 +2728,7 @@
 
 .settings-dashboard-topic-columns {
   display: grid;
-  grid-template-columns: minmax(220px, 1.8fr) minmax(190px, 1fr) 88px;
+  grid-template-columns: minmax(220px, 1.8fr) minmax(190px, 1fr) minmax(150px, 0.8fr);
   align-items: center;
   gap: 8px;
   box-sizing: border-box;
@@ -2759,7 +2763,7 @@
 
 .settings-dashboard-topic-row {
   display: grid;
-  grid-template-columns: minmax(220px, 1.8fr) minmax(190px, 1fr) 88px;
+  grid-template-columns: minmax(220px, 1.8fr) minmax(190px, 1fr) minmax(150px, 0.8fr);
   gap: 8px;
   align-items: center;
   border-radius: 6px;
@@ -2892,6 +2896,28 @@
   text-align: left;
   display: inline-flex;
   align-items: center;
+  gap: 6px;
+}
+
+.settings-dashboard-topic-run-button {
+  min-height: 22px;
+  height: 22px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 4px;
+  background: #d8f3df;
+  color: #1f6d43;
+  font-size: 11px;
+  font-family: "BasicallyAMono", "Noto Sans KR", monospace;
+}
+
+.settings-dashboard-topic-run-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.settings-dashboard-topic-run-button:hover:not(:disabled) {
+  background: #c9ecda;
 }
 
 .settings-dashboard-status-badge {
@@ -6362,6 +6388,69 @@
 
 .agents-sidebar-agent-role {
   color: var(--text-muted);
+}
+
+.agents-rag-source-group {
+  display: grid;
+  gap: 6px;
+}
+
+.agents-rag-source-group + .agents-rag-source-group {
+  margin-top: 8px;
+}
+
+.agents-rag-source-group > small {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: "Galmuri11", "DialogNanumBody1984", "Noto Sans KR", sans-serif;
+}
+
+.agents-rag-source-group > p {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.agents-rag-source-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.agents-rag-source-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.agents-rag-source-list span {
+  font-size: 11px;
+  color: var(--text-main);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.agents-rag-toggle {
+  min-width: 44px;
+  height: 22px;
+  border-radius: 4px;
+  border: 0;
+  padding: 0 8px;
+  font-size: 10px;
+  font-family: "BasicallyAMono", "Noto Sans KR", monospace;
+}
+
+.agents-rag-toggle.is-on {
+  background: #d8f3df;
+  color: #1f6d43;
+}
+
+.agents-rag-toggle.is-off {
+  background: #e7ecf3;
+  color: #5b6575;
 }
 
 .agents-sidebar-list {

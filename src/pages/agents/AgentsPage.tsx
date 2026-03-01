@@ -7,19 +7,23 @@ import { AgentsWorkspaceView } from "./AgentsWorkspaceView";
 import { buildAgentDispatchPayload } from "./agentPrompt";
 import { DEFAULT_RUNTIME_MODEL_VALUE } from "../../features/workflow/runtimeModelOptions";
 import {
-  AGENT_SET_DASHBOARD_DATA_STORAGE_KEY,
   buildGroupedSetOptions,
   buildPresetSnapshot,
   buildSetOptions,
   createCustomThread,
   createFallbackSetState,
   createInitialSetStateMap,
-  buildDashboardInsightsBySet,
-  mergeDashboardInsightsBySetState,
+  isDevSetOption,
   restoreSetStateFromPreset,
   createStateFromPresetSnapshot,
 } from "./agentSetState";
-import type { AgentSetPresetSnapshot, AgentSetState, AgentsPageProps, AttachedFile } from "./agentTypes";
+import type {
+  AgentDataSourceItem,
+  AgentSetPresetSnapshot,
+  AgentSetState,
+  AgentsPageProps,
+  AttachedFile,
+} from "./agentTypes";
 
 function topicFromSetId(setId: string | null): DashboardTopicId | null {
   if (!setId || !setId.startsWith("data-")) {
@@ -27,6 +31,13 @@ function topicFromSetId(setId: string | null): DashboardTopicId | null {
   }
   const candidate = setId.slice(5);
   return DASHBOARD_TOPIC_IDS.includes(candidate as DashboardTopicId) ? (candidate as DashboardTopicId) : null;
+}
+
+function formatTopicToken(topic: string): string {
+  return String(topic ?? "")
+    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+    .replace(/-/g, "_")
+    .toUpperCase();
 }
 
 export default function AgentsPage({
@@ -39,7 +50,10 @@ export default function AgentsPage({
   onOpenDataTab,
 }: AgentsPageProps) {
   const { t } = useI18n();
-  const setOptions = useMemo(() => buildSetOptions((key) => t(key)), [t]);
+  const setOptions = useMemo(
+    () => buildSetOptions((key) => t(key)).filter((option) => isDevSetOption(option) && !option.id.startsWith("data-")),
+    [t],
+  );
   const setPresetById = useMemo<Record<string, AgentSetPresetSnapshot>>(
     () =>
       setOptions.reduce<Record<string, AgentSetPresetSnapshot>>((acc, option) => {
@@ -110,60 +124,6 @@ export default function AgentsPage({
     });
   }, [launchRequest, setOptions]);
 
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-    try {
-      const raw = window.localStorage.getItem(AGENT_SET_DASHBOARD_DATA_STORAGE_KEY);
-      if (!raw) {
-        return;
-      }
-      const parsed = JSON.parse(raw) as Record<string, string[]>;
-      setSetStateMap((prev) => {
-        const next = { ...prev };
-        for (const setOption of setOptions) {
-          const saved = parsed[setOption.id];
-          if (Array.isArray(saved)) {
-            const current = next[setOption.id] ?? createFallbackSetState();
-            next[setOption.id] = {
-              ...current,
-              dashboardInsights: saved
-                .map((item) => String(item ?? "").trim())
-                .filter((item) => item.length > 0)
-                .slice(0, 7),
-            };
-          }
-        }
-        return next;
-      });
-    } catch {
-      // ignore invalid local storage
-    }
-  }, [setOptions]);
-
-  useEffect(() => {
-    const nextInsightsBySet = buildDashboardInsightsBySet(setOptions, topicSnapshots);
-    setSetStateMap((prev) => {
-      const { nextSetStateMap, changed } = mergeDashboardInsightsBySetState(prev, nextInsightsBySet);
-      if (!changed) {
-        return prev;
-      }
-      if (typeof window !== "undefined") {
-        try {
-          const toStore: Record<string, string[]> = {};
-          for (const setOption of setOptions) {
-            toStore[setOption.id] = nextSetStateMap[setOption.id]?.dashboardInsights ?? [];
-          }
-          window.localStorage.setItem(AGENT_SET_DASHBOARD_DATA_STORAGE_KEY, JSON.stringify(toStore));
-        } catch {
-          // ignore local storage failures
-        }
-      }
-      return nextSetStateMap;
-    });
-  }, [setOptions, topicSnapshots]);
-
   const currentSetState = useMemo(() => {
     if (!activeSetId) {
       return null;
@@ -184,6 +144,30 @@ export default function AgentsPage({
   const attachedFiles = currentSetState?.attachedFiles ?? [];
   const setMission = currentSetState?.setMission ?? "";
   const dashboardInsights = currentSetState?.dashboardInsights ?? [];
+  const enabledAttachedFileNames = currentSetState?.enabledAttachedFileNames ?? [];
+  const enabledDataSourceIds = currentSetState?.enabledDataSourceIds ?? [];
+  const recentDataSources = useMemo<AgentDataSourceItem[]>(
+    () =>
+      DASHBOARD_TOPIC_IDS.map((topic) => {
+        const snapshot = topicSnapshots[topic];
+        if (!snapshot) {
+          return null;
+        }
+        const summary = String(snapshot.summary ?? "").trim();
+        if (!summary) {
+          return null;
+        }
+        const runId = String(snapshot.runId ?? snapshot.generatedAt ?? "").trim();
+        return {
+          id: `${topic}:${runId || summary.slice(0, 24)}`,
+          label: t(`dashboard.widget.${topic}.title`),
+          detail: `${formatTopicToken(topic)} · ${summary}`,
+        } satisfies AgentDataSourceItem;
+      })
+        .filter((item): item is AgentDataSourceItem => item !== null)
+        .slice(0, 8),
+    [t, topicSnapshots],
+  );
 
   const activeThread = useMemo(
     () => threads.find((thread) => thread.id === activeThreadId) ?? threads[0] ?? null,
@@ -202,6 +186,29 @@ export default function AgentsPage({
       };
     });
   };
+
+  useEffect(() => {
+    if (!activeSetId) {
+      return;
+    }
+    const availableIds = new Set(recentDataSources.map((item) => item.id));
+    updateActiveSetState((current) => {
+      const nextEnabled = current.enabledDataSourceIds.filter((id) => availableIds.has(id));
+      if (nextEnabled.length === 0 && recentDataSources.length > 0) {
+        return {
+          ...current,
+          enabledDataSourceIds: recentDataSources.slice(0, 3).map((item) => item.id),
+        };
+      }
+      if (nextEnabled.length === current.enabledDataSourceIds.length) {
+        return current;
+      }
+      return {
+        ...current,
+        enabledDataSourceIds: nextEnabled,
+      };
+    });
+  }, [activeSetId, recentDataSources]);
 
   useEffect(() => {
     if (!modelOptions.some((option) => option.value === selectedModel)) {
@@ -333,6 +340,8 @@ export default function AgentsPage({
       }
       return;
     }
+    const selectedDataSources = recentDataSources.filter((item) => enabledDataSourceIds.includes(item.id));
+    const selectedAttachedFiles = attachedFiles.filter((file) => enabledAttachedFileNames.includes(file.name));
     const payload = buildAgentDispatchPayload({
       threadName: activeThread?.name,
       threadRole: activeThread?.role,
@@ -341,8 +350,11 @@ export default function AgentsPage({
       selectedModel,
       selectedReasonLevel,
       isReasonLevelSelectable,
-      text,
-      attachedFileNames: attachedFiles.map((file) => file.name),
+      text:
+        selectedDataSources.length > 0
+          ? `RAG SOURCES\n${selectedDataSources.map((item) => `- ${item.detail}`).join("\n")}\n\n${text}`
+          : text,
+      attachedFileNames: selectedAttachedFiles.map((file) => file.name),
       codexMultiAgentMode,
     });
     onQuickAction({
@@ -388,10 +400,37 @@ export default function AgentsPage({
       return {
         ...current,
         attachedFiles: merged,
+        enabledAttachedFileNames: Array.from(
+          new Set([...current.enabledAttachedFileNames, ...nextFiles.map((file) => file.name)]),
+        ),
       };
     });
 
     event.target.value = "";
+  };
+
+  const onToggleAttachedFile = (fileName: string) => {
+    updateActiveSetState((current) => {
+      const exists = current.enabledAttachedFileNames.includes(fileName);
+      return {
+        ...current,
+        enabledAttachedFileNames: exists
+          ? current.enabledAttachedFileNames.filter((name) => name !== fileName)
+          : [...current.enabledAttachedFileNames, fileName],
+      };
+    });
+  };
+
+  const onToggleDataSource = (sourceId: string) => {
+    updateActiveSetState((current) => {
+      const exists = current.enabledDataSourceIds.includes(sourceId);
+      return {
+        ...current,
+        enabledDataSourceIds: exists
+          ? current.enabledDataSourceIds.filter((id) => id !== sourceId)
+          : [...current.enabledDataSourceIds, sourceId],
+      };
+    });
   };
 
   if (!activeSetId) {
@@ -412,6 +451,9 @@ export default function AgentsPage({
       attachedFiles={attachedFiles}
       codexMultiAgentMode={codexMultiAgentMode}
       dashboardInsights={dashboardInsights}
+      recentDataSources={recentDataSources}
+      enabledAttachedFileNames={enabledAttachedFileNames}
+      enabledDataSourceIds={enabledDataSourceIds}
       draft={draft}
       fileInputRef={fileInputRef}
       isModelMenuOpen={isModelMenuOpen}
@@ -426,6 +468,8 @@ export default function AgentsPage({
       onOpenDataTab={onOpenDataTab}
       onOpenFilePicker={onOpenFilePicker}
       onQueuePrompt={onQueuePrompt}
+      onToggleAttachedFile={onToggleAttachedFile}
+      onToggleDataSource={onToggleDataSource}
       onRestoreTemplateSet={onRestoreTemplateSet}
       onSelectModel={setSelectedModel}
       onSelectReasonLevel={setSelectedReasonLevel}

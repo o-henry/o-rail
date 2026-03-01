@@ -50,6 +50,8 @@ export type AgentSetState = {
   draft: string;
   attachedFiles: AttachedFile[];
   dashboardInsights: string[];
+  enabledAttachedFileNames: string[];
+  enabledDataSourceIds: string[];
 };
 
 export type AgentSetPresetSnapshot = {
@@ -64,4 +66,10 @@ export type AgentSetGroup = {
   id: string;
   title: string;
   items: AgentSetOption[];
+};
+
+export type AgentDataSourceItem = {
+  id: string;
+  label: string;
+  detail: string;
 };

@@ -13,7 +13,7 @@ type DashboardIntelligenceSettingsProps = {
   runStateByTopic: Record<DashboardTopicId, DashboardTopicRunState>;
   snapshotsByTopic: Partial<Record<DashboardTopicId, DashboardTopicSnapshot>>;
   disabled?: boolean;
-  onRequestRunInAgents: (topic: DashboardTopicId, followupInstruction?: string) => void;
+  onRunTopic: (topic: DashboardTopicId, followupInstruction?: string) => void;
   briefingDocuments: Array<{
     id: string;
     runId: string;
@@ -211,6 +211,17 @@ export default function DashboardIntelligenceSettings(props: DashboardIntelligen
 
                 <div className="settings-dashboard-topic-state">
                   <span className={`settings-dashboard-status-badge is-${rowStatus.tone}`}>{rowStatus.label}</span>
+                  <button
+                    className="settings-dashboard-topic-run-button"
+                    disabled={Boolean(props.disabled) || Boolean(runState?.running)}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      props.onRunTopic(topic);
+                    }}
+                    type="button"
+                  >
+                    실행하기
+                  </button>
                 </div>
               </article>
             );
@@ -225,14 +236,6 @@ export default function DashboardIntelligenceSettings(props: DashboardIntelligen
             <strong>{t(`dashboard.widget.${activeTopic}.title`)}</strong>
             <code>{formatTopicId(activeTopic)}</code>
           </div>
-          <button
-            className="settings-dashboard-request-button"
-            disabled={props.disabled}
-            onClick={() => props.onRequestRunInAgents(activeTopic)}
-            type="button"
-          >
-            에이전트에서 실행 요청
-          </button>
         </header>
 
         <div className="settings-dashboard-topic-detail-scroll">

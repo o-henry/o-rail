@@ -1,7 +1,13 @@
 import { useState, type ChangeEvent, type RefObject } from "react";
 import type { DashboardTopicId, DashboardTopicRunState } from "../../features/dashboard/intelligence";
 import type { CodexMultiAgentMode } from "./agentPrompt";
-import type { AgentModelOption, AgentSetOption, AgentThread, AttachedFile } from "./agentTypes";
+import type {
+  AgentDataSourceItem,
+  AgentModelOption,
+  AgentSetOption,
+  AgentThread,
+  AttachedFile,
+} from "./agentTypes";
 import { AgentGridCard } from "./workspace/AgentGridCard";
 import { AgentsWorkspaceSidebar } from "./workspace/AgentsWorkspaceSidebar";
 import { AgentsWorkspaceTopbar } from "./workspace/AgentsWorkspaceTopbar";
@@ -14,6 +20,9 @@ type AgentsWorkspaceViewProps = {
   activeSetOption: AgentSetOption | null;
   setMission: string;
   dashboardInsights: string[];
+  recentDataSources: AgentDataSourceItem[];
+  enabledAttachedFileNames: string[];
+  enabledDataSourceIds: string[];
   codexMultiAgentMode: CodexMultiAgentMode;
   onSetActiveThreadId: (threadId: string) => void;
   onBackToSetList: () => void;
@@ -43,6 +52,8 @@ type AgentsWorkspaceViewProps = {
   onSend: () => void;
   sendDisabled: boolean;
   onQueuePrompt: (prompt: string) => void;
+  onToggleAttachedFile: (fileName: string) => void;
+  onToggleDataSource: (sourceId: string) => void;
   dataTopicId: DashboardTopicId | null;
   dataTopicRunState: DashboardTopicRunState | null;
   onOpenDataTab: () => void;
@@ -56,6 +67,9 @@ export function AgentsWorkspaceView({
   activeSetOption,
   setMission,
   dashboardInsights,
+  recentDataSources,
+  enabledAttachedFileNames,
+  enabledDataSourceIds,
   codexMultiAgentMode,
   onSetActiveThreadId,
   onBackToSetList,
@@ -85,6 +99,8 @@ export function AgentsWorkspaceView({
   onSend,
   sendDisabled,
   onQueuePrompt,
+  onToggleAttachedFile,
+  onToggleDataSource,
   dataTopicId,
   dataTopicRunState,
   onOpenDataTab,
@@ -137,7 +153,13 @@ export function AgentsWorkspaceView({
           codexMultiAgentMode={codexMultiAgentMode}
           activeThread={activeThread}
           dashboardInsights={dashboardInsights}
+          recentDataSources={recentDataSources}
+          attachedFiles={attachedFiles}
+          enabledAttachedFileNames={enabledAttachedFileNames}
+          enabledDataSourceIds={enabledDataSourceIds}
           onQueuePrompt={onQueuePrompt}
+          onToggleAttachedFile={onToggleAttachedFile}
+          onToggleDataSource={onToggleDataSource}
         />
       </section>
 

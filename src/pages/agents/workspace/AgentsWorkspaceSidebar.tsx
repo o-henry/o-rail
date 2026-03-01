@@ -1,4 +1,4 @@
-import type { AgentSetOption, AgentThread } from "../agentTypes";
+import type { AgentDataSourceItem, AgentSetOption, AgentThread, AttachedFile } from "../agentTypes";
 import { uppercaseEnglishTokens } from "./textUtils";
 
 type AgentsWorkspaceSidebarProps = {
@@ -9,7 +9,13 @@ type AgentsWorkspaceSidebarProps = {
   codexMultiAgentMode: string;
   activeThread: AgentThread | null;
   dashboardInsights: string[];
+  recentDataSources: AgentDataSourceItem[];
+  attachedFiles: AttachedFile[];
+  enabledAttachedFileNames: string[];
+  enabledDataSourceIds: string[];
   onQueuePrompt: (prompt: string) => void;
+  onToggleAttachedFile: (fileName: string) => void;
+  onToggleDataSource: (sourceId: string) => void;
 };
 
 export function AgentsWorkspaceSidebar({
@@ -20,7 +26,13 @@ export function AgentsWorkspaceSidebar({
   codexMultiAgentMode,
   activeThread,
   dashboardInsights,
+  recentDataSources,
+  attachedFiles,
+  enabledAttachedFileNames,
+  enabledDataSourceIds,
   onQueuePrompt,
+  onToggleAttachedFile,
+  onToggleDataSource,
 }: AgentsWorkspaceSidebarProps) {
   const quickActionItems = [
     {
@@ -74,13 +86,58 @@ export function AgentsWorkspaceSidebar({
 
           <section className="agents-sidebar-card">
             <div className="agents-sidebar-card-head">
-              <h4>데이터 스냅샷</h4>
+              <h4>컨텍스트/RAG 소스</h4>
             </div>
-            <ul className="agents-sidebar-list">
-              {(dashboardInsights.length > 0 ? dashboardInsights : ["스냅샷 데이터가 없습니다."]).slice(0, 6).map((line) => (
-                <li key={line}>{line}</li>
-              ))}
-            </ul>
+            <div className="agents-rag-source-group">
+              <small>첨부 파일</small>
+              {attachedFiles.length > 0 ? (
+                <ul className="agents-rag-source-list">
+                  {attachedFiles.map((file) => {
+                    const enabled = enabledAttachedFileNames.includes(file.name);
+                    return (
+                      <li key={file.id}>
+                        <span>{file.name}</span>
+                        <button
+                          aria-pressed={enabled}
+                          className={`agents-rag-toggle${enabled ? " is-on" : " is-off"}`}
+                          onClick={() => onToggleAttachedFile(file.name)}
+                          type="button"
+                        >
+                          {enabled ? "ON" : "OFF"}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : (
+                <p>첨부 파일이 없습니다.</p>
+              )}
+            </div>
+            <div className="agents-rag-source-group">
+              <small>최근 데이터 파이프라인 산출물</small>
+              {recentDataSources.length > 0 ? (
+                <ul className="agents-rag-source-list">
+                  {recentDataSources.map((item) => {
+                    const enabled = enabledDataSourceIds.includes(item.id);
+                    return (
+                      <li key={item.id}>
+                        <span>{item.detail}</span>
+                        <button
+                          aria-pressed={enabled}
+                          className={`agents-rag-toggle${enabled ? " is-on" : " is-off"}`}
+                          onClick={() => onToggleDataSource(item.id)}
+                          type="button"
+                        >
+                          {enabled ? "ON" : "OFF"}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : (
+                <p>{(dashboardInsights.length > 0 ? dashboardInsights : ["데이터 산출물이 없습니다."]).slice(0, 1)[0]}</p>
+              )}
+            </div>
           </section>
 
           <section className="agents-sidebar-card">

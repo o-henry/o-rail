@@ -2081,10 +2081,7 @@ function App() {
     setStatus,
     applyPreset,
   });
-  const {
-    onRequestDashboardTopicRunInAgents,
-    onRunDashboardTopicFromAgents,
-  } = useDashboardAgentBridge({
+  const { onRunDashboardTopicFromAgents, onRunDashboardTopicFromData } = useDashboardAgentBridge({
     setAgentLaunchRequest,
     agentLaunchRequestSeqRef,
     setWorkspaceTab: (next) => setWorkspaceTab(next),
@@ -2391,7 +2388,7 @@ function App() {
               config={dashboardIntelligenceConfig}
               disabled={running || isGraphRunning}
               onOpenBriefingDocument={onOpenBriefingDocumentFromData}
-              onRequestRunInAgents={onRequestDashboardTopicRunInAgents}
+              onRunTopic={onRunDashboardTopicFromData}
               runStateByTopic={dashboardIntelligenceRunStateByTopic}
               snapshotsByTopic={dashboardSnapshotsByTopic}
             />

@@ -16,6 +16,8 @@ describe("restoreSetStateFromPreset", () => {
       draft: "custom draft",
       attachedFiles: [{ id: "file-1", name: "memo.txt" }],
       dashboardInsights: ["marketSummary: 상승 신호", "riskAlertsBoard: 변동성 확대"],
+      enabledAttachedFileNames: ["memo.txt"],
+      enabledDataSourceIds: ["marketSummary:run-1"],
     };
 
     const preset: AgentSetPresetSnapshot = {
@@ -41,6 +43,8 @@ describe("restoreSetStateFromPreset", () => {
     expect(restored.threads.map((thread) => thread.name)).toEqual(["signal-scout"]);
     expect(restored.attachedFiles).toEqual([]);
     expect(restored.dashboardInsights).toEqual(current.dashboardInsights);
+    expect(restored.enabledAttachedFileNames).toEqual(current.enabledAttachedFileNames);
+    expect(restored.enabledDataSourceIds).toEqual(current.enabledDataSourceIds);
   });
 });
 
@@ -80,6 +84,8 @@ describe("dashboard insights mapping", () => {
         draft: "",
         attachedFiles: [],
         dashboardInsights: ["MARKET_SUMMARY: 이전 오염 데이터"],
+        enabledAttachedFileNames: [],
+        enabledDataSourceIds: [],
       },
       "data-marketSummary": {
         setMission: "시장 요약",
@@ -88,6 +94,8 @@ describe("dashboard insights mapping", () => {
         draft: "",
         attachedFiles: [],
         dashboardInsights: ["MARKET_SUMMARY: 이전 오염 데이터"],
+        enabledAttachedFileNames: [],
+        enabledDataSourceIds: [],
       },
     };
 

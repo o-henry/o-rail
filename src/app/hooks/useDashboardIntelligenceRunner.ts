@@ -70,10 +70,6 @@ export function useDashboardIntelligenceRunner(params: UseDashboardIntelligenceR
   const runTopic = useCallback(
     async (topic: DashboardTopicId, followupInstruction?: string) => {
       const topicConfig = config[topic];
-      if (!topicConfig?.enabled) {
-        setStatus(`Dashboard Intelligence 비활성 주제: ${topic}`);
-        return;
-      }
       if (!hasTauriRuntime) {
         setError("Dashboard Intelligence는 Tauri 런타임에서만 실행할 수 있습니다.");
         return;
@@ -115,25 +111,18 @@ export function useDashboardIntelligenceRunner(params: UseDashboardIntelligenceR
 
   const runAll = useCallback(async () => {
     for (const topic of DASHBOARD_TOPIC_IDS) {
-      if (!config[topic].enabled) {
-        continue;
-      }
       // Sequential execution reduces engine contention and keeps logs readable.
       // eslint-disable-next-line no-await-in-loop
       await runTopic(topic);
     }
-  }, [config, runTopic]);
+  }, [runTopic]);
 
   const runCrawlerOnlyForEnabledTopics = useCallback(async () => {
     if (!hasTauriRuntime) {
       setError("크롤러 실행은 Tauri 런타임에서만 가능합니다.");
       return;
     }
-    const selected = DASHBOARD_TOPIC_IDS.filter((topic) => config[topic].enabled);
-    if (selected.length === 0) {
-      setError("실행 가능한 주제가 없습니다. 주제 ON/OFF를 확인하세요.");
-      return;
-    }
+    const selected = [...DASHBOARD_TOPIC_IDS];
     for (const topic of selected) {
       updateRunState(setRunStateByTopic, topic, { running: true, lastError: undefined });
     }

@@ -31,7 +31,7 @@ export function createAgenticQueue(): AgenticQueue {
     const previousTail = tails.get(key) ?? Promise.resolve();
     const stablePreviousTail = previousTail.catch(() => undefined);
 
-    let resolveGate: (() => void) | null = null;
+    let resolveGate: () => void = () => {};
     const gatePromise = new Promise<void>((resolve) => {
       resolveGate = resolve;
     });
@@ -52,9 +52,7 @@ export function createAgenticQueue(): AgenticQueue {
         pendingCounts.delete(key);
       }
 
-      if (resolveGate) {
-        resolveGate();
-      }
+      resolveGate();
 
       queueMicrotask(() => {
         if (tails.get(key) === nextTail) {

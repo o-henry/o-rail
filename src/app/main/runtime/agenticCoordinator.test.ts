@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import { createAgenticQueue } from "./agenticQueue";
 import { runGraphWithCoordinator, runTopicWithCoordinator } from "./agenticCoordinator";
 
+type InvokeFn = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
+
 function sleep(ms: number) {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
@@ -11,7 +13,7 @@ function sleep(ms: number) {
 describe("agenticCoordinator", () => {
   it("persists topic run envelope and events", async () => {
     const queue = createAgenticQueue();
-    const invokeFn = vi.fn(async (command: string) => {
+    const invokeFn = (vi.fn(async (command: string) => {
       if (command === "workspace_write_text") {
         return "/tmp/write";
       }
@@ -19,7 +21,7 @@ describe("agenticCoordinator", () => {
         return "/tmp/runs";
       }
       return null;
-    });
+    }) as unknown) as InvokeFn;
 
     const result = await runTopicWithCoordinator({
       cwd: "/tmp/workspace",
@@ -57,7 +59,7 @@ describe("agenticCoordinator", () => {
 
   it("serializes same topic runs by queue key", async () => {
     const queue = createAgenticQueue();
-    const invokeFn = vi.fn(async () => "/tmp/write");
+    const invokeFn = (vi.fn(async () => "/tmp/write") as unknown) as InvokeFn;
     const order: string[] = [];
 
     const first = runTopicWithCoordinator({
@@ -95,12 +97,12 @@ describe("agenticCoordinator", () => {
 
   it("runs graph flow and records graph artifact path", async () => {
     const queue = createAgenticQueue();
-    const invokeFn = vi.fn(async (command: string) => {
+    const invokeFn = (vi.fn(async (command: string) => {
       if (command === "run_directory") {
         return "/tmp/runs";
       }
       return "/tmp/write";
-    });
+    }) as unknown) as InvokeFn;
 
     const result = await runGraphWithCoordinator({
       cwd: "/tmp/workspace",

@@ -1,5 +1,6 @@
 import { useCallback, type MutableRefObject } from "react";
 import type { DashboardTopicId } from "../../features/dashboard/intelligence";
+import type { AgenticAction } from "../../features/orchestration/agentic/actionBus";
 import type { AgentWorkspaceLaunchRequest } from "../../pages/agents/agentTypes";
 
 type UseDashboardAgentBridgeParams = {
@@ -18,6 +19,7 @@ type UseDashboardAgentBridgeParams = {
   setError: (message: string) => void;
   runDashboardTopic: (topic: DashboardTopicId, followupInstruction?: string) => Promise<void>;
   refreshDashboardSnapshots: () => Promise<void>;
+  dispatchAction?: (action: AgenticAction) => void;
 };
 
 export function useDashboardAgentBridge(params: UseDashboardAgentBridgeParams) {
@@ -56,6 +58,17 @@ export function useDashboardAgentBridge(params: UseDashboardAgentBridgeParams) {
         return;
       }
       params.setStatus(`에이전트 실행: ${params.t(`dashboard.widget.${topic}.title`)} 파이프라인 시작`);
+      if (params.dispatchAction) {
+        params.dispatchAction({
+          type: "run_topic",
+          payload: {
+            topic,
+            followupInstruction,
+            setId: `data-${topic}`,
+          },
+        });
+        return;
+      }
       await params.runDashboardTopic(topic, followupInstruction);
       await params.refreshDashboardSnapshots();
     },

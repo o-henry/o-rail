@@ -13,6 +13,7 @@ import BridgePage from "../pages/bridge/BridgePage";
 import FeedPage from "../pages/feed/FeedPage";
 import DashboardPage from "../pages/dashboard/DashboardPage";
 import { type DashboardDetailTopic } from "../pages/dashboard/DashboardDetailPage";
+import type { DashboardTopicId } from "../features/dashboard/intelligence";
 import AgentsPage from "../pages/agents/AgentsPage";
 import type { AgentQuickActionRequest, AgentWorkspaceLaunchRequest } from "../pages/agents/agentTypes";
 import SettingsPage from "../pages/settings/SettingsPage";
@@ -34,6 +35,7 @@ import { useWorkspaceNavigation } from "./hooks/useWorkspaceNavigation";
 import { useWorkspaceQuickPanel } from "./hooks/useWorkspaceQuickPanel";
 import { useDashboardAgentBridge } from "./hooks/useDashboardAgentBridge";
 import { useWorkspaceEventPersistence } from "./hooks/useWorkspaceEventPersistence";
+import { useAgenticActionBus } from "./hooks/useAgenticActionBus";
 import {
   COST_PRESET_DEFAULT_MODEL,
   DEFAULT_TURN_MODEL,
@@ -242,6 +244,8 @@ import { createRunGraphControlHandlers } from "./main/runtime/runGraphControlHan
 import { createRunGraphRunner } from "./main/runtime/runGraphRunner";
 import { createWorkflowPresetHandlers } from "./main/runtime/workflowPresetHandlers";
 import { createWebTurnRunHandlers } from "./main/runtime/webTurnRunHandlers";
+import { createAgenticQueue } from "./main/runtime/agenticQueue";
+import { runTopicWithCoordinator } from "./main/runtime/agenticCoordinator";
 import {
   createWorkspaceEventEntry,
   type WorkspaceEventEntry,
@@ -589,6 +593,8 @@ function App() {
     () => Boolean((window as Window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__),
     [],
   );
+  const agenticQueue = useMemo(() => createAgenticQueue(), []);
+  const { publishAction, subscribeAction } = useAgenticActionBus();
   const {
     snapshotsByTopic: dashboardSnapshotsByTopic,
     refreshSnapshots: refreshDashboardSnapshots,
@@ -1575,6 +1581,40 @@ function App() {
     batchScheduler.triggerByUserEvent();
     await onRunGraphCore(skipWebConnectPreflight);
   };
+  const runDashboardTopicDirect = useCallback(
+    async (topic: DashboardTopicId, followupInstruction?: string, setId?: string) => {
+      if (!loginCompleted) {
+        setError("Codex 로그인이 필요합니다. 설정에서 먼저 로그인해 주세요.");
+        setWorkspaceTab("settings");
+        return;
+      }
+      await runTopicWithCoordinator({
+        cwd,
+        topic,
+        sourceTab: workspaceTab === "workflow" ? "workflow" : "agents",
+        followupInstruction,
+        setId,
+        queue: agenticQueue,
+        invokeFn: invoke,
+        execute: async () => {
+          await runDashboardTopic(topic, followupInstruction);
+          await refreshDashboardSnapshots();
+          return null;
+        },
+        appendWorkspaceEvent,
+      });
+    },
+    [
+      agenticQueue,
+      appendWorkspaceEvent,
+      cwd,
+      loginCompleted,
+      refreshDashboardSnapshots,
+      runDashboardTopic,
+      setError,
+      workspaceTab,
+    ],
+  );
   const edgeLines = buildCanvasEdgeLines({
     entries: canvasDisplayEdges,
     nodeMap: canvasNodeMap,
@@ -1972,7 +2012,48 @@ function App() {
     setError,
     runDashboardTopic,
     refreshDashboardSnapshots,
+    dispatchAction: publishAction,
   });
+  useEffect(() => {
+    return subscribeAction((action) => {
+      if (action.type === "run_topic") {
+        void runDashboardTopicDirect(
+          action.payload.topic,
+          action.payload.followupInstruction,
+          action.payload.setId,
+        );
+        return;
+      }
+      if (action.type === "run_graph") {
+        void onRunGraph();
+        return;
+      }
+      if (action.type === "open_graph") {
+        onSelectWorkspaceTab("workflow");
+        const focusNodeId = String(action.payload?.focusNodeId ?? "").trim();
+        if (focusNodeId) {
+          setNodeSelection([focusNodeId], focusNodeId);
+        }
+        return;
+      }
+      if (action.type === "focus_node") {
+        onSelectWorkspaceTab("workflow");
+        const nodeId = String(action.payload.nodeId ?? "").trim();
+        if (nodeId) {
+          setNodeSelection([nodeId], nodeId);
+        }
+        return;
+      }
+      if (action.type === "open_run") {
+        onSelectWorkspaceTab("dashboard");
+        setStatus(`run 열기: ${action.payload.runId}`);
+        return;
+      }
+      if (action.type === "apply_template" && action.payload.presetKind) {
+        applyPreset(action.payload.presetKind);
+      }
+    });
+  }, [applyPreset, onRunGraph, onSelectWorkspaceTab, runDashboardTopicDirect, setNodeSelection, setStatus, subscribeAction]);
   const workspaceTopbarTabs = WORKSPACE_TOPBAR_TABS;
 
   const {

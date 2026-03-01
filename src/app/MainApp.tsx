@@ -327,6 +327,7 @@ function App() {
   const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>("dashboard");
   const [dashboardDetailTopic, setDashboardDetailTopic] = useState<DashboardDetailTopic | null>(null);
   const workspaceBackStackRef = useRef<WorkspaceTab[]>([]);
+  const workspaceForwardStackRef = useRef<WorkspaceTab[]>([]);
   const suppressWorkspaceHistoryPushRef = useRef(false);
   const {
     config: dashboardIntelligenceConfig,
@@ -1838,6 +1839,9 @@ function App() {
   });
   const onSelectWorkspaceTab = (tab: WorkspaceTab) => {
     const nextTab = tab === "bridge" ? "settings" : tab;
+    if (nextTab !== workspaceTab) {
+      workspaceForwardStackRef.current = [];
+    }
     setWorkspaceTab(nextTab);
     if (nextTab !== "dashboard") {
       setDashboardDetailTopic(null);
@@ -1848,6 +1852,7 @@ function App() {
       suppressWorkspaceHistoryPushRef.current = false;
       return;
     }
+    workspaceForwardStackRef.current = [];
     const stack = workspaceBackStackRef.current;
     if (stack.length === 0 || stack[stack.length - 1] !== workspaceTab) {
       stack.push(workspaceTab);
@@ -1861,11 +1866,18 @@ function App() {
       setDashboardDetailTopic(null);
       return;
     }
+    const forwardStack = workspaceForwardStackRef.current;
     const stack = workspaceBackStackRef.current;
     if (stack.length <= 1) {
       return;
     }
     const current = stack.pop();
+    if (current && (forwardStack.length === 0 || forwardStack[forwardStack.length - 1] !== current)) {
+      forwardStack.push(current);
+      if (forwardStack.length > 40) {
+        forwardStack.splice(0, forwardStack.length - 40);
+      }
+    }
     let previous = stack[stack.length - 1];
     while (previous === current && stack.length > 1) {
       stack.pop();
@@ -1877,17 +1889,40 @@ function App() {
     suppressWorkspaceHistoryPushRef.current = true;
     setWorkspaceTab(previous);
   }, [dashboardDetailTopic]);
+  const onNavigateWorkspaceForward = useCallback(() => {
+    const forwardStack = workspaceForwardStackRef.current;
+    if (forwardStack.length === 0) {
+      return;
+    }
+    const next = forwardStack.pop();
+    if (!next) {
+      return;
+    }
+    const backStack = workspaceBackStackRef.current;
+    if (backStack.length === 0 || backStack[backStack.length - 1] !== next) {
+      backStack.push(next);
+      if (backStack.length > 40) {
+        backStack.splice(0, backStack.length - 40);
+      }
+    }
+    suppressWorkspaceHistoryPushRef.current = true;
+    setWorkspaceTab(next);
+  }, []);
   useEffect(() => {
-    const onMouseBackButton = (event: MouseEvent) => {
-      if (event.button !== 3) {
+    const onMouseHistoryButton = (event: MouseEvent) => {
+      if (event.button === 3) {
+        event.preventDefault();
+        onNavigateWorkspaceBack();
         return;
       }
-      event.preventDefault();
-      onNavigateWorkspaceBack();
+      if (event.button === 4) {
+        event.preventDefault();
+        onNavigateWorkspaceForward();
+      }
     };
-    window.addEventListener("mousedown", onMouseBackButton);
-    return () => window.removeEventListener("mousedown", onMouseBackButton);
-  }, [onNavigateWorkspaceBack]);
+    window.addEventListener("mousedown", onMouseHistoryButton);
+    return () => window.removeEventListener("mousedown", onMouseHistoryButton);
+  }, [onNavigateWorkspaceBack, onNavigateWorkspaceForward]);
   const applyTurnExecutionFromModelSelection = useCallback(
     (selection: {
       executor: TurnExecutor;

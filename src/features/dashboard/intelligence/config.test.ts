@@ -27,6 +27,16 @@ describe("dashboard intelligence config", () => {
         "gamedeveloper.com",
       ]),
     );
+    expect(defaults.riskAlertBoard.allowlist).toEqual(
+      expect.arrayContaining([
+        "fema.gov",
+        "earthquake.usgs.gov",
+        "noaa.gov",
+        "weather.gov",
+        "gdacs.org",
+        "reliefweb.int",
+      ]),
+    );
   });
 
   it("normalizes invalid topic config values", () => {

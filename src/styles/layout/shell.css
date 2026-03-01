@@ -68,22 +68,22 @@
 }
 
 .app-shell.canvas-fullscreen-mode .left-nav {
-  display: none !important;
+  display: none;
 }
 
 .left-nav {
-  display: none !important;
-  width: 0 !important;
-  min-width: 0 !important;
-  height: 0 !important;
-  min-height: 0 !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  border: 0 !important;
-  border-radius: 0 !important;
-  background: transparent !important;
-  box-shadow: none !important;
-  overflow: hidden !important;
+  display: none;
+  width: 0;
+  min-width: 0;
+  height: 0;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  overflow: hidden;
 }
 
 .brand-spacer {
@@ -125,7 +125,7 @@
 }
 
 .left-nav .nav-list button {
-  display: none !important;
+  display: none;
 }
 
 .nav-list button {
@@ -362,7 +362,7 @@
 }
 
 .workspace-quick-toggle {
-  display: none !important;
+  display: none;
   width: 36px;
   min-width: 36px;
   min-height: 36px;
@@ -373,7 +373,6 @@
   background: transparent;
   color: var(--text-muted);
   padding: 0;
-  display: inline-flex;
   align-items: center;
   justify-content: center;
   font-size: 12px;
@@ -1697,12 +1696,12 @@
 }
 
 .canvas-runbar button {
-  width: var(--runbar-btn-size) !important;
-  min-width: var(--runbar-btn-size) !important;
-  height: var(--runbar-btn-size) !important;
+  width: var(--runbar-btn-size);
+  min-width: var(--runbar-btn-size);
+  height: var(--runbar-btn-size);
   border: 1px solid var(--canvas-control-border);
   box-shadow: var(--canvas-control-shadow);
-  min-height: var(--runbar-btn-size) !important;
+  min-height: var(--runbar-btn-size);
   font-size: 14px;
   font-weight: 700;
   line-height: 1;
@@ -1807,7 +1806,7 @@
   font-weight: 600;
   letter-spacing: -0.4px;
   font-size: 15px;
-  font-family: "Galmuri11", "DialogNanumBody1984", "Noto Sans KR", sans-serif !important;
+  font-family: "Galmuri11", "DialogNanumBody1984", "Noto Sans KR", sans-serif;
 }
 
 .inspector-head-tooltip-panel {
@@ -2200,22 +2199,22 @@
 .settings-dashboard-topic-select.fancy-select.is-open .fancy-select-trigger,
 .settings-dashboard-topic-select .fancy-select-trigger:focus,
 .settings-dashboard-topic-select .fancy-select-trigger:focus-visible {
-  min-height: 30px !important;
-  height: 30px !important;
-  border: 0 !important;
-  border-radius: 4px !important;
-  background: color-mix(in srgb, var(--surface-soft) 74%, var(--surface-elevated)) !important;
-  box-shadow: none !important;
+  min-height: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--surface-soft) 74%, var(--surface-elevated));
+  box-shadow: none;
 }
 
 .settings-multiagent-select .fancy-select-trigger,
 .settings-multiagent-select.fancy-select.is-open .fancy-select-trigger,
 .settings-multiagent-select .fancy-select-trigger:focus,
 .settings-multiagent-select .fancy-select-trigger:focus-visible {
-  border: 0 !important;
-  border-radius: 4px !important;
-  background: color-mix(in srgb, var(--surface-soft) 74%, var(--surface-elevated)) !important;
-  box-shadow: none !important;
+  border: 0;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--surface-soft) 74%, var(--surface-elevated));
+  box-shadow: none;
 }
 
 .settings-view .controls .fancy-select.is-open .fancy-select-trigger {
@@ -2666,7 +2665,7 @@
   font-size: 15px;
   letter-spacing: 0;
   color: var(--text-main);
-  font-family: "Galmuri11", "DialogNanumBody1984", "Noto Sans KR", sans-serif !important;
+  font-family: "Galmuri11", "DialogNanumBody1984", "Noto Sans KR", sans-serif;
 }
 
 .settings-dashboard-intelligence-eyebrow {
@@ -2674,7 +2673,7 @@
   line-height: 1;
   letter-spacing: 0;
   color: var(--text-muted);
-  font-family: "Galmuri11", "DialogNanumBody1984", "Noto Sans KR", sans-serif !important;
+  font-family: "Galmuri11", "DialogNanumBody1984", "Noto Sans KR", sans-serif;
 }
 
 .settings-dashboard-intelligence-head h4 {
@@ -2926,7 +2925,7 @@
   font-size: 14px;
   color: var(--text-main);
   line-height: 1.25;
-  font-family: "Galmuri11", "DialogNanumBody1984", "Noto Sans KR", sans-serif !important;
+  font-family: "Galmuri11", "DialogNanumBody1984", "Noto Sans KR", sans-serif;
 }
 
 .settings-dashboard-topic-detail-title code {
@@ -3257,22 +3256,22 @@
 .feed-agent-settings-grid .fancy-select *,
 .feed-agent-settings-grid input,
 .feed-agent-settings-grid textarea {
-  pointer-events: none !important;
-  cursor: default !important;
+  pointer-events: none;
+  cursor: default;
 }
 
 .feed-agent-settings-grid .fancy-select-menu {
-  display: none !important;
+  display: none;
 }
 
 .feed-agent-settings-grid .fancy-select-trigger,
 .feed-agent-settings-grid input,
 .feed-agent-settings-grid textarea {
-  border: 0 !important;
-  box-shadow: none !important;
-  outline: none !important;
-  background: #f6f6f6 !important;
-  color: #2a3340 !important;
+  border: 0;
+  box-shadow: none;
+  outline: none;
+  background: #f6f6f6;
+  color: #2a3340;
 }
 
 .feed-agent-settings-grid .fancy-select-trigger,
@@ -3285,7 +3284,7 @@
 
 .feed-agent-settings-grid .fancy-select-chevron,
 .feed-agent-settings-grid .fancy-select-chevron-icon {
-  display: none !important;
+  display: none;
 }
 
 .feed-agent-settings-grid .fancy-select-trigger {
@@ -3320,9 +3319,9 @@
 .feed-agent-settings-grid textarea:focus-visible,
 .feed-agent-settings-grid .fancy-select-trigger:focus,
 .feed-agent-settings-grid .fancy-select-trigger:focus-visible {
-  outline: none !important;
-  box-shadow: none !important;
-  border-color: transparent !important;
+  outline: none;
+  box-shadow: none;
+  border-color: transparent;
 }
 
 .feed-agent-settings-grid input[type="number"] {
@@ -3449,7 +3448,7 @@
 .feed-topbar h2 {
   margin: 0;
   font-size: 15px;
-  font-family: "Galmuri11", "DialogNanumBody1984", "Noto Sans KR", sans-serif !important;
+  font-family: "Galmuri11", "DialogNanumBody1984", "Noto Sans KR", sans-serif;
   letter-spacing: -0.015em;
   color: #14181f;
 }
@@ -3502,7 +3501,7 @@
   border: 0;
   padding: 0;
   border-radius: 0;
-  background: transparent !important;
+  background: transparent;
   color: #28303a;
   font-size: 12px;
 }
@@ -3736,7 +3735,7 @@
   min-height: 28px;
   padding: 0 10px;
   border-radius: 3px;
-  font-size: 12px !important;
+  font-size: 12px;
   line-height: 1;
   background: #eef2f7;
   color: #3a4656;
@@ -3748,7 +3747,7 @@
 }
 
 .feed-run-group-delete {
-  font-size: 9px !important;
+  font-size: 9px;
 }
 
 .feed-run-group-rename {
@@ -4424,7 +4423,7 @@
 }
 
 .feed-step-list {
-  display: none !important;
+  display: none;
 }
 
 .feed-step-chip {
@@ -4779,7 +4778,7 @@
 }
 
 .dashboard-layout.dashboard-overview-layout .panel-card {
-  border: 0 !important;
+  border: 0;
 }
 
 .dashboard-overview-layout {
@@ -4805,7 +4804,7 @@
 .dashboard-terminal-sidebar,
 .dashboard-terminal-workspace {
   min-height: 0;
-  border: 0 !important;
+  border: 0;
   border-radius: 10px;
   background: color-mix(in srgb, var(--surface-elevated) 86%, var(--surface-panel));
   /* box-shadow: 0 10px 20px rgba(0, 0, 0, 0.24); */
@@ -5884,7 +5883,7 @@
   font-size: 14px;
   color: var(--text-main);
   line-height: 1.25;
-  font-family: "Galmuri11", "DialogNanumBody1984", "Noto Sans KR", sans-serif !important;
+  font-family: "Galmuri11", "DialogNanumBody1984", "Noto Sans KR", sans-serif;
 }
 
 .agents-set-picker-sidebar-title code {
@@ -5897,7 +5896,7 @@
   margin: 0;
   font-size: 15px;
   letter-spacing: 0;
-  font-family: "Galmuri11", "DialogNanumBody1984", "Noto Sans KR", sans-serif !important;
+  font-family: "Galmuri11", "DialogNanumBody1984", "Noto Sans KR", sans-serif;
   color: var(--text-main);
 }
 
@@ -6143,12 +6142,12 @@
 }
 
 .agents-sidebar-agent-name {
-  color: var(--text-main) !important;
-  font-size: 13px !important;
+  color: var(--text-main);
+  font-size: 13px;
 }
 
 .agents-sidebar-agent-role {
-  color: var(--text-muted) !important;
+  color: var(--text-muted);
 }
 
 .agents-sidebar-list {
@@ -6812,23 +6811,23 @@ html[data-locale="ko"] .agents-grid-card :lang(en) {
 .bridge-view.workspace-tab-panel,
 .childview-view.workspace-tab-panel,
 .dev-layout.workspace-tab-panel {
-  margin: 0 10px 10px !important;
-  min-height: 0 !important;
-  height: 100% !important;
+  margin: 0 10px 10px;
+  min-height: 0;
+  height: 100%;
   box-sizing: border-box;
-  padding-bottom: 0 !important;
+  padding-bottom: 0;
 }
 
 .settings-view.workspace-tab-panel {
-  padding-bottom: 20px !important;
+  padding-bottom: 20px;
 }
 
 .dashboard-layout.workspace-tab-panel {
-  padding-bottom: 4px !important;
+  padding-bottom: 4px;
 }
 
 .settings-view.data-intelligence-view.workspace-tab-panel {
-  padding-bottom: 0 !important;
+  padding-bottom: 0;
 }
 
 .history-layout,
@@ -6983,8 +6982,8 @@ pre {
 }
 
 .canvas-runbar .canvas-web-turn-reopen {
-  width: auto !important;
-  min-width: 56px !important;
+  width: auto;
+  min-width: 56px;
   padding: 0 9px;
   border-radius: 999px;
   border: 1px solid #3574f0;
@@ -7022,7 +7021,7 @@ pre {
 
 .controls > h3 {
   font-size: 15px;
-  font-family: "Galmuri11", "DialogNanumBody1984", "Noto Sans KR", sans-serif !important;
+  font-family: "Galmuri11", "DialogNanumBody1984", "Noto Sans KR", sans-serif;
 }
 
 .settings-view .controls > h3 {
@@ -7034,7 +7033,7 @@ pre {
 .inspector-title-chip,
 .agents-set-picker-head h2,
 .settings-dashboard-intelligence-eyebrow {
-  font-family: "Galmuri11", "DialogNanumBody1984", "Noto Sans KR", sans-serif !important;
+  font-family: "Galmuri11", "DialogNanumBody1984", "Noto Sans KR", sans-serif;
   font-size: 15px;
   letter-spacing: 0;
 }

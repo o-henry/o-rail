@@ -2728,7 +2728,7 @@
 
 .settings-dashboard-topic-columns {
   display: grid;
-  grid-template-columns: minmax(220px, 1.8fr) minmax(190px, 1fr) minmax(150px, 0.8fr);
+  grid-template-columns: minmax(220px, 1.8fr) minmax(190px, 1fr) minmax(108px, 0.5fr) minmax(92px, 0.45fr);
   align-items: center;
   gap: 8px;
   box-sizing: border-box;
@@ -2763,7 +2763,7 @@
 
 .settings-dashboard-topic-row {
   display: grid;
-  grid-template-columns: minmax(220px, 1.8fr) minmax(190px, 1fr) minmax(150px, 0.8fr);
+  grid-template-columns: minmax(220px, 1.8fr) minmax(190px, 1fr) minmax(108px, 0.5fr) minmax(92px, 0.45fr);
   gap: 8px;
   align-items: center;
   border-radius: 6px;
@@ -2897,6 +2897,13 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
+}
+
+.settings-dashboard-topic-run {
+  justify-self: start;
+  text-align: left;
+  display: inline-flex;
+  align-items: center;
 }
 
 .settings-dashboard-topic-run-button {

@@ -183,6 +183,7 @@ export default function DashboardIntelligenceSettings(props: DashboardIntelligen
           <span>TOPIC</span>
           <span>MODEL</span>
           <span>STATE</span>
+          <span>RUN</span>
         </div>
         <div className="settings-dashboard-intelligence-list" role="tablist" aria-label="데이터 토픽">
           {DASHBOARD_TOPIC_IDS.map((topic) => {
@@ -211,6 +212,8 @@ export default function DashboardIntelligenceSettings(props: DashboardIntelligen
 
                 <div className="settings-dashboard-topic-state">
                   <span className={`settings-dashboard-status-badge is-${rowStatus.tone}`}>{rowStatus.label}</span>
+                </div>
+                <div className="settings-dashboard-topic-run">
                   <button
                     className="settings-dashboard-topic-run-button"
                     disabled={Boolean(props.disabled) || Boolean(runState?.running)}

@@ -65,17 +65,35 @@ function BridgePanel({
               </div>
             </div>
           </div>
-          <button
-            aria-label={t("bridge.refresh.aria")}
-            className="settings-refresh-button settings-refresh-icon-button"
-            disabled={busy}
-            onClick={onRefreshStatus}
-            title={t("bridge.refresh.title")}
-            type="button"
-          >
-            <img alt="" aria-hidden="true" className="settings-refresh-icon" src="/reload.svg" />
-            <span className="settings-refresh-label">{t("bridge.refresh.title")}</span>
-          </button>
+          <div className="bridge-head-actions">
+            <button
+              aria-label={t("bridge.refresh.aria")}
+              className="settings-refresh-button settings-refresh-icon-button"
+              disabled={busy}
+              onClick={onRefreshStatus}
+              title={t("bridge.refresh.title")}
+              type="button"
+            >
+              <img alt="" aria-hidden="true" className="settings-refresh-icon" src="/reload.svg" />
+              <span className="settings-refresh-label">{t("bridge.refresh.title")}</span>
+            </button>
+            <button
+              className="settings-account-button bridge-head-action-button"
+              disabled={busy}
+              onClick={onCopyConnectCode}
+              type="button"
+            >
+              <span className="settings-button-label">{t("bridge.copyCode")}</span>
+            </button>
+            <button
+              className="settings-account-button bridge-head-action-button"
+              disabled={busy}
+              onClick={onRestartBridge}
+              type="button"
+            >
+              <span className="settings-button-label">{t("bridge.restart")}</span>
+            </button>
+          </div>
         </div>
         <div className="settings-badges">
           <span className={`status-tag ${status.running ? "on" : "off"}`}>
@@ -91,24 +109,6 @@ function BridgePanel({
               ? t("bridge.allowlist.count", { count: status.allowedExtensionOriginCount ?? 0 })
               : t("bridge.tokenMode")}
           </span>
-        </div>
-        <div className="button-row bridge-action-row">
-          <button
-            className="settings-account-button"
-            disabled={busy}
-            onClick={onCopyConnectCode}
-            type="button"
-          >
-            <span className="settings-button-label">{t("bridge.copyCode")}</span>
-          </button>
-          <button
-            className="settings-account-button"
-            disabled={busy}
-            onClick={onRestartBridge}
-            type="button"
-          >
-            <span className="settings-button-label">{t("bridge.restart")}</span>
-          </button>
         </div>
         {connectCode && (
           <div className="bridge-code-card">

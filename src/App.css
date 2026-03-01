@@ -422,6 +422,7 @@ h3 {
   grid-template-columns: 1fr;
   column-gap: 0;
   background: var(--app-shell-bg);
+  padding-bottom: 18px;
 }
 
 .window-drag-region {
@@ -684,7 +685,8 @@ h3 {
 
 .workspace-topbar {
   grid-row: 3;
-  background: var(--workspace-chrome-surface);
+  /* background: var(--workspace-chrome-surface); */
+  background: transparent;
   min-height: 44px;
   padding: 0 12px;
   display: flex;
@@ -2837,6 +2839,12 @@ h3 {
   line-height: 1;
 }
 
+.settings-usage-button.settings-account-button,
+.bridge-head-action-button.settings-account-button {
+  height: 30px;
+  min-height: 30px;
+}
+
 .provider-session-toggle,
 .settings-refresh-button {
   width: 84px;
@@ -2921,6 +2929,13 @@ h3 {
   gap: 8px;
 }
 
+.bridge-head-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
 .web-automation-head h2 {
   margin: 0;
 }
@@ -2955,7 +2970,7 @@ h3 {
   gap: 12px;
   min-height: 0;
   overflow: auto;
-  box-shadow: var(--panel-shadow);
+  /* box-shadow: var(--panel-shadow); */
 }
 
 .history-layout {
@@ -5064,7 +5079,7 @@ h3 {
   justify-items: stretch;
   align-content: start;
   gap: 12px;
-  padding: 18px 20px 12px;
+  padding: 18px 20px 20px;
   overflow: auto;
   -ms-overflow-style: none;
   scrollbar-width: none;
@@ -5081,7 +5096,7 @@ h3 {
   width: 100%;
   max-width: 720px;
   margin-inline: auto;
-  margin-top: 1.5rem;
+  margin-top: 2.5rem;
 }
 
 .panel-card.settings-view {
@@ -5153,7 +5168,7 @@ h3 {
   border: 0 !important;
   border-radius: 10px;
   background: color-mix(in srgb, var(--surface-elevated) 86%, var(--surface-panel));
-  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.24);
+  /* box-shadow: 0 10px 20px rgba(0, 0, 0, 0.24); */
   padding: 0;
   gap: 0;
   overflow: hidden;
@@ -5411,7 +5426,8 @@ h3 {
 .dashboard-terminal-editor pre {
   margin: 0;
   max-height: none;
-  background: transparent;
+  /* background: transparent; */
+  background: white;
   border-radius: 0;
   color: #c4d2e8;
   padding: 14px;
@@ -6016,7 +6032,7 @@ h3 {
   border: 0;
   border-radius: 10px;
   background: var(--panel-surface);
-  box-shadow: var(--panel-shadow);
+  /* box-shadow: var(--panel-shadow); */
 }
 
 :root[data-theme="light"] .panel-card.settings-view.data-intelligence-view {
@@ -7065,6 +7081,18 @@ html[data-locale="ko"] .agents-grid-card :lang(en) {
   min-height: 0 !important;
   height: 100% !important;
   box-sizing: border-box;
+  padding-bottom: 0 !important;
+}
+
+.settings-view.workspace-tab-panel {
+  padding-bottom: 20px !important;
+}
+
+.dashboard-layout.workspace-tab-panel {
+  padding-bottom: 4px !important;
+}
+
+.settings-view.data-intelligence-view.workspace-tab-panel {
   padding-bottom: 0 !important;
 }
 

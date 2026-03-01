@@ -34,6 +34,10 @@ export default function DashboardIntelligenceSettings(props: DashboardIntelligen
   const activeTopicConfig = props.config[activeTopic];
   const activeTopicRunState = props.runStateByTopic[activeTopic];
   const activeSnapshot = props.snapshotsByTopic[activeTopic];
+  const allowlistPreview = useMemo(
+    () => activeTopicConfig.allowlist.slice(0, 8),
+    [activeTopicConfig.allowlist],
+  );
 
   const activeTopicStatus = useMemo(() => {
     if (activeTopicRunState?.running) {
@@ -128,6 +132,16 @@ export default function DashboardIntelligenceSettings(props: DashboardIntelligen
             <small>선택 토픽</small>
             <strong>{t(`dashboard.widget.${activeTopic}.title`)}</strong>
             <code>{formatTopicId(activeTopic)}</code>
+            {allowlistPreview.length > 0 ? (
+              <div className="settings-dashboard-topic-detail-allowlist-brief">
+                {allowlistPreview.map((source) => (
+                  <span key={source}>{source}</span>
+                ))}
+                {activeTopicConfig.allowlist.length > allowlistPreview.length ? (
+                  <span>{`+${activeTopicConfig.allowlist.length - allowlistPreview.length}`}</span>
+                ) : null}
+              </div>
+            ) : null}
           </div>
           <button
             className="settings-dashboard-request-button"

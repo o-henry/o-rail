@@ -6760,6 +6760,7 @@ html[data-locale="ko"] .agents-grid-card :lang(en) {
   display: flex;
   align-items: center;
   min-height: 20px;
+  margin-top: -4px;
 }
 
 .agents-grid-card-kind {

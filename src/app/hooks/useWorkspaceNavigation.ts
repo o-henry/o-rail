@@ -12,6 +12,8 @@ type UseWorkspaceNavigationParams = {
     message: string;
     actor?: "user" | "ai" | "system";
     level?: "info" | "error";
+    runId?: string;
+    topic?: string;
   }) => void;
 };
 

@@ -12,6 +12,8 @@ type UseDashboardAgentBridgeParams = {
     message: string;
     actor?: "user" | "ai" | "system";
     level?: "info" | "error";
+    runId?: string;
+    topic?: DashboardTopicId;
   }) => void;
   setStatus: (message: string) => void;
   t: (key: string) => string;

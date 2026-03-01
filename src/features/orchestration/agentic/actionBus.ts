@@ -1,5 +1,5 @@
-import type { DashboardTopicId } from "../../dashboard/intelligence";
-import type { PresetKind } from "../../workflow/domain";
+export type AgenticActionTopicId = string;
+export type AgenticPresetKind = string;
 
 export type AgenticAction =
   | {
@@ -23,7 +23,7 @@ export type AgenticAction =
   | {
       type: "run_topic";
       payload: {
-        topic: DashboardTopicId;
+        topic: AgenticActionTopicId;
         followupInstruction?: string;
         setId?: string;
       };
@@ -37,7 +37,7 @@ export type AgenticAction =
   | {
       type: "apply_template";
       payload: {
-        presetKind?: PresetKind;
+        presetKind?: AgenticPresetKind;
         setId?: string;
       };
     };

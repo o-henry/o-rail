@@ -1,11 +1,4 @@
-import {
-  type CSSProperties,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "../App.css";
 import { invoke, listen, openUrl } from "../shared/tauri";
 import AppNav from "../components/AppNav";
@@ -13,7 +6,6 @@ import BridgePage from "../pages/bridge/BridgePage";
 import FeedPage from "../pages/feed/FeedPage";
 import DashboardPage from "../pages/dashboard/DashboardPage";
 import { type DashboardDetailTopic } from "../pages/dashboard/DashboardDetailPage";
-import type { DashboardTopicId } from "../features/dashboard/intelligence";
 import AgentsPage from "../pages/agents/AgentsPage";
 import type { AgentQuickActionRequest, AgentWorkspaceLaunchRequest } from "../pages/agents/agentTypes";
 import SettingsPage from "../pages/settings/SettingsPage";
@@ -34,6 +26,7 @@ import { useDashboardIntelligenceRunner } from "./hooks/useDashboardIntelligence
 import { useWorkspaceNavigation } from "./hooks/useWorkspaceNavigation";
 import { useWorkspaceQuickPanel } from "./hooks/useWorkspaceQuickPanel";
 import { useDashboardAgentBridge } from "./hooks/useDashboardAgentBridge";
+import { useAgenticOrchestrationBridge } from "./hooks/useAgenticOrchestrationBridge";
 import { useWorkspaceEventPersistence } from "./hooks/useWorkspaceEventPersistence";
 import { useAgenticActionBus } from "./hooks/useAgenticActionBus";
 import {
@@ -111,9 +104,7 @@ import {
   snapToNearbyNodeAxis,
   turnModelLabel,
 } from "../features/workflow/graph-utils";
-import type {
-  GraphNode,
-} from "../features/workflow/types";
+import type { GraphNode } from "../features/workflow/types";
 import {
   AUTH_MODE_STORAGE_KEY,
   CODEX_MULTI_AGENT_MODE_STORAGE_KEY,
@@ -139,6 +130,7 @@ import {
   toOpenRunsFolderErrorMessage,
   toUsageCheckErrorMessage,
 } from "./mainAppUtils";
+import { saveToLocalStorageSafely, toCssBackgroundImageValue } from "./mainAppUiUtils";
 import {
   GRAPH_SCHEMA_VERSION,
   KNOWLEDGE_DEFAULT_MAX_CHARS,
@@ -245,11 +237,7 @@ import { createRunGraphRunner } from "./main/runtime/runGraphRunner";
 import { createWorkflowPresetHandlers } from "./main/runtime/workflowPresetHandlers";
 import { createWebTurnRunHandlers } from "./main/runtime/webTurnRunHandlers";
 import { createAgenticQueue } from "./main/runtime/agenticQueue";
-import { runGraphWithCoordinator, runTopicWithCoordinator } from "./main/runtime/agenticCoordinator";
-import {
-  createWorkspaceEventEntry,
-  type WorkspaceEventEntry,
-} from "./main/runtime/workspaceEventLog";
+import { createWorkspaceEventEntry, type WorkspaceEventEntry } from "./main/runtime/workspaceEventLog";
 import { useBatchScheduler } from "./main/runtime/useBatchScheduler";
 import { useCanvasGraphDerivedState } from "./main/canvas/useCanvasGraphDerivedState";
 import { MainAppModals } from "./main/presentation/MainAppModals";
@@ -302,32 +290,7 @@ import {
   loadAgentRuleDocs,
 } from "./main/runtime/turnExecutionUtils";
 import { executeTurnNodeWithContext } from "./main/runtime/executeTurnNode";
-import type {
-  FeedCategory,
-  InternalMemorySnippet,
-  WebProviderRunResult,
-  RunRecord,
-} from "./main";
-
-function saveToLocalStorageSafely(key: string, value: string): void {
-  if (typeof window === "undefined") {
-    return;
-  }
-  try {
-    window.localStorage.setItem(key, value);
-  } catch {
-    // Ignore quota/security failures so UI interaction remains available.
-  }
-}
-
-function toCssBackgroundImageValue(raw: string): string {
-  const value = String(raw ?? "").trim();
-  if (!value) {
-    return "none";
-  }
-  const escaped = value.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\r?\n/g, "");
-  return `url("${escaped}")`;
-}
+import type { FeedCategory, InternalMemorySnippet, WebProviderRunResult, RunRecord } from "./main";
 
 const WORKSPACE_TOPBAR_TABS: Array<{ tab: WorkspaceTab; label: string }> = [{ tab: "dashboard", label: "대시보드" }, { tab: "intelligence", label: "데이터" }, { tab: "agents", label: "에이전트" }, { tab: "workflow", label: "그래프" }, { tab: "feed", label: "피드" }, { tab: "settings", label: "설정" }];
 
@@ -704,6 +667,8 @@ function App() {
     message: string;
     actor?: "user" | "ai" | "system";
     level?: "info" | "error";
+    runId?: string;
+    topic?: string;
   }) => {
     const message = String(params.message ?? "").trim();
     if (!message) {
@@ -714,6 +679,8 @@ function App() {
       message,
       actor: params.actor,
       level: params.level,
+      runId: params.runId,
+      topic: params.topic,
     });
     setWorkspaceEvents((prev) => [next, ...prev].slice(0, 300));
   }, []);
@@ -1582,86 +1549,6 @@ function App() {
     markCodexNodesStatusOnEngineIssue,
     cleanupRunGraphExecutionState,
   });
-  const runGraphWithAgenticCoordinator = useCallback(
-    async (skipWebConnectPreflight = false) => {
-      await runGraphWithCoordinator({
-        cwd,
-        sourceTab: "workflow",
-        graphId: selectedGraphFileName || graphFileName || "default",
-        queue: agenticQueue,
-        invokeFn: invoke,
-        execute: async ({ runId }) => {
-          graphRunOverrideIdRef.current = runId;
-          try {
-            batchScheduler.triggerByUserEvent();
-            await onRunGraphCore(skipWebConnectPreflight);
-          } finally {
-            graphRunOverrideIdRef.current = null;
-          }
-        },
-        appendWorkspaceEvent,
-      });
-    },
-    [
-      agenticQueue,
-      appendWorkspaceEvent,
-      batchScheduler,
-      cwd,
-      graphFileName,
-      invoke,
-      onRunGraphCore,
-      selectedGraphFileName,
-    ],
-  );
-  const onRunGraph = async (skipWebConnectPreflight = false) => {
-    if (skipWebConnectPreflight) {
-      await runGraphWithAgenticCoordinator(true);
-      return;
-    }
-    publishAction({
-      type: "run_graph",
-      payload: {
-        graphId: selectedGraphFileName || graphFileName || "default",
-      },
-    });
-  };
-  const runDashboardTopicDirect = useCallback(
-    async (topic: DashboardTopicId, followupInstruction?: string, setId?: string) => {
-      if (!loginCompleted) {
-        setError("Codex 로그인이 필요합니다. 설정에서 먼저 로그인해 주세요.");
-        setWorkspaceTab("settings");
-        return;
-      }
-      await runTopicWithCoordinator({
-        cwd,
-        topic,
-        sourceTab: workspaceTab === "workflow" ? "workflow" : "agents",
-        followupInstruction,
-        setId,
-        queue: agenticQueue,
-        invokeFn: invoke,
-        execute: async ({ runId, onProgress }) => {
-          const result = await runDashboardTopic(topic, followupInstruction, {
-            runId,
-            onProgress,
-          });
-          await refreshDashboardSnapshots();
-          return result;
-        },
-        appendWorkspaceEvent,
-      });
-    },
-    [
-      agenticQueue,
-      appendWorkspaceEvent,
-      cwd,
-      loginCompleted,
-      refreshDashboardSnapshots,
-      runDashboardTopic,
-      setError,
-      workspaceTab,
-    ],
-  );
   const edgeLines = buildCanvasEdgeLines({
     entries: canvasDisplayEdges,
     nodeMap: canvasNodeMap,
@@ -2045,6 +1932,29 @@ function App() {
     setWorkflowQuestion(request.prompt);
     setWorkspaceTab("workflow");
   };
+  const { onRunGraph, runDashboardTopicDirect } = useAgenticOrchestrationBridge({
+    cwd,
+    selectedGraphFileName,
+    graphFileName,
+    queue: agenticQueue,
+    invokeFn: invoke,
+    appendWorkspaceEvent,
+    triggerBatchByUserEvent: batchScheduler.triggerByUserEvent,
+    runGraphCore: onRunGraphCore,
+    graphRunOverrideIdRef,
+    publishAction,
+    subscribeAction,
+    loginCompleted,
+    setError,
+    setWorkspaceTab,
+    workspaceTab,
+    runDashboardTopic,
+    refreshDashboardSnapshots,
+    onSelectWorkspaceTab,
+    setNodeSelection,
+    setStatus,
+    applyPreset,
+  });
   const {
     onRequestDashboardTopicRunInAgents,
     onRunDashboardTopicFromAgents,
@@ -2057,58 +1967,10 @@ function App() {
     t,
     loginCompleted,
     setError,
-    runDashboardTopic,
+    runDashboardTopic: runDashboardTopicDirect,
     refreshDashboardSnapshots,
     dispatchAction: publishAction,
   });
-  useEffect(() => {
-    return subscribeAction((action) => {
-      if (action.type === "run_topic") {
-        void runDashboardTopicDirect(
-          action.payload.topic,
-          action.payload.followupInstruction,
-          action.payload.setId,
-        );
-        return;
-      }
-      if (action.type === "run_graph") {
-        void runGraphWithAgenticCoordinator(false);
-        return;
-      }
-      if (action.type === "open_graph") {
-        onSelectWorkspaceTab("workflow");
-        const focusNodeId = String(action.payload?.focusNodeId ?? "").trim();
-        if (focusNodeId) {
-          setNodeSelection([focusNodeId], focusNodeId);
-        }
-        return;
-      }
-      if (action.type === "focus_node") {
-        onSelectWorkspaceTab("workflow");
-        const nodeId = String(action.payload.nodeId ?? "").trim();
-        if (nodeId) {
-          setNodeSelection([nodeId], nodeId);
-        }
-        return;
-      }
-      if (action.type === "open_run") {
-        onSelectWorkspaceTab("dashboard");
-        setStatus(`run 열기: ${action.payload.runId}`);
-        return;
-      }
-      if (action.type === "apply_template" && action.payload.presetKind) {
-        applyPreset(action.payload.presetKind);
-      }
-    });
-  }, [
-    applyPreset,
-    onSelectWorkspaceTab,
-    runDashboardTopicDirect,
-    runGraphWithAgenticCoordinator,
-    setNodeSelection,
-    setStatus,
-    subscribeAction,
-  ]);
   const workspaceTopbarTabs = WORKSPACE_TOPBAR_TABS;
 
   const {

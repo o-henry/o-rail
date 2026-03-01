@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   DASHBOARD_TOPIC_IDS,
   type DashboardTopicId,
@@ -28,6 +28,8 @@ type DashboardPageProps = {
     actor: string;
     level: string;
     message: string;
+    runId?: string;
+    topic?: string;
   }>;
 };
 
@@ -55,6 +57,8 @@ function normalizeDashboardLogText(input: string): string {
 
 export default function DashboardPage(props: DashboardPageProps) {
   const { t } = useI18n();
+  const [runFilter, setRunFilter] = useState<string>("all");
+  const [topicFilter, setTopicFilter] = useState<string>("all");
 
   const cards = useMemo<DashboardCard[]>(
     () => [
@@ -118,14 +122,20 @@ export default function DashboardPage(props: DashboardPageProps) {
   const workSummaryItems = snapshotSummaries.length > 0 ? snapshotSummaries : fallbackFeedSummaries;
   const terminalLines = workSummaryItems.length > 0 ? workSummaryItems : [t("dashboard.value.none")];
   const resourceLines = useMemo<DashboardResourceLine[]>(() => {
+    const runFilterValue = runFilter;
+    const topicFilterValue = topicFilter;
     const eventLines: DashboardResourceLine[] = props.workspaceEvents
       .filter((entry) => entry.actor !== "user")
+      .filter((entry) => (runFilterValue === "all" ? true : String(entry.runId ?? "") === runFilterValue))
+      .filter((entry) => (topicFilterValue === "all" ? true : String(entry.topic ?? "") === topicFilterValue))
       .slice(0, 10)
       .map((entry) => ({
         id: `log-${entry.id}`,
         topic: "feed",
         kind: "log",
-        text: normalizeDashboardLogText(`${entry.source} · ${entry.message}`),
+        text: normalizeDashboardLogText(
+          `${entry.runId ? `[${entry.runId}] ` : ""}${entry.topic ? `${entry.topic} · ` : ""}${entry.source} · ${entry.message}`,
+        ),
       }));
 
     const snapshots = Object.values(props.topicSnapshots)
@@ -197,7 +207,28 @@ export default function DashboardPage(props: DashboardPageProps) {
         text: t("dashboard.value.none"),
       },
     ];
-  }, [fallbackFeedSummaries, props.topicSnapshots, props.workspaceEvents]);
+  }, [fallbackFeedSummaries, props.topicSnapshots, props.workspaceEvents, runFilter, topicFilter]);
+
+  const runFilterOptions = useMemo(
+    () =>
+      [...new Set(
+        props.workspaceEvents
+          .filter((entry) => entry.actor !== "user")
+          .map((entry) => String(entry.runId ?? "").trim())
+          .filter((value) => value.length > 0),
+      )].slice(0, 30),
+    [props.workspaceEvents],
+  );
+  const topicFilterOptions = useMemo(
+    () =>
+      [...new Set(
+        props.workspaceEvents
+          .filter((entry) => entry.actor !== "user")
+          .map((entry) => String(entry.topic ?? "").trim())
+          .filter((value) => value.length > 0),
+      )].slice(0, 20),
+    [props.workspaceEvents],
+  );
 
   const latestSnapshotText = useMemo(() => {
     const snapshots = Object.values(props.topicSnapshots).filter(
@@ -269,6 +300,30 @@ export default function DashboardPage(props: DashboardPageProps) {
           <div className="dashboard-terminal-sidebar-meta">
             <p>{t("dashboard.card.lastBatch")}</p>
             <b>{latestSnapshotText}</b>
+            <div className="dashboard-terminal-log-filters">
+              <label>
+                RUN
+                <select value={runFilter} onChange={(event) => setRunFilter(event.target.value)}>
+                  <option value="all">all</option>
+                  {runFilterOptions.map((value) => (
+                    <option key={value} value={value}>
+                      {value}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                TOPIC
+                <select value={topicFilter} onChange={(event) => setTopicFilter(event.target.value)}>
+                  <option value="all">all</option>
+                  {topicFilterOptions.map((value) => (
+                    <option key={value} value={value}>
+                      {value}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
           </div>
           {topicRunStateRows.length > 0 ? (
             <div className="dashboard-terminal-runstate" role="status">

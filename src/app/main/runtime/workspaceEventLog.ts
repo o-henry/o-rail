@@ -8,6 +8,8 @@ export type WorkspaceEventEntry = {
   actor: WorkspaceEventActor;
   level: WorkspaceEventLevel;
   message: string;
+  runId?: string;
+  topic?: string;
 };
 
 export function createWorkspaceEventEntry(input: {
@@ -15,6 +17,8 @@ export function createWorkspaceEventEntry(input: {
   message: string;
   actor?: WorkspaceEventActor;
   level?: WorkspaceEventLevel;
+  runId?: string;
+  topic?: string;
 }): WorkspaceEventEntry {
   const source = String(input.source ?? "").trim() || "system";
   const message = String(input.message ?? "").trim();
@@ -29,6 +33,8 @@ export function createWorkspaceEventEntry(input: {
     actor,
     level,
     message,
+    runId: String(input.runId ?? "").trim() || undefined,
+    topic: String(input.topic ?? "").trim() || undefined,
   };
 }
 
@@ -43,14 +49,14 @@ export function workspaceEventLogToMarkdown(entries: WorkspaceEventEntry[]): str
   const header = [
     "# Workspace Event Log",
     "",
-    "| time | source | actor | level | message |",
-    "| --- | --- | --- | --- | --- |",
+    "| time | source | actor | level | runId | topic | message |",
+    "| --- | --- | --- | --- | --- | --- | --- |",
   ];
   const rows = entries.map((entry) => {
     const date = new Date(entry.at);
     const timeText = Number.isNaN(date.getTime()) ? entry.at : date.toLocaleString();
     const message = entry.message.replace(/\r?\n/g, " ").replace(/\|/g, "\\|");
-    return `| ${timeText} | ${entry.source} | ${entry.actor} | ${entry.level} | ${message} |`;
+    return `| ${timeText} | ${entry.source} | ${entry.actor} | ${entry.level} | ${entry.runId ?? ""} | ${entry.topic ?? ""} | ${message} |`;
   });
   return [...header, ...rows].join("\n");
 }

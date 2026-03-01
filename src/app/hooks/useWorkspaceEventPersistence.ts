@@ -15,6 +15,8 @@ type UseWorkspaceEventPersistenceParams = {
     message: string;
     actor?: "user" | "ai" | "system";
     level?: "info" | "error";
+    runId?: string;
+    topic?: string;
   }) => void;
   workspaceEvents: WorkspaceEventEntry[];
   cwd: string;

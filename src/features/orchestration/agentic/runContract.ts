@@ -1,6 +1,5 @@
-import type { DashboardTopicId } from "../../dashboard/intelligence";
-
 export type AgenticRunSourceTab = "agents" | "workflow" | "intelligence" | "dashboard" | "feed" | "system";
+export type AgenticTopicId = string;
 
 export type AgenticRunStatus = "queued" | "running" | "done" | "error";
 
@@ -11,7 +10,7 @@ export type AgenticRunStageStatus = "idle" | "running" | "done" | "error" | "ski
 export type AgenticRunRecord = {
   runId: string;
   sourceTab: AgenticRunSourceTab;
-  topic?: DashboardTopicId;
+  topic?: AgenticTopicId;
   setId?: string;
   queueKey: string;
   status: AgenticRunStatus;
@@ -50,7 +49,7 @@ export type AgenticRunEvent = {
   at: string;
   runId: string;
   queueKey: string;
-  topic?: DashboardTopicId;
+  topic?: AgenticTopicId;
   sourceTab: AgenticRunSourceTab;
   type:
     | "run_queued"
@@ -74,7 +73,7 @@ export function createAgenticRunId(prefix = "run"): string {
   return `${prefix}-${stamp}-${random}`;
 }
 
-export function queueKeyForTopic(topic: DashboardTopicId): string {
+export function queueKeyForTopic(topic: AgenticTopicId): string {
   return `topic:${topic}`;
 }
 
@@ -91,7 +90,7 @@ export function createAgenticRunEnvelope(params: {
   runId?: string;
   sourceTab: AgenticRunSourceTab;
   queueKey: string;
-  topic?: DashboardTopicId;
+  topic?: AgenticTopicId;
   setId?: string;
 }): AgenticRunEnvelope {
   const now = nowIso();

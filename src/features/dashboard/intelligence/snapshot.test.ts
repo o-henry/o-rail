@@ -41,4 +41,26 @@ describe("dashboard snapshot parser", () => {
     expect(snapshot.highlights).toEqual(["x"]);
     expect(snapshot.references).toHaveLength(1);
   });
+
+  it("sanitizes machine/json/html payloads for human-readable highlights", () => {
+    const text = JSON.stringify({
+      summary: "<div>  시장 변동성 확대  </div>",
+      highlights: [
+        "{\"title\":\"미국 고용지표 둔화\",\"note\":\"채권 금리 하락\"}",
+        { text: "AI 반도체 수요 증가" },
+        "<p>원자재 가격 급등</p>",
+      ],
+      risks: [],
+      events: [],
+      references: [{ url: "https://example.com", title: "<b>Example</b>", source: "example.com" }],
+    });
+    const snapshot = parseDashboardSnapshotText("marketSummary", "gpt-5.2-codex", text);
+    expect(snapshot.summary).toBe("시장 변동성 확대");
+    expect(snapshot.highlights).toEqual([
+      "미국 고용지표 둔화",
+      "AI 반도체 수요 증가",
+      "원자재 가격 급등",
+    ]);
+    expect(snapshot.references[0]?.title).toBe("Example");
+  });
 });

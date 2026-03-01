@@ -520,7 +520,7 @@ export const ZH_MESSAGES: Dictionary = {
     "feed.share.status": "状态",
     "feed.share.role": "角色",
     "feed.share.createdAt": "创建时间",
-    "feed.share.runId": "运行 ID",
+    "feed.share.runId": "RUNID",
     "feed.share.sourceFile": "记录文件",
     "feed.share.question": "问题",
     "feed.share.summary": "摘要",

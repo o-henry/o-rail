@@ -520,7 +520,7 @@ export const KO_MESSAGES: Dictionary = {
     "feed.share.status": "상태",
     "feed.share.role": "역할",
     "feed.share.createdAt": "생성 시간",
-    "feed.share.runId": "실행 ID",
+    "feed.share.runId": "RUNID",
     "feed.share.sourceFile": "기록 파일",
     "feed.share.question": "질문",
     "feed.share.summary": "요약",

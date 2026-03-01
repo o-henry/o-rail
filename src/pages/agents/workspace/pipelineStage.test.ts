@@ -76,9 +76,9 @@ describe("pipeline stage mapping", () => {
       "marketSummary",
       { running: true, progressStage: "rag" },
     );
-    expect(crawlerSteps.map((step) => step.label)).toEqual(["crawler 수집"]);
-    expect(ragSteps.map((step) => step.label)).toEqual(["rag 분석"]);
-    expect(synthSteps.map((step) => step.label)).toEqual(["codex 생성", "snapshot 저장"]);
+    expect(crawlerSteps.map((step) => step.label)).toEqual(["allowlist 소스 수집 완료, raw 문서 저장 완료"]);
+    expect(ragSteps.map((step) => step.label)).toEqual(["knowledge_probe/retrieve로 근거 스니펫 추출·정규화 중"]);
+    expect(synthSteps.map((step) => step.label)).toEqual(["Codex 요약/리스크/이벤트 생성 대기", "스냅샷 저장 대기"]);
   });
 
   it("marks running agent by stage", () => {
@@ -108,5 +108,35 @@ describe("pipeline stage mapping", () => {
     );
     expect(crawlerStatus).toBe("done");
     expect(ragStatus).toBe("running");
+  });
+
+  it("keeps non-data agents as pending before explicit runtime state", () => {
+    const status = resolveAgentPipelineStatus(
+      {
+        id: "market-scout",
+        name: "signal-scout",
+        role: "Scout",
+        guidance: ["핵심 신호 수집"],
+        starterPrompt: "",
+        status: "preset",
+      },
+      null,
+      null,
+    );
+    const steps = buildProcessSteps(
+      {
+        id: "market-scout",
+        name: "signal-scout",
+        role: "Scout",
+        guidance: ["핵심 신호 수집", "핵심 근거 정리"],
+        starterPrompt: "",
+        status: "preset",
+      },
+      true,
+      null,
+      null,
+    );
+    expect(status).toBe("pending");
+    expect(steps.every((step) => step.state === "pending")).toBe(true);
   });
 });

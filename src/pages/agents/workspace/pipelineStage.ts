@@ -11,11 +11,31 @@ export type ProcessStep = {
   state: ProcessStepState;
 };
 
-const PIPELINE_STEP_LABELS: Record<PipelineStepKey, string> = {
-  crawler: "crawler 수집",
-  rag: "rag 분석",
-  codex: "codex 생성",
-  save: "snapshot 저장",
+const PIPELINE_STEP_LABELS: Record<PipelineStepKey, Record<ProcessStepState, string>> = {
+  crawler: {
+    pending: "allowlist 소스 수집 대기",
+    running: "allowlist 소스(RSS/API/HTML) 수집 후 raw 파일 저장 중",
+    done: "allowlist 소스 수집 완료, raw 문서 저장 완료",
+    error: "allowlist 소스 수집 실패, 원문 확보 중단",
+  },
+  rag: {
+    pending: "raw 문서 근거 스니펫 추출 대기",
+    running: "knowledge_probe/retrieve로 근거 스니펫 추출·정규화 중",
+    done: "근거 스니펫 추출 완료, 프롬프트 입력 준비 완료",
+    error: "근거 스니펫 추출 실패, 분석 단계 중단",
+  },
+  codex: {
+    pending: "Codex 요약/리스크/이벤트 생성 대기",
+    running: "Codex가 근거 기반 요약·리스크·이벤트를 생성 중",
+    done: "Codex 응답 파싱 완료, 스냅샷 생성 준비 완료",
+    error: "Codex 응답 생성 실패 또는 파싱 실패",
+  },
+  save: {
+    pending: "스냅샷 저장 대기",
+    running: "RUNID 기준 스냅샷/아티팩트 파일 저장 중",
+    done: "스냅샷 저장 완료, 실행 메타 갱신 완료",
+    error: "스냅샷 저장 실패",
+  },
 };
 
 function resolveThreadPipelineScopes(thread: AgentThread): PipelineStepKey[] {
@@ -144,7 +164,7 @@ export function resolveAgentPipelineStatus(
 
 export function buildProcessSteps(
   thread: AgentThread,
-  isSelected: boolean,
+  _isSelected: boolean,
   dataTopicId: DashboardTopicId | null,
   dataTopicRunState: DashboardTopicRunState | null,
 ): ProcessStep[] {
@@ -153,10 +173,11 @@ export function buildProcessSteps(
     const stepStates = resolvePipelineStepStates(dataTopicRunState);
     return scopes.map((scope) => {
       const index = scope === "crawler" ? 0 : scope === "rag" ? 1 : scope === "codex" ? 2 : 3;
+      const state = stepStates[index] ?? "pending";
       return {
         id: `${thread.id}-pipeline-${scope}`,
-        label: PIPELINE_STEP_LABELS[scope],
-        state: stepStates[index] ?? "pending",
+        label: PIPELINE_STEP_LABELS[scope][state],
+        state,
       };
     });
   }
@@ -171,7 +192,7 @@ export function buildProcessSteps(
   return steps.map((label, index) => ({
     id: `${thread.id}-step-${index}`,
     label,
-    state: isSelected && index === 0 ? "running" : "pending",
+    state: "pending",
   }));
 }
 

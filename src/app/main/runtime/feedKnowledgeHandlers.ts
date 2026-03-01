@@ -3,6 +3,15 @@ import type { KnowledgeFileRef } from "../../../features/workflow/types";
 import type { FeedViewPost, RunRecord } from "../types";
 
 export function createFeedKnowledgeHandlers(params: any) {
+  function isTransientDashboardPost(post: FeedViewPost): boolean {
+    const sourceFile = String(post?.sourceFile ?? "").trim().toLowerCase();
+    if (sourceFile.startsWith("dashboard-")) {
+      return true;
+    }
+    const postId = String(post?.id ?? "").trim().toLowerCase();
+    return postId.includes(":dashboard-");
+  }
+
   async function refreshGraphFiles() {
     if (!params.hasTauriRuntime) {
       params.setGraphFiles([]);
@@ -53,9 +62,23 @@ export function createFeedKnowledgeHandlers(params: any) {
           });
         }
       }
-      mergedPosts.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      const transientPosts = (Array.isArray(params.feedPosts) ? params.feedPosts : []).filter((post: FeedViewPost) =>
+        isTransientDashboardPost(post),
+      );
+      const mergedById = new Map<string, FeedViewPost>();
+      for (const post of mergedPosts) {
+        mergedById.set(post.id, post);
+      }
+      for (const post of transientPosts) {
+        if (!mergedById.has(post.id)) {
+          mergedById.set(post.id, post);
+        }
+      }
+      const nextPosts = [...mergedById.values()].sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      );
       params.feedRunCacheRef.current = nextCache;
-      params.setFeedPosts(mergedPosts);
+      params.setFeedPosts(nextPosts);
     } catch (e) {
       params.setError(`피드 로드 실패: ${String(e)}`);
     } finally {

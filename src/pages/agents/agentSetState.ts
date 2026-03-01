@@ -1,4 +1,4 @@
-import { DASHBOARD_TOPIC_IDS } from "../../features/dashboard/intelligence";
+import { DASHBOARD_TOPIC_IDS, type DashboardTopicId, type DashboardTopicSnapshot } from "../../features/dashboard/intelligence";
 import { BASE_AGENT_SET_OPTIONS } from "./agentOptions";
 import { buildAgentSetPreset, type AgentThreadPreset } from "./agentSetPresets";
 import type {
@@ -160,4 +160,74 @@ export function mergeRowPreview(description: string, snapshotLine: string): stri
     return desc;
   }
   return `${desc} · ${snap}`;
+}
+
+function formatTopicToken(topic: string): string {
+  return topic
+    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+    .replace(/-/g, "_")
+    .toUpperCase();
+}
+
+function normalizeInsightLine(topic: string, summary: string): string {
+  const normalizedSummary = String(summary ?? "").trim();
+  if (!normalizedSummary) {
+    return "";
+  }
+  return `${formatTopicToken(topic)}: ${normalizedSummary}`;
+}
+
+function sameLines(left: string[], right: string[]): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index] !== right[index]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+export function buildDashboardInsightsBySet(
+  setOptions: AgentSetOption[],
+  topicSnapshots: Partial<Record<DashboardTopicId, DashboardTopicSnapshot>>,
+): Record<string, string[]> {
+  const next = setOptions.reduce<Record<string, string[]>>((acc, option) => {
+    acc[option.id] = [];
+    return acc;
+  }, {});
+  for (const topicId of DASHBOARD_TOPIC_IDS) {
+    const snapshot = topicSnapshots[topicId];
+    if (!snapshot) {
+      continue;
+    }
+    const setId = `data-${topicId}`;
+    if (!Object.prototype.hasOwnProperty.call(next, setId)) {
+      continue;
+    }
+    const line = normalizeInsightLine(snapshot.topic, snapshot.summary);
+    next[setId] = line ? [line] : [];
+  }
+  return next;
+}
+
+export function mergeDashboardInsightsBySetState(
+  setStateMap: Record<string, AgentSetState>,
+  nextInsightsBySet: Record<string, string[]>,
+): { nextSetStateMap: Record<string, AgentSetState>; changed: boolean } {
+  let changed = false;
+  const nextSetStateMap: Record<string, AgentSetState> = { ...setStateMap };
+  for (const [setId, nextLines] of Object.entries(nextInsightsBySet)) {
+    const current = nextSetStateMap[setId] ?? createFallbackSetState();
+    if (sameLines(current.dashboardInsights, nextLines)) {
+      continue;
+    }
+    changed = true;
+    nextSetStateMap[setId] = {
+      ...current,
+      dashboardInsights: nextLines,
+    };
+  }
+  return { nextSetStateMap, changed };
 }

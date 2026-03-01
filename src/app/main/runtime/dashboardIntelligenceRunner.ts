@@ -167,7 +167,44 @@ function buildSnapshotWithoutCodex(params: {
   });
 }
 
+function isCodexAuthError(error: unknown): boolean {
+  const text = String(error ?? "").trim().toLowerCase();
+  if (!text) {
+    return false;
+  }
+  return [
+    "login required",
+    "requires login",
+    "로그인 필요",
+    "not authenticated",
+    "authentication",
+    "unauthorized",
+    "401",
+    "requiresopenaiauth",
+    "auth required",
+    "invalid api key",
+  ].some((keyword) => text.includes(keyword));
+}
+
+async function startCodexThreadOrThrow(params: RunDashboardTopicParams): Promise<ThreadStartResult> {
+  emitProgress(params, "codex_thread", "Codex 세션 준비 확인");
+  try {
+    return await params.invokeFn<ThreadStartResult>("thread_start", {
+      model: params.config.model,
+      cwd: params.cwd,
+    });
+  } catch (error) {
+    if (isCodexAuthError(error)) {
+      emitProgress(params, "auth_required", "Codex 로그인 필요: 실행 중단");
+      throw new Error("Codex 로그인이 필요합니다. 설정에서 로그인 후 다시 실행해 주세요.");
+    }
+    emitProgress(params, "agent_unavailable", `에이전트 준비 실패: ${String(error)}`);
+    throw new Error(`에이전트 실행 준비 실패로 파이프라인을 시작하지 않았습니다: ${String(error)}`);
+  }
+}
+
 export async function runDashboardTopicIntelligence(params: RunDashboardTopicParams): Promise<RunDashboardTopicResult> {
+  const threadStart = await startCodexThreadOrThrow(params);
   emitProgress(params, "crawler", "크롤러 수집 시작");
   const crawlResult = await runCrawlerForTopic({
     cwd: params.cwd,
@@ -210,11 +247,6 @@ export async function runDashboardTopicIntelligence(params: RunDashboardTopicPar
 
   let snapshot: DashboardTopicSnapshot;
   try {
-    emitProgress(params, "codex_thread", "Codex 세션 시작");
-    const threadStart = await params.invokeFn<ThreadStartResult>("thread_start", {
-      model: params.config.model,
-      cwd: params.cwd,
-    });
     emitProgress(params, "codex_turn", "Codex 응답 생성 중");
     const turnStartResponse = await params.invokeFn<unknown>("turn_start", {
       threadId: threadStart.threadId,
@@ -244,6 +276,10 @@ export async function runDashboardTopicIntelligence(params: RunDashboardTopicPar
       });
     }
   } catch (error) {
+    if (isCodexAuthError(error)) {
+      emitProgress(params, "auth_required", "Codex 로그인 필요: 실행 중단");
+      throw new Error("Codex 로그인이 필요합니다. 설정에서 로그인 후 다시 실행해 주세요.");
+    }
     emitProgress(params, "fallback", `Codex 실패: ${String(error)}`);
     snapshot = buildSnapshotWithoutCodex({
       topic: params.topic,

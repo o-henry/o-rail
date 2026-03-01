@@ -130,17 +130,13 @@ export function createEngineBridgeHandlers(params: any) {
       const probed = await refreshAuthStateFromEngine(true);
       if (probed?.state === "authenticated") {
         params.setLoginCompleted(true);
-      } else if (probed?.state === "login_required" && !params.loginCompleted) {
+      } else if (probed?.state === "login_required") {
         params.setLoginCompleted(false);
-      } else if (mode && mode !== "unknown") {
-        params.setLoginCompleted(true);
       }
       const inferredLogin = inferLoginStateFromUsage(result.raw);
       if (inferredLogin === false) {
         params.setLoginCompleted(false);
         params.setAuthMode("unknown");
-      } else if (inferredLogin === true) {
-        params.setLoginCompleted(true);
       }
       params.setUsageInfoText(params.formatUsageInfoForDisplay(result.raw));
       params.setUsageResultClosed(false);

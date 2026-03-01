@@ -1,7 +1,7 @@
 import type { DashboardTopicId, DashboardTopicRunState } from "../../../features/dashboard/intelligence";
 import type { AgentThread } from "../agentTypes";
-import { type ProcessStep, buildProcessSteps, formatAgentRuntimeText, resolveAgentPipelineStatus } from "./pipelineStage";
-import { detectTextLang, toKoreanThreadName } from "./textUtils";
+import { type ProcessStep, buildProcessSteps, resolveAgentPipelineStatus } from "./pipelineStage";
+import { detectTextLang, toKoreanThreadName, uppercaseEnglishTokens } from "./textUtils";
 
 type AgentGridCardProps = {
   t: (key: string) => string;
@@ -23,7 +23,7 @@ export function AgentGridCard({
   dataTopicRunState,
 }: AgentGridCardProps) {
   const resolvedStatus = resolveAgentPipelineStatus(thread, dataTopicId, dataTopicRunState);
-  const pipelineStatus = dataTopicId ? resolvedStatus : isSelected ? "running" : "pending";
+  const pipelineStatus = dataTopicId ? resolvedStatus : "pending";
   const displayThreadName = toKoreanThreadName(thread.name);
   const processSteps: ProcessStep[] = buildProcessSteps(
     thread,
@@ -32,7 +32,6 @@ export function AgentGridCard({
     dataTopicRunState,
   );
   const isRunning = pipelineStatus === "running";
-  const runtimeText = formatAgentRuntimeText(dataTopicRunState, pipelineStatus);
   const chipText =
     pipelineStatus === "running"
       ? "실행 중"
@@ -66,24 +65,20 @@ export function AgentGridCard({
         </button>
       </div>
       <div className="agents-grid-card-meta">
-        <span className={`agents-grid-card-chip is-${pipelineStatus}`}>
-          {chipText}
-        </span>
-        <span className="agents-grid-card-chip is-neutral">
+        <span className="agents-grid-card-kind">
           {thread.status === "preset" ? "기본 에이전트" : "사용자 에이전트"}
         </span>
       </div>
       <div className="agents-grid-card-log" aria-label={`${displayThreadName} 로그`}>
         <section className="agents-grid-card-log-block">
           <h5>역할</h5>
-          <p className="agents-grid-card-role" lang={roleLang}>{thread.role}</p>
+          <p className="agents-grid-card-role" lang={roleLang}>{uppercaseEnglishTokens(thread.role)}</p>
         </section>
         <section className="agents-grid-card-log-block">
           <h5>처리 단계</h5>
           <ol className="agents-grid-card-process-list">
-            {processSteps.map((step, index) => (
+            {processSteps.map((step) => (
               <li key={step.id}>
-                <span className="agents-grid-card-process-index">{index + 1}</span>
                 <span className={`agents-grid-card-process-dot is-${step.state}`} />
                 <span lang={detectTextLang(step.label)}>{step.label}</span>
               </li>
@@ -98,16 +93,7 @@ export function AgentGridCard({
         ) : null}
       </div>
       <div className="agents-grid-card-foot">
-        <div className={`agents-grid-card-progress-text is-${pipelineStatus}`}>
-          <span>{runtimeText}</span>
-          {isRunning ? (
-            <span aria-hidden="true" className="agents-grid-card-progress-dots">
-              <span>.</span>
-              <span>.</span>
-              <span>.</span>
-            </span>
-          ) : null}
-        </div>
+        <span className={`agents-grid-card-chip agents-grid-card-foot-chip is-${pipelineStatus}`}>{chipText}</span>
         <span
           aria-label={pipelineStatus === "running" ? "실행 중" : pipelineStatus === "done" ? "완료" : pipelineStatus === "error" ? "실패" : "대기"}
           className={`agents-grid-card-status-dot is-${pipelineStatus}`}

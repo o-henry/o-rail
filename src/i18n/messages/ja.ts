@@ -520,7 +520,7 @@ export const JA_MESSAGES: Dictionary = {
     "feed.share.status": "状態",
     "feed.share.role": "役割",
     "feed.share.createdAt": "生成時刻",
-    "feed.share.runId": "実行ID",
+    "feed.share.runId": "RUNID",
     "feed.share.sourceFile": "記録ファイル",
     "feed.share.question": "質問",
     "feed.share.summary": "要約",

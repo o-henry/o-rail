@@ -1,5 +1,5 @@
 import { type ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
-import { DASHBOARD_TOPIC_IDS, type DashboardTopicId, type DashboardTopicSnapshot } from "../../features/dashboard/intelligence";
+import { DASHBOARD_TOPIC_IDS, type DashboardTopicId } from "../../features/dashboard/intelligence";
 import { useI18n } from "../../i18n";
 import { AGENT_MODEL_OPTIONS, AGENT_REASON_LEVEL_OPTIONS } from "./agentOptions";
 import { AgentSetIndexView } from "./AgentSetIndexView";
@@ -14,6 +14,8 @@ import {
   createCustomThread,
   createFallbackSetState,
   createInitialSetStateMap,
+  buildDashboardInsightsBySet,
+  mergeDashboardInsightsBySetState,
   restoreSetStateFromPreset,
   createStateFromPresetSnapshot,
 } from "./agentSetState";
@@ -141,36 +143,24 @@ export default function AgentsPage({
   }, [setOptions]);
 
   useEffect(() => {
-    const snapshots = Object.values(topicSnapshots)
-      .filter((snapshot): snapshot is DashboardTopicSnapshot => Boolean(snapshot))
-      .sort((left, right) => new Date(right.generatedAt).getTime() - new Date(left.generatedAt).getTime())
-      .slice(0, 7)
-      .map((snapshot) => `${snapshot.topic}: ${snapshot.summary}`);
-    if (snapshots.length === 0) {
-      return;
-    }
-
+    const nextInsightsBySet = buildDashboardInsightsBySet(setOptions, topicSnapshots);
     setSetStateMap((prev) => {
-      const next = { ...prev };
-      for (const setOption of setOptions) {
-        const current = next[setOption.id] ?? createFallbackSetState();
-        next[setOption.id] = {
-          ...current,
-          dashboardInsights: snapshots,
-        };
+      const { nextSetStateMap, changed } = mergeDashboardInsightsBySetState(prev, nextInsightsBySet);
+      if (!changed) {
+        return prev;
       }
       if (typeof window !== "undefined") {
         try {
           const toStore: Record<string, string[]> = {};
           for (const setOption of setOptions) {
-            toStore[setOption.id] = next[setOption.id]?.dashboardInsights ?? [];
+            toStore[setOption.id] = nextSetStateMap[setOption.id]?.dashboardInsights ?? [];
           }
           window.localStorage.setItem(AGENT_SET_DASHBOARD_DATA_STORAGE_KEY, JSON.stringify(toStore));
         } catch {
           // ignore local storage failures
         }
       }
-      return next;
+      return nextSetStateMap;
     });
   }, [setOptions, topicSnapshots]);
 

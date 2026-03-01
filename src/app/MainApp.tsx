@@ -743,6 +743,7 @@ function App() {
   } = createFeedKnowledgeHandlers({
     hasTauriRuntime,
     invokeFn: invoke,
+    feedPosts,
     setGraphFiles,
     setFeedPosts,
     setFeedLoading,
@@ -1883,6 +1884,131 @@ function App() {
     setDashboardDetailTopic,
     appendWorkspaceEvent,
   });
+  const onOpenBriefingDocumentFromData = useCallback(
+    (runId: string, postId?: string) => {
+      const resolvedRunId = String(runId ?? "").trim();
+      if (!resolvedRunId) {
+        setStatus("열 수 있는 브리핑 실행 기록이 없습니다.");
+        return;
+      }
+      const resolvedPostId = String(postId ?? "").trim();
+      const existingRunPosts = feedPosts.filter((post) => String(post.runId ?? "").trim() === resolvedRunId);
+      let fallbackPostId = resolvedPostId;
+      let hasOpenablePost = existingRunPosts.length > 0;
+      if (existingRunPosts.length === 0) {
+        const snapshot = Object.values(dashboardSnapshotsByTopic)
+          .filter((row): row is NonNullable<typeof row> => Boolean(row))
+          .find((row) => String(row.runId ?? "").trim() === resolvedRunId);
+        if (snapshot) {
+          const topicLabel = t(`dashboard.widget.${snapshot.topic}.title`);
+          const syntheticNodeId = `dashboard-${snapshot.topic}`;
+          const syntheticPostId = `${resolvedRunId}:${syntheticNodeId}:${snapshot.status === "degraded" ? "low_quality" : "done"}`;
+          const alreadyExists = feedPosts.some((post) => post.id === syntheticPostId);
+          if (!alreadyExists) {
+            const built = buildFeedPost({
+              runId: resolvedRunId,
+              node: {
+                id: syntheticNodeId,
+                type: "turn",
+                config: {
+                  executor: "codex",
+                  model: snapshot.model,
+                  role: "DASHBOARD BRIEFING",
+                },
+              },
+              isFinalDocument: true,
+              status: snapshot.status === "degraded" ? "low_quality" : "done",
+              createdAt: String(snapshot.generatedAt ?? new Date().toISOString()),
+              summary: String(snapshot.summary ?? "").trim() || `${topicLabel} 브리핑 생성`,
+              logs: [
+                `${topicLabel} 브리핑 생성`,
+                ...(Array.isArray(snapshot.highlights) ? snapshot.highlights.slice(0, 8) : []),
+              ],
+              output: snapshot,
+            });
+            built.post.inputSources = (snapshot.references ?? []).slice(0, 10).map((reference) => ({
+              kind: "node",
+              nodeId: syntheticNodeId,
+              agentName: String(reference.source ?? "").trim() || "REFERENCE",
+              roleLabel: "SOURCE",
+              summary: [reference.title, reference.url].filter((part) => String(part ?? "").trim().length > 0).join(" · "),
+            }));
+            built.post.steps = [
+              ...(Array.isArray(snapshot.highlights) ? snapshot.highlights.slice(0, 6) : []),
+              ...(Array.isArray(snapshot.risks) ? snapshot.risks.slice(0, 3).map((risk) => `리스크: ${risk}`) : []),
+            ].filter((line) => String(line ?? "").trim().length > 0);
+            const syntheticPost = {
+              ...built.post,
+              id: syntheticPostId,
+              sourceFile: `dashboard-${snapshot.topic}-${resolvedRunId}.json`,
+              question: `${topicLabel} 데이터 파이프라인 실행 결과`,
+            };
+            feedRawAttachmentRef.current[feedAttachmentRawKey(syntheticPost.id, "markdown")] = built.rawAttachments.markdown;
+            feedRawAttachmentRef.current[feedAttachmentRawKey(syntheticPost.id, "json")] = built.rawAttachments.json;
+            setFeedPosts((prev) => {
+              if (prev.some((row) => row.id === syntheticPost.id)) {
+                return prev;
+              }
+              return [syntheticPost, ...prev];
+            });
+            fallbackPostId = syntheticPost.id;
+            hasOpenablePost = true;
+          }
+        }
+      }
+      if (!hasOpenablePost && !fallbackPostId) {
+        setError("해당 실행의 브리핑 문서를 찾지 못했습니다. 실행 완료 후 다시 시도해 주세요.");
+        setStatus("브리핑 문서 없음");
+        return;
+      }
+      setFeedCategory("all_posts");
+      setFeedStatusFilter("all");
+      setFeedExecutorFilter("all");
+      setFeedPeriodFilter("all");
+      setFeedKeyword(resolvedRunId);
+      setFeedFilterOpen(true);
+      setFeedGroupExpandedByRunId((prev) => ({
+        ...prev,
+        [resolvedRunId]: true,
+      }));
+      if (fallbackPostId) {
+        setFeedInspectorPostId(fallbackPostId);
+        setFeedExpandedByPost((prev) => ({
+          ...prev,
+          [fallbackPostId]: true,
+        }));
+      }
+      setWorkspaceTab("feed");
+      setStatus(`피드에서 브리핑 문서를 여는 중: ${resolvedRunId}`);
+      appendWorkspaceEvent({
+        source: "intelligence",
+        actor: "user",
+        level: "info",
+        runId: resolvedRunId,
+        message: resolvedPostId ? `브리핑 문서 열기: ${resolvedPostId}` : "브리핑 전체 문서 열기",
+      });
+    },
+    [
+      appendWorkspaceEvent,
+      setFeedCategory,
+      setFeedExecutorFilter,
+      setFeedExpandedByPost,
+      setFeedFilterOpen,
+      setFeedGroupExpandedByRunId,
+      setFeedInspectorPostId,
+      setFeedKeyword,
+      setFeedPeriodFilter,
+      setFeedStatusFilter,
+      setFeedPosts,
+      setError,
+      setStatus,
+      setWorkspaceTab,
+      dashboardSnapshotsByTopic,
+      feedPosts,
+      feedRawAttachmentRef,
+      t,
+    ],
+  );
   const applyTurnExecutionFromModelSelection = useCallback(
     (selection: {
       executor: TurnExecutor;
@@ -2250,8 +2376,21 @@ function App() {
         {workspaceTab === "intelligence" && (
           <section className="panel-card settings-view data-intelligence-view workspace-tab-panel">
             <DashboardIntelligenceSettings
+              briefingDocuments={feedPosts
+                .filter((post) => post.status === "done" || post.status === "low_quality")
+                .map((post) => ({
+                  id: post.id,
+                  runId: post.runId,
+                  summary: post.summary,
+                  sourceFile: post.sourceFile,
+                  agentName: post.agentName,
+                  createdAt: post.createdAt,
+                  isFinalDocument: post.isFinalDocument,
+                  status: post.status,
+                }))}
               config={dashboardIntelligenceConfig}
               disabled={running || isGraphRunning}
+              onOpenBriefingDocument={onOpenBriefingDocumentFromData}
               onRequestRunInAgents={onRequestDashboardTopicRunInAgents}
               runStateByTopic={dashboardIntelligenceRunStateByTopic}
               snapshotsByTopic={dashboardSnapshotsByTopic}

@@ -37,6 +37,10 @@ export function detectTextLang(value: string): "en" | "ko" {
   return /[A-Za-z]/.test(String(value ?? "")) ? "en" : "ko";
 }
 
+export function uppercaseEnglishTokens(value: string): string {
+  return String(value ?? "").replace(/[A-Za-z][A-Za-z0-9/._:+-]*/g, (token) => token.toUpperCase());
+}
+
 export function renderMixedLangText(value: string): ReactNode {
   const text = String(value ?? "");
   const parts = text.split(/([A-Za-z][A-Za-z0-9/._-]*)/g).filter((part) => part.length > 0);

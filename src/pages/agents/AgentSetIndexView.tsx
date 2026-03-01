@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { mergeRowPreview } from "./agentSetState";
 import type { AgentSetGroup, AgentSetState } from "./agentTypes";
 
 type AgentSetIndexViewProps = {
@@ -7,6 +6,13 @@ type AgentSetIndexViewProps = {
   setStateMap: Record<string, AgentSetState>;
   onSelectSet: (setId: string) => void;
 };
+
+function formatSetCode(setId: string): string {
+  return String(setId ?? "")
+    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+    .replace(/-/g, "_")
+    .toUpperCase();
+}
 
 export function AgentSetIndexView({
   groupedSetOptions,
@@ -46,8 +52,6 @@ export function AgentSetIndexView({
                   </div>
                   <div className="agents-set-list" role="list" aria-label={`${group.title} Agent sets`}>
                     {group.items.map((setOption) => {
-                      const snapshotLine = (setStateMap[setOption.id]?.dashboardInsights[0] ?? "").trim();
-                      const mergedPreview = mergeRowPreview(setOption.description, snapshotLine);
                       return (
                         <button
                           className={`agents-set-index-row${previewSetId === setOption.id ? " is-preview-active" : ""}`}
@@ -60,7 +64,7 @@ export function AgentSetIndexView({
                         >
                           <div className="agents-set-index-meta">
                             <strong>{setOption.label}</strong>
-                            <code>{mergedPreview}</code>
+                            <code>{setOption.description}</code>
                           </div>
                         </button>
                       );
@@ -76,7 +80,7 @@ export function AgentSetIndexView({
               <div className="agents-set-picker-sidebar-title">
                 <small>미리보기</small>
                 <strong>{previewSet?.label ?? "선택된 세트 없음"}</strong>
-                {previewSet?.id ? <code>{previewSet.id}</code> : null}
+                {previewSet?.id ? <code>{formatSetCode(previewSet.id)}</code> : null}
               </div>
             </header>
             <section className="agents-sidebar-card">

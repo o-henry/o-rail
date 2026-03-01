@@ -133,6 +133,9 @@ export function useAgenticOrchestrationBridge(params: {
             onProgress,
           });
           await refreshDashboardSnapshots();
+          if (!result) {
+            throw new Error("토픽 스냅샷 생성 실패");
+          }
           return result as { snapshotPath?: string; rawPaths?: string[]; warnings?: string[] } | null;
         },
         appendWorkspaceEvent,

@@ -1,4 +1,5 @@
 import type { AgentSetOption, AgentThread } from "../agentTypes";
+import { uppercaseEnglishTokens } from "./textUtils";
 
 type AgentsWorkspaceSidebarProps = {
   isSidebarCollapsed: boolean;
@@ -67,7 +68,7 @@ export function AgentsWorkspaceSidebar({
           <section className="agents-sidebar-card">
             <h4>활성 에이전트</h4>
             <p className="agents-sidebar-agent-name">{activeThread?.name ?? "-"}</p>
-            <p className="agents-sidebar-agent-role">{activeThread?.role ?? "선택된 에이전트 없음"}</p>
+            <p className="agents-sidebar-agent-role">{uppercaseEnglishTokens(activeThread?.role ?? "선택된 에이전트 없음")}</p>
             {activeThread?.starterPrompt ? <small>{activeThread.starterPrompt}</small> : null}
           </section>
 

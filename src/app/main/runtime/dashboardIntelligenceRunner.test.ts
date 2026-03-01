@@ -78,6 +78,8 @@ describe("dashboard intelligence runner", () => {
         case "dashboard_raw_list":
           return [];
         case "thread_start":
+          return { threadId: "t1" };
+        case "turn_start":
           throw new Error("boom");
         case "dashboard_snapshot_save":
           return "/tmp/snapshot.json";
@@ -99,6 +101,59 @@ describe("dashboard intelligence runner", () => {
 
     expect(result.snapshot.status).toBe("degraded");
     expect(result.snapshot.referenceEmpty).toBe(true);
+  });
+
+  it("does not start crawler when agent preflight fails", async () => {
+    const invokeMock = vi.fn(async (command: string, _args?: Record<string, unknown>) => {
+      switch (command) {
+        case "thread_start":
+          throw new Error("engine unavailable");
+        default:
+          throw new Error(`unexpected command ${command}`);
+      }
+    });
+    const invoke = invokeMock as unknown as <T>(
+      command: string,
+      args?: Record<string, unknown>,
+    ) => Promise<T>;
+
+    await expect(
+      runDashboardTopicIntelligence({
+        cwd: "/tmp",
+        topic: "marketSummary",
+        config: createDefaultDashboardTopicConfig("marketSummary"),
+        invokeFn: invoke,
+      }),
+    ).rejects.toThrow(/에이전트 실행 준비 실패로 파이프라인을 시작하지 않았습니다/);
+
+    expect(invokeMock.mock.calls.some((row) => row[0] === "dashboard_crawl_run")).toBe(false);
+  });
+
+  it("throws explicit error when codex authentication is required", async () => {
+    const invokeMock = vi.fn(async (command: string, _args?: Record<string, unknown>) => {
+      switch (command) {
+        case "thread_start":
+          throw new Error("login required");
+        default:
+          return { snippets: [], warnings: [] };
+      }
+    });
+    const invoke = invokeMock as unknown as <T>(
+      command: string,
+      args?: Record<string, unknown>,
+    ) => Promise<T>;
+
+    await expect(
+      runDashboardTopicIntelligence({
+        cwd: "/tmp",
+        topic: "marketSummary",
+        config: createDefaultDashboardTopicConfig("marketSummary"),
+        invokeFn: invoke,
+      }),
+    ).rejects.toThrow("Codex 로그인이 필요합니다.");
+
+    expect(invokeMock.mock.calls.some((row) => row[0] === "dashboard_snapshot_save")).toBe(false);
+    expect(invokeMock.mock.calls.some((row) => row[0] === "dashboard_crawl_run")).toBe(false);
   });
 
   it("injects follow-up instruction into codex prompt", async () => {

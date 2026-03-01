@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import FancySelect from "../../components/FancySelect";
 import {
   DASHBOARD_TOPIC_IDS,
   type DashboardTopicId,
@@ -47,8 +48,46 @@ type DashboardResourceLine = {
   text: string;
 };
 
-function topicTitleKey(topic: DashboardTopicId): string {
-  return `dashboard.widget.${topic}.title`;
+function formatTopicToken(input: string): string {
+  return String(input ?? "")
+    .trim()
+    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+    .replace(/[^a-zA-Z0-9]+/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_|_$/g, "")
+    .toUpperCase();
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function normalizeWorkspaceEventMessage(params: {
+  message: string;
+  runId?: string;
+  topic?: string;
+  source?: string;
+}): string {
+  let text = String(params.message ?? "").trim();
+  const runId = String(params.runId ?? "").trim();
+  const topic = String(params.topic ?? "").trim();
+  const source = String(params.source ?? "").trim();
+
+  if (runId) {
+    const runPrefix = new RegExp(`^\\[${escapeRegExp(runId)}\\]\\s*`, "i");
+    text = text.replace(runPrefix, "").trim();
+  }
+  if (topic) {
+    const topicPrefix = new RegExp(`^${escapeRegExp(topic)}\\s*[·:|\\-]?\\s*`, "i");
+    text = text.replace(topicPrefix, "").trim();
+    const formattedTopicPrefix = new RegExp(`^${escapeRegExp(formatTopicToken(topic))}\\s*[·:|\\-]?\\s*`, "i");
+    text = text.replace(formattedTopicPrefix, "").trim();
+  }
+  if (source) {
+    const sourcePrefix = new RegExp(`^${escapeRegExp(source)}\\s*[·:|\\-]?\\s*`, "i");
+    text = text.replace(sourcePrefix, "").trim();
+  }
+  return normalizeDashboardLogText(text);
 }
 
 function normalizeDashboardLogText(input: string): string {
@@ -106,8 +145,8 @@ export default function DashboardPage(props: DashboardPageProps) {
       .filter((snapshot): snapshot is DashboardTopicSnapshot => Boolean(snapshot))
       .sort((left, right) => new Date(right.generatedAt).getTime() - new Date(left.generatedAt).getTime())
       .slice(0, 8);
-    return snapshots.map((snapshot) => `${t(topicTitleKey(snapshot.topic))}: ${snapshot.summary}`);
-  }, [props.topicSnapshots, t]);
+    return snapshots.map((snapshot) => `${formatTopicToken(snapshot.topic)}: ${snapshot.summary}`);
+  }, [props.topicSnapshots]);
 
   const fallbackFeedSummaries = useMemo(
     () =>
@@ -124,19 +163,35 @@ export default function DashboardPage(props: DashboardPageProps) {
   const resourceLines = useMemo<DashboardResourceLine[]>(() => {
     const runFilterValue = runFilter;
     const topicFilterValue = topicFilter;
+    const seenLogKeys = new Set<string>();
     const eventLines: DashboardResourceLine[] = props.workspaceEvents
       .filter((entry) => entry.actor !== "user")
       .filter((entry) => (runFilterValue === "all" ? true : String(entry.runId ?? "") === runFilterValue))
       .filter((entry) => (topicFilterValue === "all" ? true : String(entry.topic ?? "") === topicFilterValue))
-      .slice(0, 10)
-      .map((entry) => ({
-        id: `log-${entry.id}`,
-        topic: "feed",
-        kind: "log",
-        text: normalizeDashboardLogText(
-          `${entry.runId ? `[${entry.runId}] ` : ""}${entry.topic ? `${entry.topic} · ` : ""}${entry.source} · ${entry.message}`,
-        ),
-      }));
+      .reduce<DashboardResourceLine[]>((acc, entry) => {
+        const normalizedMessage = normalizeWorkspaceEventMessage({
+          message: entry.message,
+          runId: entry.runId,
+          topic: entry.topic,
+          source: entry.source,
+        });
+        const rendered = normalizeDashboardLogText(
+          `${entry.runId ? `[${entry.runId}] ` : ""}${entry.topic ? `${formatTopicToken(entry.topic)} · ` : ""}${entry.source} · ${normalizedMessage}`,
+        ).trim();
+        const dedupeKey = `${entry.runId ?? ""}|${entry.topic ?? ""}|${entry.source}|${rendered}`;
+        if (!rendered || seenLogKeys.has(dedupeKey)) {
+          return acc;
+        }
+        seenLogKeys.add(dedupeKey);
+        acc.push({
+          id: `log-${entry.id}`,
+          topic: "feed",
+          kind: "log",
+          text: rendered,
+        });
+        return acc;
+      }, [])
+      .slice(0, 10);
 
     const snapshots = Object.values(props.topicSnapshots)
       .filter((snapshot): snapshot is DashboardTopicSnapshot => Boolean(snapshot))
@@ -229,6 +284,20 @@ export default function DashboardPage(props: DashboardPageProps) {
       )].slice(0, 20),
     [props.workspaceEvents],
   );
+  const runFilterSelectOptions = useMemo(
+    () => [
+      { value: "all", label: "all" },
+      ...runFilterOptions.map((value) => ({ value, label: value })),
+    ],
+    [runFilterOptions],
+  );
+  const topicFilterSelectOptions = useMemo(
+    () => [
+      { value: "all", label: "all" },
+      ...topicFilterOptions.map((value) => ({ value, label: formatTopicToken(value) })),
+    ],
+    [topicFilterOptions],
+  );
 
   const latestSnapshotText = useMemo(() => {
     const snapshots = Object.values(props.topicSnapshots).filter(
@@ -264,7 +333,7 @@ export default function DashboardPage(props: DashboardPageProps) {
     [props.runStateByTopic],
   );
   const runningTopicCount = topicRunStateRows.filter((row) => row.running).length;
-  const runningTopicLabels = topicRunStateRows.filter((row) => row.running).map((row) => t(topicTitleKey(row.topic)));
+  const runningTopicLabels = topicRunStateRows.filter((row) => row.running).map((row) => formatTopicToken(row.topic));
   const latestErroredTopic = topicRunStateRows.find((row) => row.statusText === "ERROR");
   const latestDoneTopic = topicRunStateRows.find((row) => row.statusText === "DONE");
 
@@ -278,13 +347,13 @@ export default function DashboardPage(props: DashboardPageProps) {
     if (latestErroredTopic) {
       return {
         tone: "error" as const,
-        text: `실행 실패: ${t(topicTitleKey(latestErroredTopic.topic))}`,
+        text: `실행 실패: ${formatTopicToken(latestErroredTopic.topic)}`,
       };
     }
     if (latestDoneTopic) {
       return {
         tone: "done" as const,
-        text: `최근 완료: ${t(topicTitleKey(latestDoneTopic.topic))}`,
+        text: `최근 완료: ${formatTopicToken(latestDoneTopic.topic)}`,
       };
     }
     return {
@@ -303,25 +372,23 @@ export default function DashboardPage(props: DashboardPageProps) {
             <div className="dashboard-terminal-log-filters">
               <label>
                 RUN
-                <select value={runFilter} onChange={(event) => setRunFilter(event.target.value)}>
-                  <option value="all">all</option>
-                  {runFilterOptions.map((value) => (
-                    <option key={value} value={value}>
-                      {value}
-                    </option>
-                  ))}
-                </select>
+                <FancySelect
+                  ariaLabel="RUN"
+                  className="dashboard-log-filter-select"
+                  onChange={setRunFilter}
+                  options={runFilterSelectOptions}
+                  value={runFilter}
+                />
               </label>
               <label>
                 TOPIC
-                <select value={topicFilter} onChange={(event) => setTopicFilter(event.target.value)}>
-                  <option value="all">all</option>
-                  {topicFilterOptions.map((value) => (
-                    <option key={value} value={value}>
-                      {value}
-                    </option>
-                  ))}
-                </select>
+                <FancySelect
+                  ariaLabel="TOPIC"
+                  className="dashboard-log-filter-select"
+                  onChange={setTopicFilter}
+                  options={topicFilterSelectOptions}
+                  value={topicFilter}
+                />
               </label>
             </div>
           </div>
@@ -329,7 +396,7 @@ export default function DashboardPage(props: DashboardPageProps) {
             <div className="dashboard-terminal-runstate" role="status">
               {topicRunStateRows.map((row) => (
                 <article className="dashboard-terminal-runstate-row" key={row.id}>
-                  <b>{t(topicTitleKey(row.topic))}</b>
+                  <b>{formatTopicToken(row.topic)}</b>
                   <span className={`dashboard-terminal-runstate-state ${row.statusText.toLowerCase()}`}>{row.statusText}</span>
                   {row.detailText ? <p>{row.detailText}</p> : null}
                 </article>
@@ -342,7 +409,7 @@ export default function DashboardPage(props: DashboardPageProps) {
                 <span aria-hidden="true">
                   {line.kind === "reference" ? "REF" : line.kind === "event" ? "EVT" : line.kind === "highlight" ? "HLT" : line.kind === "log" ? "LOG" : "SUM"}
                 </span>
-                <p>{line.topic === "feed" ? line.text : `${t(topicTitleKey(line.topic))} · ${line.text}`}</p>
+                <p>{line.topic === "feed" ? line.text : `${formatTopicToken(line.topic)} · ${line.text}`}</p>
               </li>
             ))}
           </ul>

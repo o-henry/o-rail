@@ -520,7 +520,7 @@ export const EN_MESSAGES: Dictionary = {
     "feed.share.status": "Status",
     "feed.share.role": "Role",
     "feed.share.createdAt": "Created at",
-    "feed.share.runId": "Run ID",
+    "feed.share.runId": "RUNID",
     "feed.share.sourceFile": "Source file",
     "feed.share.question": "Question",
     "feed.share.summary": "Summary",

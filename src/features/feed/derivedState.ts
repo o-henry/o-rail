@@ -230,7 +230,7 @@ export function computeFeedDerivedState(params: {
       const sourceText = (Array.isArray(post.inputSources) ? post.inputSources : [])
         .map((source: any) => `${source.agentName} ${source.roleLabel ?? ""} ${source.summary ?? ""}`)
         .join(" ");
-      const haystack = `${post.question ?? ""} ${post.agentName} ${post.roleLabel} ${post.summary} ${
+      const haystack = `${post.runId ?? ""} ${post.question ?? ""} ${post.agentName} ${post.roleLabel} ${post.summary} ${
         post.inputContext?.preview ?? ""
       } ${sourceText}`.toLowerCase();
       return haystack.includes(keyword);

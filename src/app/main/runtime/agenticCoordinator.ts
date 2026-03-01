@@ -244,7 +244,7 @@ export async function runTopicWithCoordinator(input: AgenticRunTopicInput): Prom
           emitWorkspace({
             appendWorkspaceEvent: input.appendWorkspaceEvent,
             source: "agentic",
-            message: `[${runId}] ${input.topic} · ${message}`,
+            message,
             runId,
             topic: input.topic,
           });

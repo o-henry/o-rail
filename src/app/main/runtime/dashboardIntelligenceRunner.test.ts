@@ -164,6 +164,77 @@ describe("dashboard intelligence runner", () => {
     expect(turnStartArgs.text ?? "").toContain("변동성 항목을 더 강조해줘");
   });
 
+  it("emits progress updates while running topic intelligence", async () => {
+    const stages: string[] = [];
+    const invokeMock = vi.fn(async (command: string, _args?: Record<string, unknown>) => {
+      switch (command) {
+        case "dashboard_crawl_run":
+          return {
+            startedAt: "1",
+            finishedAt: "2",
+            totalFetched: 1,
+            totalFiles: 1,
+            topics: [{ topic: "marketSummary", fetchedCount: 1, savedFiles: ["/tmp/a.md"], errors: [] }],
+          };
+        case "dashboard_raw_list":
+          return ["/tmp/a.md"];
+        case "knowledge_probe":
+          return [
+            {
+              id: "1",
+              name: "a.md",
+              path: "/tmp/a.md",
+              ext: ".md",
+              enabled: true,
+              status: "ready",
+            },
+          ];
+        case "knowledge_retrieve":
+          return {
+            snippets: [{ fileId: "1", fileName: "a.md", chunkIndex: 1, text: "Snippet", score: 1 }],
+            warnings: [],
+          };
+        case "thread_start":
+          return { threadId: "t1" };
+        case "turn_start":
+          return {
+            text: JSON.stringify({
+              summary: "ok",
+              highlights: [],
+              risks: [],
+              events: [],
+              references: [],
+              generatedAt: "2026-02-28T00:00:00.000Z",
+              topic: "marketSummary",
+              model: "gpt-5.2-codex",
+            }),
+          };
+        case "dashboard_snapshot_save":
+          return "/tmp/snapshot.json";
+        default:
+          throw new Error(`unexpected command ${command}`);
+      }
+    });
+    const invoke = invokeMock as unknown as <T>(
+      command: string,
+      args?: Record<string, unknown>,
+    ) => Promise<T>;
+
+    await runDashboardTopicIntelligence({
+      cwd: "/tmp",
+      topic: "marketSummary",
+      config: createDefaultDashboardTopicConfig("marketSummary"),
+      invokeFn: invoke,
+      onProgress: (stage) => {
+        stages.push(stage);
+      },
+    });
+
+    expect(stages).toEqual(
+      expect.arrayContaining(["crawler", "crawler_done", "rag", "rag_done", "codex_turn", "save", "done"]),
+    );
+  });
+
   it("loads latest snapshot per topic", async () => {
     const invokeMock = vi.fn(async () => [
       {

@@ -56,6 +56,8 @@ export type DashboardTopicRunState = {
   running: boolean;
   lastRunAt?: string;
   lastError?: string;
+  progressStage?: string;
+  progressText?: string;
 };
 
 export type DashboardIntelligenceState = {

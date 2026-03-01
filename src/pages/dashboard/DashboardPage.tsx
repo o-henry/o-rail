@@ -197,13 +197,14 @@ export default function DashboardPage(props: DashboardPageProps) {
         const row = props.runStateByTopic[topic];
         const lastRunText = row?.lastRunAt ? new Date(row.lastRunAt).toLocaleTimeString() : "";
         const statusText = row?.running ? "RUNNING" : row?.lastError ? "ERROR" : row?.lastRunAt ? "DONE" : "IDLE";
+        const progressText = String(row?.progressText ?? "").trim();
         return {
           id: topic,
           topic,
           statusText,
-          detailText: row?.lastError ? String(row.lastError) : lastRunText,
+          detailText: row?.lastError ? String(row.lastError) : row?.running ? progressText || "실행 중" : lastRunText,
           running: Boolean(row?.running),
-          hasState: Boolean(row?.running || row?.lastError || row?.lastRunAt),
+          hasState: Boolean(row?.running || row?.lastError || row?.lastRunAt || progressText),
         };
       }).filter((row) => row.hasState),
     [props.runStateByTopic],

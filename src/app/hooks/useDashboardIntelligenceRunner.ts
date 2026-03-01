@@ -77,6 +77,8 @@ export function useDashboardIntelligenceRunner(params: UseDashboardIntelligenceR
       updateRunState(setRunStateByTopic, topic, {
         running: true,
         lastError: undefined,
+        progressStage: "init",
+        progressText: "실행 준비 중",
       });
       try {
         const result = await runDashboardTopicIntelligence({
@@ -86,6 +88,13 @@ export function useDashboardIntelligenceRunner(params: UseDashboardIntelligenceR
           invokeFn,
           previousSnapshot: snapshotsByTopic[topic],
           followupInstruction,
+          onProgress: (stage, message) => {
+            updateRunState(setRunStateByTopic, topic, {
+              progressStage: stage,
+              progressText: message,
+            });
+            setStatus(`Dashboard Intelligence(${topic}): ${message}`);
+          },
         });
         setSnapshotsByTopic((prev) => ({
           ...prev,
@@ -95,6 +104,8 @@ export function useDashboardIntelligenceRunner(params: UseDashboardIntelligenceR
           running: false,
           lastRunAt: result.snapshot.generatedAt,
           lastError: undefined,
+          progressStage: "done",
+          progressText: "완료",
         });
         setStatus(`Dashboard Intelligence 완료: ${topic}`);
       } catch (error) {
@@ -102,6 +113,8 @@ export function useDashboardIntelligenceRunner(params: UseDashboardIntelligenceR
           running: false,
           lastRunAt: new Date().toISOString(),
           lastError: String(error),
+          progressStage: "error",
+          progressText: `실패: ${String(error)}`,
         });
         setError(`Dashboard Intelligence 실행 실패(${topic}): ${String(error)}`);
       }
@@ -124,7 +137,12 @@ export function useDashboardIntelligenceRunner(params: UseDashboardIntelligenceR
     }
     const selected = [...DASHBOARD_TOPIC_IDS];
     for (const topic of selected) {
-      updateRunState(setRunStateByTopic, topic, { running: true, lastError: undefined });
+      updateRunState(setRunStateByTopic, topic, {
+        running: true,
+        lastError: undefined,
+        progressStage: "crawler",
+        progressText: "크롤러 실행 중",
+      });
     }
     try {
       const result = await runDashboardCrawlerOnly({
@@ -167,6 +185,8 @@ export function useDashboardIntelligenceRunner(params: UseDashboardIntelligenceR
           running: false,
           lastRunAt: now,
           lastError: undefined,
+          progressStage: "done",
+          progressText: "크롤러 완료",
         });
       }
       setStatus(`Dashboard 크롤러 완료 (${result.totalFetched} sources)`);
@@ -176,6 +196,8 @@ export function useDashboardIntelligenceRunner(params: UseDashboardIntelligenceR
           running: false,
           lastRunAt: new Date().toISOString(),
           lastError: String(error),
+          progressStage: "error",
+          progressText: `실패: ${String(error)}`,
         });
       }
       setError(`Dashboard 크롤러 실행 실패: ${String(error)}`);

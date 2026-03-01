@@ -34,6 +34,7 @@ type RunDashboardTopicParams = {
   invokeFn: InvokeFn;
   previousSnapshot?: DashboardTopicSnapshot;
   followupInstruction?: string;
+  onProgress?: (stage: string, message: string) => void;
 };
 
 type RunDashboardTopicResult = {
@@ -42,6 +43,10 @@ type RunDashboardTopicResult = {
   rawPaths: string[];
   warnings: string[];
 };
+
+function emitProgress(params: RunDashboardTopicParams, stage: string, message: string): void {
+  params.onProgress?.(stage, message);
+}
 
 function isDashboardTopicId(value: unknown): value is DashboardTopicId {
   return DASHBOARD_TOPIC_IDS.includes(value as DashboardTopicId);
@@ -161,13 +166,21 @@ function buildSnapshotWithoutCodex(params: {
 }
 
 export async function runDashboardTopicIntelligence(params: RunDashboardTopicParams): Promise<RunDashboardTopicResult> {
+  emitProgress(params, "crawler", "크롤러 수집 시작");
   const crawlResult = await runCrawlerForTopic({
     cwd: params.cwd,
     topic: params.topic,
     config: params.config,
     invokeFn: params.invokeFn,
   });
+  const topicCrawlResult = crawlResult.topics.find((row) => row.topic === params.topic);
+  emitProgress(
+    params,
+    "crawler_done",
+    `크롤링 완료: ${topicCrawlResult?.fetchedCount ?? 0}건 수집 / ${topicCrawlResult?.savedFiles?.length ?? 0}개 저장`,
+  );
 
+  emitProgress(params, "rag", "수집 파일에서 근거 추출 중");
   const knowledge = await collectKnowledgeSnippets({
     cwd: params.cwd,
     topic: params.topic,
@@ -175,7 +188,13 @@ export async function runDashboardTopicIntelligence(params: RunDashboardTopicPar
     invokeFn: params.invokeFn,
   });
   const warnings = [...knowledge.retrieve.warnings];
+  emitProgress(
+    params,
+    "rag_done",
+    `근거 추출 완료: raw ${knowledge.rawPaths.length}개 / snippet ${knowledge.retrieve.snippets.length}개`,
+  );
 
+  emitProgress(params, "prompt", "요약 프롬프트 구성 중");
   const promptBase = buildDashboardTopicPrompt({
     topic: params.topic,
     config: params.config,
@@ -189,10 +208,12 @@ export async function runDashboardTopicIntelligence(params: RunDashboardTopicPar
 
   let snapshot: DashboardTopicSnapshot;
   try {
+    emitProgress(params, "codex_thread", "Codex 세션 시작");
     const threadStart = await params.invokeFn<ThreadStartResult>("thread_start", {
       model: params.config.model,
       cwd: params.cwd,
     });
+    emitProgress(params, "codex_turn", "Codex 응답 생성 중");
     const turnStartResponse = await params.invokeFn<unknown>("turn_start", {
       threadId: threadStart.threadId,
       text: prompt,
@@ -209,8 +230,10 @@ export async function runDashboardTopicIntelligence(params: RunDashboardTopicPar
       ]) ?? "";
 
     if (responseText.trim()) {
+      emitProgress(params, "parse", "응답 파싱 및 스냅샷 생성 중");
       snapshot = parseDashboardSnapshotText(params.topic, params.config.model, responseText);
     } else {
+      emitProgress(params, "fallback", "Codex 빈 응답: 스니펫 기반 대체 요약 생성 중");
       snapshot = buildSnapshotWithoutCodex({
         topic: params.topic,
         model: params.config.model,
@@ -219,6 +242,7 @@ export async function runDashboardTopicIntelligence(params: RunDashboardTopicPar
       });
     }
   } catch (error) {
+    emitProgress(params, "fallback", `Codex 실패: ${String(error)}`);
     snapshot = buildSnapshotWithoutCodex({
       topic: params.topic,
       model: params.config.model,
@@ -228,6 +252,7 @@ export async function runDashboardTopicIntelligence(params: RunDashboardTopicPar
   }
 
   if (knowledge.retrieve.snippets.length === 0) {
+    emitProgress(params, "normalize", "스니펫 부족 상태로 스냅샷 정규화");
     snapshot = normalizeDashboardSnapshot(params.topic, params.config.model, {
       ...snapshot,
       referenceEmpty: true,
@@ -236,11 +261,13 @@ export async function runDashboardTopicIntelligence(params: RunDashboardTopicPar
     });
   }
 
+  emitProgress(params, "save", "스냅샷 저장 중");
   await params.invokeFn<string>("dashboard_snapshot_save", {
     cwd: params.cwd,
     topic: params.topic,
     snapshotJson: snapshot,
   });
+  emitProgress(params, "done", "완료");
 
   return {
     snapshot,

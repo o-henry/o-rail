@@ -187,6 +187,7 @@ export default function DashboardIntelligenceSettings(props: DashboardIntelligen
           <section className="settings-dashboard-topic-detail-section">
             <h5>실행 상태</h5>
             <p>{activeTopicStatus}</p>
+            {activeTopicRunState?.progressText ? <small>{activeTopicRunState.progressText}</small> : null}
             <small>{activeTopicUpdatedAtText}</small>
             {activeTopicRunState?.lastError ? <small>{activeTopicRunState.lastError}</small> : null}
           </section>

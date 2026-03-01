@@ -92,8 +92,6 @@ export default function FeedPage({ vm }: FeedPageProps) {
     feedGroupRenameDraft,
     onSubmitFeedRunGroupRename,
     toHumanReadableFeedText,
-    hashStringToHue,
-    buildFeedAvatarLabel,
     pendingNodeRequests,
     feedReplyFeedbackByPost,
     feedExpandedByPost,
@@ -591,13 +589,6 @@ export default function FeedPage({ vm }: FeedPageProps) {
                               const markdownFilePath = String(markdownAttachment?.filePath ?? "").trim();
                               const readableQuestion = toHumanReadableFeedText(post.question ?? "");
                               const readableInputPreview = toHumanReadableFeedText(post.inputContext?.preview ?? "");
-                              const avatarHue = hashStringToHue(`${post.nodeId}:${post.agentName}:${post.roleLabel}`);
-                              const avatarStyle = {
-                                backgroundColor: `hsl(${avatarHue} 78% 92%)`,
-                                color: `hsl(${avatarHue} 54% 28%)`,
-                                borderColor: `hsl(${avatarHue} 36% 76%)`,
-                              };
-                              const avatarLabel = buildFeedAvatarLabel(post);
                               const pendingRequestCount = (pendingNodeRequests[post.nodeId] ?? []).length;
                               const requestFeedback = String(replyFeedbackMap[postId] ?? "");
                               const requestFeedbackError = isFeedbackErrorMessage(requestFeedback);
@@ -645,9 +636,6 @@ export default function FeedPage({ vm }: FeedPageProps) {
                                   onClick={() => onSelectFeedInspectorPost(post)}
                                 >
                                   <div className="feed-card-head">
-                                    <div className="feed-card-avatar" style={avatarStyle}>
-                                      <span>{avatarLabel}</span>
-                                    </div>
                                     <div className="feed-card-title-wrap">
                                       <h3 className={post.nodeType === "gate" ? "gate-node-title" : undefined}>
                                         {String(post.agentName ?? "")}

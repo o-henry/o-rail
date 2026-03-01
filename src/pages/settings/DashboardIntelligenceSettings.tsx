@@ -239,7 +239,6 @@ export default function DashboardIntelligenceSettings(props: DashboardIntelligen
               <div className="settings-dashboard-topic-doc-flat">
                 {activeBriefingDocuments.slice(0, 6).map((doc) => (
                   <article className="settings-dashboard-topic-doc-row" key={doc.id}>
-                    <strong>{doc.isFinalDocument ? "최종 문서" : "생성 문서"}</strong>
                     <small>{`${doc.agentName} · ${formatDateTimeText(doc.createdAt)}`}</small>
                     <p>{doc.summary || "요약이 없는 문서입니다."}</p>
                     <code>{doc.sourceFile}</code>

@@ -6409,6 +6409,7 @@ html[data-locale="ko"] .agents-grid-card :lang(en) {
 .agents-grid-card-log-block {
   display: grid;
   gap: 5px;
+  padding: 1rem 0 0 0;
 }
 
 .agents-grid-card-log-block h5 {

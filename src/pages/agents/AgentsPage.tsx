@@ -1,5 +1,5 @@
 import { type ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
-import type { DashboardTopicSnapshot } from "../../features/dashboard/intelligence";
+import { DASHBOARD_TOPIC_IDS, type DashboardTopicId, type DashboardTopicSnapshot } from "../../features/dashboard/intelligence";
 import { useI18n } from "../../i18n";
 import { AGENT_MODEL_OPTIONS, AGENT_REASON_LEVEL_OPTIONS } from "./agentOptions";
 import { AgentSetIndexView } from "./AgentSetIndexView";
@@ -19,7 +19,24 @@ import {
 } from "./agentSetState";
 import type { AgentSetPresetSnapshot, AgentSetState, AgentsPageProps, AttachedFile } from "./agentTypes";
 
-export default function AgentsPage({ onQuickAction, topicSnapshots, codexMultiAgentMode }: AgentsPageProps) {
+function topicFromSetId(setId: string | null): DashboardTopicId | null {
+  if (!setId || !setId.startsWith("data-")) {
+    return null;
+  }
+  const candidate = setId.slice(5);
+  return DASHBOARD_TOPIC_IDS.includes(candidate as DashboardTopicId) ? (candidate as DashboardTopicId) : null;
+}
+
+export default function AgentsPage({
+  onQuickAction,
+  topicSnapshots,
+  codexMultiAgentMode,
+  runStateByTopic,
+  onRunDataTopic,
+  onRunDataCrawlerOnly,
+  launchRequest,
+  onOpenDataTab,
+}: AgentsPageProps) {
   const { t } = useI18n();
   const setOptions = useMemo(() => buildSetOptions((key) => t(key)), [t]);
   const setPresetById = useMemo<Record<string, AgentSetPresetSnapshot>>(
@@ -66,6 +83,31 @@ export default function AgentsPage({ onQuickAction, topicSnapshots, codexMultiAg
       return next;
     });
   }, [setOptions, setPresetById]);
+
+  useEffect(() => {
+    if (!launchRequest) {
+      return;
+    }
+    const nextSetId = String(launchRequest.setId ?? "").trim();
+    if (!nextSetId || !setOptions.some((option) => option.id === nextSetId)) {
+      return;
+    }
+    setActiveSetId(nextSetId);
+    const nextDraft = String(launchRequest.draft ?? "").trim();
+    if (!nextDraft) {
+      return;
+    }
+    setSetStateMap((prev) => {
+      const current = prev[nextSetId] ?? createFallbackSetState();
+      return {
+        ...prev,
+        [nextSetId]: {
+          ...current,
+          draft: nextDraft,
+        },
+      };
+    });
+  }, [launchRequest, setOptions]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -144,6 +186,8 @@ export default function AgentsPage({ onQuickAction, topicSnapshots, codexMultiAg
     () => (activeSetId ? setOptions.find((option) => option.id === activeSetId) ?? null : null),
     [activeSetId, setOptions],
   );
+  const activeDataTopicId = useMemo(() => topicFromSetId(activeSetOption?.id ?? null), [activeSetOption?.id]);
+  const activeDataRunState = activeDataTopicId ? runStateByTopic[activeDataTopicId] : undefined;
 
   const threads = currentSetState?.threads ?? [];
   const activeThreadId = currentSetState?.activeThreadId ?? "";
@@ -321,6 +365,20 @@ export default function AgentsPage({ onQuickAction, topicSnapshots, codexMultiAg
     fileInputRef.current?.click();
   };
 
+  const onRunActiveDataTopic = () => {
+    if (!activeDataTopicId) {
+      return;
+    }
+    onRunDataTopic(activeDataTopicId);
+  };
+
+  const onRunActiveDataCrawlerOnly = () => {
+    if (!activeDataTopicId) {
+      return;
+    }
+    onRunDataCrawlerOnly(activeDataTopicId);
+  };
+
   const onAttachFiles = (event: ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files || files.length === 0) {
@@ -378,9 +436,12 @@ export default function AgentsPage({ onQuickAction, topicSnapshots, codexMultiAg
       onAttachFiles={onAttachFiles}
       onBackToSetList={onBackToSetList}
       onCloseThread={onCloseThread}
+      onOpenDataTab={onOpenDataTab}
       onOpenFilePicker={onOpenFilePicker}
       onQueuePrompt={onQueuePrompt}
       onRestoreTemplateSet={onRestoreTemplateSet}
+      onRunDataCrawlerOnly={onRunActiveDataCrawlerOnly}
+      onRunDataTopic={onRunActiveDataTopic}
       onSelectModel={setSelectedModel}
       onSelectReasonLevel={setSelectedReasonLevel}
       onSend={onSend}
@@ -395,6 +456,8 @@ export default function AgentsPage({ onQuickAction, topicSnapshots, codexMultiAg
       setIsModelMenuOpen={setIsModelMenuOpen}
       setIsReasonMenuOpen={setIsReasonMenuOpen}
       setMission={setMission}
+      dataTopicId={activeDataTopicId}
+      dataTopicRunState={activeDataRunState ?? null}
       t={(key) => t(key)}
       threads={threads}
     />

@@ -16,9 +16,8 @@ type DashboardIntelligenceSettingsProps = {
   modelOptions: ReadonlyArray<{ value: string; label: string }>;
   disabled?: boolean;
   onSetTopicModel: (topic: DashboardTopicId, model: string) => void;
-  onRunTopic: (topic: DashboardTopicId, followupInstruction?: string) => void;
-  onRunAll: () => void;
-  onRunCrawlerOnly: () => void;
+  onRequestRunInAgents: (topic: DashboardTopicId, followupInstruction?: string) => void;
+  onOpenAgentsWorkspace: () => void;
 };
 
 function formatTopicId(topic: DashboardTopicId): string {
@@ -84,10 +83,10 @@ export default function DashboardIntelligenceSettings(props: DashboardIntelligen
   const onSubmitFollowup = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const prompt = followupDraft.trim();
-    if (!prompt || props.disabled || activeTopicRunState?.running) {
+    if (!prompt || props.disabled) {
       return;
     }
-    props.onRunTopic(activeTopic, prompt);
+    props.onRequestRunInAgents(activeTopic, prompt);
     setFollowupDraft("");
   };
 
@@ -100,18 +99,15 @@ export default function DashboardIntelligenceSettings(props: DashboardIntelligen
             <p>{t("settings.dashboardIntelligence.description")}</p>
           </div>
           <div className="settings-dashboard-intelligence-actions">
-            <button disabled={props.disabled} onClick={props.onRunCrawlerOnly} type="button">
-              {t("settings.dashboardIntelligence.runCrawlerOnly")}
-            </button>
-            <button disabled={props.disabled} onClick={props.onRunAll} type="button">
-              {t("settings.dashboardIntelligence.runAll")}
+            <button disabled={props.disabled} onClick={props.onOpenAgentsWorkspace} type="button">
+              에이전트 실행 탭 열기
             </button>
           </div>
         </header>
         <div className="settings-dashboard-topic-columns" role="presentation">
           <span>TOPIC</span>
           <span>MODEL</span>
-          <span>RUN</span>
+          <span>STATE</span>
         </div>
         <div className="settings-dashboard-intelligence-list" role="tablist" aria-label="데이터 토픽">
           {DASHBOARD_TOPIC_IDS.map((topic) => {
@@ -147,18 +143,9 @@ export default function DashboardIntelligenceSettings(props: DashboardIntelligen
                   />
                 </div>
 
-                <button
-                  disabled={props.disabled || runState?.running}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    props.onRunTopic(topic);
-                  }}
-                  type="button"
-                >
-                  {runState?.running
-                    ? t("settings.dashboardIntelligence.running")
-                    : t("settings.dashboardIntelligence.runTopic")}
-                </button>
+                <div className={`settings-dashboard-topic-state${runState?.running ? " is-running" : ""}`}>
+                  {runState?.running ? "RUNNING" : runState?.lastError ? "ERROR" : runState?.lastRunAt ? "DONE" : "IDLE"}
+                </div>
               </article>
             );
           })}
@@ -173,13 +160,11 @@ export default function DashboardIntelligenceSettings(props: DashboardIntelligen
             <code>{formatTopicId(activeTopic)}</code>
           </div>
           <button
-            disabled={props.disabled || activeTopicRunState?.running}
-            onClick={() => props.onRunTopic(activeTopic)}
+            disabled={props.disabled}
+            onClick={() => props.onRequestRunInAgents(activeTopic)}
             type="button"
           >
-            {activeTopicRunState?.running
-              ? t("settings.dashboardIntelligence.running")
-              : t("settings.dashboardIntelligence.runTopic")}
+            에이전트에서 실행 요청
           </button>
         </header>
 
@@ -264,9 +249,9 @@ export default function DashboardIntelligenceSettings(props: DashboardIntelligen
 
         <form className="data-topic-followup-composer question-input agents-composer workflow-question-input" onSubmit={onSubmitFollowup}>
           <textarea
-            disabled={props.disabled || activeTopicRunState?.running}
+            disabled={props.disabled}
             onChange={(event) => setFollowupDraft(event.currentTarget.value)}
-            placeholder="추가 요청을 입력하면 현재 토픽에 반영해 다시 실행합니다."
+            placeholder="추가 요청을 입력하면 에이전트 탭으로 실행 요청이 전달됩니다."
             rows={2}
             value={followupDraft}
           />
@@ -274,7 +259,7 @@ export default function DashboardIntelligenceSettings(props: DashboardIntelligen
             <span className="data-topic-followup-label">추가 요청</span>
             <button
               className="primary-action question-create-button agents-send-button data-topic-followup-send"
-              disabled={!followupDraft.trim() || props.disabled || activeTopicRunState?.running}
+              disabled={!followupDraft.trim() || props.disabled}
               type="submit"
             >
               <img alt="" aria-hidden="true" className="question-create-icon" src="/up.svg" />

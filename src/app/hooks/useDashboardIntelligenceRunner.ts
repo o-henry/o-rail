@@ -130,12 +130,12 @@ export function useDashboardIntelligenceRunner(params: UseDashboardIntelligenceR
     }
   }, [runTopic]);
 
-  const runCrawlerOnlyForEnabledTopics = useCallback(async () => {
+  const runCrawlerOnly = useCallback(async (topics?: DashboardTopicId[]) => {
     if (!hasTauriRuntime) {
       setError("크롤러 실행은 Tauri 런타임에서만 가능합니다.");
       return;
     }
-    const selected = [...DASHBOARD_TOPIC_IDS];
+    const selected = Array.isArray(topics) && topics.length > 0 ? topics : [...DASHBOARD_TOPIC_IDS];
     for (const topic of selected) {
       updateRunState(setRunStateByTopic, topic, {
         running: true,
@@ -204,12 +204,17 @@ export function useDashboardIntelligenceRunner(params: UseDashboardIntelligenceR
     }
   }, [config, cwd, hasTauriRuntime, invokeFn, setError, setRunStateByTopic, setStatus]);
 
+  const runCrawlerOnlyForEnabledTopics = useCallback(async () => {
+    await runCrawlerOnly();
+  }, [runCrawlerOnly]);
+
   return {
     snapshotsByTopic,
     setSnapshotsByTopic,
     refreshSnapshots,
     runTopic,
     runAll,
+    runCrawlerOnly,
     runCrawlerOnlyForEnabledTopics,
   };
 }

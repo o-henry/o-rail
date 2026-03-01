@@ -1,6 +1,10 @@
 import type { TurnExecutor } from "../../features/workflow/domain";
 import type { RuntimeModelOption } from "../../features/workflow/runtimeModelOptions";
-import type { DashboardTopicId, DashboardTopicSnapshot } from "../../features/dashboard/intelligence";
+import type {
+  DashboardTopicId,
+  DashboardTopicRunState,
+  DashboardTopicSnapshot,
+} from "../../features/dashboard/intelligence";
 import type { CodexMultiAgentMode } from "./agentPrompt";
 import type { AgentSetOptionLike, AgentThreadPreset } from "./agentSetPresets";
 
@@ -16,6 +20,17 @@ export type AgentsPageProps = {
   onQuickAction: (request: AgentQuickActionRequest) => void;
   topicSnapshots: Partial<Record<DashboardTopicId, DashboardTopicSnapshot>>;
   codexMultiAgentMode: CodexMultiAgentMode;
+  runStateByTopic: Record<DashboardTopicId, DashboardTopicRunState>;
+  onRunDataTopic: (topic: DashboardTopicId) => void;
+  onRunDataCrawlerOnly: (topic: DashboardTopicId) => void;
+  launchRequest: AgentWorkspaceLaunchRequest | null;
+  onOpenDataTab: () => void;
+};
+
+export type AgentWorkspaceLaunchRequest = {
+  id: number;
+  setId: string;
+  draft?: string;
 };
 
 export type AgentThread = AgentThreadPreset & {

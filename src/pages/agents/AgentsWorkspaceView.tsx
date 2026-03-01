@@ -1,4 +1,5 @@
 import { useState, type ChangeEvent, type RefObject } from "react";
+import type { DashboardTopicId, DashboardTopicRunState } from "../../features/dashboard/intelligence";
 import type { CodexMultiAgentMode } from "./agentPrompt";
 import type { AgentModelOption, AgentSetOption, AgentThread, AttachedFile } from "./agentTypes";
 
@@ -100,6 +101,11 @@ type AgentsWorkspaceViewProps = {
   onSend: () => void;
   sendDisabled: boolean;
   onQueuePrompt: (prompt: string) => void;
+  dataTopicId: DashboardTopicId | null;
+  dataTopicRunState: DashboardTopicRunState | null;
+  onRunDataTopic: () => void;
+  onRunDataCrawlerOnly: () => void;
+  onOpenDataTab: () => void;
 };
 
 export function AgentsWorkspaceView({
@@ -139,6 +145,11 @@ export function AgentsWorkspaceView({
   onSend,
   sendDisabled,
   onQueuePrompt,
+  dataTopicId,
+  dataTopicRunState,
+  onRunDataTopic,
+  onRunDataCrawlerOnly,
+  onOpenDataTab,
 }: AgentsWorkspaceViewProps) {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
@@ -159,6 +170,13 @@ export function AgentsWorkspaceView({
       prompt: "최신 데이터 스냅샷을 바탕으로 highlights/risks/actions 3개씩 한국어로 정리해줘.",
     },
   ];
+  const dataTopicStatusLabel = dataTopicRunState?.running
+    ? "RUNNING"
+    : dataTopicRunState?.lastError
+      ? "ERROR"
+      : dataTopicRunState?.lastRunAt
+        ? "DONE"
+        : "IDLE";
 
   return (
     <section className="agents-layout agents-workspace-mode workspace-tab-panel">
@@ -167,6 +185,34 @@ export function AgentsWorkspaceView({
           <strong lang="ko">{activeSetOption?.label ?? "세트 미선택"}</strong>
           <p lang="ko">{setMission || activeSetOption?.description || "세트 설명이 없습니다."}</p>
         </div>
+        {dataTopicId ? (
+          <section className="agents-data-run-controls" aria-label="데이터 파이프라인 실행">
+            <div className="agents-data-run-meta">
+              <strong>{`topic · ${dataTopicId}`}</strong>
+              <span>{`status · ${dataTopicStatusLabel}`}</span>
+              {dataTopicRunState?.progressText ? <small>{dataTopicRunState.progressText}</small> : null}
+            </div>
+            <div className="agents-data-run-actions">
+              <button
+                disabled={Boolean(dataTopicRunState?.running)}
+                onClick={onRunDataTopic}
+                type="button"
+              >
+                실행하기
+              </button>
+              <button
+                disabled={Boolean(dataTopicRunState?.running)}
+                onClick={onRunDataCrawlerOnly}
+                type="button"
+              >
+                크롤러만
+              </button>
+              <button onClick={onOpenDataTab} type="button">
+                데이터 보기
+              </button>
+            </div>
+          </section>
+        ) : null}
         <div className="agents-topbar-actions">
           <button
             aria-label="템플릿 복원"

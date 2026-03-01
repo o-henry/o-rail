@@ -14,7 +14,7 @@ import FeedPage from "../pages/feed/FeedPage";
 import DashboardPage from "../pages/dashboard/DashboardPage";
 import { type DashboardDetailTopic } from "../pages/dashboard/DashboardDetailPage";
 import AgentsPage from "../pages/agents/AgentsPage";
-import type { AgentQuickActionRequest } from "../pages/agents/agentTypes";
+import type { AgentQuickActionRequest, AgentWorkspaceLaunchRequest } from "../pages/agents/agentTypes";
 import SettingsPage from "../pages/settings/SettingsPage";
 import DashboardIntelligenceSettings from "../pages/settings/DashboardIntelligenceSettings";
 import WorkflowPage from "../pages/workflow/WorkflowPage";
@@ -326,6 +326,8 @@ function App() {
   const defaultCodexMultiAgentMode = useMemo(() => loadPersistedCodexMultiAgentMode(), []);
   const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>("dashboard");
   const [dashboardDetailTopic, setDashboardDetailTopic] = useState<DashboardDetailTopic | null>(null);
+  const [agentLaunchRequest, setAgentLaunchRequest] = useState<AgentWorkspaceLaunchRequest | null>(null);
+  const agentLaunchRequestSeqRef = useRef(0);
   const workspaceBackStackRef = useRef<WorkspaceTab[]>([]);
   const workspaceForwardStackRef = useRef<WorkspaceTab[]>([]);
   const suppressWorkspaceHistoryPushRef = useRef(false);
@@ -586,8 +588,7 @@ function App() {
     snapshotsByTopic: dashboardSnapshotsByTopic,
     refreshSnapshots: refreshDashboardSnapshots,
     runTopic: runDashboardTopic,
-    runAll: runAllDashboardTopics,
-    runCrawlerOnlyForEnabledTopics: runDashboardCrawlerOnlyForEnabledTopics,
+    runCrawlerOnly: runDashboardCrawlerOnly,
   } = useDashboardIntelligenceRunner({
     cwd,
     hasTauriRuntime,
@@ -1972,33 +1973,50 @@ function App() {
     },
     [updateDashboardTopicConfig],
   );
-  const onRunDashboardTopic = useCallback(
-    async (topic: DashboardTopicId, followupInstruction?: string) => {
+  const openAgentWorkspaceForTopic = useCallback(
+    (topic: DashboardTopicId, draft?: string) => {
+      agentLaunchRequestSeqRef.current += 1;
+      setAgentLaunchRequest({
+        id: agentLaunchRequestSeqRef.current,
+        setId: `data-${topic}`,
+        draft,
+      });
+      setWorkspaceTab("agents");
+      setStatus(`${t(`dashboard.widget.${topic}.title`)} 실행 요청을 에이전트 탭으로 전달했습니다.`);
+    },
+    [setStatus, t],
+  );
+  const onOpenAgentsWorkspaceFromData = useCallback(() => {
+    setWorkspaceTab("agents");
+    setStatus("에이전트 탭에서 데이터 파이프라인 실행을 시작할 수 있습니다.");
+  }, [setStatus]);
+  const onRequestDashboardTopicRunInAgents = useCallback(
+    (topic: DashboardTopicId, followupInstruction?: string) => {
+      openAgentWorkspaceForTopic(topic, followupInstruction);
+    },
+    [openAgentWorkspaceForTopic],
+  );
+  const onRunDashboardTopicFromAgents = useCallback(
+    async (topic: DashboardTopicId) => {
       if (!loginCompleted) {
         setError("Codex 로그인이 필요합니다. 설정에서 먼저 로그인해 주세요.");
+        setWorkspaceTab("settings");
         return;
       }
-      setWorkspaceTab("dashboard");
-      setStatus("대시보드 인텔리전스 실행 중...");
-      await runDashboardTopic(topic, followupInstruction);
+      setStatus(`에이전트 실행: ${t(`dashboard.widget.${topic}.title`)} 파이프라인 시작`);
+      await runDashboardTopic(topic);
       await refreshDashboardSnapshots();
     },
-    [loginCompleted, refreshDashboardSnapshots, runDashboardTopic, setError, setStatus],
+    [loginCompleted, refreshDashboardSnapshots, runDashboardTopic, setError, setStatus, t],
   );
-  const onRunAllDashboardTopics = useCallback(async () => {
-    if (!loginCompleted) {
-      setError("Codex 로그인이 필요합니다. 설정에서 먼저 로그인해 주세요.");
-      return;
-    }
-    setWorkspaceTab("dashboard");
-    setStatus("대시보드 전체 인텔리전스 실행 중...");
-    await runAllDashboardTopics();
-    await refreshDashboardSnapshots();
-  }, [loginCompleted, refreshDashboardSnapshots, runAllDashboardTopics, setError, setStatus]);
-  const onRunDashboardCrawlerOnly = useCallback(async () => {
-    await runDashboardCrawlerOnlyForEnabledTopics();
-    await refreshDashboardSnapshots();
-  }, [refreshDashboardSnapshots, runDashboardCrawlerOnlyForEnabledTopics]);
+  const onRunDashboardCrawlerOnlyFromAgents = useCallback(
+    async (topic: DashboardTopicId) => {
+      setStatus(`에이전트 실행: ${t(`dashboard.widget.${topic}.title`)} 크롤러 시작`);
+      await runDashboardCrawlerOnly([topic]);
+      await refreshDashboardSnapshots();
+    },
+    [refreshDashboardSnapshots, runDashboardCrawlerOnly, setStatus, t],
+  );
   const workspaceTopbarTabs = useMemo(
     () => [
       { tab: "dashboard" as WorkspaceTab, label: "대시보드" },
@@ -2276,7 +2294,12 @@ function App() {
         {workspaceTab === "agents" && (
           <AgentsPage
             codexMultiAgentMode={codexMultiAgentMode}
+            launchRequest={agentLaunchRequest}
             onQuickAction={onAgentQuickAction}
+            onOpenDataTab={() => setWorkspaceTab("intelligence")}
+            onRunDataCrawlerOnly={onRunDashboardCrawlerOnlyFromAgents}
+            onRunDataTopic={onRunDashboardTopicFromAgents}
+            runStateByTopic={dashboardIntelligenceRunStateByTopic}
             topicSnapshots={dashboardSnapshotsByTopic}
           />
         )}
@@ -2328,9 +2351,8 @@ function App() {
               config={dashboardIntelligenceConfig}
               disabled={running || isGraphRunning}
               modelOptions={dashboardIntelligenceModelOptions}
-              onRunAll={onRunAllDashboardTopics}
-              onRunCrawlerOnly={onRunDashboardCrawlerOnly}
-              onRunTopic={onRunDashboardTopic}
+              onOpenAgentsWorkspace={onOpenAgentsWorkspaceFromData}
+              onRequestRunInAgents={onRequestDashboardTopicRunInAgents}
               onSetTopicModel={onSetDashboardTopicModel}
               runStateByTopic={dashboardIntelligenceRunStateByTopic}
               snapshotsByTopic={dashboardSnapshotsByTopic}

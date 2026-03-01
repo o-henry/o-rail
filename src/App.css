@@ -3236,16 +3236,17 @@ h3 {
   margin: 0;
 }
 
-.settings-dashboard-topic-row > button {
-  min-height: 30px;
-  height: 30px;
-  border-radius: 5px;
-  padding: 0 10px;
-  font-size: 12px;
-  font-family: "BasicallyAMono", "Noto Sans KR", monospace;
-  background: var(--surface);
+.settings-dashboard-topic-state {
   justify-self: start;
   text-align: left;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: "BasicallyAMono", "Noto Sans KR", monospace;
+  letter-spacing: 0.04em;
+}
+
+.settings-dashboard-topic-state.is-running {
+  color: #1f66d5;
 }
 
 .settings-dashboard-topic-cadence small {
@@ -6359,6 +6360,51 @@ h3 {
   gap: 8px;
 }
 
+.agents-data-run-controls {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--surface-soft) 58%, var(--surface));
+}
+
+.agents-data-run-meta {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.agents-data-run-meta strong {
+  font-size: 11px;
+  color: var(--text-main);
+  font-family: "BasicallyAMono", "Noto Sans KR", monospace;
+  letter-spacing: 0.04em;
+}
+
+.agents-data-run-meta span,
+.agents-data-run-meta small {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-family: "BasicallyAMono", "Noto Sans KR", monospace;
+}
+
+.agents-data-run-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.agents-data-run-actions button {
+  height: 28px;
+  min-height: 28px;
+  border-radius: 4px;
+  padding: 0 9px;
+  font-size: 11px;
+  font-family: "BasicallyAMono", "Noto Sans KR", monospace;
+  background: var(--surface-panel);
+}
+
 .agents-back-button,
 .agents-restore-template-button {
   border: 1px solid var(--surface-strong);
@@ -6373,6 +6419,7 @@ h3 {
 .agents-topbar {
   display: flex;
   align-items: flex-start;
+  flex-wrap: wrap;
   gap: 12px;
 }
 
@@ -7525,7 +7572,6 @@ pre {
 :root[data-theme="dark"] .settings-usage-guide,
 :root[data-theme="dark"] .settings-dashboard-topic-row,
 :root[data-theme="dark"] .settings-dashboard-intelligence-actions button,
-:root[data-theme="dark"] .settings-dashboard-topic-row > button,
 :root[data-theme="dark"] .settings-cwd-picker,
 :root[data-theme="dark"] .settings-account-button,
 :root[data-theme="dark"] .settings-refresh-button {

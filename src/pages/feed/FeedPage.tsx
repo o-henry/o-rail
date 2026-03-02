@@ -586,6 +586,7 @@ export default function FeedPage({ vm }: FeedPageProps) {
                               const evidence = post.evidence && typeof post.evidence === "object" ? post.evidence : {};
                               const markdownAttachment = attachments.find((attachment: any) => attachment?.kind === "markdown");
                               const markdownFilePath = String(markdownAttachment?.filePath ?? "").trim();
+                              const hasMarkdownDocument = Boolean(markdownAttachment);
                               const readableQuestion = toHumanReadableFeedText(post.question ?? "");
                               const readableInputPreview = toHumanReadableFeedText(post.inputContext?.preview ?? "");
                               const pendingRequestCount = (pendingNodeRequests[post.nodeId] ?? []).length;
@@ -754,7 +755,7 @@ export default function FeedPage({ vm }: FeedPageProps) {
                                     <section className="feed-doc-link-block">
                                       <div className="feed-doc-link-head">
                                         <div className="feed-doc-link-title">{documentSectionTitle}</div>
-                                        {markdownFilePath && (
+                                        {hasMarkdownDocument && (
                                           <button
                                             aria-label={t("feed.document.openFile")}
                                             className="feed-doc-link-open-icon-button"
@@ -771,6 +772,10 @@ export default function FeedPage({ vm }: FeedPageProps) {
                                       {markdownFilePath ? (
                                         <div className="feed-doc-link-row">
                                           <code className="feed-doc-link-path">{markdownFilePath}</code>
+                                        </div>
+                                      ) : hasMarkdownDocument ? (
+                                        <div className="feed-doc-link-row">
+                                          <code className="feed-doc-link-path">{t("feed.document.openFile")}</code>
                                         </div>
                                       ) : (
                                         <div className="feed-doc-link-missing">

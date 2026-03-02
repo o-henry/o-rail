@@ -1,1 +1,7 @@
 /* temporary legacy override layer; rules are currently kept in layout/shell.css and will be trimmed. */
+
+.dashboard-terminal-workspace-log-list li.dashboard-terminal-log-item-highlight p {
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}

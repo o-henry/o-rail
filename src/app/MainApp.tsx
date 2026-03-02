@@ -1885,7 +1885,7 @@ function App() {
     appendWorkspaceEvent,
   });
   const onOpenBriefingDocumentFromData = useCallback(
-    (runId: string, postId?: string) => {
+    async (runId: string, postId?: string) => {
       const resolvedRunId = String(runId ?? "").trim();
       if (!resolvedRunId) {
         setStatus("열 수 있는 브리핑 실행 기록이 없습니다.");
@@ -1926,6 +1926,36 @@ function App() {
               ],
               output: snapshot,
             });
+            let markdownFilePath = "";
+            let jsonFilePath = "";
+            const normalizedCwd = String(cwd ?? "").trim();
+            if (hasTauriRuntime && normalizedCwd) {
+              try {
+                const runDir = `${normalizedCwd.replace(/[\\/]+$/, "")}/.rail/runs/${resolvedRunId}`;
+                const topicToken = String(snapshot.topic ?? "dashboard")
+                  .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+                  .replace(/[^a-zA-Z0-9]+/g, "_")
+                  .replace(/_+/g, "_")
+                  .replace(/^_|_$/g, "")
+                  .toLowerCase();
+                const stamp = String(snapshot.generatedAt ?? new Date().toISOString())
+                  .replace(/[-:.TZ]/g, "")
+                  .slice(0, 14) || String(Date.now());
+                const fileBase = `dashboard_${topicToken}_${stamp}`;
+                markdownFilePath = await invoke<string>("workspace_write_text", {
+                  cwd: runDir,
+                  name: `${fileBase}.md`,
+                  content: built.rawAttachments.markdown,
+                });
+                jsonFilePath = await invoke<string>("workspace_write_text", {
+                  cwd: runDir,
+                  name: `${fileBase}.json`,
+                  content: built.rawAttachments.json,
+                });
+              } catch {
+                // Ignore file persistence failures here; feed can still render in-memory content.
+              }
+            }
             built.post.inputSources = (snapshot.references ?? []).slice(0, 10).map((reference) => ({
               kind: "node",
               nodeId: syntheticNodeId,
@@ -1940,8 +1970,19 @@ function App() {
             const syntheticPost = {
               ...built.post,
               id: syntheticPostId,
-              sourceFile: `dashboard-${snapshot.topic}-${resolvedRunId}.json`,
+              sourceFile: jsonFilePath || `dashboard-${snapshot.topic}-${resolvedRunId}.json`,
               question: `${topicLabel} 데이터 파이프라인 실행 결과`,
+              attachments: Array.isArray(built.post.attachments)
+                ? built.post.attachments.map((attachment: any) => {
+                    if (attachment?.kind === "markdown" && markdownFilePath) {
+                      return { ...attachment, filePath: markdownFilePath };
+                    }
+                    if (attachment?.kind === "json" && jsonFilePath) {
+                      return { ...attachment, filePath: jsonFilePath };
+                    }
+                    return attachment;
+                  })
+                : built.post.attachments,
             };
             feedRawAttachmentRef.current[feedAttachmentRawKey(syntheticPost.id, "markdown")] = built.rawAttachments.markdown;
             feedRawAttachmentRef.current[feedAttachmentRawKey(syntheticPost.id, "json")] = built.rawAttachments.json;
@@ -1990,6 +2031,8 @@ function App() {
     },
     [
       appendWorkspaceEvent,
+      cwd,
+      hasTauriRuntime,
       setFeedCategory,
       setFeedExecutorFilter,
       setFeedExpandedByPost,
@@ -2006,6 +2049,7 @@ function App() {
       dashboardSnapshotsByTopic,
       feedPosts,
       feedRawAttachmentRef,
+      invoke,
       t,
     ],
   );

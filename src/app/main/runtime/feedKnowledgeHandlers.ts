@@ -101,10 +101,56 @@ export function createFeedKnowledgeHandlers(params: any) {
     params.setError("");
     const attachments = Array.isArray(post.attachments) ? post.attachments : [];
     const markdownAttachment = attachments.find((attachment) => attachment.kind === "markdown");
-    const filePath = String(markdownAttachment?.filePath ?? "").trim();
+    let filePath = String(markdownAttachment?.filePath ?? "").trim();
+    let materializedFilePath = "";
     if (!filePath) {
-      params.setError("문서 파일 경로를 찾지 못했습니다.");
-      return;
+      const markdownRawKey = String(
+        post?.rawAttachmentRef?.markdownKey ??
+          params.feedAttachmentRawKeyFn?.(String(post?.id ?? "").trim(), "markdown") ??
+          "",
+      ).trim();
+      const rawMarkdown =
+        markdownRawKey && params.feedRawAttachmentRef?.current
+          ? String(params.feedRawAttachmentRef.current[markdownRawKey] ?? "").trim()
+          : "";
+      const fallbackMarkdown = rawMarkdown || String(markdownAttachment?.content ?? "").trim();
+      const normalizedCwd = String(params.cwd ?? "").trim();
+      if (!fallbackMarkdown || !normalizedCwd || !params.hasTauriRuntime) {
+        params.setError("문서 파일 경로를 찾지 못했습니다.");
+        return;
+      }
+      const normalizedRunId = String(post?.runId ?? "").trim() || "feed";
+      const normalizedPostId =
+        String(post?.id ?? "post")
+          .trim()
+          .replace(/[^a-zA-Z0-9._-]+/g, "_")
+          .slice(0, 64) || "post";
+      try {
+        const runDir = `${normalizedCwd.replace(/[\\/]+$/, "")}/.rail/runs/${normalizedRunId}`;
+        filePath = await params.invokeFn("workspace_write_text", {
+          cwd: runDir,
+          name: `feed_${normalizedPostId}.md`,
+          content: fallbackMarkdown,
+        });
+        materializedFilePath = String(filePath ?? "").trim();
+      } catch (error) {
+        params.setError(`문서 파일 생성 실패: ${String(error)}`);
+        return;
+      }
+    }
+    if (materializedFilePath) {
+      params.setFeedPosts((prev: FeedViewPost[]) =>
+        (Array.isArray(prev) ? prev : []).map((row) => {
+          if (row.id !== post.id) {
+            return row;
+          }
+          const attachments = Array.isArray(row.attachments) ? row.attachments : [];
+          const nextAttachments = attachments.map((attachment) =>
+            attachment.kind === "markdown" ? { ...attachment, filePath: materializedFilePath } : attachment,
+          );
+          return { ...row, attachments: nextAttachments };
+        }),
+      );
     }
     try {
       const normalizedUrl =

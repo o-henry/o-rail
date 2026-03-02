@@ -94,6 +94,14 @@ function normalizeDashboardLogText(input: string): string {
   return input.replace(/\bstatus\b/gi, "상태");
 }
 
+function truncateDashboardHighlightText(input: string, maxChars = 110): string {
+  const normalized = String(input ?? "").replace(/\s+/g, " ").trim();
+  if (normalized.length <= maxChars) {
+    return normalized;
+  }
+  return `${normalized.slice(0, Math.max(0, maxChars - 3)).trimEnd()}...`;
+}
+
 export default function DashboardPage(props: DashboardPageProps) {
   const { t } = useI18n();
   const [runFilter, setRunFilter] = useState<string>("all");
@@ -140,14 +148,6 @@ export default function DashboardPage(props: DashboardPageProps) {
     ],
   );
 
-  const snapshotSummaries = useMemo(() => {
-    const snapshots = Object.values(props.topicSnapshots)
-      .filter((snapshot): snapshot is DashboardTopicSnapshot => Boolean(snapshot))
-      .sort((left, right) => new Date(right.generatedAt).getTime() - new Date(left.generatedAt).getTime())
-      .slice(0, 8);
-    return snapshots.map((snapshot) => `${formatTopicToken(snapshot.topic)}: ${snapshot.summary}`);
-  }, [props.topicSnapshots]);
-
   const fallbackFeedSummaries = useMemo(
     () =>
       [...props.stockDocumentPosts]
@@ -157,9 +157,6 @@ export default function DashboardPage(props: DashboardPageProps) {
         .map((post) => String(post.summary ?? "").trim()),
     [props.stockDocumentPosts],
   );
-
-  const workSummaryItems = snapshotSummaries.length > 0 ? snapshotSummaries : fallbackFeedSummaries;
-  const terminalLines = workSummaryItems.length > 0 ? workSummaryItems : [t("dashboard.value.none")];
   const resourceLines = useMemo<DashboardResourceLine[]>(() => {
     const runFilterValue = runFilter;
     const topicFilterValue = topicFilter;
@@ -231,11 +228,12 @@ export default function DashboardPage(props: DashboardPageProps) {
         if (!text) {
           return;
         }
+        const truncatedText = truncateDashboardHighlightText(text);
         collected.push({
-          id: `${snapshot.topic}-highlight-${index}-${text}`,
+          id: `${snapshot.topic}-highlight-${index}-${truncatedText}`,
           topic: snapshot.topic,
           kind: "highlight",
-          text,
+          text: truncatedText,
         });
       });
     });
@@ -429,19 +427,19 @@ export default function DashboardPage(props: DashboardPageProps) {
           </div>
 
           <ul className="dashboard-terminal-log-list dashboard-terminal-workspace-log-list">
-            {resourceLines.map((line) => (
-              <li key={line.id}>
-                <span aria-hidden="true">
-                  {line.kind === "reference" ? "REF" : line.kind === "event" ? "EVT" : line.kind === "highlight" ? "HLT" : line.kind === "log" ? "LOG" : "SUM"}
-                </span>
-                <p>{line.topic === "feed" ? line.text : `${formatTopicToken(line.topic)} · ${line.text}`}</p>
-              </li>
-            ))}
+            {resourceLines.map((line) => {
+              const baseText = line.topic === "feed" ? line.text : `${formatTopicToken(line.topic)} · ${line.text}`;
+              const renderedText = line.kind === "highlight" ? truncateDashboardHighlightText(baseText) : baseText;
+              return (
+                <li className={`dashboard-terminal-log-item dashboard-terminal-log-item-${line.kind}`} key={line.id}>
+                  <span aria-hidden="true">
+                    {line.kind === "reference" ? "REF" : line.kind === "event" ? "EVT" : line.kind === "highlight" ? "HLT" : line.kind === "log" ? "LOG" : "SUM"}
+                  </span>
+                  <p title={baseText}>{renderedText}</p>
+                </li>
+              );
+            })}
           </ul>
-
-          <section className="dashboard-terminal-editor">
-            <pre>{terminalLines.map((line, index) => `[${String(index + 1).padStart(2, "0")}] ${line}`).join("\n")}</pre>
-          </section>
         </section>
       </section>
     </section>

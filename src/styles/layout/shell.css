@@ -1140,7 +1140,7 @@
   border: 1px solid var(--surface-strong);
   background: var(--surface-panel);
   box-shadow: 0 12px 30px rgba(12, 18, 28, 0.18);
-  padding: 7px 7px 10px;
+  padding: 7px;
   max-height: 250px;
   overflow-y: auto;
 }
@@ -1206,7 +1206,7 @@
 
 .fancy-select.graph-file-select .fancy-select-menu {
   border-radius: 4px;
-  padding: 7px 7px 10px;
+  padding: 7px;
 }
 
 .fancy-select.template-select .fancy-select-menu {
@@ -5130,7 +5130,7 @@
 
 .dashboard-terminal-sidebar {
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
 }
 
 .dashboard-terminal-sidebar-head {
@@ -5229,6 +5229,9 @@
   padding: 8px 10px 10px;
   border-bottom: 0;
   background: color-mix(in srgb, var(--surface-soft) 32%, var(--surface-elevated));
+  min-height: 0;
+  overflow: auto;
+  align-content: start;
 }
 
 .dashboard-terminal-runstate-row {
@@ -5316,6 +5319,8 @@
   min-width: 0;
   margin: 0;
   display: block;
+  position: relative;
+  bottom: 2px;
   color: var(--text-main);
   font-size: 12px;
   line-height: 1.55;
@@ -5323,6 +5328,26 @@
   overflow-wrap: anywhere;
   word-break: break-word;
   overflow: visible;
+}
+
+.dashboard-terminal-log-list li.dashboard-terminal-log-item-highlight {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  grid-template-columns: auto minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.dashboard-terminal-log-list li.dashboard-terminal-log-item-highlight p {
+  display: block;
+  min-width: 0;
+  width: 100%;
+  max-width: min(100%, calc(100vw - 420px));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  overflow-wrap: normal;
+  word-break: keep-all;
 }
 
 .workflow-add-agent-button {
@@ -5333,7 +5358,7 @@
 
 .dashboard-terminal-workspace {
   display: grid;
-  grid-template-rows: auto auto minmax(120px, 0.58fr) minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
 }
 
 .dashboard-terminal-workspace-head {
@@ -7600,7 +7625,7 @@ pre {
 
 .bridge-view h2,
 .bridge-embedded h2 {
-  font-size: 14px;
+  font-size: 15px;
   /* font-family: Galmuri14; */
   font-family: "DialogNanumBody1984";
 }
@@ -7616,6 +7641,7 @@ pre {
 
 .settings-view .controls > h3,
 .feed-topbar h2,
+.web-automation-head h2,
 .inspector-title-chip,
 .agents-set-picker-head h2,
 .settings-dashboard-intelligence-eyebrow {

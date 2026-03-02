@@ -28,5 +28,14 @@ describe("agentic action bus", () => {
 
     expect(first).toHaveBeenCalledTimes(1);
     expect(second).toHaveBeenCalledTimes(2);
+
+    bus.publish({
+      type: "run_role",
+      payload: {
+        roleId: "role-system_programmer",
+        taskId: "SYSTEM-001",
+      },
+    });
+    expect(second).toHaveBeenCalledTimes(3);
   });
 });

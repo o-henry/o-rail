@@ -84,7 +84,10 @@ pub fn knowledge_retrieve(
         }
 
         if !is_supported_extension(&file.ext) {
-            warnings.push(format!("지원하지 않는 확장자: {} ({})", file.name, file.ext));
+            warnings.push(format!(
+                "지원하지 않는 확장자: {} ({})",
+                file.name, file.ext
+            ));
             continue;
         }
 
@@ -250,8 +253,8 @@ fn stable_file_id(path: &str) -> String {
 
 fn is_supported_extension(ext: &str) -> bool {
     let supported: HashSet<&str> = HashSet::from([
-        ".txt", ".md", ".json", ".csv", ".ts", ".tsx", ".js", ".jsx", ".py", ".rs", ".go",
-        ".java", ".cs", ".html", ".css", ".sql", ".yaml", ".yml", ".pdf", ".docx",
+        ".txt", ".md", ".json", ".csv", ".ts", ".tsx", ".js", ".jsx", ".py", ".rs", ".go", ".java",
+        ".cs", ".html", ".css", ".sql", ".yaml", ".yml", ".pdf", ".docx",
     ]);
     supported.contains(ext)
 }
@@ -278,7 +281,8 @@ fn extract_docx_text(path: &Path) -> Result<String, String> {
         .read_to_string(&mut xml)
         .map_err(|err| format!("document.xml 문자열 읽기 실패: {err}"))?;
 
-    let doc = roxmltree::Document::parse(&xml).map_err(|err| format!("docx xml 파싱 실패: {err}"))?;
+    let doc =
+        roxmltree::Document::parse(&xml).map_err(|err| format!("docx xml 파싱 실패: {err}"))?;
     let mut out = String::new();
     for node in doc.descendants() {
         if node.is_element() && node.tag_name().name() == "t" {

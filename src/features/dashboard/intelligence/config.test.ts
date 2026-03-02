@@ -61,16 +61,18 @@ describe("dashboard intelligence config", () => {
     expect(normalized.maxSources).toBe(1);
     expect(normalized.maxSnippets).toBe(1);
     expect(normalized.maxSnippetChars).toBe(6000);
+    expect(normalized.allowlist).not.toContain("reuters.com");
+    expect(normalized.allowlist).not.toContain("wsj.com");
+    expect(normalized.allowlist).not.toContain("ft.com");
+    expect(normalized.allowlist).not.toContain("feeds.reuters.com/reuters/worldnews");
     expect(normalized.allowlist).toEqual(
       expect.arrayContaining([
-        "reuters.com",
-        "feeds.reuters.com/reuters/worldnews",
         "apnews.com/hub/apf-topnews?output=rss",
         "feeds.bbci.co.uk/news/world/rss.xml",
         "rss.nytimes.com/services/xml/rss/nyt/world.xml",
-        "apnews.com",
-        "ft.com",
-        "wsj.com",
+        "theguardian.com/world/rss",
+        "aljazeera.com/xml/rss/all.xml",
+        "npr.org/rss/rss.php?id=1004",
       ]),
     );
   });

@@ -42,7 +42,13 @@ pub fn run() {
             dashboard_crawler::dashboard_crawl_run,
             dashboard_crawler::dashboard_snapshot_save,
             dashboard_crawler::dashboard_snapshot_list,
+            dashboard_crawler::dashboard_snapshot_delete,
             dashboard_crawler::dashboard_raw_list,
+            dashboard_crawler::dashboard_agentic_run_list,
+            dashboard_crawler::dashboard_scrapling_bridge_health,
+            dashboard_crawler::dashboard_scrapling_bridge_start,
+            dashboard_crawler::dashboard_scrapling_bridge_install,
+            dashboard_crawler::dashboard_scrapling_bridge_stop,
             knowledge::knowledge_probe,
             knowledge::knowledge_retrieve,
             quality::quality_run_checks,
@@ -78,6 +84,7 @@ pub fn run() {
             tauri::async_runtime::block_on(async {
                 let _ = engine::shutdown_all_runtimes(state.inner()).await;
             });
+            dashboard_crawler::shutdown_scrapling_bridge_runtime();
         }
         _ => {}
     });

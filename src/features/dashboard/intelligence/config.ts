@@ -31,14 +31,14 @@ const DEFAULT_ALLOWLIST_BY_TOPIC: Record<DashboardTopicId, string[]> = {
     "finance.naver.com/sise/",
   ],
   globalHeadlines: [
-    "feeds.reuters.com/reuters/worldNews",
     "apnews.com/hub/apf-topnews?output=rss",
     "feeds.bbci.co.uk/news/world/rss.xml",
-    "rss.nytimes.com/services/xml/rss/nyt/World.xml",
-    "reuters.com",
-    "apnews.com",
-    "ft.com",
-    "wsj.com",
+    "rss.nytimes.com/services/xml/rss/nyt/world.xml",
+    "theguardian.com/world/rss",
+    "aljazeera.com/xml/rss/all.xml",
+    "npr.org/rss/rss.php?id=1004",
+    "dw.com/en/top-stories/s-9097",
+    "straitstimes.com/global/rss.xml",
   ],
   industryTrendRadar: [
     "mckinsey.com",
@@ -141,6 +141,23 @@ const DEFAULT_PROMPT_BY_TOPIC: Record<DashboardTopicId, string> = {
 
 const MAX_ALLOWLIST_ITEMS = 40;
 
+const BLOCKED_SOURCES_BY_TOPIC: Record<DashboardTopicId, string[]> = {
+  marketSummary: [],
+  globalHeadlines: [
+    "reuters.com",
+    "feeds.reuters.com/reuters/worldnews",
+    "wsj.com",
+    "ft.com",
+  ],
+  industryTrendRadar: [],
+  communityHotTopics: [],
+  devCommunityHotTopics: [],
+  paperResearch: [],
+  eventCalendar: [],
+  riskAlertBoard: [],
+  devEcosystem: [],
+};
+
 function normalizeCadenceHours(value: unknown, fallback: number): number {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) {
@@ -172,6 +189,14 @@ function normalizeAllowlist(value: unknown, fallback: string[]): string[] {
     return [...fallbackNormalized];
   }
   return [...new Set([...normalized, ...fallbackNormalized])].slice(0, MAX_ALLOWLIST_ITEMS);
+}
+
+function sanitizeAllowlistByTopic(topic: DashboardTopicId, allowlist: string[]): string[] {
+  const blocked = new Set((BLOCKED_SOURCES_BY_TOPIC[topic] ?? []).map((row) => row.trim().toLowerCase()));
+  if (blocked.size === 0) {
+    return allowlist;
+  }
+  return allowlist.filter((row) => !blocked.has(String(row ?? "").trim().toLowerCase()));
 }
 
 export function createDefaultDashboardTopicConfig(topic: DashboardTopicId): DashboardTopicAgentConfig {
@@ -209,7 +234,7 @@ export function normalizeDashboardTopicConfig(topic: DashboardTopicId, raw: unkn
     maxSources: normalizePositiveInt(row.maxSources, fallback.maxSources, 1, 20),
     maxSnippets: normalizePositiveInt(row.maxSnippets, fallback.maxSnippets, 1, 20),
     maxSnippetChars: normalizePositiveInt(row.maxSnippetChars, fallback.maxSnippetChars, 300, 6_000),
-    allowlist: normalizeAllowlist(row.allowlist, fallback.allowlist),
+    allowlist: sanitizeAllowlistByTopic(topic, normalizeAllowlist(row.allowlist, fallback.allowlist)),
   };
 }
 

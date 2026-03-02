@@ -23,6 +23,7 @@ import { useWorkflowGraphActions } from "./hooks/useWorkflowGraphActions";
 import { useWorkflowShortcuts } from "./hooks/useWorkflowShortcuts";
 import { useDashboardIntelligenceConfig } from "./hooks/useDashboardIntelligenceConfig";
 import { useDashboardIntelligenceRunner } from "./hooks/useDashboardIntelligenceRunner";
+import { DASHBOARD_TOPIC_IDS } from "../features/dashboard/intelligence";
 import { useWorkspaceNavigation } from "./hooks/useWorkspaceNavigation";
 import { useWorkspaceQuickPanel } from "./hooks/useWorkspaceQuickPanel";
 import { useDashboardAgentBridge } from "./hooks/useDashboardAgentBridge";
@@ -292,7 +293,14 @@ import {
 import { executeTurnNodeWithContext } from "./main/runtime/executeTurnNode";
 import type { FeedCategory, InternalMemorySnippet, WebProviderRunResult, RunRecord } from "./main";
 
-const WORKSPACE_TOPBAR_TABS: Array<{ tab: WorkspaceTab; label: string }> = [{ tab: "dashboard", label: "대시보드" }, { tab: "intelligence", label: "데이터" }, { tab: "agents", label: "에이전트" }, { tab: "workflow", label: "그래프" }, { tab: "feed", label: "피드" }, { tab: "settings", label: "설정" }];
+const HIDDEN_WORKSPACE_TABS = new Set<WorkspaceTab>(["intelligence", "feed"]);
+
+const WORKSPACE_TOPBAR_TABS: Array<{ tab: WorkspaceTab; label: string }> = [
+  { tab: "dashboard", label: "대시보드" },
+  { tab: "agents", label: "에이전트" },
+  { tab: "workflow", label: "그래프" },
+  { tab: "settings", label: "설정" },
+];
 
 function App() {
   const USER_BG_IMAGE_STORAGE_KEY = "rail.settings.user_bg_image";
@@ -515,6 +523,8 @@ function App() {
     setFeedExecutorFilter,
     feedPeriodFilter,
     setFeedPeriodFilter,
+    feedTopicFilter,
+    setFeedTopicFilter,
     feedKeyword,
     setFeedKeyword,
     feedCategory,
@@ -558,6 +568,12 @@ function App() {
     [],
   );
   const agenticQueue = useMemo(() => createAgenticQueue(), []);
+
+  useEffect(() => {
+    if (HIDDEN_WORKSPACE_TABS.has(workspaceTab)) {
+      setWorkspaceTab("dashboard");
+    }
+  }, [workspaceTab]);
   const { publishAction, subscribeAction } = useAgenticActionBus();
   const {
     snapshotsByTopic: dashboardSnapshotsByTopic,
@@ -792,6 +808,7 @@ function App() {
     onDeleteFeedRunGroup,
     onSubmitFeedRunGroupRename,
   } = useFeedRunActions({
+    cwd,
     setError,
     setStatus,
     setFeedShareMenuPostId,
@@ -1638,6 +1655,7 @@ function App() {
     feedStatusFilter,
     feedExecutorFilter,
     feedPeriodFilter,
+    feedTopicFilter,
     feedKeyword,
     feedCategory,
     feedRunCache: feedRunCacheRef.current,
@@ -1655,6 +1673,16 @@ function App() {
     { key: "web_posts", label: t("feed.category.web_posts") },
     { key: "error_posts", label: t("feed.category.error_posts") },
   ];
+  const feedTopicOptions = useMemo(
+    () => [
+      { value: "all", label: t("feed.topic.all") },
+      ...DASHBOARD_TOPIC_IDS.map((topic) => ({
+        value: topic,
+        label: t(`dashboard.widget.${topic}.title`),
+      })),
+    ],
+    [t],
+  );
 
   const loadFeedInspectorRuleDocs = useCallback(
     (nodeCwd: string) =>
@@ -1833,11 +1861,14 @@ function App() {
     setFeedStatusFilter,
     setFeedExecutorFilter,
     setFeedPeriodFilter,
+    setFeedTopicFilter,
     setFeedKeyword,
     feedStatusFilter,
     feedExecutorFilter,
     feedPeriodFilter,
+    feedTopicFilter,
     feedKeyword,
+    feedTopicOptions,
     feedCategoryMeta,
     feedCategory,
     feedCategoryPosts,
@@ -1919,6 +1950,11 @@ function App() {
               isFinalDocument: true,
               status: snapshot.status === "degraded" ? "low_quality" : "done",
               createdAt: String(snapshot.generatedAt ?? new Date().toISOString()),
+              topic: snapshot.topic,
+              topicLabel,
+              groupName: topicLabel,
+              agentName: topicLabel,
+              roleLabel: `${String(snapshot.model ?? "").toUpperCase()} · DASHBOARD BRIEFING`,
               summary: String(snapshot.summary ?? "").trim() || `${topicLabel} 브리핑 생성`,
               logs: [
                 `${topicLabel} 브리핑 생성`,
@@ -1970,6 +2006,9 @@ function App() {
             const syntheticPost = {
               ...built.post,
               id: syntheticPostId,
+              topic: snapshot.topic,
+              topicLabel,
+              groupName: topicLabel,
               sourceFile: jsonFilePath || `dashboard-${snapshot.topic}-${resolvedRunId}.json`,
               question: `${topicLabel} 데이터 파이프라인 실행 결과`,
               attachments: Array.isArray(built.post.attachments)
@@ -2006,6 +2045,7 @@ function App() {
       setFeedStatusFilter("all");
       setFeedExecutorFilter("all");
       setFeedPeriodFilter("all");
+      setFeedTopicFilter("all");
       setFeedKeyword(resolvedRunId);
       setFeedFilterOpen(true);
       setFeedGroupExpandedByRunId((prev) => ({
@@ -2042,6 +2082,7 @@ function App() {
       setFeedKeyword,
       setFeedPeriodFilter,
       setFeedStatusFilter,
+      setFeedTopicFilter,
       setFeedPosts,
       setError,
       setStatus,
@@ -2296,6 +2337,7 @@ function App() {
                 setWorkspaceTab("feed");
                 setFeedCategory("all_posts");
                 setFeedStatusFilter("all");
+                setFeedTopicFilter("all");
                 setFeedKeyword("");
                 setStatus(`피드에서 ${nodeId} 노드 결과를 확인하세요.`);
               }}

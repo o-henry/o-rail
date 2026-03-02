@@ -2129,7 +2129,7 @@
 }
 
 .settings-view .controls > h3 + .settings-badges {
-  margin-top: -8px;
+  margin-top: -2px;
 }
 
 .settings-view .bridge-head-panel {
@@ -3882,7 +3882,7 @@
   background: #eff2f6;
   padding: 8px;
   display: grid;
-  grid-template-columns: repeat(4, minmax(120px, 1fr));
+  grid-template-columns: repeat(5, minmax(110px, 1fr));
   gap: 8px;
   position: relative;
   z-index: 1;

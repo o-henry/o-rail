@@ -57,15 +57,13 @@ fn main() {
     let request = parse_cli_args();
     let result = tauri::async_runtime::block_on(run_dashboard_crawl(request));
     match result {
-        Ok(summary) => {
-            match to_string_pretty(&summary) {
-                Ok(text) => println!("{text}"),
-                Err(err) => {
-                    eprintln!("failed to render crawl summary: {err}");
-                    std::process::exit(1);
-                }
+        Ok(summary) => match to_string_pretty(&summary) {
+            Ok(text) => println!("{text}"),
+            Err(err) => {
+                eprintln!("failed to render crawl summary: {err}");
+                std::process::exit(1);
             }
-        }
+        },
         Err(err) => {
             eprintln!("dashboard crawler failed: {err}");
             std::process::exit(1);

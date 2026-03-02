@@ -191,6 +191,82 @@ export function buildFeedSummary(status: string, output: unknown, error?: string
   return outputText.length > 360 ? `${outputText.slice(0, 360)}...` : outputText;
 }
 
+function summarizeSnapshotText(input: unknown, maxLen: number): string {
+  const text = String(input ?? "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!text) {
+    return "";
+  }
+  return text.length > maxLen ? text.slice(0, maxLen).trimEnd() : text;
+}
+
+function snapshotStringList(input: unknown, maxItems: number, maxLen: number): string[] {
+  if (!Array.isArray(input)) {
+    return [];
+  }
+  return input
+    .map((row) => summarizeSnapshotText(row, maxLen))
+    .filter((row) => row.length > 0)
+    .filter((row, index, arr) => arr.indexOf(row) === index)
+    .slice(0, maxItems);
+}
+
+function formatDashboardSnapshotOutput(output: Record<string, unknown>): string {
+  const summary = summarizeSnapshotText(output.summary, 4000);
+  const highlights = snapshotStringList(output.highlights, 20, 800);
+  const risks = snapshotStringList(output.risks, 20, 800);
+  const references = Array.isArray(output.references)
+    ? output.references
+        .map((row) => {
+          if (!row || typeof row !== "object" || Array.isArray(row)) {
+            return "";
+          }
+          const item = row as Record<string, unknown>;
+          const title = summarizeSnapshotText(item.title, 220);
+          const url = summarizeSnapshotText(item.url, 1000);
+          if (!url) {
+            return "";
+          }
+          if (title) {
+            return `- ${title}: ${url}`;
+          }
+          return `- ${url}`;
+        })
+        .filter((row) => row.length > 0)
+        .slice(0, 20)
+    : [];
+
+  const hasSnapshotShape = Boolean(summary) || highlights.length > 0 || risks.length > 0 || references.length > 0;
+  if (!hasSnapshotShape) {
+    return "";
+  }
+
+  const lines: string[] = [];
+  if (summary) {
+    lines.push("## 실행 요약", summary);
+  }
+  if (highlights.length > 0) {
+    if (lines.length > 0) {
+      lines.push("");
+    }
+    lines.push("## 핵심 포인트", ...highlights.map((item) => `- ${item}`));
+  }
+  if (risks.length > 0) {
+    if (lines.length > 0) {
+      lines.push("");
+    }
+    lines.push("## 리스크", ...risks.map((item) => `- ${item}`));
+  }
+  if (references.length > 0) {
+    if (lines.length > 0) {
+      lines.push("");
+    }
+    lines.push("## 참고 링크", ...references);
+  }
+  return lines.join("\n").trim();
+}
+
 function extractFeedOutputText(output: unknown): string {
   const direct = extractFinalAnswer(output).trim();
   if (direct) {
@@ -211,6 +287,17 @@ function extractFeedOutputText(output: unknown): string {
 
   if (typeof output === "string") {
     return output.trim();
+  }
+  if (output && typeof output === "object" && !Array.isArray(output)) {
+    const formattedDashboardSnapshot = formatDashboardSnapshotOutput(output as Record<string, unknown>);
+    if (formattedDashboardSnapshot) {
+      return formattedDashboardSnapshot;
+    }
+    try {
+      return JSON.stringify(output, null, 2);
+    } catch {
+      return stringifyInput(output).trim();
+    }
   }
   return "";
 }
@@ -618,13 +705,15 @@ export function buildFeedPost(input: any): {
   rawAttachments: Record<"markdown" | "json", string>;
 } {
   const config = input.node.config as TurnConfig;
-  const roleLabel = input.node.type === "turn" ? turnRoleLabel(input.node) : nodeTypeLabel(input.node.type);
-  const agentName =
+  const inferredRoleLabel = input.node.type === "turn" ? turnRoleLabel(input.node) : nodeTypeLabel(input.node.type);
+  const roleLabel = String(input.roleLabel ?? "").trim() || inferredRoleLabel;
+  const inferredAgentName =
     input.node.type === "turn"
       ? turnModelLabel(input.node)
       : input.node.type === "transform"
         ? t("label.node.transform")
         : t("label.node.gate");
+  const agentName = String(input.agentName ?? "").trim() || inferredAgentName;
   const logs = input.logs ?? [];
   const steps = summarizeFeedSteps(logs);
   const summary = buildFeedSummary(input.status, input.output, input.error, input.summary);
@@ -716,6 +805,9 @@ export function buildFeedPost(input: any): {
     runId: input.runId,
     nodeId: input.node.id,
     nodeType: input.node.type,
+    topic: typeof input.topic === "string" ? input.topic : undefined,
+    topicLabel: typeof input.topicLabel === "string" ? input.topicLabel : undefined,
+    groupName: typeof input.groupName === "string" ? input.groupName : undefined,
     isFinalDocument: Boolean(input.isFinalDocument),
     executor: input.node.type === "turn" ? getTurnExecutor(config) : undefined,
     agentName,

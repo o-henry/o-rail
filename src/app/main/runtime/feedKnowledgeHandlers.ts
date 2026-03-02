@@ -1,5 +1,6 @@
 import { openPath, revealItemInDir } from "../../../shared/tauri";
 import type { KnowledgeFileRef } from "../../../features/workflow/types";
+import { isFeedRunIdHidden, readHiddenFeedRunIds } from "./feedHiddenRuns";
 import type { FeedViewPost, RunRecord } from "../types";
 
 export function createFeedKnowledgeHandlers(params: any) {
@@ -18,6 +19,88 @@ export function createFeedKnowledgeHandlers(params: any) {
       return normalized.replace(/([a-z0-9])([A-Z])/g, "$1 $2");
     }
     return translated;
+  }
+
+  async function loadDashboardFailedRunPosts(existingPostIds: Set<string>): Promise<FeedViewPost[]> {
+    const normalizedCwd = String(params.cwd ?? "").trim();
+    if (!normalizedCwd || typeof params.buildFeedPostFn !== "function") {
+      return [];
+    }
+    let rows: unknown[] = [];
+    try {
+      rows = (await params.invokeFn("dashboard_agentic_run_list", { cwd: normalizedCwd, limit: 300 })) as unknown[];
+    } catch {
+      return [];
+    }
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return [];
+    }
+    const posts: FeedViewPost[] = [];
+    for (const item of rows) {
+      if (!item || typeof item !== "object" || Array.isArray(item)) {
+        continue;
+      }
+      const row = item as Record<string, unknown>;
+      const status = String(row.status ?? "").trim().toLowerCase();
+      const topic = String(row.topic ?? "").trim();
+      const runId = String(row.runId ?? "").trim();
+      if (status !== "error" || !topic || !runId) {
+        continue;
+      }
+      if (isFeedRunIdHidden(runId)) {
+        continue;
+      }
+      const nodeId = `dashboard-${topic}`;
+      const postId = `${runId}:${nodeId}:failed`;
+      if (existingPostIds.has(postId)) {
+        continue;
+      }
+      const topicTitle = toDashboardTopicTitle(topic);
+      const errorStage = String(row.errorStage ?? "").trim();
+      const errorMessage = String(row.errorMessage ?? "").trim() || "실행 중 오류가 발생했습니다.";
+      const built = params.buildFeedPostFn({
+        runId,
+        node: {
+          id: nodeId,
+          type: "turn",
+          config: {
+            executor: "codex",
+            model: "gpt-5.2-codex",
+            role: "DASHBOARD BRIEFING",
+          },
+        },
+        isFinalDocument: false,
+        status: "failed",
+        createdAt: String(row.updatedAt ?? "").trim() || new Date().toISOString(),
+        topic,
+        topicLabel: topicTitle,
+        groupName: topicTitle,
+        agentName: topicTitle,
+        roleLabel: "DASHBOARD BRIEFING",
+        summary: `실행 실패: ${errorMessage}`,
+        logs: [
+          `${topicTitle} 파이프라인 실행 실패`,
+          ...(errorStage ? [`실패 단계: ${errorStage}`] : []),
+          errorMessage,
+        ],
+        output: {
+          runId,
+          topic,
+          status: "failed",
+          errorStage,
+          errorMessage,
+        },
+        error: errorMessage,
+      });
+      posts.push({
+        ...built.post,
+        id: postId,
+        sourceFile: `agentic-run-${runId}.json`,
+        question: `${topicTitle} 데이터 파이프라인 실행 결과`,
+      });
+      existingPostIds.add(postId);
+    }
+    return posts;
   }
 
   async function loadDashboardSnapshotPosts(): Promise<FeedViewPost[]> {
@@ -46,9 +129,13 @@ export function createFeedKnowledgeHandlers(params: any) {
       if (!topic || !runId) {
         continue;
       }
+      if (isFeedRunIdHidden(runId)) {
+        continue;
+      }
       const model = String(row.model ?? "").trim() || "gpt-5.2-codex";
       const createdAt = String(row.generatedAt ?? "").trim() || new Date().toISOString();
-      const summary = String(row.summary ?? "").trim() || `${toDashboardTopicTitle(topic)} 브리핑 생성`;
+      const topicTitle = toDashboardTopicTitle(topic);
+      const summary = String(row.summary ?? "").trim() || `${topicTitle} 브리핑 생성`;
       const highlights = Array.isArray(row.highlights)
         ? row.highlights.map((value) => String(value ?? "").trim()).filter(Boolean).slice(0, 8)
         : [];
@@ -73,16 +160,21 @@ export function createFeedKnowledgeHandlers(params: any) {
         isFinalDocument: true,
         status,
         createdAt,
+        topic,
+        topicLabel: topicTitle,
+        groupName: topicTitle,
+        agentName: topicTitle,
+        roleLabel: `${model.toUpperCase()} · DASHBOARD BRIEFING`,
         summary,
-        logs: [`${toDashboardTopicTitle(topic)} 브리핑 생성`, ...highlights, ...risks.map((risk) => `리스크: ${risk}`)],
+        logs: [`${topicTitle} 브리핑 생성`, ...highlights, ...risks.map((risk) => `리스크: ${risk}`)],
         output: row,
       });
       const sourcePath = String(row.path ?? "").trim();
       posts.push({
         ...built.post,
         id: postId,
-        sourceFile: sourcePath ? sourcePath.split(/[\\/]/).pop() || sourcePath : `dashboard-${topic}-${runId}.json`,
-        question: `${toDashboardTopicTitle(topic)} 데이터 파이프라인 실행 결과`,
+        sourceFile: sourcePath || `dashboard-${topic}-${runId}.json`,
+        question: `${topicTitle} 데이터 파이프라인 실행 결과`,
       });
     }
     return posts;
@@ -132,12 +224,17 @@ export function createFeedKnowledgeHandlers(params: any) {
       );
       const nextCache: Record<string, RunRecord> = {};
       const mergedPosts: FeedViewPost[] = [];
+      const hiddenRunIds = readHiddenFeedRunIds();
       for (const row of loaded) {
         if (!row) {
           continue;
         }
         nextCache[row.file] = row.run;
         const runQuestion = row.run.question;
+        const normalizedRunId = String(row.run.runId ?? "").trim();
+        if (normalizedRunId && hiddenRunIds.has(normalizedRunId)) {
+          continue;
+        }
         const posts = row.run.feedPosts ?? [];
         for (const post of posts) {
           mergedPosts.push({
@@ -148,14 +245,25 @@ export function createFeedKnowledgeHandlers(params: any) {
         }
       }
       const snapshotPosts = await loadDashboardSnapshotPosts();
-      const transientPosts = (Array.isArray(params.feedPosts) ? params.feedPosts : []).filter((post: FeedViewPost) =>
-        isTransientDashboardPost(post),
-      );
+      const transientPosts: FeedViewPost[] = (
+        Array.isArray(params.feedPosts) ? (params.feedPosts as FeedViewPost[]) : []
+      ).filter((post) => isTransientDashboardPost(post));
+      const existingIds = new Set<string>([
+        ...mergedPosts.map((post) => post.id),
+        ...snapshotPosts.map((post) => post.id),
+        ...transientPosts.map((post) => post.id),
+      ]);
+      const failedDashboardPosts = await loadDashboardFailedRunPosts(existingIds);
       const mergedById = new Map<string, FeedViewPost>();
       for (const post of mergedPosts) {
         mergedById.set(post.id, post);
       }
       for (const post of snapshotPosts) {
+        if (!mergedById.has(post.id)) {
+          mergedById.set(post.id, post);
+        }
+      }
+      for (const post of failedDashboardPosts) {
         if (!mergedById.has(post.id)) {
           mergedById.set(post.id, post);
         }

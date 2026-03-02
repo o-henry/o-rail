@@ -8,6 +8,8 @@ use std::{
     fs,
     net::IpAddr,
     path::PathBuf,
+    process::{Child, Command, Stdio},
+    sync::{Mutex, OnceLock},
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 use url::Url;
@@ -20,13 +22,14 @@ const MAX_SUMMARY_CHARS: usize = 1_200;
 const MAX_CONTENT_CHARS: usize = 12_000;
 const MAX_RSS_ITEMS: usize = 8;
 const USER_AGENT: &str = "RAIL-Dashboard-Crawler/1.0";
-const PINCHTAB_DEFAULT_BASE_URL: &str = "http://127.0.0.1:9867";
-const ENV_PINCHTAB_BASE_URL: &str = "RAIL_PINCHTAB_URL";
-const ENV_PINCHTAB_BRIDGE_TOKEN: &str = "RAIL_PINCHTAB_BRIDGE_TOKEN";
-const ENV_PINCHTAB_REQUIRED: &str = "RAIL_PINCHTAB_REQUIRED";
-const ENV_PINCHTAB_URL_COMPAT: &str = "PINCHTAB_URL";
-const ENV_PINCHTAB_TOKEN_COMPAT: &str = "PINCHTAB_TOKEN";
-const ENV_PINCHTAB_BRIDGE_TOKEN_COMPAT: &str = "BRIDGE_TOKEN";
+const SCRAPLING_DEFAULT_BASE_URL: &str = "http://127.0.0.1:9871";
+const ENV_SCRAPLING_BASE_URL: &str = "RAIL_SCRAPLING_BRIDGE_URL";
+const ENV_SCRAPLING_TOKEN: &str = "RAIL_SCRAPLING_BRIDGE_TOKEN";
+const ENV_SCRAPLING_PYTHON: &str = "RAIL_SCRAPLING_PYTHON";
+const ENV_SCRAPLING_DISABLE: &str = "RAIL_SCRAPLING_DISABLE";
+const ENV_SCRAPLING_AUTO_INSTALL: &str = "RAIL_SCRAPLING_AUTO_INSTALL";
+const DEFAULT_SCRAPLING_HEALTH_RETRY: usize = 20;
+const DEFAULT_SCRAPLING_FETCH_TIMEOUT_MS: u64 = 20_000;
 
 const TOPIC_IDS: [&str; 9] = [
     "marketSummary",
@@ -57,6 +60,7 @@ pub struct DashboardTopicCrawlResult {
     pub fetched_count: usize,
     pub saved_files: Vec<String>,
     pub errors: Vec<String>,
+    pub source_results: Vec<DashboardSourceCrawlResult>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -67,12 +71,38 @@ pub struct DashboardCrawlRunResult {
     pub total_fetched: usize,
     pub total_files: usize,
     pub topics: Vec<DashboardTopicCrawlResult>,
+    pub bridge: DashboardScraplingBridgeHealth,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DashboardSourceCrawlResult {
+    pub url: String,
+    pub status: String,
+    pub http_status: Option<u16>,
+    pub error: Option<String>,
+    pub bytes: usize,
+    pub fetched_at: String,
+    pub format: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DashboardScraplingBridgeHealth {
+    pub running: bool,
+    pub base_url: String,
+    pub token_protected: bool,
+    pub scrapling_ready: bool,
+    pub message: String,
 }
 
 #[derive(Debug, Clone)]
 struct SourceDocument {
     markdown: String,
     json_payload: Value,
+    format: String,
+    bytes: usize,
+    http_status: Option<u16>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -85,10 +115,41 @@ struct ParsedFeedItem {
 }
 
 #[derive(Debug, Clone)]
-struct PinchtabConfig {
+struct ScraplingConfig {
     base_url: String,
     bridge_token: Option<String>,
-    required: bool,
+}
+
+#[derive(Debug)]
+struct ScraplingBridgeRuntime {
+    child: Option<Child>,
+    base_url: String,
+    bridge_token: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DashboardAgenticRunSummary {
+    pub run_id: String,
+    pub topic: Option<String>,
+    pub set_id: Option<String>,
+    pub source_tab: Option<String>,
+    pub status: String,
+    pub updated_at: String,
+    pub error_stage: Option<String>,
+    pub error_message: Option<String>,
+}
+
+static SCRAPLING_BRIDGE_RUNTIME: OnceLock<Mutex<ScraplingBridgeRuntime>> = OnceLock::new();
+
+fn bridge_runtime() -> &'static Mutex<ScraplingBridgeRuntime> {
+    SCRAPLING_BRIDGE_RUNTIME.get_or_init(|| {
+        Mutex::new(ScraplingBridgeRuntime {
+            child: None,
+            base_url: SCRAPLING_DEFAULT_BASE_URL.to_string(),
+            bridge_token: None,
+        })
+    })
 }
 
 #[tauri::command]
@@ -107,6 +168,56 @@ pub async fn dashboard_crawl_run(
         allowlist_by_topic,
     })
     .await
+}
+
+#[tauri::command]
+pub async fn dashboard_scrapling_bridge_health() -> Result<DashboardScraplingBridgeHealth, String> {
+    let client = Client::builder()
+        .user_agent(USER_AGENT)
+        .timeout(Duration::from_millis(4_000))
+        .build()
+        .map_err(|err| format!("failed to build health client: {err}"))?;
+    resolve_scrapling_health(&client).await
+}
+
+#[tauri::command]
+pub async fn dashboard_scrapling_bridge_start(
+    cwd: Option<String>,
+) -> Result<DashboardScraplingBridgeHealth, String> {
+    let workspace = cwd
+        .as_ref()
+        .map(|value| normalize_workspace_cwd(value))
+        .transpose()?;
+    let client = Client::builder()
+        .user_agent(USER_AGENT)
+        .timeout(Duration::from_millis(4_000))
+        .build()
+        .map_err(|err| format!("failed to build bridge client: {err}"))?;
+    ensure_scrapling_bridge_running(workspace.as_ref(), &client).await
+}
+
+#[tauri::command]
+pub fn dashboard_scrapling_bridge_install(cwd: String) -> Result<Value, String> {
+    let workspace = normalize_workspace_cwd(&cwd)?;
+    let result = install_scrapling_bridge_dependencies(&workspace)?;
+    Ok(json!({
+        "installed": true,
+        "venvPath": result.venv_path,
+        "pythonPath": result.python_path,
+        "log": result.log,
+    }))
+}
+
+#[tauri::command]
+pub fn dashboard_scrapling_bridge_stop() -> Result<DashboardScraplingBridgeHealth, String> {
+    stop_scrapling_bridge_process();
+    Ok(DashboardScraplingBridgeHealth {
+        running: false,
+        base_url: runtime_bridge_base_url(),
+        token_protected: runtime_bridge_has_token(),
+        scrapling_ready: false,
+        message: "stopped".to_string(),
+    })
 }
 
 #[tauri::command]
@@ -188,7 +299,110 @@ pub fn dashboard_snapshot_list(cwd: String) -> Result<Vec<Value>, String> {
 }
 
 #[tauri::command]
-pub fn dashboard_raw_list(cwd: String, topic: String, limit: Option<usize>) -> Result<Vec<String>, String> {
+pub fn dashboard_snapshot_delete(
+    cwd: String,
+    run_id: Option<String>,
+    path: Option<String>,
+) -> Result<usize, String> {
+    let workspace = normalize_workspace_cwd(&cwd)?;
+    let snapshot_root = workspace.join(".rail/dashboard/snapshots");
+    if !snapshot_root.exists() {
+        return Ok(0);
+    }
+
+    let canonical_root = fs::canonicalize(&snapshot_root)
+        .map_err(|err| format!("failed to resolve snapshot root: {err}"))?;
+    let normalized_run_id = run_id
+        .as_ref()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty());
+    let normalized_path = path
+        .as_ref()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty());
+
+    let mut targets: BTreeSet<PathBuf> = BTreeSet::new();
+
+    if let Some(raw_path) = normalized_path {
+        let requested = PathBuf::from(raw_path);
+        let resolved = if requested.is_absolute() {
+            requested
+        } else {
+            workspace.join(requested)
+        };
+        if resolved.is_file() {
+            let canonical = fs::canonicalize(&resolved)
+                .map_err(|err| format!("failed to resolve snapshot path: {err}"))?;
+            if !canonical.starts_with(&canonical_root) {
+                return Err(
+                    "snapshot path is outside workspace dashboard snapshot directory".to_string(),
+                );
+            }
+            if canonical.extension().and_then(|ext| ext.to_str()) == Some("json") {
+                targets.insert(canonical);
+            }
+        }
+    }
+
+    if let Some(expected_run_id) = normalized_run_id {
+        for topic in TOPIC_IDS {
+            let topic_dir = snapshot_root.join(topic);
+            if !topic_dir.is_dir() {
+                continue;
+            }
+            for entry in fs::read_dir(&topic_dir)
+                .map_err(|err| format!("failed to list snapshots for {topic}: {err}"))?
+            {
+                let entry = entry.map_err(|err| format!("failed to read snapshot entry: {err}"))?;
+                let file_path = entry.path();
+                if !file_path.is_file()
+                    || file_path.extension().and_then(|ext| ext.to_str()) != Some("json")
+                {
+                    continue;
+                }
+                let raw = match fs::read_to_string(&file_path) {
+                    Ok(value) => value,
+                    Err(_) => continue,
+                };
+                let parsed: Value = match serde_json::from_str(&raw) {
+                    Ok(value) => value,
+                    Err(_) => continue,
+                };
+                let file_run_id = parsed
+                    .get("runId")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                    .trim()
+                    .to_string();
+                if file_run_id != expected_run_id {
+                    continue;
+                }
+                let canonical = match fs::canonicalize(&file_path) {
+                    Ok(value) => value,
+                    Err(_) => continue,
+                };
+                if canonical.starts_with(&canonical_root) {
+                    targets.insert(canonical);
+                }
+            }
+        }
+    }
+
+    let mut deleted = 0usize;
+    for target in targets {
+        if fs::remove_file(&target).is_ok() {
+            deleted += 1;
+        }
+    }
+    Ok(deleted)
+}
+
+#[tauri::command]
+pub fn dashboard_raw_list(
+    cwd: String,
+    topic: String,
+    limit: Option<usize>,
+) -> Result<Vec<String>, String> {
     let workspace = normalize_workspace_cwd(&cwd)?;
     let topic_id = normalize_topic_id(&topic).ok_or_else(|| format!("invalid topic: {topic}"))?;
     let topic_dir = workspace.join(".rail/dashboard/raw").join(topic_id);
@@ -197,15 +411,18 @@ pub fn dashboard_raw_list(cwd: String, topic: String, limit: Option<usize>) -> R
     }
 
     let mut paths: Vec<PathBuf> = Vec::new();
-    for entry in
-        fs::read_dir(&topic_dir).map_err(|err| format!("failed to list raw files for {topic_id}: {err}"))?
+    for entry in fs::read_dir(&topic_dir)
+        .map_err(|err| format!("failed to list raw files for {topic_id}: {err}"))?
     {
         let entry = entry.map_err(|err| format!("failed to read raw file entry: {err}"))?;
         let path = entry.path();
         if !path.is_file() {
             continue;
         }
-        let ext = path.extension().and_then(|value| value.to_str()).unwrap_or_default();
+        let ext = path
+            .extension()
+            .and_then(|value| value.to_str())
+            .unwrap_or_default();
         if ext.eq_ignore_ascii_case("md") || ext.eq_ignore_ascii_case("json") {
             paths.push(path);
         }
@@ -216,7 +433,11 @@ pub fn dashboard_raw_list(cwd: String, topic: String, limit: Option<usize>) -> R
             .file_name()
             .and_then(|value| value.to_str())
             .unwrap_or_default()
-            .cmp(left.file_name().and_then(|value| value.to_str()).unwrap_or_default())
+            .cmp(
+                left.file_name()
+                    .and_then(|value| value.to_str())
+                    .unwrap_or_default(),
+            )
     });
 
     let limit = limit.unwrap_or(50).clamp(1, 500);
@@ -227,11 +448,112 @@ pub fn dashboard_raw_list(cwd: String, topic: String, limit: Option<usize>) -> R
         .collect())
 }
 
-pub async fn run_dashboard_crawl(request: DashboardCrawlRequest) -> Result<DashboardCrawlRunResult, String> {
+#[tauri::command]
+pub fn dashboard_agentic_run_list(
+    cwd: String,
+    limit: Option<usize>,
+) -> Result<Vec<DashboardAgenticRunSummary>, String> {
+    let workspace = normalize_workspace_cwd(&cwd)?;
+    let root = workspace.join(".rail/runs");
+    if !root.exists() {
+        return Ok(Vec::new());
+    }
+    let max_items = limit.unwrap_or(200).clamp(1, 1000);
+    let mut rows: Vec<DashboardAgenticRunSummary> = Vec::new();
+    for entry in
+        fs::read_dir(&root).map_err(|err| format!("failed to list run directory: {err}"))?
+    {
+        let entry = entry.map_err(|err| format!("failed to read run directory entry: {err}"))?;
+        let run_dir = entry.path();
+        if !run_dir.is_dir() {
+            continue;
+        }
+        let run_file = run_dir.join("run.json");
+        if !run_file.is_file() {
+            continue;
+        }
+        let raw = match fs::read_to_string(&run_file) {
+            Ok(value) => value,
+            Err(_) => continue,
+        };
+        let parsed: Value = match serde_json::from_str(&raw) {
+            Ok(value) => value,
+            Err(_) => continue,
+        };
+        let record = parsed
+            .get("record")
+            .and_then(Value::as_object)
+            .cloned()
+            .unwrap_or_default();
+        let run_id = record
+            .get("runId")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .trim()
+            .to_string();
+        if run_id.is_empty() {
+            continue;
+        }
+        let status = record
+            .get("status")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .trim()
+            .to_string();
+        if status.is_empty() {
+            continue;
+        }
+        let stages = parsed
+            .get("stages")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+        let error_stage_row = stages.iter().find(|row| {
+            row.get("status")
+                .and_then(Value::as_str)
+                .map(|value| value.eq_ignore_ascii_case("error"))
+                .unwrap_or(false)
+        });
+        rows.push(DashboardAgenticRunSummary {
+            run_id,
+            topic: record
+                .get("topic")
+                .and_then(Value::as_str)
+                .map(|value| value.to_string()),
+            set_id: record
+                .get("setId")
+                .and_then(Value::as_str)
+                .map(|value| value.to_string()),
+            source_tab: record
+                .get("sourceTab")
+                .and_then(Value::as_str)
+                .map(|value| value.to_string()),
+            status,
+            updated_at: record
+                .get("updatedAt")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_string(),
+            error_stage: error_stage_row
+                .and_then(|row| row.get("stage"))
+                .and_then(Value::as_str)
+                .map(|value| value.to_string()),
+            error_message: error_stage_row
+                .and_then(|row| row.get("error").or_else(|| row.get("message")))
+                .and_then(Value::as_str)
+                .map(|value| truncate_chars(value, 480)),
+        });
+    }
+    rows.sort_by(|left, right| right.updated_at.cmp(&left.updated_at));
+    Ok(rows.into_iter().take(max_items).collect())
+}
+
+pub async fn run_dashboard_crawl(
+    request: DashboardCrawlRequest,
+) -> Result<DashboardCrawlRunResult, String> {
     let workspace = normalize_workspace_cwd(&request.cwd)?;
     let selected_topics = normalize_topics(request.topics);
     let allowlist_map = build_allowlist_map(request.allowlist_by_topic);
-    let pinchtab = pinchtab_config_from_env()?;
     let max_sources_per_topic = request
         .max_sources_per_topic
         .unwrap_or(DEFAULT_MAX_SOURCES_PER_TOPIC)
@@ -245,6 +567,41 @@ pub async fn run_dashboard_crawl(request: DashboardCrawlRequest) -> Result<Dashb
         .timeout(Duration::from_millis(timeout_ms))
         .build()
         .map_err(|err| format!("failed to build crawler client: {err}"))?;
+    let bridge_health: DashboardScraplingBridgeHealth;
+    let scrapling = if scrapling_disabled_by_env() {
+        bridge_health = DashboardScraplingBridgeHealth {
+            running: false,
+            base_url: runtime_bridge_base_url(),
+            token_protected: runtime_bridge_has_token(),
+            scrapling_ready: false,
+            message: "scrapling bridge disabled by env".to_string(),
+        };
+        None
+    } else {
+        match ensure_scrapling_bridge_running(Some(&workspace), &client).await {
+            Ok(health) => {
+                bridge_health = health.clone();
+                if health.running && health.scrapling_ready {
+                    Some(ScraplingConfig {
+                        base_url: health.base_url.clone(),
+                        bridge_token: resolve_runtime_bridge_token(),
+                    })
+                } else {
+                    None
+                }
+            }
+            Err(error) => {
+                bridge_health = DashboardScraplingBridgeHealth {
+                    running: false,
+                    base_url: runtime_bridge_base_url(),
+                    token_protected: runtime_bridge_has_token(),
+                    scrapling_ready: false,
+                    message: truncate_chars(&error, 240),
+                };
+                None
+            }
+        }
+    };
 
     let started_at = now_iso8601_like();
     let mut topic_results: Vec<DashboardTopicCrawlResult> = Vec::new();
@@ -270,6 +627,7 @@ pub async fn run_dashboard_crawl(request: DashboardCrawlRequest) -> Result<Dashb
             fetched_count: 0,
             saved_files: Vec::new(),
             errors: Vec::new(),
+            source_results: Vec::new(),
         };
 
         if allowlist.is_empty() {
@@ -282,45 +640,86 @@ pub async fn run_dashboard_crawl(request: DashboardCrawlRequest) -> Result<Dashb
 
         for source in allowlist {
             let source_url = normalize_source_url(&source);
+            let fetched_at = now_iso8601_like();
             if let Err(err) = validate_source_url(&source_url) {
-                result.errors.push(format!("blocked source ({source_url}): {err}"));
+                result
+                    .errors
+                    .push(format!("blocked source ({source_url}): {err}"));
+                result.source_results.push(DashboardSourceCrawlResult {
+                    url: source_url,
+                    status: "blocked".to_string(),
+                    http_status: None,
+                    error: Some(err),
+                    bytes: 0,
+                    fetched_at,
+                    format: None,
+                });
                 continue;
             }
-            match fetch_source_document(&client, topic, &source_url, pinchtab.as_ref()).await {
+            match fetch_source_document(&client, topic, &source_url, scrapling.as_ref()).await {
                 Ok(document) => {
                     let stamp = now_epoch_millis();
                     let date = now_date_yyyymmdd();
                     let slug = slugify_source(&source_url);
                     let md_path = topic_dir.join(format!("{stamp}_{date}_{event_label}_{slug}.md"));
-                    let json_path = topic_dir.join(format!("{stamp}_{date}_{event_label}_{slug}.json"));
+                    let json_path =
+                        topic_dir.join(format!("{stamp}_{date}_{event_label}_{slug}.json"));
 
                     if let Err(err) = fs::write(&md_path, document.markdown) {
-                        result.errors.push(format!("{}: failed to write markdown ({err})", source_url));
+                        result
+                            .errors
+                            .push(format!("{}: failed to write markdown ({err})", source_url));
                         continue;
                     }
 
                     let payload_body = match serde_json::to_string_pretty(&document.json_payload) {
                         Ok(body) => body,
                         Err(err) => {
-                            result.errors.push(format!("{}: failed to serialize payload ({err})", source_url));
+                            result.errors.push(format!(
+                                "{}: failed to serialize payload ({err})",
+                                source_url
+                            ));
                             continue;
                         }
                     };
                     if let Err(err) = fs::write(&json_path, payload_body) {
-                        result
-                            .errors
-                            .push(format!("{}: failed to write payload json ({err})", source_url));
+                        result.errors.push(format!(
+                            "{}: failed to write payload json ({err})",
+                            source_url
+                        ));
                         continue;
                     }
 
                     result.fetched_count += 1;
                     total_fetched += 1;
                     total_files += 2;
-                    result.saved_files.push(md_path.to_string_lossy().to_string());
-                    result.saved_files.push(json_path.to_string_lossy().to_string());
+                    result
+                        .saved_files
+                        .push(md_path.to_string_lossy().to_string());
+                    result
+                        .saved_files
+                        .push(json_path.to_string_lossy().to_string());
+                    result.source_results.push(DashboardSourceCrawlResult {
+                        url: source_url,
+                        status: "ok".to_string(),
+                        http_status: document.http_status,
+                        error: None,
+                        bytes: document.bytes,
+                        fetched_at,
+                        format: Some(document.format),
+                    });
                 }
                 Err(err) => {
                     result.errors.push(format!("{}: {err}", source_url));
+                    result.source_results.push(DashboardSourceCrawlResult {
+                        url: source_url,
+                        status: classify_fetch_error_status(&err),
+                        http_status: extract_http_status_from_error(&err),
+                        error: Some(truncate_chars(&err, 360)),
+                        bytes: 0,
+                        fetched_at,
+                        format: None,
+                    });
                 }
             }
         }
@@ -334,6 +733,7 @@ pub async fn run_dashboard_crawl(request: DashboardCrawlRequest) -> Result<Dashb
         total_fetched,
         total_files,
         topics: topic_results,
+        bridge: bridge_health,
     })
 }
 
@@ -351,42 +751,365 @@ fn first_non_empty_env(keys: &[&str]) -> Option<String> {
         .filter(|value| !value.is_empty())
 }
 
-fn pinchtab_config_from_env() -> Result<Option<PinchtabConfig>, String> {
-    let required = std::env::var(ENV_PINCHTAB_REQUIRED)
-        .ok()
-        .map(|value| parse_bool_env(&value))
-        .unwrap_or(false);
-    let bridge_token = first_non_empty_env(&[
-        ENV_PINCHTAB_BRIDGE_TOKEN,
-        ENV_PINCHTAB_BRIDGE_TOKEN_COMPAT,
-        ENV_PINCHTAB_TOKEN_COMPAT,
-    ]);
-    let raw_base = first_non_empty_env(&[ENV_PINCHTAB_BASE_URL, ENV_PINCHTAB_URL_COMPAT])
-        .unwrap_or_else(|| PINCHTAB_DEFAULT_BASE_URL.to_string());
-    let base_url = validate_pinchtab_base_url(&raw_base)?;
-    // Try pinchtab by default (without forcing), so users only need to run the local server.
-    // If unavailable and required=false, crawler will transparently fallback to reqwest.
-    Ok(Some(PinchtabConfig {
-        base_url,
-        bridge_token,
-        required,
-    }))
-}
-
-fn validate_pinchtab_base_url(raw: &str) -> Result<String, String> {
-    let parsed = Url::parse(raw.trim()).map_err(|err| format!("invalid pinchtab base url: {err}"))?;
+fn validate_local_bridge_base_url(raw: &str) -> Result<String, String> {
+    let parsed = Url::parse(raw.trim())
+        .map_err(|err| format!("invalid scrapling bridge base url: {err}"))?;
     if parsed.scheme() != "http" && parsed.scheme() != "https" {
-        return Err("pinchtab base url must use http/https".to_string());
+        return Err("scrapling bridge base url must use http/https".to_string());
     }
     let Some(host) = parsed.host_str() else {
-        return Err("pinchtab base url host is missing".to_string());
+        return Err("scrapling bridge base url host is missing".to_string());
     };
     let is_localhost = host.eq_ignore_ascii_case("localhost")
-        || host.parse::<IpAddr>().map(|ip| ip.is_loopback()).unwrap_or(false);
+        || host
+            .parse::<IpAddr>()
+            .map(|ip| ip.is_loopback())
+            .unwrap_or(false);
     if !is_localhost {
-        return Err("pinchtab base url must be localhost/loopback for security".to_string());
+        return Err(
+            "scrapling bridge base url must be localhost/loopback for security".to_string(),
+        );
     }
     Ok(parsed.as_str().trim_end_matches('/').to_string())
+}
+
+fn runtime_bridge_base_url() -> String {
+    bridge_runtime()
+        .lock()
+        .map(|state| state.base_url.clone())
+        .unwrap_or_else(|_| SCRAPLING_DEFAULT_BASE_URL.to_string())
+}
+
+fn runtime_bridge_has_token() -> bool {
+    bridge_runtime()
+        .lock()
+        .map(|state| {
+            state
+                .bridge_token
+                .as_ref()
+                .map(|row| !row.is_empty())
+                .unwrap_or(false)
+        })
+        .unwrap_or(false)
+}
+
+fn resolve_runtime_bridge_token() -> Option<String> {
+    bridge_runtime()
+        .lock()
+        .ok()
+        .and_then(|state| state.bridge_token.clone())
+}
+
+fn generate_bridge_token() -> String {
+    format!("rail-{}-{}", now_epoch_millis(), std::process::id())
+}
+
+fn resolve_bridge_base_url() -> Result<String, String> {
+    let raw = first_non_empty_env(&[ENV_SCRAPLING_BASE_URL])
+        .unwrap_or_else(|| SCRAPLING_DEFAULT_BASE_URL.to_string());
+    validate_local_bridge_base_url(&raw)
+}
+
+fn resolve_script_path() -> Result<PathBuf, String> {
+    let candidates = [
+        PathBuf::from("scripts/scrapling_bridge/server.py"),
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../scripts/scrapling_bridge/server.py"),
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("scripts/scrapling_bridge/server.py"),
+    ];
+    for candidate in candidates {
+        if candidate.is_file() {
+            return Ok(candidate);
+        }
+    }
+    Err("scrapling bridge script not found (scripts/scrapling_bridge/server.py)".to_string())
+}
+
+fn resolve_workspace_venv_python(workspace: Option<&PathBuf>) -> Option<PathBuf> {
+    let workspace = workspace?;
+    let mut candidates: Vec<PathBuf> = Vec::new();
+    if cfg!(target_os = "windows") {
+        candidates.push(workspace.join(".rail/.venv_scrapling/Scripts/python.exe"));
+    } else {
+        candidates.push(workspace.join(".rail/.venv_scrapling/bin/python"));
+    }
+    for candidate in candidates {
+        if candidate.is_file() {
+            return Some(candidate);
+        }
+    }
+    None
+}
+
+fn resolve_bridge_python(workspace: Option<&PathBuf>) -> String {
+    if let Some(value) = first_non_empty_env(&[ENV_SCRAPLING_PYTHON]) {
+        return value;
+    }
+    if let Some(path) = resolve_workspace_venv_python(workspace) {
+        return path.to_string_lossy().to_string();
+    }
+    "python3".to_string()
+}
+
+fn stop_scrapling_bridge_process() {
+    if let Ok(mut state) = bridge_runtime().lock() {
+        if let Some(mut child) = state.child.take() {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+    }
+}
+
+pub fn shutdown_scrapling_bridge_runtime() {
+    stop_scrapling_bridge_process();
+}
+
+fn scrapling_disabled_by_env() -> bool {
+    std::env::var(ENV_SCRAPLING_DISABLE)
+        .ok()
+        .map(|value| parse_bool_env(&value))
+        .unwrap_or(false)
+}
+
+struct InstallBridgeResult {
+    venv_path: String,
+    python_path: String,
+    log: String,
+}
+
+fn run_install_command(command: &mut Command, step: &str) -> Result<String, String> {
+    let output = command
+        .output()
+        .map_err(|err| format!("{step}: failed to execute command ({err})"))?;
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+    if !output.status.success() {
+        let message = if stderr.is_empty() { stdout } else { stderr };
+        return Err(format!("{step}: {}", truncate_chars(&message, 480)));
+    }
+    Ok(if stdout.is_empty() { stderr } else { stdout })
+}
+
+fn install_scrapling_bridge_dependencies(
+    workspace: &PathBuf,
+) -> Result<InstallBridgeResult, String> {
+    let rail_dir = workspace.join(".rail");
+    fs::create_dir_all(&rail_dir)
+        .map_err(|err| format!("failed to create .rail directory: {err}"))?;
+    let venv_path = rail_dir.join(".venv_scrapling");
+    let python_bootstrap =
+        first_non_empty_env(&[ENV_SCRAPLING_PYTHON]).unwrap_or_else(|| "python3".to_string());
+    if !venv_path.exists() {
+        run_install_command(
+            Command::new(&python_bootstrap)
+                .arg("-m")
+                .arg("venv")
+                .arg(&venv_path),
+            "scrapling install",
+        )?;
+    }
+    let python_path = if cfg!(target_os = "windows") {
+        venv_path.join("Scripts/python.exe")
+    } else {
+        venv_path.join("bin/python")
+    };
+    if !python_path.is_file() {
+        return Err("scrapling install: python executable not found in venv".to_string());
+    }
+    let mut logs: Vec<String> = Vec::new();
+    logs.push(run_install_command(
+        Command::new(&python_path)
+            .arg("-m")
+            .arg("pip")
+            .arg("install")
+            .arg("--upgrade")
+            .arg("pip"),
+        "scrapling install",
+    )?);
+    logs.push(run_install_command(
+        Command::new(&python_path)
+            .arg("-m")
+            .arg("pip")
+            .arg("install")
+            .arg("scrapling"),
+        "scrapling install",
+    )?);
+    Ok(InstallBridgeResult {
+        venv_path: venv_path.to_string_lossy().to_string(),
+        python_path: python_path.to_string_lossy().to_string(),
+        log: logs
+            .into_iter()
+            .filter(|row| !row.trim().is_empty())
+            .collect::<Vec<_>>()
+            .join("\n"),
+    })
+}
+
+async fn resolve_scrapling_health(
+    client: &Client,
+) -> Result<DashboardScraplingBridgeHealth, String> {
+    let (base_url, bridge_token) = {
+        let state = bridge_runtime()
+            .lock()
+            .map_err(|_| "failed to lock scrapling bridge runtime".to_string())?;
+        (state.base_url.clone(), state.bridge_token.clone())
+    };
+    let health_url = format!("{base_url}/health");
+    let mut request = client.get(&health_url);
+    if let Some(token) = bridge_token
+        .as_ref()
+        .filter(|value| !value.trim().is_empty())
+    {
+        request = request.header("Authorization", format!("Bearer {token}"));
+    }
+    let response = request
+        .send()
+        .await
+        .map_err(|err| format!("scrapling bridge health request failed: {err}"))?;
+    if !response.status().is_success() {
+        let status = response.status();
+        let body = response.text().await.unwrap_or_default();
+        return Ok(DashboardScraplingBridgeHealth {
+            running: false,
+            base_url,
+            token_protected: bridge_token.is_some(),
+            scrapling_ready: false,
+            message: format!(
+                "health check failed ({status}): {}",
+                truncate_chars(body.trim(), 180)
+            ),
+        });
+    }
+    let payload = response.json::<Value>().await.unwrap_or_else(|_| json!({}));
+    let ready = payload
+        .get("scraplingReady")
+        .and_then(Value::as_bool)
+        .unwrap_or_else(|| payload.get("ok").and_then(Value::as_bool).unwrap_or(true));
+    Ok(DashboardScraplingBridgeHealth {
+        running: true,
+        base_url,
+        token_protected: bridge_token.is_some(),
+        scrapling_ready: ready,
+        message: "ready".to_string(),
+    })
+}
+
+fn update_runtime_bridge_defaults() -> Result<(), String> {
+    let base_url = resolve_bridge_base_url()?;
+    let bridge_token =
+        first_non_empty_env(&[ENV_SCRAPLING_TOKEN]).or_else(|| Some(generate_bridge_token()));
+    let mut state = bridge_runtime()
+        .lock()
+        .map_err(|_| "failed to lock scrapling bridge runtime".to_string())?;
+    state.base_url = base_url;
+    state.bridge_token = bridge_token;
+    Ok(())
+}
+
+async fn ensure_scrapling_bridge_running(
+    workspace: Option<&PathBuf>,
+    client: &Client,
+) -> Result<DashboardScraplingBridgeHealth, String> {
+    ensure_scrapling_bridge_running_inner(workspace, client, true).await
+}
+
+async fn ensure_scrapling_bridge_running_inner(
+    workspace: Option<&PathBuf>,
+    client: &Client,
+    allow_install: bool,
+) -> Result<DashboardScraplingBridgeHealth, String> {
+    update_runtime_bridge_defaults()?;
+    if let Ok(health) = resolve_scrapling_health(client).await {
+        if health.running && health.scrapling_ready {
+            return Ok(health);
+        }
+    }
+
+    spawn_scrapling_bridge_process(workspace)?;
+
+    for _ in 0..DEFAULT_SCRAPLING_HEALTH_RETRY {
+        let health = resolve_scrapling_health(client).await?;
+        if health.running && health.scrapling_ready {
+            return Ok(health);
+        }
+        tokio::time::sleep(Duration::from_millis(180)).await;
+    }
+
+    if allow_install
+        && std::env::var(ENV_SCRAPLING_AUTO_INSTALL)
+            .ok()
+            .map(|value| parse_bool_env(&value))
+            .unwrap_or(true)
+    {
+        if let Some(target_workspace) = workspace {
+            if install_scrapling_bridge_dependencies(target_workspace).is_ok() {
+                stop_scrapling_bridge_process();
+                {
+                    let mut state = bridge_runtime()
+                        .lock()
+                        .map_err(|_| "failed to lock scrapling bridge runtime".to_string())?;
+                    state.child = None;
+                }
+                spawn_scrapling_bridge_process(workspace)?;
+                for _ in 0..DEFAULT_SCRAPLING_HEALTH_RETRY {
+                    let health = resolve_scrapling_health(client).await?;
+                    if health.running && health.scrapling_ready {
+                        return Ok(health);
+                    }
+                    tokio::time::sleep(Duration::from_millis(180)).await;
+                }
+            }
+        }
+    }
+
+    resolve_scrapling_health(client).await
+}
+
+fn spawn_scrapling_bridge_process(workspace: Option<&PathBuf>) -> Result<(), String> {
+    let script_path = resolve_script_path()?;
+    let base_url = resolve_bridge_base_url()?;
+    let parsed =
+        Url::parse(&base_url).map_err(|err| format!("invalid scrapling bridge url: {err}"))?;
+    let host = parsed.host_str().unwrap_or("127.0.0.1").to_string();
+    let port = parsed.port_or_known_default().unwrap_or(9871).to_string();
+    let python = resolve_bridge_python(workspace);
+    let bridge_token =
+        first_non_empty_env(&[ENV_SCRAPLING_TOKEN]).or_else(|| Some(generate_bridge_token()));
+
+    let mut state = bridge_runtime()
+        .lock()
+        .map_err(|_| "failed to lock scrapling bridge runtime".to_string())?;
+    if let Some(child) = state.child.as_mut() {
+        if child.try_wait().ok().flatten().is_some() {
+            state.child = None;
+        }
+    }
+    if state.child.is_some() {
+        return Ok(());
+    }
+
+    let mut command = Command::new(&python);
+    command
+        .arg(script_path)
+        .arg("--host")
+        .arg(&host)
+        .arg("--port")
+        .arg(&port)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    if let Some(token) = bridge_token
+        .as_ref()
+        .filter(|value| !value.trim().is_empty())
+    {
+        command.env(ENV_SCRAPLING_TOKEN, token);
+    }
+    let child = command
+        .spawn()
+        .map_err(|err| format!("failed to start scrapling bridge process: {err}"))?;
+    state.child = Some(child);
+    state.base_url = base_url;
+    state.bridge_token = bridge_token;
+    Ok(())
 }
 
 fn validate_source_url(raw: &str) -> Result<(), String> {
@@ -435,7 +1158,8 @@ fn normalize_workspace_cwd(cwd: &str) -> Result<PathBuf, String> {
     }
     let path = PathBuf::from(trimmed);
     if !path.exists() {
-        fs::create_dir_all(&path).map_err(|err| format!("failed to create cwd directory: {err}"))?;
+        fs::create_dir_all(&path)
+            .map_err(|err| format!("failed to create cwd directory: {err}"))?;
     }
     if !path.is_dir() {
         return Err("cwd must be a directory".to_string());
@@ -463,10 +1187,15 @@ fn normalize_topics(topics: Option<Vec<String>>) -> Vec<&'static str> {
 
 fn normalize_topic_id(raw: &str) -> Option<&'static str> {
     let trimmed = raw.trim();
-    TOPIC_IDS.iter().copied().find(|topic| topic.eq_ignore_ascii_case(trimmed))
+    TOPIC_IDS
+        .iter()
+        .copied()
+        .find(|topic| topic.eq_ignore_ascii_case(trimmed))
 }
 
-fn build_allowlist_map(custom: Option<HashMap<String, Vec<String>>>) -> HashMap<&'static str, Vec<String>> {
+fn build_allowlist_map(
+    custom: Option<HashMap<String, Vec<String>>>,
+) -> HashMap<&'static str, Vec<String>> {
     let defaults = default_allowlist_map();
     let Some(input) = custom else {
         return defaults;
@@ -474,10 +1203,13 @@ fn build_allowlist_map(custom: Option<HashMap<String, Vec<String>>>) -> HashMap<
 
     let mut out: HashMap<&'static str, Vec<String>> = HashMap::new();
     for topic in TOPIC_IDS {
-        let custom_values = input
-            .iter()
-            .find_map(|(key, values)| normalize_topic_id(key).filter(|k| *k == topic).map(|_| values.clone()));
-        let source_values = custom_values.unwrap_or_else(|| defaults.get(topic).cloned().unwrap_or_default());
+        let custom_values = input.iter().find_map(|(key, values)| {
+            normalize_topic_id(key)
+                .filter(|k| *k == topic)
+                .map(|_| values.clone())
+        });
+        let source_values =
+            custom_values.unwrap_or_else(|| defaults.get(topic).cloned().unwrap_or_default());
         let normalized = source_values
             .into_iter()
             .map(|row| row.trim().to_lowercase())
@@ -503,10 +1235,14 @@ fn default_allowlist_map() -> HashMap<&'static str, Vec<String>> {
         (
             "globalHeadlines",
             vec![
-                "reuters.com".to_string(),
-                "apnews.com".to_string(),
-                "ft.com".to_string(),
-                "wsj.com".to_string(),
+                "apnews.com/hub/apf-topnews?output=rss".to_string(),
+                "feeds.bbci.co.uk/news/world/rss.xml".to_string(),
+                "rss.nytimes.com/services/xml/rss/nyt/world.xml".to_string(),
+                "theguardian.com/world/rss".to_string(),
+                "aljazeera.com/xml/rss/all.xml".to_string(),
+                "npr.org/rss/rss.php?id=1004".to_string(),
+                "dw.com/en/top-stories/s-9097".to_string(),
+                "straitstimes.com/global/rss.xml".to_string(),
             ],
         ),
         (
@@ -597,22 +1333,28 @@ async fn fetch_source_document(
     client: &Client,
     topic: &str,
     url: &str,
-    pinchtab: Option<&PinchtabConfig>,
+    scrapling: Option<&ScraplingConfig>,
 ) -> Result<SourceDocument, String> {
-    if let Some(config) = pinchtab {
-        match fetch_source_document_with_pinchtab(client, topic, url, config).await {
+    if let Some(config) = scrapling {
+        match fetch_source_document_with_scrapling(client, topic, url, config).await {
             Ok(document) => return Ok(document),
             Err(err) => {
-                if config.required {
-                    return Err(format!("pinchtab required mode: {err}"));
+                let fallback = fetch_source_document_with_reqwest(client, topic, url).await;
+                if let Ok(value) = fallback {
+                    return Ok(value);
                 }
+                return Err(format!("scrapling failed ({err})"));
             }
         }
     }
     fetch_source_document_with_reqwest(client, topic, url).await
 }
 
-async fn fetch_source_document_with_reqwest(client: &Client, topic: &str, url: &str) -> Result<SourceDocument, String> {
+async fn fetch_source_document_with_reqwest(
+    client: &Client,
+    topic: &str,
+    url: &str,
+) -> Result<SourceDocument, String> {
     let response = client
         .get(url)
         .send()
@@ -647,11 +1389,15 @@ async fn fetch_source_document_with_reqwest(client: &Client, topic: &str, url: &
                 "format": "rss",
                 "items": rss_items,
             }),
+            format: "rss".to_string(),
+            bytes: body.len(),
+            http_status: Some(200),
         });
     }
 
     if content_type.contains("json") || looks_like_json(&trimmed) {
-        let parsed = serde_json::from_str::<Value>(&trimmed).unwrap_or_else(|_| json!({ "raw": trimmed }));
+        let parsed =
+            serde_json::from_str::<Value>(&trimmed).unwrap_or_else(|_| json!({ "raw": trimmed }));
         let content = truncate_chars(&value_to_summary_text(&parsed), MAX_CONTENT_CHARS);
         let summary = truncate_chars(&content, MAX_SUMMARY_CHARS);
         let markdown = format!(
@@ -669,11 +1415,15 @@ async fn fetch_source_document_with_reqwest(client: &Client, topic: &str, url: &
                 "content": content,
                 "payload": parsed,
             }),
+            format: "json".to_string(),
+            bytes: body.len(),
+            http_status: Some(200),
         });
     }
 
     let title = extract_html_title(&trimmed).unwrap_or_else(|| url.to_string());
-    let summary = extract_meta_description(&trimmed).unwrap_or_else(|| extract_text_preview(&trimmed, MAX_SUMMARY_CHARS));
+    let summary = extract_meta_description(&trimmed)
+        .unwrap_or_else(|| extract_text_preview(&trimmed, MAX_SUMMARY_CHARS));
     let content = extract_text_preview(&trimmed, MAX_CONTENT_CHARS);
     let markdown = format!(
         "# {title}\n\n- Topic: {topic}\n- URL: {url}\n- Fetched: {fetched_at}\n- Type: HTML\n\n## Summary\n\n{summary}\n\n## Content\n\n{content}\n"
@@ -690,71 +1440,84 @@ async fn fetch_source_document_with_reqwest(client: &Client, topic: &str, url: &
             "summary": summary,
             "content": content,
         }),
+        format: "html".to_string(),
+        bytes: body.len(),
+        http_status: Some(200),
     })
 }
 
-async fn fetch_source_document_with_pinchtab(
+async fn fetch_source_document_with_scrapling(
     client: &Client,
     topic: &str,
     url: &str,
-    config: &PinchtabConfig,
+    config: &ScraplingConfig,
 ) -> Result<SourceDocument, String> {
     let fetched_at = now_iso8601_like();
-    let navigate_url = format!("{}/navigate", config.base_url);
-    let text_url = format!("{}/text", config.base_url);
-    let mut navigate_request = client.post(&navigate_url);
+    let fetch_url = format!("{}/fetch", config.base_url);
+    let mut request = client.post(&fetch_url);
     if let Some(token) = &config.bridge_token {
-        navigate_request = navigate_request.header("Authorization", format!("Bearer {token}"));
+        request = request.header("Authorization", format!("Bearer {token}"));
     }
-    let navigate_response = navigate_request
-        .json(&json!({ "url": url }))
+    let response = request
+        .json(&json!({
+            "url": url,
+            "timeoutMs": DEFAULT_SCRAPLING_FETCH_TIMEOUT_MS,
+            "maxChars": MAX_CONTENT_CHARS
+        }))
         .send()
         .await
-        .map_err(|err| format!("pinchtab navigate request failed: {err}"))?;
-    if !navigate_response.status().is_success() {
-        let status = navigate_response.status();
-        let body = navigate_response.text().await.unwrap_or_default();
-        return Err(format!(
-            "pinchtab navigate failed ({status}): {}",
-            truncate_chars(body.trim(), 240)
-        ));
+        .map_err(|err| format!("scrapling fetch request failed: {err}"))?;
+    let status = response.status();
+    let payload = response
+        .json::<Value>()
+        .await
+        .map_err(|err| format!("scrapling fetch payload parse failed: {err}"))?;
+    if !status.is_success() {
+        let message = payload
+            .get("error")
+            .and_then(Value::as_str)
+            .map(|value| truncate_chars(value, 240))
+            .unwrap_or_else(|| "bridge request failed".to_string());
+        let error_code = payload
+            .get("errorCode")
+            .and_then(Value::as_str)
+            .unwrap_or("SCRAPLING_FAILED");
+        return Err(format!("{error_code}: {message}"));
     }
 
-    let mut text_request = client.get(&text_url);
-    if let Some(token) = &config.bridge_token {
-        text_request = text_request.header("Authorization", format!("Bearer {token}"));
+    let content = payload
+        .get("content")
+        .and_then(Value::as_str)
+        .map(|value| truncate_chars(value, MAX_CONTENT_CHARS))
+        .unwrap_or_default();
+    if content.trim().is_empty() {
+        return Err("SCRAPLING_EMPTY: bridge returned empty content".to_string());
     }
-    let text_response = text_request
-        .send()
-        .await
-        .map_err(|err| format!("pinchtab text request failed: {err}"))?;
-    if !text_response.status().is_success() {
-        let status = text_response.status();
-        let body = text_response.text().await.unwrap_or_default();
-        return Err(format!(
-            "pinchtab text failed ({status}): {}",
-            truncate_chars(body.trim(), 240)
-        ));
-    }
-
-    let content_type = text_response
-        .headers()
-        .get("content-type")
-        .and_then(|value| value.to_str().ok())
-        .unwrap_or("text/plain")
-        .to_string();
-    let body = text_response
-        .text()
-        .await
-        .map_err(|err| format!("pinchtab text body read failed: {err}"))?;
-    let extracted = extract_pinchtab_text(&body, content_type.contains("json"));
-    if extracted.trim().is_empty() {
-        return Err("pinchtab returned empty text".to_string());
-    }
-    let content = truncate_chars(&extracted, MAX_CONTENT_CHARS);
-    let summary = extract_text_preview(&extracted, MAX_SUMMARY_CHARS);
+    let summary = payload
+        .get("summary")
+        .and_then(Value::as_str)
+        .map(|value| truncate_chars(value, MAX_SUMMARY_CHARS))
+        .unwrap_or_else(|| extract_text_preview(&content, MAX_SUMMARY_CHARS));
+    let title = payload
+        .get("title")
+        .and_then(Value::as_str)
+        .map(|value| truncate_chars(value, 240))
+        .unwrap_or_else(|| url.to_string());
+    let content_type = payload
+        .get("contentType")
+        .and_then(Value::as_str)
+        .unwrap_or("text/plain");
+    let http_status = payload
+        .get("httpStatus")
+        .and_then(Value::as_u64)
+        .and_then(|value| u16::try_from(value).ok());
+    let bytes = payload
+        .get("bytes")
+        .and_then(Value::as_u64)
+        .map(|value| value as usize)
+        .unwrap_or_else(|| content.len());
     let markdown = format!(
-        "# Source Capture\n\n- Topic: {topic}\n- URL: {url}\n- Fetched: {fetched_at}\n- Type: PINCHTAB\n\n## Summary\n\n{summary}\n\n## Content\n\n{content}\n"
+        "# {title}\n\n- Topic: {topic}\n- URL: {url}\n- Fetched: {fetched_at}\n- Type: SCRAPLING\n\n## Summary\n\n{summary}\n\n## Content\n\n{content}\n"
     );
     Ok(SourceDocument {
         markdown,
@@ -762,41 +1525,49 @@ async fn fetch_source_document_with_pinchtab(
             "topic": topic,
             "url": url,
             "fetchedAt": fetched_at,
-            "format": "pinchtab",
+            "format": "scrapling",
             "summary": summary,
             "content": content,
             "contentType": content_type,
+            "title": title,
+            "httpStatus": http_status,
         }),
+        format: "scrapling".to_string(),
+        bytes,
+        http_status,
     })
 }
 
-fn extract_pinchtab_text(response_body: &str, looks_json: bool) -> String {
-    if looks_json {
-        if let Ok(parsed) = serde_json::from_str::<Value>(response_body) {
-            let keys = [
-                "/text",
-                "/content",
-                "/result",
-                "/data/text",
-                "/data/content",
-                "/data/result",
-                "/output/text",
-            ];
-            for key in keys {
-                if let Some(value) = parsed.pointer(key).and_then(Value::as_str) {
-                    let trimmed = value.trim();
-                    if !trimmed.is_empty() {
-                        return truncate_chars(trimmed, MAX_BODY_CHARS);
-                    }
-                }
-            }
-            let fallback = value_to_summary_text(&parsed);
-            if !fallback.trim().is_empty() {
-                return truncate_chars(&fallback, MAX_BODY_CHARS);
-            }
-        }
+fn classify_fetch_error_status(error: &str) -> String {
+    let lower = error.to_lowercase();
+    if lower.contains("timeout") {
+        return "timeout".to_string();
     }
-    truncate_chars(response_body.trim(), MAX_BODY_CHARS)
+    if lower.contains("blocked") {
+        return "blocked".to_string();
+    }
+    if lower.contains("401") || lower.contains("403") {
+        return "http_error".to_string();
+    }
+    if lower.contains("5") && lower.contains("http") {
+        return "http_error".to_string();
+    }
+    "failed".to_string()
+}
+
+fn extract_http_status_from_error(error: &str) -> Option<u16> {
+    let lower = error.to_lowercase();
+    let marker = "http status ";
+    let index = lower.find(marker)?;
+    let tail = &lower[index + marker.len()..];
+    let code = tail
+        .chars()
+        .take_while(|ch| ch.is_ascii_digit())
+        .collect::<String>();
+    if code.len() < 3 {
+        return None;
+    }
+    code.parse::<u16>().ok()
 }
 
 fn parse_rss_items(xml: &str) -> Vec<ParsedFeedItem> {
@@ -869,7 +1640,12 @@ fn child_link(node: &roxmltree::Node<'_, '_>) -> Option<String> {
     None
 }
 
-fn build_rss_markdown(url: &str, topic: &str, fetched_at: &str, items: &[ParsedFeedItem]) -> String {
+fn build_rss_markdown(
+    url: &str,
+    topic: &str,
+    fetched_at: &str,
+    items: &[ParsedFeedItem],
+) -> String {
     if items.is_empty() {
         return format!(
             "# Source Capture\n\n- Topic: {topic}\n- URL: {url}\n- Fetched: {fetched_at}\n- Type: RSS\n\nNo item parsed.\n"
@@ -916,13 +1692,7 @@ fn slugify_source(url: &str) -> String {
         .trim_start_matches("http://");
     without_scheme
         .chars()
-        .map(|ch| {
-            if ch.is_ascii_alphanumeric() {
-                ch
-            } else {
-                '_'
-            }
-        })
+        .map(|ch| if ch.is_ascii_alphanumeric() { ch } else { '_' })
         .take(48)
         .collect::<String>()
 }
@@ -1112,6 +1882,7 @@ fn value_to_summary_text(value: &Value) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::PathBuf;
 
     #[test]
     fn sanitizes_event_label_for_filename() {
@@ -1122,7 +1893,10 @@ mod tests {
     #[test]
     fn maps_known_topic_to_event_label() {
         assert_eq!(topic_event_label("marketSummary"), "시장요약");
-        assert_eq!(topic_event_label("communityHotTopics"), "일반커뮤니티핫토픽");
+        assert_eq!(
+            topic_event_label("communityHotTopics"),
+            "일반커뮤니티핫토픽"
+        );
     }
 
     #[test]
@@ -1177,9 +1951,42 @@ mod tests {
     }
 
     #[test]
-    fn pinchtab_base_url_must_be_localhost() {
-        let error = validate_pinchtab_base_url("https://example.com").unwrap_err();
+    fn scrapling_base_url_must_be_localhost() {
+        let error = validate_local_bridge_base_url("https://example.com").unwrap_err();
         assert!(error.contains("localhost/loopback"));
-        assert!(validate_pinchtab_base_url("http://127.0.0.1:8931").is_ok());
+        assert!(validate_local_bridge_base_url("http://127.0.0.1:8931").is_ok());
+    }
+
+    #[test]
+    fn dashboard_snapshot_delete_removes_only_matching_run_id() {
+        let root =
+            std::env::temp_dir().join(format!("rail_snapshot_delete_{}", now_epoch_millis()));
+        let topic_dir = root.join(".rail/dashboard/snapshots/globalHeadlines");
+        fs::create_dir_all(&topic_dir).expect("create topic dir");
+
+        let keep_file = topic_dir.join("keep.json");
+        let delete_file = topic_dir.join("delete.json");
+        fs::write(
+            &keep_file,
+            r#"{"topic":"globalHeadlines","runId":"topic-keep","summary":"keep"}"#,
+        )
+        .expect("write keep file");
+        fs::write(
+            &delete_file,
+            r#"{"topic":"globalHeadlines","runId":"topic-delete","summary":"delete"}"#,
+        )
+        .expect("write delete file");
+
+        let deleted = dashboard_snapshot_delete(
+            root.to_string_lossy().to_string(),
+            Some("topic-delete".to_string()),
+            None,
+        )
+        .expect("delete by run id");
+        assert_eq!(deleted, 1);
+        assert!(!delete_file.exists());
+        assert!(keep_file.exists());
+
+        let _ = fs::remove_dir_all(PathBuf::from(root));
     }
 }

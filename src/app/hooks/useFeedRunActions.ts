@@ -2,6 +2,7 @@ import { useCallback } from "react";
 import type { Dispatch, MutableRefObject, SetStateAction } from "react";
 import { invoke } from "../../shared/tauri";
 import { buildFeedShareText } from "../main";
+import { hideFeedRunId } from "../main/runtime/feedHiddenRuns";
 import type { FeedViewPost, RunGroupKind, RunRecord } from "../main";
 import type { PresetKind } from "../../features/workflow/domain";
 
@@ -15,6 +16,7 @@ type ActiveFeedRunMeta = {
 } | null;
 
 type UseFeedRunActionsParams = {
+  cwd: string;
   setError: (value: string) => void;
   setStatus: (value: string) => void;
   setFeedShareMenuPostId: Dispatch<SetStateAction<string | null>>;
@@ -34,6 +36,7 @@ type UseFeedRunActionsParams = {
 
 export function useFeedRunActions(params: UseFeedRunActionsParams) {
   const {
+    cwd,
     setError,
     setStatus,
     setFeedShareMenuPostId,
@@ -107,6 +110,7 @@ export function useFeedRunActions(params: UseFeedRunActionsParams) {
       };
 
       const dropRunGroupFromFeed = () => {
+        hideFeedRunId(runId);
         if (target) {
           delete feedRunCacheRef.current[target];
         }
@@ -128,8 +132,22 @@ export function useFeedRunActions(params: UseFeedRunActionsParams) {
         target.startsWith("dashboard-") ||
         target.includes("/.rail/dashboard/") ||
         target.includes("\\.rail\\dashboard\\");
+      const normalizedCwd = String(cwd ?? "").trim();
+      const isDashboardSnapshotTarget =
+        target.includes("/.rail/dashboard/snapshots/") || target.includes("\\.rail\\dashboard\\snapshots\\");
 
       if (shouldSkipRunDelete) {
+        if (normalizedCwd) {
+          try {
+            await invoke("dashboard_snapshot_delete", {
+              cwd: normalizedCwd,
+              runId: String(runId ?? "").trim() || null,
+              path: isDashboardSnapshotTarget ? target : null,
+            });
+          } catch {
+            // Ignore snapshot delete errors here; feed state cleanup still proceeds.
+          }
+        }
         dropRunGroupFromFeed();
         setStatus(`피드 세트 삭제 완료: ${groupName}`);
         return;
@@ -158,6 +176,7 @@ export function useFeedRunActions(params: UseFeedRunActionsParams) {
       }
     },
     [
+      cwd,
       feedGroupRenameRunId,
       ensureFeedRunRecord,
       feedRunCacheRef,

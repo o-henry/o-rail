@@ -172,12 +172,10 @@ export function useDashboardIntelligenceRunner(params: UseDashboardIntelligenceR
       const nextSnapshots: Partial<Record<DashboardTopicId, DashboardTopicSnapshot>> = {};
       for (const topic of selected) {
         const topicResult = result.topics.find((row) => row.topic === topic);
-        const fetchedCount = topicResult?.fetchedCount ?? 0;
-        const savedCount = topicResult?.savedFiles?.length ?? 0;
         const errors = topicResult?.errors ?? [];
         const snapshot = {
           ...buildDashboardFallbackSnapshot(topic, config[topic].model, {
-            summary: `크롤링 수집 ${fetchedCount}건 / 저장 파일 ${savedCount}개`,
+            summary: "크롤링 비활성화 모드입니다. Codex 웹검색 기반 실행을 사용해 주세요.",
             highlights: (topicResult?.savedFiles ?? []).slice(0, 5).map((path) => path.split(/[\\/]/).pop() || path),
             risks: errors.slice(0, 4),
             status: errors.length > 0 ? "degraded" : "ok",

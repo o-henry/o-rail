@@ -8,6 +8,18 @@ import { t } from "../../i18n";
 
 type FeedCategory = "all_posts" | "completed_posts" | "web_posts" | "error_posts";
 
+function inferFeedPostTopic(post: any): string {
+  const direct = String(post?.topic ?? "").trim();
+  if (direct) {
+    return direct;
+  }
+  const nodeId = String(post?.nodeId ?? "").trim();
+  if (nodeId.startsWith("dashboard-")) {
+    return nodeId.slice("dashboard-".length);
+  }
+  return "";
+}
+
 export function computeFeedDerivedState(params: {
   activeFeedRunMeta: any;
   graph: any;
@@ -16,6 +28,7 @@ export function computeFeedDerivedState(params: {
   feedStatusFilter: string;
   feedExecutorFilter: string;
   feedPeriodFilter: string;
+  feedTopicFilter?: string;
   feedKeyword: string;
   feedCategory: FeedCategory;
   feedRunCache: Record<string, any>;
@@ -55,6 +68,7 @@ export function computeFeedDerivedState(params: {
     feedStatusFilter,
     feedExecutorFilter,
     feedPeriodFilter,
+    feedTopicFilter = "all",
     feedKeyword,
     feedCategory,
     feedRunCache,
@@ -223,6 +237,12 @@ export function computeFeedDerivedState(params: {
           return false;
         }
       }
+      if (feedTopicFilter !== "all") {
+        const postTopic = inferFeedPostTopic(post);
+        if (postTopic !== String(feedTopicFilter ?? "").trim()) {
+          return false;
+        }
+      }
       const keyword = feedKeyword.trim().toLowerCase();
       if (!keyword) {
         return true;
@@ -284,7 +304,12 @@ export function computeFeedDerivedState(params: {
                 presetKind: runRecord.workflowPresetKind,
               }
             : {
-                name: t("group.custom"),
+                name:
+                  String(post?.groupName ?? "").trim() ||
+                  (String(post?.nodeId ?? "").trim().startsWith("dashboard-")
+                    ? String(post?.topicLabel ?? post?.agentName ?? "").trim()
+                    : "") ||
+                  t("group.custom"),
                 kind: "custom",
               };
       groups.set(post.runId, {

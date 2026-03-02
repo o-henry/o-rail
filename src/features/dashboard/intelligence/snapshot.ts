@@ -139,7 +139,7 @@ function toReadableText(value: unknown, maxChars: number): string {
   if (!selected) {
     return "";
   }
-  return selected.length > maxChars ? `${selected.slice(0, maxChars).trimEnd()}...` : selected;
+  return selected.length > maxChars ? selected.slice(0, maxChars).trimEnd() : selected;
 }
 
 function asStringList(value: unknown, maxItems: number, maxChars: number): string[] {

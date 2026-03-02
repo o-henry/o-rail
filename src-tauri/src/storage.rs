@@ -1,8 +1,8 @@
 use serde_json::Value;
 use std::{fs, path::PathBuf};
 use tauri::async_runtime::channel;
-use tauri_plugin_dialog::DialogExt;
 use tauri::{AppHandle, Manager};
+use tauri_plugin_dialog::DialogExt;
 
 fn app_data_dir(app: &AppHandle) -> Result<PathBuf, String> {
     app.path()
@@ -90,7 +90,12 @@ fn list_json_files(app: &AppHandle, dir_name: &str) -> Result<Vec<String>, Strin
     Ok(files)
 }
 
-fn write_json_file(app: &AppHandle, dir_name: &str, name: &str, data: &Value) -> Result<(), String> {
+fn write_json_file(
+    app: &AppHandle,
+    dir_name: &str,
+    name: &str,
+    data: &Value,
+) -> Result<(), String> {
     let normalized_name = normalize_file_name(name)?;
     let dir = ensure_subdir(app, dir_name)?;
     let path = dir.join(normalized_name);
@@ -138,7 +143,8 @@ fn rename_json_file(
 
     let to_path = dir.join(&to_normalized);
     if to_path.exists() {
-        fs::remove_file(&to_path).map_err(|e| format!("failed to overwrite {dir_name} file: {e}"))?;
+        fs::remove_file(&to_path)
+            .map_err(|e| format!("failed to overwrite {dir_name} file: {e}"))?;
     }
 
     fs::rename(from_path, to_path).map_err(|e| format!("failed to rename {dir_name} file: {e}"))?;
@@ -197,7 +203,11 @@ pub fn run_directory(app: AppHandle) -> Result<String, String> {
 }
 
 #[tauri::command]
-pub fn workspace_write_markdown(cwd: String, name: String, content: String) -> Result<String, String> {
+pub fn workspace_write_markdown(
+    cwd: String,
+    name: String,
+    content: String,
+) -> Result<String, String> {
     let cwd_trimmed = cwd.trim();
     if cwd_trimmed.is_empty() {
         return Err("cwd is required".to_string());

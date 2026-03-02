@@ -1,7 +1,16 @@
 import { useRef, useState } from "react";
 import type { PresetKind } from "../../features/workflow/domain";
 import type { GraphNode } from "../../features/workflow/types";
-import type { AgentRuleDoc, FeedCategory, FeedExecutorFilter, FeedPeriodFilter, FeedStatusFilter, FeedViewPost, RunGroupKind } from "../main";
+import type {
+  AgentRuleDoc,
+  FeedCategory,
+  FeedExecutorFilter,
+  FeedPeriodFilter,
+  FeedStatusFilter,
+  FeedTopicFilter,
+  FeedViewPost,
+  RunGroupKind,
+} from "../main";
 
 export function useFeedState() {
   const [feedPosts, setFeedPosts] = useState<FeedViewPost[]>([]);
@@ -9,6 +18,7 @@ export function useFeedState() {
   const [feedStatusFilter, setFeedStatusFilter] = useState<FeedStatusFilter>("all");
   const [feedExecutorFilter, setFeedExecutorFilter] = useState<FeedExecutorFilter>("all");
   const [feedPeriodFilter, setFeedPeriodFilter] = useState<FeedPeriodFilter>("all");
+  const [feedTopicFilter, setFeedTopicFilter] = useState<FeedTopicFilter>("all");
   const [feedKeyword, setFeedKeyword] = useState("");
   const [feedCategory, setFeedCategory] = useState<FeedCategory>("all_posts");
   const [feedFilterOpen, setFeedFilterOpen] = useState(false);
@@ -51,6 +61,8 @@ export function useFeedState() {
     setFeedExecutorFilter,
     feedPeriodFilter,
     setFeedPeriodFilter,
+    feedTopicFilter,
+    setFeedTopicFilter,
     feedKeyword,
     setFeedKeyword,
     feedCategory,

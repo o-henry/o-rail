@@ -640,7 +640,9 @@ impl WebWorkerRuntime {
                             if line.is_empty() {
                                 continue;
                             }
-                            if let Err(err) = handle_web_worker_incoming_line(&app, &pending, line).await {
+                            if let Err(err) =
+                                handle_web_worker_incoming_line(&app, &pending, line).await
+                            {
                                 let _ = app.emit(
                                     EVENT_ENGINE_NOTIFICATION,
                                     EngineNotificationEvent {
@@ -815,7 +817,8 @@ fn resolve_web_worker_script_path(app: &AppHandle) -> Result<PathBuf, String> {
     }
 
     // Dev fallback when running from source tree.
-    let dev_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../scripts/web_worker/index.mjs");
+    let dev_path =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../scripts/web_worker/index.mjs");
     if dev_path.exists() {
         return Ok(dev_path);
     }
@@ -1033,7 +1036,9 @@ fn collect_skill_docs(dir: &Path, out: &mut Vec<PathBuf>, max_docs: usize) {
         Ok(entries) => entries,
         Err(_) => return,
     };
-    let mut paths: Vec<PathBuf> = entries.filter_map(|entry| entry.ok().map(|e| e.path())).collect();
+    let mut paths: Vec<PathBuf> = entries
+        .filter_map(|entry| entry.ok().map(|e| e.path()))
+        .collect();
     paths.sort();
 
     for path in paths {
@@ -1460,7 +1465,9 @@ fn extract_auth_mode(value: &Value, depth: usize) -> Option<String> {
                 None
             }
         }
-        Value::Array(items) => items.iter().find_map(|item| extract_auth_mode(item, depth + 1)),
+        Value::Array(items) => items
+            .iter()
+            .find_map(|item| extract_auth_mode(item, depth + 1)),
         Value::Object(map) => {
             if let Some(mode) = map
                 .get("authMode")
@@ -1575,15 +1582,16 @@ pub async fn web_provider_health(
             }
             Err(error) => return Err(error),
         };
-        let mut parsed = serde_json::from_value::<WebWorkerHealth>(raw).unwrap_or(WebWorkerHealth {
-            running: true,
-            last_error: None,
-            providers: json!({}),
-            log_path: Some(runtime.log_path.to_string_lossy().to_string()),
-            profile_root: Some(runtime.profile_root.to_string_lossy().to_string()),
-            active_provider: None,
-            bridge: None,
-        });
+        let mut parsed =
+            serde_json::from_value::<WebWorkerHealth>(raw).unwrap_or(WebWorkerHealth {
+                running: true,
+                last_error: None,
+                providers: json!({}),
+                log_path: Some(runtime.log_path.to_string_lossy().to_string()),
+                profile_root: Some(runtime.profile_root.to_string_lossy().to_string()),
+                active_provider: None,
+                bridge: None,
+            });
         parsed.running = true;
         if parsed.log_path.is_none() {
             parsed.log_path = Some(runtime.log_path.to_string_lossy().to_string());
@@ -1977,8 +1985,8 @@ pub async fn approval_respond(
 #[tauri::command]
 pub async fn provider_window_open(app: AppHandle, provider: String) -> Result<(), String> {
     let provider_key = provider.trim().to_lowercase();
-    let url = provider_url(&provider_key)
-        .ok_or_else(|| format!("unsupported provider: {provider}"))?;
+    let url =
+        provider_url(&provider_key).ok_or_else(|| format!("unsupported provider: {provider}"))?;
     let window_id = format!("provider-{provider_key}");
 
     if let Some(window) = app.get_webview_window(&window_id) {
@@ -2018,14 +2026,16 @@ pub async fn provider_window_close(app: AppHandle, provider: String) -> Result<(
 #[tauri::command]
 pub async fn provider_child_view_open(window: Window, provider: String) -> Result<(), String> {
     let provider_key = provider.trim().to_lowercase();
-    let url = provider_url(&provider_key)
-        .ok_or_else(|| format!("unsupported provider: {provider}"))?;
+    let url =
+        provider_url(&provider_key).ok_or_else(|| format!("unsupported provider: {provider}"))?;
     let child_label = provider_child_view_label(&provider_key);
 
     let size = window
         .inner_size()
         .map_err(|e| format!("failed to read parent window size: {e}"))?;
-    let available_width = size.width.saturating_sub(CHILD_VIEW_SAFE_MARGIN_X.saturating_mul(2));
+    let available_width = size
+        .width
+        .saturating_sub(CHILD_VIEW_SAFE_MARGIN_X.saturating_mul(2));
     let available_height = size
         .height
         .saturating_sub(CHILD_VIEW_SAFE_MARGIN_TOP + CHILD_VIEW_SAFE_MARGIN_BOTTOM);
@@ -2034,10 +2044,10 @@ pub async fn provider_child_view_open(window: Window, provider: String) -> Resul
     let height_ceiling = available_height.max(1);
     let width_floor = CHILD_VIEW_MIN_WIDTH.min(width_ceiling).max(1);
     let height_floor = CHILD_VIEW_MIN_HEIGHT.min(height_ceiling).max(1);
-    let desired_width =
-        ((f64::from(available_width) * CHILD_VIEW_WIDTH_RATIO).round() as u32).min(CHILD_VIEW_MAX_WIDTH);
-    let desired_height =
-        ((f64::from(available_height) * CHILD_VIEW_HEIGHT_RATIO).round() as u32).min(CHILD_VIEW_MAX_HEIGHT);
+    let desired_width = ((f64::from(available_width) * CHILD_VIEW_WIDTH_RATIO).round() as u32)
+        .min(CHILD_VIEW_MAX_WIDTH);
+    let desired_height = ((f64::from(available_height) * CHILD_VIEW_HEIGHT_RATIO).round() as u32)
+        .min(CHILD_VIEW_MAX_HEIGHT);
     let width = desired_width.max(width_floor).min(width_ceiling);
     let height = desired_height.max(height_floor).min(height_ceiling);
 

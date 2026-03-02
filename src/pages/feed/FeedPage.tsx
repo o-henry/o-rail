@@ -70,11 +70,14 @@ export default function FeedPage({ vm }: FeedPageProps) {
     setFeedStatusFilter,
     setFeedExecutorFilter,
     setFeedPeriodFilter,
+    setFeedTopicFilter,
     setFeedKeyword,
     feedStatusFilter,
     feedExecutorFilter,
     feedPeriodFilter,
+    feedTopicFilter,
     feedKeyword,
+    feedTopicOptions,
     feedCategoryMeta,
     feedCategory,
     feedCategoryPosts,
@@ -439,6 +442,16 @@ export default function FeedPage({ vm }: FeedPageProps) {
                         { value: "7d", label: t("feed.period.7d") },
                       ]}
                       value={feedPeriodFilter}
+                    />
+                  </label>
+                  <label>
+                    {t("feed.filter.topic")}
+                    <FancySelect
+                      ariaLabel={t("feed.filter.topic")}
+                      className="modern-select"
+                      onChange={(next) => setFeedTopicFilter(next)}
+                      options={Array.isArray(feedTopicOptions) ? feedTopicOptions : [{ value: "all", label: t("feed.topic.all") }]}
+                      value={feedTopicFilter}
                     />
                   </label>
                   <label className="feed-filter-keyword-field">

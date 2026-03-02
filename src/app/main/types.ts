@@ -209,6 +209,9 @@ export type FeedPost = {
   runId: string;
   nodeId: string;
   nodeType: NodeType;
+  topic?: string;
+  topicLabel?: string;
+  groupName?: string;
   isFinalDocument?: boolean;
   executor?: TurnExecutor;
   agentName: string;
@@ -246,6 +249,7 @@ export type FeedPost = {
 export type FeedStatusFilter = "all" | FeedPostStatus;
 export type FeedExecutorFilter = "all" | "codex" | "web" | "ollama";
 export type FeedPeriodFilter = "all" | "today" | "7d";
+export type FeedTopicFilter = "all" | string;
 export type FeedCategory = "all_posts" | "completed_posts" | "web_posts" | "error_posts";
 export type RunGroupKind = "template" | "custom";
 

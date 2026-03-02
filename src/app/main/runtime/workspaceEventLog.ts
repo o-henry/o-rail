@@ -45,6 +45,14 @@ export function workspaceEventLogFileName(date: Date = new Date()): string {
   return `${yyyy}${mm}${dd}_workspace-events.md`;
 }
 
+function escapeMarkdownTableCell(value: unknown): string {
+  return String(value ?? "")
+    .replace(/\\/g, "\\\\")
+    .replace(/\r?\n/g, " ")
+    .replace(/\|/g, "\\|")
+    .trim();
+}
+
 export function workspaceEventLogToMarkdown(entries: WorkspaceEventEntry[]): string {
   const header = [
     "# Workspace Event Log",
@@ -55,8 +63,7 @@ export function workspaceEventLogToMarkdown(entries: WorkspaceEventEntry[]): str
   const rows = entries.map((entry) => {
     const date = new Date(entry.at);
     const timeText = Number.isNaN(date.getTime()) ? entry.at : date.toLocaleString();
-    const message = entry.message.replace(/\r?\n/g, " ").replace(/\|/g, "\\|");
-    return `| ${timeText} | ${entry.source} | ${entry.actor} | ${entry.level} | ${entry.runId ?? ""} | ${entry.topic ?? ""} | ${message} |`;
+    return `| ${escapeMarkdownTableCell(timeText)} | ${escapeMarkdownTableCell(entry.source)} | ${escapeMarkdownTableCell(entry.actor)} | ${escapeMarkdownTableCell(entry.level)} | ${escapeMarkdownTableCell(entry.runId ?? "")} | ${escapeMarkdownTableCell(entry.topic ?? "")} | ${escapeMarkdownTableCell(entry.message)} |`;
   });
   return [...header, ...rows].join("\n");
 }

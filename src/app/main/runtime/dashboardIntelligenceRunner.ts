@@ -108,6 +108,127 @@ function summarizeSnippets(snippets: KnowledgeRetrieveResult["snippets"]): strin
     .filter((text) => text.length > 0);
 }
 
+function collectTextCandidates(
+  input: unknown,
+  out: string[],
+  depth: number,
+  visited: WeakSet<object>,
+): void {
+  if (depth > 8 || input == null) {
+    return;
+  }
+  if (typeof input === "string") {
+    const normalized = input.replace(/\s+/g, " ").trim();
+    if (!normalized) {
+      return;
+    }
+    out.push(normalized);
+    return;
+  }
+  if (Array.isArray(input)) {
+    for (const item of input) {
+      collectTextCandidates(item, out, depth + 1, visited);
+      if (out.length >= 80) {
+        break;
+      }
+    }
+    return;
+  }
+  if (typeof input !== "object") {
+    return;
+  }
+  const row = input as Record<string, unknown>;
+  if (visited.has(row)) {
+    return;
+  }
+  visited.add(row);
+  const priorityKeys = [
+    "output_text",
+    "text",
+    "content",
+    "message",
+    "response",
+    "output",
+    "completion",
+    "turn",
+    "item",
+    "event",
+    "data",
+    "value",
+  ] as const;
+  for (const key of priorityKeys) {
+    if (key in row) {
+      collectTextCandidates(row[key], out, depth + 1, visited);
+      if (out.length >= 80) {
+        return;
+      }
+    }
+  }
+  for (const value of Object.values(row)) {
+    collectTextCandidates(value, out, depth + 1, visited);
+    if (out.length >= 80) {
+      return;
+    }
+  }
+}
+
+function isLikelyPromptEcho(value: string): boolean {
+  const lower = value.toLowerCase();
+  return lower.includes("[topic]") || lower.includes("[retrieved snippets]") || lower.includes("[required json schema]");
+}
+
+function resolveResponseText(raw: unknown): string {
+  const direct =
+    extractStringByPaths(raw, [
+      "text",
+      "output_text",
+      "output.0.content.0.text",
+      "output.0.content.0.output_text",
+      "output.0.text",
+      "response.output.0.content.0.text",
+      "response.output.0.content.0.output_text",
+      "response.output.0.text",
+      "completion.output.0.content.0.text",
+      "completion.output.0.content.0.output_text",
+      "completion.output.0.text",
+      "turn.output_text",
+      "turn.response.output_text",
+      "turn.response.text",
+      "response.output_text",
+      "response.text",
+    ]) ?? "";
+  if (direct.trim()) {
+    return direct.trim();
+  }
+
+  const candidates: string[] = [];
+  collectTextCandidates(raw, candidates, 0, new WeakSet<object>());
+  const unique = [...new Set(candidates.map((item) => item.trim()).filter(Boolean))];
+  if (unique.length === 0) {
+    return "";
+  }
+
+  const jsonCandidate =
+    unique.find((item) => item.includes("\"summary\"") && item.includes("{") && item.includes("}")) ??
+    unique.find((item) => item.trim().startsWith("{") && item.includes("\"highlights\""));
+  if (jsonCandidate) {
+    return jsonCandidate;
+  }
+
+  const textCandidate = unique.find((item) => item.length >= 48 && !isLikelyPromptEcho(item));
+  return textCandidate ?? unique[0] ?? "";
+}
+
+function buildFallbackSummaryFromSnippets(snippets: KnowledgeRetrieveResult["snippets"]): string {
+  const lines = summarizeSnippets(snippets).slice(0, 3);
+  if (lines.length === 0) {
+    return "크롤러 결과에서 스니펫을 찾지 못했습니다.";
+  }
+  const joined = lines.join(" / ");
+  const compact = joined.length > 240 ? `${joined.slice(0, 237).trimEnd()}...` : joined;
+  return `Codex 응답을 확인하지 못해 수집 근거 기반 임시 요약을 제공합니다: ${compact}`;
+}
+
 async function runCrawlerForTopic(params: {
   cwd: string;
   topic: DashboardTopicId;
@@ -203,10 +324,7 @@ function buildSnapshotWithoutCodex(params: {
   warnings: string[];
 }): DashboardTopicSnapshot {
   return buildDashboardFallbackSnapshot(params.topic, params.model, {
-    summary:
-      params.snippets.length > 0
-        ? "Codex 응답이 없어 검색 스니펫 기반으로 대체 요약을 생성했습니다."
-        : "크롤러 결과에서 스니펫을 찾지 못했습니다.",
+    summary: buildFallbackSummaryFromSnippets(params.snippets),
     highlights: summarizeSnippets(params.snippets),
     risks: params.warnings.slice(0, 4),
     events: [],
@@ -331,22 +449,7 @@ export async function runDashboardTopicIntelligence(params: RunDashboardTopicPar
       threadId: threadStart.threadId,
       text: prompt,
     });
-    const responseText =
-      extractStringByPaths(turnStartResponse, [
-        "text",
-        "output_text",
-        "output.0.content.0.text",
-        "output.0.text",
-        "response.output.0.content.0.text",
-        "response.output.0.text",
-        "completion.output.0.content.0.text",
-        "completion.output.0.text",
-        "turn.output_text",
-        "turn.response.output_text",
-        "turn.response.text",
-        "response.output_text",
-        "response.text",
-      ]) ?? "";
+    const responseText = resolveResponseText(turnStartResponse);
 
     if (responseText.trim()) {
       emitProgress(params, "parse", "응답 파싱 및 스냅샷 생성 중");

@@ -241,7 +241,6 @@ export default function DashboardIntelligenceSettings(props: DashboardIntelligen
                   <article className="settings-dashboard-topic-doc-row" key={doc.id}>
                     <small>{`${doc.agentName} · ${formatDateTimeText(doc.createdAt)}`}</small>
                     <p>{doc.summary || "요약이 없는 문서입니다."}</p>
-                    <code>{doc.sourceFile}</code>
                     <button
                       className="settings-dashboard-topic-doc-open"
                       onClick={() => props.onOpenBriefingDocument(doc.runId, doc.id)}

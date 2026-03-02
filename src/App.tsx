@@ -6,7 +6,6 @@ import { I18nProvider, t } from "./i18n";
 type AppErrorBoundaryState = {
   hasError: boolean;
   message: string;
-  stack: string;
 };
 
 class AppErrorBoundary extends Component<{ children: ReactNode }, AppErrorBoundaryState> {
@@ -15,15 +14,13 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, AppErrorBounda
     this.state = {
       hasError: false,
       message: "",
-      stack: "",
     };
   }
 
-  static getDerivedStateFromError(error: unknown): AppErrorBoundaryState {
+  static getDerivedStateFromError(_error: unknown): AppErrorBoundaryState {
     return {
       hasError: true,
-      message: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error && typeof error.stack === "string" ? error.stack : "",
+      message: "예기치 않은 오류가 발생했습니다. 앱을 다시 시작해 주세요.",
     };
   }
 
@@ -64,7 +61,6 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, AppErrorBounda
             }}
           >
             {this.state.message || t("app.error.noMessage")}
-            {this.state.stack ? `\n\n${this.state.stack}` : ""}
           </pre>
           <button
             onClick={() => window.location.reload()}

@@ -587,6 +587,8 @@ export default function FeedPage({ vm }: FeedPageProps) {
                               const markdownAttachment = attachments.find((attachment: any) => attachment?.kind === "markdown");
                               const markdownFilePath = String(markdownAttachment?.filePath ?? "").trim();
                               const hasMarkdownDocument = Boolean(markdownAttachment);
+                              const markdownPreview = toHumanReadableFeedText(markdownAttachment?.content ?? "");
+                              const hasMarkdownPreview = markdownPreview.trim().length > 0;
                               const readableQuestion = toHumanReadableFeedText(post.question ?? "");
                               const readableInputPreview = toHumanReadableFeedText(post.inputContext?.preview ?? "");
                               const pendingRequestCount = (pendingNodeRequests[post.nodeId] ?? []).length;
@@ -708,7 +710,7 @@ export default function FeedPage({ vm }: FeedPageProps) {
                                     {hasInputBundle && (
                                       <section className="feed-card-input-sources">
                                         <div className="feed-card-input-sources-head">
-                                          <div className="feed-card-input-sources-title">{t("feed.inputBundle")}</div>
+                                          <div className="feed-card-input-sources-title">응답</div>
                                           <button
                                             aria-expanded={isInputBundleExpanded}
                                             className={`feed-card-input-toggle ${isInputBundleExpanded ? "is-expanded" : ""}`}
@@ -727,6 +729,14 @@ export default function FeedPage({ vm }: FeedPageProps) {
                                         {isInputBundleExpanded && (
                                           <div className="feed-input-bundle-body">
                                             {readableQuestion && <div className="feed-card-question">Q: {readableQuestion}</div>}
+                                            {hasMarkdownPreview && (
+                                              <div className="feed-card-output-wrap">
+                                                <div className="feed-card-input-sources-head feed-card-output-head">
+                                                  <div className="feed-card-input-sources-title">출력</div>
+                                                </div>
+                                                <pre className="feed-card-output-content">{markdownPreview}</pre>
+                                              </div>
+                                            )}
                                             {upstreamSources.length > 0 && (
                                               <div className="feed-input-bundle-group">
                                                 <div className="feed-input-bundle-label">{t("feed.inputSources")}</div>

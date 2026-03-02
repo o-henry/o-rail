@@ -86,14 +86,31 @@ export function useFeedRunActions(params: UseFeedRunActionsParams) {
       setError("");
       setFeedShareMenuPostId(null);
       const target = String(sourceFile ?? "").trim();
-      if (!target) {
-        setError("삭제할 실행 파일을 찾을 수 없습니다.");
-        return;
-      }
-      try {
-        await invoke("run_delete", { name: target });
-        delete feedRunCacheRef.current[target];
-        setFeedPosts((prev) => prev.filter((item) => item.sourceFile !== target));
+
+      const resolveErrorMessage = (error: unknown): string => {
+        if (error instanceof Error) {
+          return error.message;
+        }
+        if (typeof error === "string") {
+          return error;
+        }
+        if (error && typeof error === "object") {
+          const row = error as Record<string, unknown>;
+          const candidate = [row.message, row.error, row.details].find(
+            (value) => typeof value === "string" && String(value).trim().length > 0,
+          );
+          if (typeof candidate === "string") {
+            return candidate;
+          }
+        }
+        return String(error ?? "");
+      };
+
+      const dropRunGroupFromFeed = () => {
+        if (target) {
+          delete feedRunCacheRef.current[target];
+        }
+        setFeedPosts((prev) => prev.filter((item) => String(item.runId ?? "").trim() !== runId));
         setFeedInspectorPostId("");
         setFeedGroupExpandedByRunId((prev) => {
           const next = { ...prev };
@@ -104,13 +121,45 @@ export function useFeedRunActions(params: UseFeedRunActionsParams) {
           setFeedGroupRenameRunId(null);
           setFeedGroupRenameDraft("");
         }
+      };
+
+      const shouldSkipRunDelete =
+        !target ||
+        target.startsWith("dashboard-") ||
+        target.includes("/.rail/dashboard/") ||
+        target.includes("\\.rail\\dashboard\\");
+
+      if (shouldSkipRunDelete) {
+        dropRunGroupFromFeed();
+        setStatus(`피드 세트 삭제 완료: ${groupName}`);
+        return;
+      }
+
+      const existingRun = await ensureFeedRunRecord(target);
+      if (!existingRun) {
+        dropRunGroupFromFeed();
+        setStatus(`피드 세트 정리 완료: ${groupName}`);
+        return;
+      }
+
+      try {
+        await invoke("run_delete", { name: target });
+        dropRunGroupFromFeed();
         setStatus(`피드 세트 삭제 완료: ${groupName}`);
       } catch (error) {
-        setError(`피드 세트 삭제 실패: ${String(error)}`);
+        const message = resolveErrorMessage(error);
+        const lower = message.toLowerCase();
+        if (lower.includes("not found") || lower.includes("enoent")) {
+          dropRunGroupFromFeed();
+          setStatus(`피드 세트 정리 완료: ${groupName}`);
+          return;
+        }
+        setError(`피드 세트 삭제 실패: ${message}`);
       }
     },
     [
       feedGroupRenameRunId,
+      ensureFeedRunRecord,
       feedRunCacheRef,
       setError,
       setFeedGroupExpandedByRunId,
@@ -190,4 +239,3 @@ export function useFeedRunActions(params: UseFeedRunActionsParams) {
     onSubmitFeedRunGroupRename,
   };
 }
-

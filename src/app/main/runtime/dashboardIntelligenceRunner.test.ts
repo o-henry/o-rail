@@ -155,7 +155,7 @@ describe("dashboard intelligence runner", () => {
 
     expect(retrieveCalls).toHaveLength(2);
     expect(retrieveCalls[1]?.query).toBe("");
-    expect(result.snapshot.summary).toContain("스니펫 기반");
+    expect(result.snapshot.summary).toContain("임시 요약");
     expect(result.snapshot.highlights.length).toBeGreaterThan(0);
   });
 
@@ -289,7 +289,7 @@ describe("dashboard intelligence runner", () => {
     });
 
     expect(result.snapshot.status).toBe("degraded");
-    expect(result.snapshot.summary).toContain("스니펫 기반");
+    expect(result.snapshot.summary).toContain("임시 요약");
     expect(invokeMock.mock.calls.some((row) => row[0] === "dashboard_crawl_run")).toBe(true);
     expect(invokeMock.mock.calls.some((row) => row[0] === "dashboard_snapshot_save")).toBe(true);
   });
@@ -426,6 +426,83 @@ describe("dashboard intelligence runner", () => {
     expect(stages).toEqual(
       expect.arrayContaining(["crawler", "crawler_done", "rag", "rag_done", "codex_turn", "save", "done"]),
     );
+  });
+
+  it("parses codex response text from nested output_text payload", async () => {
+    const invokeMock = vi.fn(async (command: string, _args?: Record<string, unknown>) => {
+      switch (command) {
+        case "dashboard_crawl_run":
+          return {
+            startedAt: "1",
+            finishedAt: "2",
+            totalFetched: 1,
+            totalFiles: 1,
+            topics: [{ topic: "globalHeadlines", fetchedCount: 1, savedFiles: ["/tmp/a.md"], errors: [] }],
+          };
+        case "dashboard_raw_list":
+          return ["/tmp/a.md"];
+        case "knowledge_probe":
+          return [
+            {
+              id: "1",
+              name: "a.md",
+              path: "/tmp/a.md",
+              ext: ".md",
+              enabled: true,
+              status: "ready",
+            },
+          ];
+        case "knowledge_retrieve":
+          return {
+            snippets: [{ fileId: "1", fileName: "a.md", chunkIndex: 1, text: "Snippet", score: 1 }],
+            warnings: [],
+          };
+        case "thread_start":
+          return { threadId: "t1" };
+        case "turn_start":
+          return {
+            response: {
+              output: [
+                {
+                  content: [
+                    {
+                      type: "output_text",
+                      output_text: JSON.stringify({
+                        summary: "nested payload summary",
+                        highlights: ["h1"],
+                        risks: [],
+                        events: [],
+                        references: [],
+                        generatedAt: "2026-02-28T00:00:00.000Z",
+                        topic: "globalHeadlines",
+                        model: "gpt-5.2-codex",
+                      }),
+                    },
+                  ],
+                },
+              ],
+            },
+          };
+        case "dashboard_snapshot_save":
+          return "/tmp/snapshot.json";
+        default:
+          throw new Error(`unexpected command ${command}`);
+      }
+    });
+    const invoke = invokeMock as unknown as <T>(
+      command: string,
+      args?: Record<string, unknown>,
+    ) => Promise<T>;
+
+    const result = await runDashboardTopicIntelligence({
+      cwd: "/tmp",
+      topic: "globalHeadlines",
+      config: createDefaultDashboardTopicConfig("globalHeadlines"),
+      invokeFn: invoke,
+    });
+
+    expect(result.snapshot.summary).toBe("nested payload summary");
+    expect(result.snapshot.status).toBe("ok");
   });
 
   it("loads latest snapshot per topic", async () => {

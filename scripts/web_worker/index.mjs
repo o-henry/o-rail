@@ -683,6 +683,50 @@ async function rotateBridgeToken() {
   return bridgeStatusPayload({ exposeToken: true });
 }
 
+function sanitizePublicErrorCode(rawCode, fallback = 'INTERNAL_ERROR') {
+  const normalized = String(rawCode ?? '')
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9_]/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_+|_+$/g, '');
+  return normalized || fallback;
+}
+
+function sanitizePublicErrorMessage(rawMessage, fallback = '요청 처리 실패') {
+  const firstLine = String(rawMessage ?? '')
+    .split(/\r?\n/)[0]
+    ?.trim();
+  const cleaned = String(firstLine ?? '')
+    .replace(/[<>`]/g, '')
+    .replace(/[\u0000-\u001f\u007f]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return cleaned.slice(0, 320) || fallback;
+}
+
+function publicErrorPayload(error, fallbackCode = 'INTERNAL_ERROR', fallbackMessage = '요청 처리 실패') {
+  if (error && typeof error === 'object') {
+    return {
+      ok: false,
+      errorCode: sanitizePublicErrorCode(error.code, fallbackCode),
+      error: sanitizePublicErrorMessage(error.message, fallbackMessage),
+    };
+  }
+  if (typeof error === 'string') {
+    return {
+      ok: false,
+      errorCode: sanitizePublicErrorCode(fallbackCode, 'INTERNAL_ERROR'),
+      error: sanitizePublicErrorMessage(error, fallbackMessage),
+    };
+  }
+  return {
+    ok: false,
+    errorCode: sanitizePublicErrorCode(fallbackCode, 'INTERNAL_ERROR'),
+    error: sanitizePublicErrorMessage('', fallbackMessage),
+  };
+}
+
 function writeHttpJson(req, res, statusCode, payload) {
   const baseHeaders = {
     'Content-Type': 'application/json; charset=utf-8',
@@ -738,16 +782,13 @@ async function handleBridgeHttpRequest(req, res) {
     try {
       body = await readJsonBody(req);
     } catch (error) {
-      writeHttpJson(req, res, 400, {
-        ok: false,
-        error: error?.message || String(error),
-      });
+      writeHttpJson(req, res, 400, publicErrorPayload(error, 'INVALID_JSON', '요청 본문을 읽지 못했습니다.'));
       return;
     }
     const provider = String(body.provider ?? '').trim().toLowerCase();
     const pageUrl = sanitizeUrlForUi(String(body.pageUrl ?? '').trim()) ?? null;
     if (!SESSION_PROVIDER_CONFIG[provider]) {
-      writeHttpJson(req, res, 400, { ok: false, error: `unsupported provider: ${provider}` });
+      writeHttpJson(req, res, 400, { ok: false, errorCode: 'UNSUPPORTED_PROVIDER', error: 'unsupported provider' });
       return;
     }
     recordBridgeSeen(provider, pageUrl);
@@ -774,15 +815,12 @@ async function handleBridgeHttpRequest(req, res) {
     try {
       body = await readJsonBody(req);
     } catch (error) {
-      writeHttpJson(req, res, 400, {
-        ok: false,
-        error: error?.message || String(error),
-      });
+      writeHttpJson(req, res, 400, publicErrorPayload(error, 'INVALID_JSON', '요청 본문을 읽지 못했습니다.'));
       return;
     }
     const provider = String(body.provider ?? '').trim().toLowerCase();
     if (!SESSION_PROVIDER_CONFIG[provider]) {
-      writeHttpJson(req, res, 400, { ok: false, error: `unsupported provider: ${provider}` });
+      writeHttpJson(req, res, 400, { ok: false, errorCode: 'UNSUPPORTED_PROVIDER', error: 'unsupported provider' });
       return;
     }
     const pageUrl = sanitizeUrlForUi(String(body.pageUrl ?? '').trim()) ?? null;
@@ -806,10 +844,7 @@ async function handleBridgeHttpRequest(req, res) {
     try {
       body = await readJsonBody(req);
     } catch (error) {
-      writeHttpJson(req, res, 400, {
-        ok: false,
-        error: error?.message || String(error),
-      });
+      writeHttpJson(req, res, 400, publicErrorPayload(error, 'INVALID_JSON', '요청 본문을 읽지 못했습니다.'));
       return;
     }
     const task = state.bridge.tasks.get(taskRoute.taskId);
@@ -873,10 +908,7 @@ async function startBridgeServer() {
   await ensureBridgeToken();
   const server = createServer((req, res) => {
     void handleBridgeHttpRequest(req, res).catch((error) => {
-      writeHttpJson(req, res, 500, {
-        ok: false,
-        error: error?.message || String(error),
-      });
+      writeHttpJson(req, res, 500, publicErrorPayload(error, 'BRIDGE_INTERNAL', '브리지 처리 중 오류가 발생했습니다.'));
     });
   });
   state.bridge.server = server;

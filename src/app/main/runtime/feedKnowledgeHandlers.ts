@@ -1,8 +1,93 @@
-import { openUrl, revealItemInDir } from "../../../shared/tauri";
+import { openPath, revealItemInDir } from "../../../shared/tauri";
 import type { KnowledgeFileRef } from "../../../features/workflow/types";
 import type { FeedViewPost, RunRecord } from "../types";
 
 export function createFeedKnowledgeHandlers(params: any) {
+  function toDashboardFeedStatus(rawStatus: unknown): "done" | "low_quality" {
+    return String(rawStatus ?? "").trim().toLowerCase() === "degraded" ? "low_quality" : "done";
+  }
+
+  function toDashboardTopicTitle(topic: string): string {
+    const normalized = String(topic ?? "").trim();
+    if (!normalized) {
+      return "대시보드";
+    }
+    const key = `dashboard.widget.${normalized}.title`;
+    const translated = typeof params.t === "function" ? String(params.t(key) ?? "").trim() : "";
+    if (!translated || translated === key) {
+      return normalized.replace(/([a-z0-9])([A-Z])/g, "$1 $2");
+    }
+    return translated;
+  }
+
+  async function loadDashboardSnapshotPosts(): Promise<FeedViewPost[]> {
+    const normalizedCwd = String(params.cwd ?? "").trim();
+    if (!normalizedCwd || typeof params.buildFeedPostFn !== "function") {
+      return [];
+    }
+    let rows: unknown[] = [];
+    try {
+      rows = (await params.invokeFn("dashboard_snapshot_list", { cwd: normalizedCwd })) as unknown[];
+    } catch {
+      return [];
+    }
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return [];
+    }
+
+    const posts: FeedViewPost[] = [];
+    for (const item of rows) {
+      if (!item || typeof item !== "object" || Array.isArray(item)) {
+        continue;
+      }
+      const row = item as Record<string, unknown>;
+      const topic = String(row.topic ?? "").trim();
+      const runId = String(row.runId ?? "").trim();
+      if (!topic || !runId) {
+        continue;
+      }
+      const model = String(row.model ?? "").trim() || "gpt-5.2-codex";
+      const createdAt = String(row.generatedAt ?? "").trim() || new Date().toISOString();
+      const summary = String(row.summary ?? "").trim() || `${toDashboardTopicTitle(topic)} 브리핑 생성`;
+      const highlights = Array.isArray(row.highlights)
+        ? row.highlights.map((value) => String(value ?? "").trim()).filter(Boolean).slice(0, 8)
+        : [];
+      const risks = Array.isArray(row.risks)
+        ? row.risks.map((value) => String(value ?? "").trim()).filter(Boolean).slice(0, 4)
+        : [];
+      const status = toDashboardFeedStatus(row.status);
+      const nodeId = `dashboard-${topic}`;
+      const postId = `${runId}:${nodeId}:${status}`;
+
+      const built = params.buildFeedPostFn({
+        runId,
+        node: {
+          id: nodeId,
+          type: "turn",
+          config: {
+            executor: "codex",
+            model,
+            role: "DASHBOARD BRIEFING",
+          },
+        },
+        isFinalDocument: true,
+        status,
+        createdAt,
+        summary,
+        logs: [`${toDashboardTopicTitle(topic)} 브리핑 생성`, ...highlights, ...risks.map((risk) => `리스크: ${risk}`)],
+        output: row,
+      });
+      const sourcePath = String(row.path ?? "").trim();
+      posts.push({
+        ...built.post,
+        id: postId,
+        sourceFile: sourcePath ? sourcePath.split(/[\\/]/).pop() || sourcePath : `dashboard-${topic}-${runId}.json`,
+        question: `${toDashboardTopicTitle(topic)} 데이터 파이프라인 실행 결과`,
+      });
+    }
+    return posts;
+  }
+
   function isTransientDashboardPost(post: FeedViewPost): boolean {
     const sourceFile = String(post?.sourceFile ?? "").trim().toLowerCase();
     if (sourceFile.startsWith("dashboard-")) {
@@ -62,12 +147,18 @@ export function createFeedKnowledgeHandlers(params: any) {
           });
         }
       }
+      const snapshotPosts = await loadDashboardSnapshotPosts();
       const transientPosts = (Array.isArray(params.feedPosts) ? params.feedPosts : []).filter((post: FeedViewPost) =>
         isTransientDashboardPost(post),
       );
       const mergedById = new Map<string, FeedViewPost>();
       for (const post of mergedPosts) {
         mergedById.set(post.id, post);
+      }
+      for (const post of snapshotPosts) {
+        if (!mergedById.has(post.id)) {
+          mergedById.set(post.id, post);
+        }
       }
       for (const post of transientPosts) {
         if (!mergedById.has(post.id)) {
@@ -153,9 +244,7 @@ export function createFeedKnowledgeHandlers(params: any) {
       );
     }
     try {
-      const normalizedUrl =
-        filePath.startsWith("file://") ? filePath : `file://${encodeURI(filePath).replace(/#/g, "%23")}`;
-      await openUrl(normalizedUrl);
+      await openPath(filePath);
       params.setStatus("문서 파일 열림");
     } catch (error) {
       try {

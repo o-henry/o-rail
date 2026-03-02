@@ -5318,7 +5318,7 @@
   color: var(--text-main);
   font-size: 12px;
   line-height: 18px;
-  white-space: normal;
+  white-space: pre-wrap;
   overflow-wrap: anywhere;
   word-break: break-word;
   overflow: visible;

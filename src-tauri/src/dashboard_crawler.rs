@@ -6,9 +6,11 @@ use serde_json::{json, Value};
 use std::{
     collections::{BTreeSet, HashMap},
     fs,
+    net::IpAddr,
     path::PathBuf,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
+use url::Url;
 
 const DEFAULT_TIMEOUT_MS: u64 = 15_000;
 const DEFAULT_MAX_SOURCES_PER_TOPIC: usize = 8;
@@ -17,6 +19,10 @@ const MAX_BODY_CHARS: usize = 80_000;
 const MAX_SUMMARY_CHARS: usize = 1_200;
 const MAX_RSS_ITEMS: usize = 8;
 const USER_AGENT: &str = "RAIL-Dashboard-Crawler/1.0";
+const PINCHTAB_DEFAULT_BASE_URL: &str = "http://127.0.0.1:8931";
+const ENV_PINCHTAB_BASE_URL: &str = "RAIL_PINCHTAB_URL";
+const ENV_PINCHTAB_BRIDGE_TOKEN: &str = "RAIL_PINCHTAB_BRIDGE_TOKEN";
+const ENV_PINCHTAB_REQUIRED: &str = "RAIL_PINCHTAB_REQUIRED";
 
 const TOPIC_IDS: [&str; 9] = [
     "marketSummary",
@@ -72,6 +78,13 @@ struct ParsedFeedItem {
     link: String,
     published_at: Option<String>,
     summary: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+struct PinchtabConfig {
+    base_url: String,
+    bridge_token: String,
+    required: bool,
 }
 
 #[tauri::command]
@@ -214,6 +227,7 @@ pub async fn run_dashboard_crawl(request: DashboardCrawlRequest) -> Result<Dashb
     let workspace = normalize_workspace_cwd(&request.cwd)?;
     let selected_topics = normalize_topics(request.topics);
     let allowlist_map = build_allowlist_map(request.allowlist_by_topic);
+    let pinchtab = pinchtab_config_from_env()?;
     let max_sources_per_topic = request
         .max_sources_per_topic
         .unwrap_or(DEFAULT_MAX_SOURCES_PER_TOPIC)
@@ -264,7 +278,11 @@ pub async fn run_dashboard_crawl(request: DashboardCrawlRequest) -> Result<Dashb
 
         for source in allowlist {
             let source_url = normalize_source_url(&source);
-            match fetch_source_document(&client, topic, &source_url).await {
+            if let Err(err) = validate_source_url(&source_url) {
+                result.errors.push(format!("blocked source ({source_url}): {err}"));
+                continue;
+            }
+            match fetch_source_document(&client, topic, &source_url, pinchtab.as_ref()).await {
                 Ok(document) => {
                     let stamp = now_epoch_millis();
                     let date = now_date_yyyymmdd();
@@ -313,6 +331,96 @@ pub async fn run_dashboard_crawl(request: DashboardCrawlRequest) -> Result<Dashb
         total_files,
         topics: topic_results,
     })
+}
+
+fn parse_bool_env(value: &str) -> bool {
+    matches!(
+        value.trim().to_lowercase().as_str(),
+        "1" | "true" | "yes" | "on" | "enabled"
+    )
+}
+
+fn pinchtab_config_from_env() -> Result<Option<PinchtabConfig>, String> {
+    let required = std::env::var(ENV_PINCHTAB_REQUIRED)
+        .ok()
+        .map(|value| parse_bool_env(&value))
+        .unwrap_or(false);
+    let bridge_token = std::env::var(ENV_PINCHTAB_BRIDGE_TOKEN)
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+    if bridge_token.is_empty() {
+        if required {
+            return Err(format!(
+                "{ENV_PINCHTAB_BRIDGE_TOKEN} is required when {ENV_PINCHTAB_REQUIRED}=true"
+            ));
+        }
+        return Ok(None);
+    }
+
+    let raw_base = std::env::var(ENV_PINCHTAB_BASE_URL)
+        .unwrap_or_else(|_| PINCHTAB_DEFAULT_BASE_URL.to_string());
+    let base_url = validate_pinchtab_base_url(&raw_base)?;
+    Ok(Some(PinchtabConfig {
+        base_url,
+        bridge_token,
+        required,
+    }))
+}
+
+fn validate_pinchtab_base_url(raw: &str) -> Result<String, String> {
+    let parsed = Url::parse(raw.trim()).map_err(|err| format!("invalid pinchtab base url: {err}"))?;
+    if parsed.scheme() != "http" && parsed.scheme() != "https" {
+        return Err("pinchtab base url must use http/https".to_string());
+    }
+    let Some(host) = parsed.host_str() else {
+        return Err("pinchtab base url host is missing".to_string());
+    };
+    let is_localhost = host.eq_ignore_ascii_case("localhost")
+        || host.parse::<IpAddr>().map(|ip| ip.is_loopback()).unwrap_or(false);
+    if !is_localhost {
+        return Err("pinchtab base url must be localhost/loopback for security".to_string());
+    }
+    Ok(parsed.as_str().trim_end_matches('/').to_string())
+}
+
+fn validate_source_url(raw: &str) -> Result<(), String> {
+    let parsed = Url::parse(raw).map_err(|err| format!("invalid url: {err}"))?;
+    if parsed.scheme() != "http" && parsed.scheme() != "https" {
+        return Err("only http/https sources are allowed".to_string());
+    }
+    let Some(host) = parsed.host_str() else {
+        return Err("source host is missing".to_string());
+    };
+    if host.eq_ignore_ascii_case("localhost") || host.ends_with(".local") {
+        return Err("localhost/local domains are blocked".to_string());
+    }
+    if let Ok(ip) = host.parse::<IpAddr>() {
+        if ip.is_loopback() || ip.is_multicast() || ip.is_unspecified() {
+            return Err("loopback/multicast/unspecified IP sources are blocked".to_string());
+        }
+        if is_private_ip(ip) {
+            return Err("private network IP sources are blocked".to_string());
+        }
+    }
+    Ok(())
+}
+
+fn is_private_ip(ip: IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(value) => {
+            value.is_private()
+                || value.is_link_local()
+                || value.is_broadcast()
+                || value.octets()[0] == 0
+                || (value.octets()[0] == 100 && (64..=127).contains(&value.octets()[1]))
+        }
+        IpAddr::V6(value) => {
+            value.is_unique_local()
+                || value.is_unicast_link_local()
+                || value.segments()[0] & 0xffc0 == 0xfe80
+        }
+    }
 }
 
 fn normalize_workspace_cwd(cwd: &str) -> Result<PathBuf, String> {
@@ -480,7 +588,26 @@ fn default_allowlist_map() -> HashMap<&'static str, Vec<String>> {
     ])
 }
 
-async fn fetch_source_document(client: &Client, topic: &str, url: &str) -> Result<SourceDocument, String> {
+async fn fetch_source_document(
+    client: &Client,
+    topic: &str,
+    url: &str,
+    pinchtab: Option<&PinchtabConfig>,
+) -> Result<SourceDocument, String> {
+    if let Some(config) = pinchtab {
+        match fetch_source_document_with_pinchtab(client, topic, url, config).await {
+            Ok(document) => return Ok(document),
+            Err(err) => {
+                if config.required {
+                    return Err(format!("pinchtab required mode: {err}"));
+                }
+            }
+        }
+    }
+    fetch_source_document_with_reqwest(client, topic, url).await
+}
+
+async fn fetch_source_document_with_reqwest(client: &Client, topic: &str, url: &str) -> Result<SourceDocument, String> {
     let response = client
         .get(url)
         .send()
@@ -555,6 +682,109 @@ async fn fetch_source_document(client: &Client, topic: &str, url: &str) -> Resul
             "summary": summary,
         }),
     })
+}
+
+async fn fetch_source_document_with_pinchtab(
+    client: &Client,
+    topic: &str,
+    url: &str,
+    config: &PinchtabConfig,
+) -> Result<SourceDocument, String> {
+    let fetched_at = now_iso8601_like();
+    let navigate_url = format!("{}/navigate", config.base_url);
+    let text_url = format!("{}/text", config.base_url);
+    let auth_header = format!("Bearer {}", config.bridge_token);
+
+    let navigate_response = client
+        .post(&navigate_url)
+        .header("Authorization", &auth_header)
+        .json(&json!({ "url": url }))
+        .send()
+        .await
+        .map_err(|err| format!("pinchtab navigate request failed: {err}"))?;
+    if !navigate_response.status().is_success() {
+        let status = navigate_response.status();
+        let body = navigate_response.text().await.unwrap_or_default();
+        return Err(format!(
+            "pinchtab navigate failed ({status}): {}",
+            truncate_chars(body.trim(), 240)
+        ));
+    }
+
+    let text_response = client
+        .post(&text_url)
+        .header("Authorization", &auth_header)
+        .json(&json!({}))
+        .send()
+        .await
+        .map_err(|err| format!("pinchtab text request failed: {err}"))?;
+    if !text_response.status().is_success() {
+        let status = text_response.status();
+        let body = text_response.text().await.unwrap_or_default();
+        return Err(format!(
+            "pinchtab text failed ({status}): {}",
+            truncate_chars(body.trim(), 240)
+        ));
+    }
+
+    let content_type = text_response
+        .headers()
+        .get("content-type")
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or("text/plain")
+        .to_string();
+    let body = text_response
+        .text()
+        .await
+        .map_err(|err| format!("pinchtab text body read failed: {err}"))?;
+    let extracted = extract_pinchtab_text(&body, content_type.contains("json"));
+    if extracted.trim().is_empty() {
+        return Err("pinchtab returned empty text".to_string());
+    }
+    let summary = extract_text_preview(&extracted, MAX_SUMMARY_CHARS);
+    let markdown = format!(
+        "# Source Capture\n\n- Topic: {topic}\n- URL: {url}\n- Fetched: {fetched_at}\n- Type: PINCHTAB\n\n## Summary\n\n{summary}\n"
+    );
+    Ok(SourceDocument {
+        markdown,
+        json_payload: json!({
+            "topic": topic,
+            "url": url,
+            "fetchedAt": fetched_at,
+            "format": "pinchtab",
+            "summary": summary,
+            "contentType": content_type,
+        }),
+    })
+}
+
+fn extract_pinchtab_text(response_body: &str, looks_json: bool) -> String {
+    if looks_json {
+        if let Ok(parsed) = serde_json::from_str::<Value>(response_body) {
+            let keys = [
+                "/text",
+                "/content",
+                "/result",
+                "/data/text",
+                "/data/content",
+                "/data/result",
+                "/output/text",
+            ];
+            for key in keys {
+                if let Some(value) = parsed.pointer(key).and_then(Value::as_str) {
+                    let trimmed = value.trim();
+                    if !trimmed.is_empty() {
+                        return truncate_chars(trimmed, MAX_BODY_CHARS);
+                    }
+                }
+            }
+            let fallback = value_to_summary_text(&parsed);
+            if !fallback.trim().is_empty() {
+                return truncate_chars(&fallback, MAX_BODY_CHARS);
+            }
+        }
+    }
+    truncate_chars(response_body.trim(), MAX_BODY_CHARS)
 }
 
 fn parse_rss_items(xml: &str) -> Vec<ParsedFeedItem> {
@@ -921,5 +1151,23 @@ mod tests {
         assert_eq!(items[0].title, "Hello");
         assert_eq!(items[0].link, "https://example.com/a");
         assert_eq!(items[0].published_at.as_deref(), Some("2026-01-01"));
+    }
+
+    #[test]
+    fn rejects_localhost_source_url_for_ssrf_safety() {
+        let error = validate_source_url("http://127.0.0.1:8080/private").unwrap_err();
+        assert!(error.contains("blocked"));
+    }
+
+    #[test]
+    fn allows_public_source_url() {
+        assert!(validate_source_url("https://reuters.com/world").is_ok());
+    }
+
+    #[test]
+    fn pinchtab_base_url_must_be_localhost() {
+        let error = validate_pinchtab_base_url("https://example.com").unwrap_err();
+        assert!(error.contains("localhost/loopback"));
+        assert!(validate_pinchtab_base_url("http://127.0.0.1:8931").is_ok());
     }
 }

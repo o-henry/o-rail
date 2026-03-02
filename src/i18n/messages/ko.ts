@@ -11,6 +11,8 @@ export const KO_MESSAGES: Dictionary = {
     "nav.intelligence": "인텔리전스",
     "nav.agents": "에이전트",
     "nav.feed": "피드",
+    "nav.handoff": "핸드오프",
+    "nav.knowledge": "지식베이스",
     "nav.settings": "설정",
     "nav.language": "언어",
     "settings.title": "설정",

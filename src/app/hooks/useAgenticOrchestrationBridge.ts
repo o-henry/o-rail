@@ -3,7 +3,7 @@ import type { DashboardTopicId } from "../../features/dashboard/intelligence";
 import type { AgenticAction, AgenticActionSubscriber } from "../../features/orchestration/agentic/actionBus";
 import type { PresetKind } from "../../features/workflow/domain";
 import type { WorkspaceTab } from "../mainAppGraphHelpers";
-import { runGraphWithCoordinator, runTopicWithCoordinator } from "../main/runtime/agenticCoordinator";
+import { runGraphWithCoordinator, runRoleWithCoordinator, runTopicWithCoordinator } from "../main/runtime/agenticCoordinator";
 import type { AgenticQueue } from "../main/runtime/agenticQueue";
 
 type InvokeFn = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
@@ -25,6 +25,26 @@ type RunDashboardTopic = (
     onProgress?: (stage: string, message: string) => void;
   },
 ) => Promise<unknown>;
+
+function presetForRole(roleId: string): PresetKind {
+  const normalized = String(roleId ?? "").toLowerCase();
+  if (normalized.includes("qa")) {
+    return "validation";
+  }
+  if (normalized.includes("build") || normalized.includes("release")) {
+    return "fullstack";
+  }
+  if (normalized.includes("art")) {
+    return "creative";
+  }
+  if (normalized.includes("planner") || normalized.includes("pm")) {
+    return "research";
+  }
+  if (normalized.includes("tooling") || normalized.includes("system")) {
+    return "expert";
+  }
+  return "development";
+}
 
 export function useAgenticOrchestrationBridge(params: {
   cwd: string;
@@ -136,6 +156,28 @@ export function useAgenticOrchestrationBridge(params: {
     [appendWorkspaceEvent, cwd, invokeFn, queue, refreshDashboardSnapshots, runDashboardTopic, workspaceTab],
   );
 
+  const runRoleDirect = useCallback(
+    async (params: { roleId: string; taskId: string; prompt?: string }) => {
+      await runRoleWithCoordinator({
+        cwd,
+        sourceTab: "agents",
+        roleId: params.roleId,
+        taskId: params.taskId,
+        prompt: params.prompt,
+        queue,
+        invokeFn,
+        execute: async () => {
+          if (params.prompt) {
+            setStatus(`역할 요청: ${params.prompt.slice(0, 72)}`);
+          }
+          await runGraphWithAgenticCoordinator(false);
+        },
+        appendWorkspaceEvent,
+      });
+    },
+    [appendWorkspaceEvent, cwd, invokeFn, queue, runGraphWithAgenticCoordinator, setStatus],
+  );
+
   useEffect(() => {
     return subscribeAction((action) => {
       if (action.type === "run_topic") {
@@ -173,11 +215,54 @@ export function useAgenticOrchestrationBridge(params: {
         setStatus(`run 열기: ${action.payload.runId}`);
         return;
       }
+      if (action.type === "open_handoff") {
+        onSelectWorkspaceTab("handoff");
+        const handoffId = String(action.payload?.handoffId ?? "").trim();
+        if (handoffId) {
+          setStatus(`핸드오프 열기: ${handoffId}`);
+        }
+        return;
+      }
+      if (action.type === "open_knowledge_doc") {
+        onSelectWorkspaceTab("knowledge");
+        setStatus(`지식 문서 열기: ${action.payload.entryId}`);
+        return;
+      }
+      if (action.type === "inject_context_sources") {
+        const count = Array.isArray(action.payload.sourceIds) ? action.payload.sourceIds.length : 0;
+        setStatus(`컨텍스트 소스 주입 요청: ${count}건`);
+        return;
+      }
+      if (action.type === "run_role") {
+        onSelectWorkspaceTab("agents");
+        setStatus(`역할 실행 요청: ${action.payload.roleId} (${action.payload.taskId})`);
+        applyPreset(presetForRole(action.payload.roleId));
+        void runRoleDirect(action.payload);
+        return;
+      }
+      if (action.type === "request_handoff") {
+        onSelectWorkspaceTab("handoff");
+        setStatus(`핸드오프 요청: ${action.payload.handoffId}`);
+        return;
+      }
+      if (action.type === "consume_handoff") {
+        onSelectWorkspaceTab("agents");
+        setStatus(`핸드오프 컨텍스트 적용: ${action.payload.handoffId}`);
+        return;
+      }
+      if (action.type === "request_code_approval") {
+        setStatus(`코드 변경 승인 요청: ${action.payload.approvalId}`);
+        return;
+      }
+      if (action.type === "resolve_code_approval") {
+        setStatus(`코드 변경 승인 처리: ${action.payload.approvalId} (${action.payload.decision})`);
+        return;
+      }
       if (action.type === "apply_template" && action.payload.presetKind) {
         applyPreset(action.payload.presetKind as PresetKind);
       }
     });
-  }, [applyPreset, onSelectWorkspaceTab, runDashboardTopicDirect, runGraphWithAgenticCoordinator, setNodeSelection, setStatus, subscribeAction]);
+  }, [applyPreset, onSelectWorkspaceTab, runDashboardTopicDirect, runGraphWithAgenticCoordinator, runRoleDirect, setNodeSelection, setStatus, subscribeAction]);
 
   return {
     onRunGraph,

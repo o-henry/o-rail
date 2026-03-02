@@ -65,10 +65,10 @@ export function useWorkflowShortcuts(params: UseWorkflowShortcutsParams) {
   useEffect(() => {
     const tabHotkeys: Record<string, WorkspaceTab> = {
       "1": "dashboard",
-      "2": "intelligence",
-      "3": "agents",
-      "4": "workflow",
-      "5": "feed",
+      "2": "agents",
+      "3": "workflow",
+      "4": "handoff",
+      "5": "knowledge",
       "6": "settings",
     };
     const tabStatusByKey: Record<WorkspaceTab, string> = {
@@ -77,12 +77,14 @@ export function useWorkflowShortcuts(params: UseWorkflowShortcutsParams) {
       agents: "에이전트 탭으로 이동",
       workflow: "워크플로우 탭으로 이동",
       feed: "피드 탭으로 이동",
+      handoff: "핸드오프 탭으로 이동",
+      knowledge: "지식베이스 탭으로 이동",
       settings: "설정 탭으로 이동",
       bridge: "설정 탭으로 이동",
     };
 
     const onTabHotkey = (event: KeyboardEvent) => {
-      if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) {
+      if (!event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) {
         return;
       }
       if (isEditableTarget(event.target)) {

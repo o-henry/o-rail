@@ -20,6 +20,7 @@ export type AgentQuickActionRequest = {
 
 export type AgentsPageProps = {
   onQuickAction: (request: AgentQuickActionRequest) => void;
+  onRunRole?: (params: { roleId: string; taskId: string; prompt?: string }) => void;
   topicSnapshots: Partial<Record<DashboardTopicId, DashboardTopicSnapshot>>;
   codexMultiAgentMode: CodexMultiAgentMode;
   runStateByTopic: Record<DashboardTopicId, DashboardTopicRunState>;

@@ -1,0 +1,132 @@
+.knowledge-view {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: 12px;
+}
+
+.knowledge-head h2 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.knowledge-head p {
+  margin: 4px 0 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.knowledge-filters {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.knowledge-filters label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.knowledge-layout {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  gap: 10px;
+}
+
+.knowledge-list,
+.knowledge-detail {
+  min-height: 0;
+  border: 0;
+  box-shadow: none;
+  background: var(--surface-panel);
+  padding: 10px;
+}
+
+.knowledge-list {
+  overflow: auto;
+  display: grid;
+  gap: 6px;
+}
+
+.knowledge-row {
+  width: 100%;
+  border: 0;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--surface) 70%, transparent);
+  padding: 8px 10px;
+  display: grid;
+  gap: 2px;
+  text-align: left;
+}
+
+.knowledge-row.is-selected {
+  background: color-mix(in srgb, var(--surface-active) 78%, transparent);
+}
+
+.knowledge-row strong {
+  font-size: 12px;
+}
+
+.knowledge-row span,
+.knowledge-row small {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.knowledge-detail {
+  overflow: auto;
+}
+
+.knowledge-detail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.knowledge-detail-head h3 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.knowledge-detail-head button {
+  min-height: 30px;
+  border: 0;
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text-main);
+  font-size: 12px;
+  padding: 0 10px;
+}
+
+.knowledge-detail p {
+  margin: 10px 0;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.knowledge-paths {
+  margin: 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 8px;
+  font-size: 12px;
+}
+
+.knowledge-paths dt {
+  color: var(--text-muted);
+}
+
+.knowledge-paths dd {
+  margin: 0;
+  word-break: break-all;
+}
+
+.knowledge-empty {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+

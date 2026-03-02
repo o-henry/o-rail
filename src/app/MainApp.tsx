@@ -11,6 +11,8 @@ import type { AgentQuickActionRequest, AgentWorkspaceLaunchRequest } from "../pa
 import SettingsPage from "../pages/settings/SettingsPage";
 import DashboardIntelligenceSettings from "../pages/settings/DashboardIntelligenceSettings";
 import WorkflowPage from "../pages/workflow/WorkflowPage";
+import HandoffPage from "../pages/handoff/HandoffPage";
+import KnowledgeBasePage from "../pages/knowledge/KnowledgeBasePage";
 import { useFloatingPanel } from "../features/ui/useFloatingPanel";
 import { useExecutionState } from "./hooks/useExecutionState";
 import { useFeedRunActions } from "./hooks/useFeedRunActions";
@@ -299,6 +301,8 @@ const WORKSPACE_TOPBAR_TABS: Array<{ tab: WorkspaceTab; label: string }> = [
   { tab: "dashboard", label: "대시보드" },
   { tab: "agents", label: "에이전트" },
   { tab: "workflow", label: "그래프" },
+  { tab: "handoff", label: "핸드오프" },
+  { tab: "knowledge", label: "지식베이스" },
   { tab: "settings", label: "설정" },
 ];
 
@@ -2407,11 +2411,53 @@ function App() {
         {workspaceTab === "feed" && (
           <FeedPage vm={feedPageVm} />
         )}
+        {workspaceTab === "handoff" && (
+          <HandoffPage
+            cwd={cwd}
+            onConsumeHandoff={(payload) => {
+              publishAction({
+                type: "consume_handoff",
+                payload: { handoffId: payload.handoffId },
+              });
+              agentLaunchRequestSeqRef.current += 1;
+              setAgentLaunchRequest({
+                id: agentLaunchRequestSeqRef.current,
+                setId: `role-${payload.toRole}`,
+                draft: `[핸드오프 ${payload.taskId}] ${payload.request}`,
+              });
+            }}
+            onOpenAgents={() => onSelectWorkspaceTab("agents")}
+          />
+        )}
+        {workspaceTab === "knowledge" && (
+          <KnowledgeBasePage
+            cwd={cwd}
+            posts={feedPosts}
+            onInjectContextSources={(sourceIds) => {
+              publishAction({
+                type: "inject_context_sources",
+                payload: { sourceIds },
+              });
+              setStatus(`지식베이스 컨텍스트 주입 요청: ${sourceIds.length}건`);
+              onSelectWorkspaceTab("agents");
+            }}
+          />
+        )}
         {workspaceTab === "agents" && (
           <AgentsPage
             codexMultiAgentMode={codexMultiAgentMode}
             launchRequest={agentLaunchRequest}
             onQuickAction={onAgentQuickAction}
+            onRunRole={({ roleId, taskId, prompt }) => {
+              publishAction({
+                type: "run_role",
+                payload: {
+                  roleId,
+                  taskId,
+                  prompt,
+                },
+              });
+            }}
             onOpenDataTab={() => onSelectWorkspaceTab("intelligence")}
             onRunDataTopic={onRunDashboardTopicFromAgents}
             runStateByTopic={dashboardIntelligenceRunStateByTopic}

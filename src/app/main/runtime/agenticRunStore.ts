@@ -6,13 +6,14 @@ function trimTrailingSlashes(value: string): string {
   return value.replace(/[\\/]+$/, "");
 }
 
-function toRunDir(cwd: string, runId: string): string {
+function toRunDir(cwd: string, runId: string, runKind: AgenticRunEnvelope["record"]["runKind"]): string {
   const base = trimTrailingSlashes(String(cwd ?? "").trim());
   const id = String(runId ?? "").trim();
   if (!base || !id) {
     return "";
   }
-  return `${base}/.rail/runs/${id}`;
+  const folder = runKind === "studio_role" ? "studio_runs" : "runs";
+  return `${base}/.rail/${folder}/${id}`;
 }
 
 export function serializeRunEventsNdjson(events: AgenticRunEvent[]): string {
@@ -24,7 +25,7 @@ export async function persistAgenticRunEnvelope(params: {
   invokeFn: InvokeFn;
   envelope: AgenticRunEnvelope;
 }): Promise<string | null> {
-  const runDir = toRunDir(params.cwd, params.envelope.record.runId);
+  const runDir = toRunDir(params.cwd, params.envelope.record.runId, params.envelope.record.runKind);
   if (!runDir) {
     return null;
   }
@@ -44,9 +45,10 @@ export async function persistAgenticRunEvents(params: {
   cwd: string;
   invokeFn: InvokeFn;
   runId: string;
+  runKind: AgenticRunEnvelope["record"]["runKind"];
   events: AgenticRunEvent[];
 }): Promise<string | null> {
-  const runDir = toRunDir(params.cwd, params.runId);
+  const runDir = toRunDir(params.cwd, params.runId, params.runKind);
   if (!runDir) {
     return null;
   }

@@ -6,14 +6,14 @@ import { AgentSetIndexView } from "./AgentSetIndexView";
 import { AgentsWorkspaceView } from "./AgentsWorkspaceView";
 import { buildAgentDispatchPayload } from "./agentPrompt";
 import { DEFAULT_RUNTIME_MODEL_VALUE } from "../../features/workflow/runtimeModelOptions";
+import { STUDIO_ROLE_TEMPLATES } from "../../features/studio/roleTemplates";
+import { useCodeChangeApproval } from "../../app/hooks/useCodeChangeApproval";
 import {
   buildGroupedSetOptions,
   buildPresetSnapshot,
-  buildSetOptions,
   createCustomThread,
   createFallbackSetState,
   createInitialSetStateMap,
-  isDevSetOption,
   restoreSetStateFromPreset,
   createStateFromPresetSnapshot,
 } from "./agentSetState";
@@ -42,6 +42,7 @@ function formatTopicToken(topic: string): string {
 
 export default function AgentsPage({
   onQuickAction,
+  onRunRole,
   topicSnapshots,
   codexMultiAgentMode,
   runStateByTopic,
@@ -51,8 +52,13 @@ export default function AgentsPage({
 }: AgentsPageProps) {
   const { t } = useI18n();
   const setOptions = useMemo(
-    () => buildSetOptions((key) => t(key)).filter((option) => isDevSetOption(option) && !option.id.startsWith("data-")),
-    [t],
+    () =>
+      STUDIO_ROLE_TEMPLATES.map((role) => ({
+        id: `role-${role.id}`,
+        label: `${role.label} 에이전트`,
+        description: role.goal,
+      })),
+    [],
   );
   const setPresetById = useMemo<Record<string, AgentSetPresetSnapshot>>(
     () =>
@@ -71,6 +77,7 @@ export default function AgentsPage({
   const [isReasonMenuOpen, setIsReasonMenuOpen] = useState(false);
   const [selectedModel, setSelectedModel] = useState(DEFAULT_RUNTIME_MODEL_VALUE);
   const [selectedReasonLevel, setSelectedReasonLevel] = useState("보통");
+  const { pendingApprovals, requestApproval, resolveApproval } = useCodeChangeApproval();
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const modelMenuRef = useRef<HTMLDivElement | null>(null);
@@ -366,6 +373,22 @@ export default function AgentsPage({
       selectedDataSourceIds: selectedDataSources.map((item) => item.id),
       selectedDataSourceDetails: selectedDataSources.map((item) => item.detail),
     });
+    if (activeSetOption) {
+      onRunRole?.({
+        roleId: activeSetOption.id,
+        taskId: activeThread?.id ?? "TASK-UNKNOWN",
+        prompt: text || undefined,
+      });
+      requestApproval({
+        id: `approval-${Date.now()}`,
+        runId: undefined,
+        roleId: "technical_writer",
+        taskId: activeThread?.id ?? "TASK-UNKNOWN",
+        title: `${activeSetOption.label} 변경 제안`,
+        summary: text.slice(0, 120),
+        patchPreview: text,
+      });
+    }
     updateActiveSetState((current) => ({
       ...current,
       draft: "",
@@ -468,6 +491,7 @@ export default function AgentsPage({
       onBackToSetList={onBackToSetList}
       onCloseThread={onCloseThread}
       onOpenDataTab={onOpenDataTab}
+      pendingApprovals={pendingApprovals}
       onOpenFilePicker={onOpenFilePicker}
       onQueuePrompt={onQueuePrompt}
       onToggleAttachedFile={onToggleAttachedFile}
@@ -487,6 +511,7 @@ export default function AgentsPage({
       setIsModelMenuOpen={setIsModelMenuOpen}
       setIsReasonMenuOpen={setIsReasonMenuOpen}
       setMission={setMission}
+      onResolveApproval={(id, decision) => resolveApproval(id, decision)}
       dataTopicId={activeDataTopicId}
       dataTopicRunState={activeDataRunState ?? null}
       dataTopicRunId={activeDataRunState?.runId ?? activeDataSnapshotRunId}

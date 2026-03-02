@@ -34,6 +34,8 @@ export function useWorkspaceQuickPanel(params: UseWorkspaceQuickPanelParams) {
       agents: "에이전트 채팅",
       workflow: "워크플로우",
       feed: "요점 정리",
+      handoff: "핸드오프",
+      knowledge: "지식베이스",
       settings: "설정",
       bridge: "설정",
     };

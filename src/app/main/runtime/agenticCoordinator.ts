@@ -6,6 +6,7 @@ import {
   patchRunStage,
   patchRunStatus,
   queueKeyForGraph,
+  queueKeyForRole,
   queueKeyForTopic,
   type AgenticArtifactRef,
   type AgenticRunEnvelope,
@@ -57,6 +58,25 @@ export type AgenticRunGraphInput = {
   queue: AgenticQueue;
   invokeFn: InvokeFn;
   execute: (params: { runId: string }) => Promise<void>;
+  appendWorkspaceEvent?: (params: {
+    source: string;
+    message: string;
+    actor?: "user" | "ai" | "system";
+    level?: "info" | "error";
+    runId?: string;
+  }) => void;
+  onEvent?: (event: AgenticRunEvent, envelope: AgenticRunEnvelope) => void;
+};
+
+export type AgenticRunRoleInput = {
+  cwd: string;
+  sourceTab: AgenticRunSourceTab;
+  roleId: string;
+  taskId: string;
+  prompt?: string;
+  queue: AgenticQueue;
+  invokeFn: InvokeFn;
+  execute: (params: { runId: string; roleId: string; taskId: string; prompt?: string }) => Promise<void>;
   appendWorkspaceEvent?: (params: {
     source: string;
     message: string;
@@ -130,6 +150,7 @@ async function persistRunContext(params: {
       cwd: params.cwd,
       invokeFn: params.invokeFn,
       runId: params.context.envelope.record.runId,
+      runKind: params.context.envelope.record.runKind,
       events: params.context.events,
     }),
   ]);
@@ -396,6 +417,93 @@ export async function runGraphWithCoordinator(input: AgenticRunGraphInput): Prom
         appendWorkspaceEvent: input.appendWorkspaceEvent,
         source: "agentic",
         message: `[${runId}] 그래프 실행 실패: ${errorText}`,
+        runId,
+        level: "error",
+      });
+    }
+
+    await persistRunContext({ cwd: input.cwd, invokeFn: input.invokeFn, context });
+    return {
+      runId,
+      envelope: context.envelope,
+      events: [...context.events],
+    };
+  });
+}
+
+export async function runRoleWithCoordinator(input: AgenticRunRoleInput): Promise<AgenticCoordinatorRunResult> {
+  const runId = createAgenticRunId("role");
+  const queueKey = queueKeyForRole(input.roleId);
+  const context: MutableRunContext = {
+    envelope: createAgenticRunEnvelope({
+      runId,
+      runKind: "studio_role",
+      sourceTab: input.sourceTab,
+      queueKey,
+      roleId: input.roleId,
+      taskId: input.taskId,
+      approvalState: "pending",
+    }),
+    events: [],
+  };
+
+  emitRunEvent({ context, type: "run_queued", message: "queued", onEvent: input.onEvent });
+  emitWorkspace({
+    appendWorkspaceEvent: input.appendWorkspaceEvent,
+    source: "agentic",
+    message: `역할 실행 대기열 등록: ${input.roleId} (${input.taskId})`,
+    runId,
+  });
+  await persistRunContext({ cwd: input.cwd, invokeFn: input.invokeFn, context });
+
+  return input.queue.enqueue(queueKey, async () => {
+    context.envelope = patchRunStatus(context.envelope, "running");
+    context.envelope = patchRunStage(context.envelope, "codex", "running", "역할 실행 시작");
+    emitRunEvent({ context, type: "run_started", message: "started", onEvent: input.onEvent });
+    emitRunEvent({ context, type: "stage_started", stage: "codex", message: "역할 실행 시작", onEvent: input.onEvent });
+
+    try {
+      await input.execute({
+        runId,
+        roleId: input.roleId,
+        taskId: input.taskId,
+        prompt: input.prompt,
+      });
+      context.envelope = patchRunStage(context.envelope, "codex", "done", "역할 실행 완료");
+      context.envelope = patchRunStage(context.envelope, "save", "done", "저장 완료");
+      context.envelope = patchRunStatus(context.envelope, "done");
+      context.envelope.record.approvalState = "pending";
+      emitRunEvent({ context, type: "stage_done", stage: "codex", message: "역할 실행 완료", onEvent: input.onEvent });
+      emitRunEvent({ context, type: "run_done", message: "done", onEvent: input.onEvent });
+      emitWorkspace({
+        appendWorkspaceEvent: input.appendWorkspaceEvent,
+        source: "agentic",
+        message: `[${runId}] 역할 실행 완료: ${input.roleId}/${input.taskId}`,
+        runId,
+      });
+    } catch (error) {
+      const errorText = normalizeError(error);
+      context.envelope = patchRunStage(context.envelope, "codex", "error", errorText, errorText);
+      context.envelope = patchRunStatus(context.envelope, "error");
+      emitRunEvent({
+        context,
+        type: "stage_error",
+        stage: "codex",
+        message: errorText,
+        payload: { error: errorText },
+        onEvent: input.onEvent,
+      });
+      emitRunEvent({
+        context,
+        type: "run_error",
+        message: errorText,
+        payload: { error: errorText },
+        onEvent: input.onEvent,
+      });
+      emitWorkspace({
+        appendWorkspaceEvent: input.appendWorkspaceEvent,
+        source: "agentic",
+        message: `[${runId}] 역할 실행 실패: ${errorText}`,
         runId,
         level: "error",
       });

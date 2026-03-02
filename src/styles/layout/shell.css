@@ -2129,7 +2129,7 @@
 }
 
 .settings-view .controls > h3 + .settings-badges {
-  margin-top: -2px;
+  margin-top: -11px;
 }
 
 .settings-view .bridge-head-panel {
@@ -7463,6 +7463,8 @@ html[data-locale="ko"] .agents-grid-card :lang(en) {
 .workflow-layout.workspace-tab-panel,
 .history-layout.workspace-tab-panel,
 .feed-layout.workspace-tab-panel,
+.handoff-view.workspace-tab-panel,
+.knowledge-view.workspace-tab-panel,
 .settings-view.workspace-tab-panel,
 .dashboard-layout.workspace-tab-panel,
 .agents-layout.workspace-tab-panel,

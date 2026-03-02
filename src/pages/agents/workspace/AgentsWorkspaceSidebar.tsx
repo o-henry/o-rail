@@ -1,4 +1,5 @@
 import type { AgentDataSourceItem, AgentSetOption, AgentThread, AttachedFile } from "../agentTypes";
+import type { CodeChangeApproval } from "../../../features/studio/approvalTypes";
 import { uppercaseEnglishTokens } from "./textUtils";
 
 type AgentsWorkspaceSidebarProps = {
@@ -16,6 +17,8 @@ type AgentsWorkspaceSidebarProps = {
   onQueuePrompt: (prompt: string) => void;
   onToggleAttachedFile: (fileName: string) => void;
   onToggleDataSource: (sourceId: string) => void;
+  pendingApprovals: CodeChangeApproval[];
+  onResolveApproval: (approvalId: string, decision: "approved" | "rejected") => void;
 };
 
 export function AgentsWorkspaceSidebar({
@@ -33,6 +36,8 @@ export function AgentsWorkspaceSidebar({
   onQueuePrompt,
   onToggleAttachedFile,
   onToggleDataSource,
+  pendingApprovals,
+  onResolveApproval,
 }: AgentsWorkspaceSidebarProps) {
   const quickActionItems = [
     {
@@ -152,6 +157,27 @@ export function AgentsWorkspaceSidebar({
                 </button>
               ))}
             </div>
+          </section>
+          <section className="agents-sidebar-card">
+            <h4>코드 변경 승인 큐</h4>
+            {pendingApprovals.length === 0 ? (
+              <p>승인 대기 항목이 없습니다.</p>
+            ) : (
+              <ul className="agents-rag-source-list">
+                {pendingApprovals.slice(0, 5).map((approval) => (
+                  <li key={approval.id}>
+                    <div className="agents-rag-source-copy">
+                      <span>{approval.title}</span>
+                      <small className="agents-rag-source-meta">{approval.taskId}</small>
+                    </div>
+                    <div className="agents-sidebar-inline-actions">
+                      <button type="button" onClick={() => onResolveApproval(approval.id, "approved")}>승인</button>
+                      <button type="button" onClick={() => onResolveApproval(approval.id, "rejected")}>반려</button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
           </section>
         </>
       ) : null}

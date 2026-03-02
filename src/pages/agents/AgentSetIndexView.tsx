@@ -42,8 +42,8 @@ export function AgentSetIndexView({
         <section className="agents-set-picker-split">
           <div className="agents-set-picker-main">
             <header className="agents-set-picker-head">
-              <h2>에이전트 워크스페이스</h2>
-              <p>세트를 선택하면 해당 에이전트 워크스페이스가 열립니다.</p>
+              <h2>에이전트 팀 운영 보드</h2>
+              <p>역할 카드를 선택하면 해당 역할 워크스페이스가 열립니다.</p>
             </header>
             <div className="agents-set-groups">
               {groupedSetOptions.map((group) => (
@@ -66,6 +66,10 @@ export function AgentSetIndexView({
                           <div className="agents-set-index-meta">
                             <strong>{setOption.label}</strong>
                             <code>{setOption.description}</code>
+                            <small>
+                              TASK · {setStateMap[setOption.id]?.threads[0]?.id ?? "task-pending"} · 상태 ·
+                              {setStateMap[setOption.id]?.dashboardInsights?.[0] ? " 완료" : " 대기"}
+                            </small>
                           </div>
                         </button>
                       );
@@ -87,7 +91,7 @@ export function AgentSetIndexView({
             <section className="agents-sidebar-card">
               <h4>세트 미리보기</h4>
               <p className="agents-sidebar-agent-name">{previewSet?.label ?? "선택된 세트 없음"}</p>
-              <p className="agents-sidebar-agent-role">{previewSet?.description ?? "세트 설명이 없습니다."}</p>
+              <p className="agents-sidebar-agent-role">{previewSet?.description ?? "역할 설명이 없습니다."}</p>
             </section>
             <section className="agents-sidebar-card">
               <h4>최근 스냅샷</h4>

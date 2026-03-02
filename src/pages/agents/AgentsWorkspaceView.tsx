@@ -8,6 +8,7 @@ import type {
   AgentThread,
   AttachedFile,
 } from "./agentTypes";
+import type { CodeChangeApproval } from "../../features/studio/approvalTypes";
 import { AgentGridCard } from "./workspace/AgentGridCard";
 import { AgentsWorkspaceSidebar } from "./workspace/AgentsWorkspaceSidebar";
 import { AgentsWorkspaceTopbar } from "./workspace/AgentsWorkspaceTopbar";
@@ -54,6 +55,8 @@ type AgentsWorkspaceViewProps = {
   onQueuePrompt: (prompt: string) => void;
   onToggleAttachedFile: (fileName: string) => void;
   onToggleDataSource: (sourceId: string) => void;
+  pendingApprovals: CodeChangeApproval[];
+  onResolveApproval: (approvalId: string, decision: "approved" | "rejected") => void;
   dataTopicId: DashboardTopicId | null;
   dataTopicRunState: DashboardTopicRunState | null;
   dataTopicRunId: string | null;
@@ -102,6 +105,8 @@ export function AgentsWorkspaceView({
   onQueuePrompt,
   onToggleAttachedFile,
   onToggleDataSource,
+  pendingApprovals,
+  onResolveApproval,
   dataTopicId,
   dataTopicRunState,
   dataTopicRunId,
@@ -163,6 +168,8 @@ export function AgentsWorkspaceView({
           onQueuePrompt={onQueuePrompt}
           onToggleAttachedFile={onToggleAttachedFile}
           onToggleDataSource={onToggleDataSource}
+          pendingApprovals={pendingApprovals}
+          onResolveApproval={onResolveApproval}
         />
       </section>
 

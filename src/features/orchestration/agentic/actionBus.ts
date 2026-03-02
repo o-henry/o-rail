@@ -40,6 +40,57 @@ export type AgenticAction =
         presetKind?: AgenticPresetKind;
         setId?: string;
       };
+    }
+  | {
+      type: "run_role";
+      payload: {
+        roleId: string;
+        taskId: string;
+        prompt?: string;
+      };
+    }
+  | {
+      type: "request_handoff";
+      payload: {
+        handoffId: string;
+      };
+    }
+  | {
+      type: "consume_handoff";
+      payload: {
+        handoffId: string;
+      };
+    }
+  | {
+      type: "open_handoff";
+      payload?: {
+        handoffId?: string;
+      };
+    }
+  | {
+      type: "open_knowledge_doc";
+      payload: {
+        entryId: string;
+      };
+    }
+  | {
+      type: "inject_context_sources";
+      payload: {
+        sourceIds: string[];
+      };
+    }
+  | {
+      type: "request_code_approval";
+      payload: {
+        approvalId: string;
+      };
+    }
+  | {
+      type: "resolve_code_approval";
+      payload: {
+        approvalId: string;
+        decision: "approved" | "rejected";
+      };
     };
 
 export type AgenticActionSubscriber = (action: AgenticAction) => void;

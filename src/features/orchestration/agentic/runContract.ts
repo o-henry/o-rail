@@ -1,5 +1,15 @@
-export type AgenticRunSourceTab = "agents" | "workflow" | "intelligence" | "dashboard" | "feed" | "system";
+export type AgenticRunSourceTab =
+  | "agents"
+  | "workflow"
+  | "intelligence"
+  | "dashboard"
+  | "feed"
+  | "handoff"
+  | "knowledge"
+  | "settings"
+  | "system";
 export type AgenticTopicId = string;
+export type AgenticRunKind = "market_topic" | "studio_role" | "graph";
 
 export type AgenticRunStatus = "queued" | "running" | "done" | "error";
 
@@ -9,11 +19,15 @@ export type AgenticRunStageStatus = "idle" | "running" | "done" | "error" | "ski
 
 export type AgenticRunRecord = {
   runId: string;
+  runKind: AgenticRunKind;
   sourceTab: AgenticRunSourceTab;
   topic?: AgenticTopicId;
+  roleId?: string;
+  taskId?: string;
   setId?: string;
   queueKey: string;
   status: AgenticRunStatus;
+  approvalState?: "none" | "pending" | "approved" | "rejected";
   createdAt: string;
   updatedAt: string;
 };
@@ -83,26 +97,39 @@ export function queueKeyForGraph(graphId?: string): string {
   return `graph:${normalized}`;
 }
 
+export function queueKeyForRole(roleId: string): string {
+  const normalized = String(roleId ?? "").trim() || "unknown-role";
+  return `role:${normalized}`;
+}
+
 function nowIso(): string {
   return new Date().toISOString();
 }
 
 export function createAgenticRunEnvelope(params: {
   runId?: string;
+  runKind?: AgenticRunKind;
   sourceTab: AgenticRunSourceTab;
   queueKey: string;
   topic?: AgenticTopicId;
+  roleId?: string;
+  taskId?: string;
   setId?: string;
+  approvalState?: "none" | "pending" | "approved" | "rejected";
 }): AgenticRunEnvelope {
   const now = nowIso();
   return {
     record: {
       runId: params.runId ?? createAgenticRunId(params.sourceTab),
+      runKind: params.runKind ?? (params.topic ? "market_topic" : params.queueKey.startsWith("graph:") ? "graph" : "studio_role"),
       sourceTab: params.sourceTab,
       topic: params.topic,
+      roleId: params.roleId,
+      taskId: params.taskId,
       setId: params.setId,
       queueKey: params.queueKey,
       status: "queued",
+      approvalState: params.approvalState ?? "none",
       createdAt: now,
       updatedAt: now,
     },

@@ -11,6 +11,8 @@ export const EN_MESSAGES: Dictionary = {
     "nav.intelligence": "Intelligence",
     "nav.agents": "Agents",
     "nav.feed": "Feed",
+    "nav.handoff": "Handoff",
+    "nav.knowledge": "Knowledge",
     "nav.settings": "Settings",
     "nav.language": "Language",
     "settings.title": "Settings",

@@ -41,11 +41,12 @@ export function useEngineEventListeners(params: any) {
                 params.setLoginCompleted(true);
                 params.setStatus(`계정 상태 갱신 수신 (인증 모드=${mode})`);
               } else {
-                params.setLoginCompleted(false);
-                params.setStatus("계정 상태 갱신 수신 (로그인 필요)");
+                params.setStatus("계정 상태 갱신 수신 (인증 모드 미확인)");
+                void params.refreshAuthStateFromEngine(true);
               }
             } else {
               params.setStatus("계정 상태 갱신 수신 (인증 모드 미확인)");
+              void params.refreshAuthStateFromEngine(true);
             }
           }
 

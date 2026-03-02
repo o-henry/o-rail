@@ -90,7 +90,6 @@ export function createEngineBridgeHandlers(params: any) {
           params.lastAuthenticatedAtRef.current > 0 &&
           now - params.lastAuthenticatedAtRef.current < params.authLoginRequiredGraceMs;
         const shouldKeepSession =
-          params.loginCompleted &&
           params.lastAuthenticatedAtRef.current > 0 &&
           (withinGraceWindow || nextProbeCount < params.authLoginRequiredConfirmCount);
 
@@ -134,9 +133,8 @@ export function createEngineBridgeHandlers(params: any) {
         params.setLoginCompleted(false);
       }
       const inferredLogin = inferLoginStateFromUsage(result.raw);
-      if (inferredLogin === false) {
+      if (inferredLogin === false && probed?.state !== "authenticated") {
         params.setLoginCompleted(false);
-        params.setAuthMode("unknown");
       }
       params.setUsageInfoText(params.formatUsageInfoForDisplay(result.raw));
       params.setUsageResultClosed(false);

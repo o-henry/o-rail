@@ -17,6 +17,7 @@ const DEFAULT_MAX_SOURCES_PER_TOPIC: usize = 8;
 const MAX_MAX_SOURCES_PER_TOPIC: usize = 40;
 const MAX_BODY_CHARS: usize = 80_000;
 const MAX_SUMMARY_CHARS: usize = 1_200;
+const MAX_CONTENT_CHARS: usize = 12_000;
 const MAX_RSS_ITEMS: usize = 8;
 const USER_AGENT: &str = "RAIL-Dashboard-Crawler/1.0";
 const PINCHTAB_DEFAULT_BASE_URL: &str = "http://127.0.0.1:9867";
@@ -354,7 +355,7 @@ fn pinchtab_config_from_env() -> Result<Option<PinchtabConfig>, String> {
     let required = std::env::var(ENV_PINCHTAB_REQUIRED)
         .ok()
         .map(|value| parse_bool_env(&value))
-        .unwrap_or(true);
+        .unwrap_or(false);
     let bridge_token = first_non_empty_env(&[
         ENV_PINCHTAB_BRIDGE_TOKEN,
         ENV_PINCHTAB_BRIDGE_TOKEN_COMPAT,
@@ -363,9 +364,8 @@ fn pinchtab_config_from_env() -> Result<Option<PinchtabConfig>, String> {
     let raw_base = first_non_empty_env(&[ENV_PINCHTAB_BASE_URL, ENV_PINCHTAB_URL_COMPAT])
         .unwrap_or_else(|| PINCHTAB_DEFAULT_BASE_URL.to_string());
     let base_url = validate_pinchtab_base_url(&raw_base)?;
-    if !required && bridge_token.is_none() {
-        return Ok(None);
-    }
+    // Try pinchtab by default (without forcing), so users only need to run the local server.
+    // If unavailable and required=false, crawler will transparently fallback to reqwest.
     Ok(Some(PinchtabConfig {
         base_url,
         bridge_token,
@@ -652,9 +652,10 @@ async fn fetch_source_document_with_reqwest(client: &Client, topic: &str, url: &
 
     if content_type.contains("json") || looks_like_json(&trimmed) {
         let parsed = serde_json::from_str::<Value>(&trimmed).unwrap_or_else(|_| json!({ "raw": trimmed }));
-        let summary = truncate_chars(&value_to_summary_text(&parsed), MAX_SUMMARY_CHARS);
+        let content = truncate_chars(&value_to_summary_text(&parsed), MAX_CONTENT_CHARS);
+        let summary = truncate_chars(&content, MAX_SUMMARY_CHARS);
         let markdown = format!(
-            "# Source Capture\n\n- Topic: {topic}\n- URL: {url}\n- Fetched: {fetched_at}\n- Type: JSON\n\n## Summary\n\n{summary}\n"
+            "# Source Capture\n\n- Topic: {topic}\n- URL: {url}\n- Fetched: {fetched_at}\n- Type: JSON\n\n## Summary\n\n{summary}\n\n## Content\n\n{content}\n"
         );
         return Ok(SourceDocument {
             markdown,
@@ -665,6 +666,7 @@ async fn fetch_source_document_with_reqwest(client: &Client, topic: &str, url: &
                 "fetchedAt": fetched_at,
                 "format": "json",
                 "summary": summary,
+                "content": content,
                 "payload": parsed,
             }),
         });
@@ -672,8 +674,9 @@ async fn fetch_source_document_with_reqwest(client: &Client, topic: &str, url: &
 
     let title = extract_html_title(&trimmed).unwrap_or_else(|| url.to_string());
     let summary = extract_meta_description(&trimmed).unwrap_or_else(|| extract_text_preview(&trimmed, MAX_SUMMARY_CHARS));
+    let content = extract_text_preview(&trimmed, MAX_CONTENT_CHARS);
     let markdown = format!(
-        "# {title}\n\n- Topic: {topic}\n- URL: {url}\n- Fetched: {fetched_at}\n- Type: HTML\n\n## Summary\n\n{summary}\n"
+        "# {title}\n\n- Topic: {topic}\n- URL: {url}\n- Fetched: {fetched_at}\n- Type: HTML\n\n## Summary\n\n{summary}\n\n## Content\n\n{content}\n"
     );
     Ok(SourceDocument {
         markdown,
@@ -685,6 +688,7 @@ async fn fetch_source_document_with_reqwest(client: &Client, topic: &str, url: &
             "format": "html",
             "title": title,
             "summary": summary,
+            "content": content,
         }),
     })
 }
@@ -747,9 +751,10 @@ async fn fetch_source_document_with_pinchtab(
     if extracted.trim().is_empty() {
         return Err("pinchtab returned empty text".to_string());
     }
+    let content = truncate_chars(&extracted, MAX_CONTENT_CHARS);
     let summary = extract_text_preview(&extracted, MAX_SUMMARY_CHARS);
     let markdown = format!(
-        "# Source Capture\n\n- Topic: {topic}\n- URL: {url}\n- Fetched: {fetched_at}\n- Type: PINCHTAB\n\n## Summary\n\n{summary}\n"
+        "# Source Capture\n\n- Topic: {topic}\n- URL: {url}\n- Fetched: {fetched_at}\n- Type: PINCHTAB\n\n## Summary\n\n{summary}\n\n## Content\n\n{content}\n"
     );
     Ok(SourceDocument {
         markdown,
@@ -759,6 +764,7 @@ async fn fetch_source_document_with_pinchtab(
             "fetchedAt": fetched_at,
             "format": "pinchtab",
             "summary": summary,
+            "content": content,
             "contentType": content_type,
         }),
     })

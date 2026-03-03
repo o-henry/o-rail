@@ -30,14 +30,21 @@ html[data-locale="ko"] .agents-grid-card :lang(en) {
   letter-spacing: -0.7px;
 }
 
+.agents-grid-card {
+  background: color-mix(in srgb, var(--surface) 86%, transparent);
+  transition: background 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+}
+
 .agents-grid-card.is-selected {
-  border-color: color-mix(in srgb, #4f555d 70%, var(--panel-border));
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, #4f555d 64%, var(--surface));
+  border-color: transparent;
+  box-shadow: none;
+  background: color-mix(in srgb, var(--surface-active) 78%, var(--surface));
 }
 
 .agents-grid-card.is-running {
-  border-color: color-mix(in srgb, #2cab5a 68%, var(--panel-border));
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, #2cab5a 62%, var(--surface));
+  border-color: transparent;
+  box-shadow: none;
+  background: color-mix(in srgb, #2cab5a 6%, var(--surface));
 }
 
 .agents-grid-card-head {
@@ -81,12 +88,16 @@ html[data-locale="ko"] .agents-grid-card :lang(en) {
 }
 
 .agents-grid-card-meta-chip {
-  border-radius: 999px;
+  /* border-radius: 999px; */
+  border-radius: 4px;
   font-size: 10px;
   line-height: 1;
-  min-height: 18px;
+  /* min-height: 18px;
   height: 18px;
-  padding: 0 7px;
+  padding: 0 7px; */
+  min-height: 24px;
+  height: 24px;
+  padding: 6px 12px;
 }
 
 .agents-grid-card-chip.is-running {

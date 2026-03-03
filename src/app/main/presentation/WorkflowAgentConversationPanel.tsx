@@ -29,7 +29,7 @@ export default function WorkflowAgentConversationPanel({
     return (
       <div className="workflow-conversation-toggle-wrap">
         <button className="mini-action-button workflow-conversation-toggle" onClick={onToggleOpen} type="button">
-          <span className="mini-action-button-label">선택 에이전트 대화 열기</span>
+          <span className="mini-action-button-label">선택 에이전트 대화</span>
         </button>
       </div>
     );

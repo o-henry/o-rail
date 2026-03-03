@@ -2304,7 +2304,7 @@
   border: 0;
   border-radius: 8px;
   background: var(--panel-surface);
-  padding: 12px;
+  /* padding: 12px; */
   display: grid;
   align-content: start;
   gap: 12px;
@@ -6517,11 +6517,11 @@ html[data-locale="ko"] .agents-topbar .agents-thread-brief p :lang(en) {
   height: 100%;
   border-radius: 12px;
   border: 1px solid var(--panel-border);
-  background: linear-gradient(
+  /* background: linear-gradient(
     180deg,
     color-mix(in srgb, var(--surface-elevated) 88%, var(--surface-panel)) 0%,
     var(--surface-panel) 100%
-  );
+  ); */
   padding: 12px;
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr) auto;

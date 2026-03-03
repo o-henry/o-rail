@@ -1,12 +1,12 @@
 .knowledge-view {
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr);
-  gap: 10px;
+  gap: 4px;
 }
 
 .knowledge-head {
   border: 0;
-  border-radius: 12px;
+  border-radius: 2px;
   background: var(--surface);
   padding: 10px;
   display: grid;
@@ -28,12 +28,12 @@
 .knowledge-overview {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
+  gap: 4px;
 }
 
 .knowledge-overview-card {
   border: 0;
-  border-radius: 12px;
+  border-radius: 2px;
   background: var(--surface);
   padding: 10px;
   display: grid;
@@ -55,13 +55,13 @@
   min-height: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
-  gap: 10px;
+  gap: 4px;
 }
 
 .knowledge-island {
   min-height: 0;
   border: 0;
-  border-radius: 12px;
+  border-radius: 2px;
   box-shadow: var(--panel-shadow);
   background: var(--surface);
   padding: 10px;
@@ -162,7 +162,7 @@
 }
 
 .knowledge-detail p {
-  margin: 0;
+  margin: 8px 0 0 0;
   font-size: 12px;
   line-height: 1.45;
 }

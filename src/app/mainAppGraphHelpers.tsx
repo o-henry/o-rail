@@ -243,10 +243,19 @@ export function NavIcon({ tab, active = false }: { tab: WorkspaceTab; active?: b
   );
 }
 
-export function InspectorSectionTitle({ title, help }: { title: string; help: string }) {
+export function InspectorSectionTitle({
+  title,
+  help,
+  className,
+}: {
+  title: string;
+  help: string;
+  className?: string;
+}) {
   const { t } = useI18n();
+  const rootClassName = className ? `inspector-section-title ${className}` : "inspector-section-title";
   return (
-    <div className="inspector-section-title">
+    <div className={rootClassName}>
       <h3>{title}</h3>
       <span aria-label={`${title} ${t("common.help")}`} className="help-tooltip" data-tooltip={help} role="note" tabIndex={0}>
         ?

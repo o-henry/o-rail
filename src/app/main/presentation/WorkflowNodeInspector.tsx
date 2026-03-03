@@ -51,6 +51,7 @@ export default function WorkflowNodeInspector({
       {isHandoffTurnNode && (
         <section className="inspector-block form-grid">
           <InspectorSectionTitle
+            className="workflow-handoff-section-title"
             help="핸드오프 노드는 역할 간 인수인계 전용입니다. 실행기/모델/역할/요청사항만 유지해 협업 흐름을 단순화합니다."
             title="핸드오프 노드 설정"
           />

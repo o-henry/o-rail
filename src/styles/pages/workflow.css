@@ -295,6 +295,11 @@
   color: var(--text-main);
 }
 
+.workflow-handoff-section-title h3 {
+  font-size: 13px;
+  line-height: 1.3;
+}
+
 .workflow-role-dock-head span {
   font-size: 11px;
   color: var(--text-muted);

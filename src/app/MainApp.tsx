@@ -2010,6 +2010,61 @@ function App() {
       consumeHandoff: workflowHandoffPanel.consumeHandoff,
     },
   });
+  const workflowInspectorPaneElement = (
+    <WorkflowInspectorPane
+      canvasFullscreen={canvasFullscreen}
+      nodeProps={workflowInspectorPaneProps.nodeProps}
+      toolsProps={workflowInspectorPaneProps.toolsProps}
+    />
+  );
+  const workflowRoleDockElement = (
+    <WorkflowRoleDock
+      onChangePrompt={setWorkflowRolePrompt}
+      onChangeTaskId={setWorkflowRoleTaskId}
+      onRunRole={() => {
+        const taskId = workflowRoleTaskId.trim();
+        if (!taskId) {
+          setStatus("TASK ID를 입력해 주세요.");
+          return;
+        }
+        const latestIncomingHandoff = workflowHandoffPanel.handoffRecords
+          .filter((row) => row.toRole === workflowRoleId && (row.status === "requested" || row.status === "accepted"))
+          .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0];
+        const basePrompt = workflowRolePrompt.trim();
+        const handoffInjectedPrompt = latestIncomingHandoff
+          ? `[HANDOFF_CONTEXT ${latestIncomingHandoff.taskId}] ${latestIncomingHandoff.request}\n\n${basePrompt}`.trim()
+          : basePrompt;
+        setWorkflowRoleRuntimeStateByRole((prev) => ({
+          ...prev,
+          [workflowRoleId]: {
+            status: "RUNNING",
+            taskId,
+            message: "RUN_PENDING",
+          },
+        }));
+        publishAction({
+          type: "run_role",
+          payload: {
+            roleId: workflowRoleId,
+            taskId,
+            prompt: handoffInjectedPrompt || undefined,
+            sourceTab: "workflow",
+            handoffToRole: workflowHandoffPanel.handoffToRole,
+            handoffRequest: basePrompt || undefined,
+          },
+        });
+      }}
+      onSelectRoleId={setWorkflowRoleId}
+      roleStatusById={workflowRoleStatusByRole}
+      selectedRoleBlockers={workflowSelectedRoleBlockers}
+      selectedRoleHandoffs={workflowSelectedRoleHandoffs}
+      prompt={workflowRolePrompt}
+      roleId={workflowRoleId}
+      runDisabled={isWorkflowBusy}
+      taskId={workflowRoleTaskId}
+    />
+  );
+  const showRoleDockFirst = Boolean(selectedNode);
   const feedPageVm = buildFeedPageVm({
     feedInspectorTurnNode,
     feedInspectorPost,
@@ -2590,60 +2645,8 @@ function App() {
 
             {!canvasFullscreen && (
               <div className="workflow-right-stack">
-                <WorkflowInspectorPane
-                  canvasFullscreen={canvasFullscreen}
-                  nodeProps={workflowInspectorPaneProps.nodeProps}
-                  toolsProps={workflowInspectorPaneProps.toolsProps}
-                />
-                <WorkflowRoleDock
-                  onChangePrompt={setWorkflowRolePrompt}
-                  onChangeTaskId={setWorkflowRoleTaskId}
-                  onRunRole={() => {
-                    const taskId = workflowRoleTaskId.trim();
-                    if (!taskId) {
-                      setStatus("TASK ID를 입력해 주세요.");
-                      return;
-                    }
-                    const latestIncomingHandoff = workflowHandoffPanel.handoffRecords
-                      .filter(
-                        (row) =>
-                          row.toRole === workflowRoleId &&
-                          (row.status === "requested" || row.status === "accepted"),
-                      )
-                      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0];
-                    const basePrompt = workflowRolePrompt.trim();
-                    const handoffInjectedPrompt = latestIncomingHandoff
-                      ? `[HANDOFF_CONTEXT ${latestIncomingHandoff.taskId}] ${latestIncomingHandoff.request}\n\n${basePrompt}`.trim()
-                      : basePrompt;
-                    setWorkflowRoleRuntimeStateByRole((prev) => ({
-                      ...prev,
-                      [workflowRoleId]: {
-                        status: "RUNNING",
-                        taskId,
-                        message: "RUN_PENDING",
-                      },
-                    }));
-                    publishAction({
-                      type: "run_role",
-                      payload: {
-                        roleId: workflowRoleId,
-                        taskId,
-                        prompt: handoffInjectedPrompt || undefined,
-                        sourceTab: "workflow",
-                        handoffToRole: workflowHandoffPanel.handoffToRole,
-                        handoffRequest: basePrompt || undefined,
-                      },
-                    });
-                  }}
-                  onSelectRoleId={setWorkflowRoleId}
-                  roleStatusById={workflowRoleStatusByRole}
-                  selectedRoleBlockers={workflowSelectedRoleBlockers}
-                  selectedRoleHandoffs={workflowSelectedRoleHandoffs}
-                  prompt={workflowRolePrompt}
-                  roleId={workflowRoleId}
-                  runDisabled={isWorkflowBusy}
-                  taskId={workflowRoleTaskId}
-                />
+                {showRoleDockFirst ? workflowRoleDockElement : workflowInspectorPaneElement}
+                {showRoleDockFirst ? workflowInspectorPaneElement : workflowRoleDockElement}
               </div>
             )}
           </WorkflowPage>

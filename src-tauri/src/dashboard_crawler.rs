@@ -1117,11 +1117,18 @@ async fn ensure_scrapling_bridge_running_inner(
     }
 
     spawn_scrapling_bridge_process(workspace)?;
+    let mut last_health_error: Option<String> = None;
 
     for _ in 0..DEFAULT_SCRAPLING_HEALTH_RETRY {
-        let health = resolve_scrapling_health(client).await?;
-        if health.running && health.scrapling_ready {
-            return Ok(health);
+        match resolve_scrapling_health(client).await {
+            Ok(health) => {
+                if health.running && health.scrapling_ready {
+                    return Ok(health);
+                }
+            }
+            Err(error) => {
+                last_health_error = Some(error);
+            }
         }
         tokio::time::sleep(Duration::from_millis(180)).await;
     }
@@ -1143,9 +1150,15 @@ async fn ensure_scrapling_bridge_running_inner(
                 }
                 spawn_scrapling_bridge_process(workspace)?;
                 for _ in 0..DEFAULT_SCRAPLING_HEALTH_RETRY {
-                    let health = resolve_scrapling_health(client).await?;
-                    if health.running && health.scrapling_ready {
-                        return Ok(health);
+                    match resolve_scrapling_health(client).await {
+                        Ok(health) => {
+                            if health.running && health.scrapling_ready {
+                                return Ok(health);
+                            }
+                        }
+                        Err(error) => {
+                            last_health_error = Some(error);
+                        }
                     }
                     tokio::time::sleep(Duration::from_millis(180)).await;
                 }
@@ -1153,7 +1166,16 @@ async fn ensure_scrapling_bridge_running_inner(
         }
     }
 
-    resolve_scrapling_health(client).await
+    match resolve_scrapling_health(client).await {
+        Ok(health) => Ok(health),
+        Err(final_error) => {
+            if let Some(previous_error) = last_health_error {
+                Err(format!("{previous_error}; final health check failed: {final_error}"))
+            } else {
+                Err(final_error)
+            }
+        }
+    }
 }
 
 fn spawn_scrapling_bridge_process(workspace: Option<&PathBuf>) -> Result<(), String> {

@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import {
   persistKnowledgeIndexToWorkspace,
   readKnowledgeEntries,
@@ -6,12 +8,17 @@ import {
   upsertKnowledgeEntry,
 } from "../../features/studio/knowledgeIndex";
 import type { KnowledgeEntry, KnowledgeSourcePost } from "../../features/studio/knowledgeTypes";
-import { invoke } from "../../shared/tauri";
+import { invoke, revealItemInDir } from "../../shared/tauri";
 
 type KnowledgeBasePageProps = {
   cwd: string;
   posts: KnowledgeSourcePost[];
   onInjectContextSources: (entries: KnowledgeEntry[]) => void;
+};
+
+type KnowledgeGroup = {
+  taskId: string;
+  entries: KnowledgeEntry[];
 };
 
 const HIDDEN_MARKET_TOPICS = new Set([
@@ -79,11 +86,78 @@ function formatSourceKindLabel(kind: KnowledgeEntry["sourceKind"]): string {
   return "WEB 자료";
 }
 
+function toFileName(path: string): string {
+  const normalized = String(path ?? "").trim();
+  if (!normalized) {
+    return "-";
+  }
+  return normalized.split(/[\\/]/).filter(Boolean).pop() ?? normalized;
+}
+
+function summarizeJsonValue(raw: unknown): string {
+  if (raw === null || raw === undefined) {
+    return "-";
+  }
+  if (typeof raw === "string") {
+    const text = raw.trim();
+    if (!text) {
+      return "(빈 문자열)";
+    }
+    return text.length > 120 ? `${text.slice(0, 119)}…` : text;
+  }
+  if (typeof raw === "number" || typeof raw === "boolean") {
+    return String(raw);
+  }
+  if (Array.isArray(raw)) {
+    return `배열 ${raw.length}개`;
+  }
+  if (typeof raw === "object") {
+    const keys = Object.keys(raw as Record<string, unknown>);
+    return keys.length > 0 ? `객체 (${keys.slice(0, 4).join(", ")}${keys.length > 4 ? ", ..." : ""})` : "객체 (빈 값)";
+  }
+  return String(raw);
+}
+
+function toReadableJsonInfo(text: string): { summaryRows: Array<{ key: string; value: string }>; pretty: string } {
+  const trimmed = String(text ?? "").trim();
+  if (!trimmed) {
+    return { summaryRows: [], pretty: "" };
+  }
+  try {
+    const parsed = JSON.parse(trimmed) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return {
+        summaryRows: [{ key: "VALUE", value: summarizeJsonValue(parsed) }],
+        pretty: JSON.stringify(parsed, null, 2),
+      };
+    }
+    const object = parsed as Record<string, unknown>;
+    const summaryRows = Object.entries(object).map(([key, value]) => ({
+      key: key.toUpperCase(),
+      value: summarizeJsonValue(value),
+    }));
+    return {
+      summaryRows,
+      pretty: JSON.stringify(parsed, null, 2),
+    };
+  } catch {
+    return {
+      summaryRows: [{ key: "RAW", value: "JSON 파싱 실패 (원문 표시)" }],
+      pretty: trimmed,
+    };
+  }
+}
+
 export default function KnowledgeBasePage({ cwd, posts, onInjectContextSources }: KnowledgeBasePageProps) {
   const [selectedId, setSelectedId] = useState<string>("");
   const [entries, setEntries] = useState<KnowledgeEntry[]>(() =>
     readKnowledgeEntries().filter((row) => !isHiddenKnowledgeEntry(row)),
   );
+  const [collapsedByGroup, setCollapsedByGroup] = useState<Record<string, boolean>>({});
+  const [markdownContent, setMarkdownContent] = useState("");
+  const [jsonContent, setJsonContent] = useState("");
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState("");
 
   useEffect(() => {
     let next = readKnowledgeEntries().filter((row) => !isHiddenKnowledgeEntry(row));
@@ -99,6 +173,19 @@ export default function KnowledgeBasePage({ cwd, posts, onInjectContextSources }
   }, [cwd, posts]);
 
   const filtered = useMemo(() => [...entries].sort((a, b) => b.createdAt.localeCompare(a.createdAt)), [entries]);
+  const grouped = useMemo<KnowledgeGroup[]>(() => {
+    const byTask = new Map<string, KnowledgeEntry[]>();
+    for (const entry of filtered) {
+      const task = toUpperSnakeToken(String(entry.taskId ?? ""));
+      const bucket = byTask.get(task) ?? [];
+      bucket.push(entry);
+      byTask.set(task, bucket);
+    }
+    return [...byTask.entries()].map(([taskId, rows]) => ({
+      taskId,
+      entries: rows,
+    }));
+  }, [filtered]);
 
   const selected = filtered.find((row) => row.id === selectedId) ?? filtered[0] ?? null;
   const entryStats = useMemo(
@@ -117,6 +204,72 @@ export default function KnowledgeBasePage({ cwd, posts, onInjectContextSources }
     }
   }, [selected, selectedId]);
 
+  useEffect(() => {
+    if (grouped.length === 0) {
+      setCollapsedByGroup({});
+      return;
+    }
+    setCollapsedByGroup((prev) => {
+      const next: Record<string, boolean> = {};
+      for (const group of grouped) {
+        next[group.taskId] = prev[group.taskId] ?? false;
+      }
+      return next;
+    });
+  }, [grouped]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const selectedMarkdownPath = String(selected?.markdownPath ?? "").trim();
+    const selectedJsonPath = String(selected?.jsonPath ?? "").trim();
+    if (!selected || (!selectedMarkdownPath && !selectedJsonPath)) {
+      setMarkdownContent("");
+      setJsonContent("");
+      setDetailError("");
+      setDetailLoading(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+    setDetailLoading(true);
+    setDetailError("");
+    void (async () => {
+      try {
+        const [markdownText, jsonText] = await Promise.all([
+          selectedMarkdownPath
+            ? invoke<string>("workspace_read_text", {
+                path: selectedMarkdownPath,
+              })
+            : Promise.resolve(""),
+          selectedJsonPath
+            ? invoke<string>("workspace_read_text", {
+                path: selectedJsonPath,
+              })
+            : Promise.resolve(""),
+        ]);
+        if (cancelled) {
+          return;
+        }
+        setMarkdownContent(String(markdownText ?? ""));
+        setJsonContent(String(jsonText ?? ""));
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+        setDetailError(`문서 읽기 실패: ${String(error)}`);
+        setMarkdownContent("");
+        setJsonContent("");
+      } finally {
+        if (!cancelled) {
+          setDetailLoading(false);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [selected?.id, selected?.markdownPath, selected?.jsonPath]);
+
   const persistRows = (rows: KnowledgeEntry[]) => {
     setEntries(rows);
     void persistKnowledgeIndexToWorkspace({ cwd, invokeFn: invoke, rows });
@@ -130,6 +283,20 @@ export default function KnowledgeBasePage({ cwd, posts, onInjectContextSources }
     persistRows(next);
     setSelectedId("");
   };
+
+  const onRevealPath = async (path: string) => {
+    const normalized = String(path ?? "").trim();
+    if (!normalized) {
+      return;
+    }
+    try {
+      await revealItemInDir(normalized);
+    } catch (error) {
+      setDetailError(`Finder 열기 실패: ${String(error)}`);
+    }
+  };
+
+  const jsonReadable = useMemo(() => toReadableJsonInfo(jsonContent), [jsonContent]);
 
   return (
     <section className="panel-card knowledge-view workspace-tab-panel">
@@ -164,18 +331,42 @@ export default function KnowledgeBasePage({ cwd, posts, onInjectContextSources }
           {filtered.length === 0 ? (
             <p className="knowledge-empty">표시할 문서가 없습니다.</p>
           ) : (
-            filtered.map((entry) => (
-              <button
-                key={entry.id}
-                className={`knowledge-row${selected?.id === entry.id ? " is-selected" : ""}`}
-                onClick={() => setSelectedId(entry.id)}
-                type="button"
-              >
-                <strong>{entry.title}</strong>
-                <span>{`${toUpperSnakeToken(entry.taskId)} · ${formatSourceKindLabel(entry.sourceKind)}`}</span>
-                <small>{new Date(entry.createdAt).toLocaleString()}</small>
-              </button>
-            ))
+            grouped.map((group) => {
+              const collapsed = collapsedByGroup[group.taskId] === true;
+              return (
+                <section key={group.taskId} className="knowledge-group">
+                  <button
+                    className="knowledge-group-trigger"
+                    onClick={() =>
+                      setCollapsedByGroup((prev) => ({
+                        ...prev,
+                        [group.taskId]: !collapsed,
+                      }))
+                    }
+                    type="button"
+                  >
+                    <strong>{group.taskId}</strong>
+                    <span>{`${collapsed ? "▶" : "▼"} ${group.entries.length}개`}</span>
+                  </button>
+                  {!collapsed ? (
+                    <div className="knowledge-group-items">
+                      {group.entries.map((entry) => (
+                        <button
+                          key={entry.id}
+                          className={`knowledge-row${selected?.id === entry.id ? " is-selected" : ""}`}
+                          onClick={() => setSelectedId(entry.id)}
+                          type="button"
+                        >
+                          <strong>{entry.title}</strong>
+                          <span>{`${formatSourceKindLabel(entry.sourceKind)} · ${toFileName(entry.markdownPath || entry.jsonPath || "")}`}</span>
+                          <small>{new Date(entry.createdAt).toLocaleString()}</small>
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </section>
+              );
+            })
           )}
         </section>
         <section className="knowledge-detail panel-card knowledge-island">
@@ -201,10 +392,56 @@ export default function KnowledgeBasePage({ cwd, posts, onInjectContextSources }
                 <dt>TASK</dt>
                 <dd>{toUpperSnakeToken(selected.taskId)}</dd>
                 <dt>MD</dt>
-                <dd>{selected.markdownPath || "-"}</dd>
+                <dd>{toFileName(selected.markdownPath ?? "")}</dd>
                 <dt>JSON</dt>
-                <dd>{selected.jsonPath || "-"}</dd>
+                <dd>{toFileName(selected.jsonPath ?? "")}</dd>
               </dl>
+              <div className="knowledge-artifact-actions">
+                <button
+                  disabled={!selected.markdownPath}
+                  onClick={() => void onRevealPath(String(selected.markdownPath ?? ""))}
+                  type="button"
+                >
+                  MD 파일 열기
+                </button>
+                <button
+                  disabled={!selected.jsonPath}
+                  onClick={() => void onRevealPath(String(selected.jsonPath ?? ""))}
+                  type="button"
+                >
+                  JSON 파일 열기
+                </button>
+              </div>
+              {detailError ? <p className="knowledge-detail-error">{detailError}</p> : null}
+              {detailLoading ? <p className="knowledge-empty">문서를 불러오는 중...</p> : null}
+              {!detailLoading && markdownContent ? (
+                <section className="knowledge-doc-block">
+                  <header className="knowledge-doc-head">
+                    <strong>산출물 문서 (MD)</strong>
+                  </header>
+                  <div className="knowledge-doc-markdown">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{markdownContent}</ReactMarkdown>
+                  </div>
+                </section>
+              ) : null}
+              {!detailLoading && jsonContent ? (
+                <section className="knowledge-doc-block">
+                  <header className="knowledge-doc-head">
+                    <strong>구조화 데이터 (JSON)</strong>
+                  </header>
+                  {jsonReadable.summaryRows.length > 0 ? (
+                    <ul className="knowledge-json-summary">
+                      {jsonReadable.summaryRows.map((row) => (
+                        <li key={`${row.key}:${row.value}`}>
+                          <strong>{row.key}</strong>
+                          <span>{row.value}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  <pre className="knowledge-doc-pre">{jsonReadable.pretty}</pre>
+                </section>
+              ) : null}
             </>
           ) : (
             <p className="knowledge-empty">좌측에서 문서를 선택하세요.</p>

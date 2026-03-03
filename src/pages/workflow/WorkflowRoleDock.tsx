@@ -22,7 +22,13 @@ type WorkflowRoleDockProps = {
 
 export default function WorkflowRoleDock(props: WorkflowRoleDockProps) {
   const latestArtifactPath = props.selectedRoleHandoffs
-    .flatMap((row) => row.artifactPaths.map((path) => String(path ?? "").trim()).filter(Boolean))[0];
+    .flatMap((row) => row.artifactPaths.map((path) => String(path ?? "").trim()).filter(Boolean))
+    .find((path) => path.toLowerCase().endsWith(".md"))
+    ?? props.selectedRoleHandoffs
+      .flatMap((row) => row.artifactPaths.map((path) => String(path ?? "").trim()).filter(Boolean))[0];
+  const latestArtifactName = latestArtifactPath
+    ? latestArtifactPath.split(/[\\/]/).filter(Boolean).pop() ?? latestArtifactPath
+    : "";
   const lockedRoleId = props.roleSelectionLockedTo ?? null;
 
   return (
@@ -115,7 +121,7 @@ export default function WorkflowRoleDock(props: WorkflowRoleDockProps) {
           </button>
         </div>
         <p className="workflow-role-summary-path">
-          {latestArtifactPath || "산출물 없음"}
+          {latestArtifactName || "산출물 없음"}
         </p>
       </section>
 

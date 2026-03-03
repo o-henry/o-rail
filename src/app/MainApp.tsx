@@ -920,7 +920,6 @@ function App() {
   const {
     ensureEngineStarted,
     refreshAuthStateFromEngine,
-    onCheckUsage,
     onLoginCodex,
     onSelectCwdDirectory,
     onOpenPendingProviderWindow,
@@ -1598,6 +1597,7 @@ function App() {
     locale,
     setActiveFeedRunMeta,
     activeRunPresetKindRef,
+    internalMemoryCorpusRef,
     loadInternalMemoryCorpus,
     invokeFn: invoke,
     graphRequiresCodexEngine,
@@ -2789,7 +2789,6 @@ function App() {
               codexMultiAgentModeOptions={[...codexMultiAgentModeOptions]}
               userBackgroundImage={userBackgroundImage}
               userBackgroundOpacity={userBackgroundOpacity}
-              onCheckUsage={() => void onCheckUsage()}
               onCloseUsageResult={() => setUsageResultClosed(true)}
               onOpenRunsFolder={() => void onOpenRunsFolder()}
               onSelectCwdDirectory={() => void onSelectCwdDirectory()}

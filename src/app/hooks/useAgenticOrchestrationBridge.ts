@@ -1,11 +1,17 @@
 import { useCallback, useEffect, type MutableRefObject } from "react";
 import type { DashboardTopicId } from "../../features/dashboard/intelligence";
 import type { AgenticAction, AgenticActionSubscriber } from "../../features/orchestration/agentic/actionBus";
+import type { StudioRoleId } from "../../features/studio/handoffTypes";
 import type { PresetKind } from "../../features/workflow/domain";
 import type { WorkspaceTab } from "../mainAppGraphHelpers";
 import { runGraphWithCoordinator, runTopicWithCoordinator } from "../main/runtime/agenticCoordinator";
 import { runRoleWithCoordinator } from "../main/runtime/agenticRoleCoordinator";
 import type { AgenticQueue } from "../main/runtime/agenticQueue";
+import {
+  bootstrapRoleKnowledgeProfile,
+  injectRoleKnowledgePrompt,
+  storeRoleKnowledgeProfile,
+} from "../main/runtime/roleKnowledgePipeline";
 
 type InvokeFn = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
 
@@ -45,6 +51,101 @@ function presetForRole(roleId: string): PresetKind {
     return "expert";
   }
   return "development";
+}
+
+function toStudioRoleId(raw: string): StudioRoleId | null {
+  const normalized = String(raw ?? "").trim();
+  if (
+    normalized === "pm_planner" ||
+    normalized === "client_programmer" ||
+    normalized === "system_programmer" ||
+    normalized === "tooling_engineer" ||
+    normalized === "art_pipeline" ||
+    normalized === "qa_engineer" ||
+    normalized === "build_release" ||
+    normalized === "technical_writer"
+  ) {
+    return normalized;
+  }
+  return null;
+}
+
+function sanitizeToken(raw: string): string {
+  const normalized = String(raw ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  return normalized || "role";
+}
+
+function toRoleShortToken(rawRoleId: string): string {
+  const roleId = String(rawRoleId ?? "").trim();
+  if (roleId === "pm_planner") {
+    return "pm";
+  }
+  if (roleId === "client_programmer") {
+    return "client";
+  }
+  if (roleId === "system_programmer") {
+    return "system";
+  }
+  if (roleId === "tooling_engineer") {
+    return "tooling";
+  }
+  if (roleId === "art_pipeline") {
+    return "art";
+  }
+  if (roleId === "qa_engineer") {
+    return "qa";
+  }
+  if (roleId === "build_release") {
+    return "release";
+  }
+  if (roleId === "technical_writer") {
+    return "docs";
+  }
+  return sanitizeToken(roleId);
+}
+
+function toCompactTimestamp(date = new Date()): string {
+  const yyyy = String(date.getFullYear());
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const dd = String(date.getDate()).padStart(2, "0");
+  const hh = String(date.getHours()).padStart(2, "0");
+  const mi = String(date.getMinutes()).padStart(2, "0");
+  const ss = String(date.getSeconds()).padStart(2, "0");
+  return `${yyyy}${mm}${dd}_${hh}${mi}${ss}`;
+}
+
+function buildRoleArtifactMarkdown(params: {
+  runId: string;
+  roleId: string;
+  taskId: string;
+  prompt?: string;
+  artifactPaths: string[];
+}): string {
+  const lines: string[] = [
+    `# ${params.roleId} 실행 산출물`,
+    `- RUN_ID: ${params.runId}`,
+    `- ROLE: ${params.roleId}`,
+    `- TASK_ID: ${params.taskId}`,
+    `- CREATED_AT: ${new Date().toISOString()}`,
+    "",
+    "## 요청",
+    String(params.prompt ?? "").trim() || "(요청 없음)",
+    "",
+    "## 산출물 경로",
+  ];
+  if (params.artifactPaths.length === 0) {
+    lines.push("- (없음)");
+  } else {
+    for (const path of params.artifactPaths) {
+      lines.push(`- ${path}`);
+    }
+  }
+  lines.push("");
+  return `${lines.join("\n")}\n`;
 }
 
 export function useAgenticOrchestrationBridge(params: {
@@ -179,6 +280,7 @@ export function useAgenticOrchestrationBridge(params: {
       handoffRequest?: string;
     }) => {
       const sourceTab = params.sourceTab === "workflow" ? "workflow" : "agents";
+      const normalizedRoleId = toStudioRoleId(params.roleId);
       const result = await runRoleWithCoordinator({
         cwd,
         sourceTab,
@@ -187,19 +289,89 @@ export function useAgenticOrchestrationBridge(params: {
         prompt: params.prompt,
         queue,
         invokeFn,
-        execute: async () => {
-          if (params.prompt) {
-            setStatus(`역할 요청: ${params.prompt.slice(0, 72)}`);
+        execute: async ({ prompt }) => {
+          const promptText = String(prompt ?? "").trim();
+          if (promptText) {
+            setStatus(`역할 요청: ${promptText.slice(0, 72)}`);
           }
-              await runGraphWithAgenticCoordinator(false, params.prompt?.trim() || undefined);
+          await runGraphWithAgenticCoordinator(false, promptText || undefined);
         },
         appendWorkspaceEvent,
+        roleKnowledgePipeline: normalizedRoleId
+          ? {
+              bootstrap: async ({ runId, taskId, prompt }) => {
+                const bootstrapped = await bootstrapRoleKnowledgeProfile({
+                  cwd,
+                  invokeFn,
+                  runId,
+                  roleId: normalizedRoleId,
+                  taskId,
+                  userPrompt: prompt,
+                });
+                return {
+                  message: bootstrapped.message,
+                  artifactPaths: bootstrapped.artifactPaths,
+                  payload: { profile: bootstrapped.profile },
+                };
+              },
+              store: async ({ bootstrap }) => {
+                const fromBootstrap = bootstrap?.payload?.profile as Parameters<typeof storeRoleKnowledgeProfile>[0]["profile"] | undefined;
+                if (!fromBootstrap) {
+                  return null;
+                }
+                const stored = await storeRoleKnowledgeProfile({
+                  cwd,
+                  invokeFn,
+                  profile: fromBootstrap,
+                });
+                return {
+                  message: stored.message,
+                  artifactPaths: stored.artifactPaths,
+                  payload: { profile: stored.profile },
+                };
+              },
+              inject: async ({ prompt, store }) => {
+                const profile = (store?.payload?.profile ?? null) as Parameters<typeof injectRoleKnowledgePrompt>[0]["profile"];
+                const injected = await injectRoleKnowledgePrompt({
+                  roleId: normalizedRoleId,
+                  prompt,
+                  profile: profile ?? null,
+                });
+                return {
+                  prompt: injected.prompt,
+                  message: injected.message,
+                  payload: { usedProfile: injected.usedProfile },
+                };
+              },
+            }
+          : undefined,
       });
+      const baseArtifactPaths = result.envelope.artifacts.map((row) => String(row.path ?? "").trim()).filter(Boolean);
+      let roleSummaryArtifactPath = "";
+      try {
+        const artifactDir = `${String(cwd ?? "").trim().replace(/[\\/]+$/, "")}/.rail/studio_runs/${result.runId}/artifacts`;
+        const roleToken = toRoleShortToken(params.roleId);
+        const fileName = `${toCompactTimestamp()}_${roleToken}.md`;
+        roleSummaryArtifactPath = await invokeFn<string>("workspace_write_text", {
+          cwd: artifactDir,
+          name: fileName,
+          content: buildRoleArtifactMarkdown({
+            runId: result.runId,
+            roleId: params.roleId,
+            taskId: params.taskId,
+            prompt: params.prompt,
+            artifactPaths: baseArtifactPaths,
+          }),
+        });
+      } catch {
+        roleSummaryArtifactPath = "";
+      }
       const artifactPaths = [
-        ...result.envelope.artifacts.map((row) => String(row.path ?? "").trim()).filter(Boolean),
+        roleSummaryArtifactPath,
+        ...baseArtifactPaths,
         `.rail/studio_runs/${result.runId}/run.json`,
       ];
-      const dedupedArtifactPaths = [...new Set(artifactPaths)];
+      const dedupedArtifactPaths = [...new Set(artifactPaths.map((row) => String(row ?? "").trim()).filter(Boolean))];
       onRoleRunCompleted?.({
         runId: result.runId,
         roleId: params.roleId,

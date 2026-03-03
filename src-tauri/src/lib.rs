@@ -65,6 +65,7 @@ pub fn run() {
             storage::run_directory,
             storage::workspace_write_markdown,
             storage::workspace_write_text,
+            storage::workspace_read_text,
             storage::dialog_pick_directory,
             storage::dialog_pick_knowledge_files,
         ])

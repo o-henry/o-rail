@@ -31,20 +31,20 @@ html[data-locale="ko"] .agents-grid-card :lang(en) {
 }
 
 .agents-grid-card {
-  background: color-mix(in srgb, var(--surface) 86%, transparent);
+  background: color-mix(in srgb, var(--surface-panel) 92%, var(--surface));
   transition: background 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
 }
 
 .agents-grid-card.is-selected {
   border-color: transparent;
   box-shadow: none;
-  background: color-mix(in srgb, var(--surface-active) 78%, var(--surface));
+  background: var(--surface);
 }
 
-.agents-grid-card.is-running {
+.agents-grid-card.is-running:not(.is-selected) {
   border-color: transparent;
   box-shadow: none;
-  background: color-mix(in srgb, #2cab5a 6%, var(--surface));
+  background: color-mix(in srgb, #2cab5a 6%, var(--surface-panel));
 }
 
 .agents-grid-card-head {

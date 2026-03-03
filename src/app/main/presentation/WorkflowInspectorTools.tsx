@@ -36,6 +36,13 @@ export default function WorkflowInspectorTools({
           >
             <span className="mini-action-button-label">{tp("핸드오프 노드 추가")}</span>
           </button>
+          <button
+            className="mini-action-button workflow-handoff-create-button workflow-research-node-create-button"
+            onClick={props.addCrawlerNode}
+            type="button"
+          >
+            <span className="mini-action-button-label">{tp("데이터 조사 노드 추가")}</span>
+          </button>
         </div>
       </div>
 

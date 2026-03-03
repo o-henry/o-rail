@@ -44,7 +44,6 @@ export default function WorkflowNodeInspector({
     value: row.id,
     label: row.label,
   }));
-  const handoffStageValue = String(selectedConfig.handoffStage ?? "analyze");
 
   return (
     <>
@@ -105,22 +104,6 @@ export default function WorkflowNodeInspector({
               onChange={(next) => updateSelectedNodeConfig("handoffToRoleId", next)}
               options={studioRoleOptions}
               value={String(selectedConfig.handoffToRoleId ?? "client_programmer")}
-            />
-          </label>
-          <label>
-            단계
-            <FancySelect
-              ariaLabel="핸드오프 단계"
-              className="modern-select"
-              onChange={(next) => updateSelectedNodeConfig("handoffStage", next)}
-              options={[
-                { value: "analyze", label: "분석" },
-                { value: "implement", label: "구현" },
-                { value: "test", label: "테스트" },
-                { value: "verify", label: "검증" },
-                { value: "document", label: "문서화" },
-              ]}
-              value={handoffStageValue}
             />
           </label>
           <label>

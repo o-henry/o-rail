@@ -75,11 +75,18 @@ export default function WorkflowCanvasNodesLayer({
         const showNodeAnchors = isNodeSelected || isConnectingDrag || selectedEdgeNodeIdSet.has(node.id);
         const receivesQuestionDirectly = questionDirectInputNodeIds.has(node.id);
         const isWebTurnNode = node.type === "turn" && String(node.config?.executor ?? "").startsWith("web_");
+        const sourceKind = String((node.config as Record<string, unknown>)?.sourceKind ?? "").trim().toLowerCase();
+        const handoffRoleId = String((node.config as Record<string, unknown>)?.handoffRoleId ?? "")
+          .trim()
+          .toLowerCase();
+        const handoffRoleToken = handoffRoleId.replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+        const handoffRoleClass = handoffRoleToken ? `handoff-role-${handoffRoleToken}` : "";
         const isDataPipelineNode =
-          node.type === "turn" && String((node.config as Record<string, unknown>)?.sourceKind ?? "") === "data_pipeline";
+          node.type === "turn" && sourceKind === "data_pipeline";
+        const isDataResearchNode = node.type === "turn" && sourceKind === "data_research";
         return (
           <div
-            className={`graph-node node-${node.type} ${isDataPipelineNode ? "is-data-pipeline-node" : ""} ${isNodeSelected ? "selected" : ""} ${isNodeDragging ? "is-dragging" : ""}`.trim()}
+            className={`graph-node node-${node.type} ${isDataPipelineNode ? "is-data-pipeline-node" : ""} ${isDataResearchNode ? "is-data-research-node" : ""} ${handoffRoleClass} ${isNodeSelected ? "selected" : ""} ${isNodeDragging ? "is-dragging" : ""}`.trim()}
             data-node-id={node.id}
             key={node.id}
             onClick={(event) => {
@@ -123,6 +130,7 @@ export default function WorkflowCanvasNodesLayer({
               </div>
               <div className="node-head-actions">
                 {isDataPipelineNode ? <span className="node-type-badge data node-head-action-badge">DATA</span> : null}
+                {isDataResearchNode ? <span className="node-type-badge research node-head-action-badge">RAG</span> : null}
                 <button className="node-head-delete-button" onClick={() => deleteNode(node.id)} type="button">
                   {t("common.delete")}
                 </button>

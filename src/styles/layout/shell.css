@@ -1268,6 +1268,19 @@
   color: #1f6f4d;
 }
 
+.graph-node.node-turn.is-data-research-node {
+  background: #f8f4ff;
+  box-shadow: 0 2px 12px rgba(88, 58, 160, 0.14);
+}
+
+.graph-node.node-turn.is-data-research-node .node-head {
+  background: #eee6ff;
+}
+
+.graph-node.node-turn.is-data-research-node .node-head-subtitle {
+  color: #5b3f95;
+}
+
 .node-transform .node-head {
   background: #f3efff;
 }
@@ -1301,6 +1314,43 @@
 .node-type-badge.data {
   color: #1f6f4d;
   background: #d7efdf;
+}
+
+.node-type-badge.research {
+  color: #5b3f95;
+  background: #e8defd;
+}
+
+.graph-node.node-turn.handoff-role-pm-planner .node-head {
+  background: #e8f2ff;
+}
+
+.graph-node.node-turn.handoff-role-client-programmer .node-head {
+  background: #e9f8ee;
+}
+
+.graph-node.node-turn.handoff-role-system-programmer .node-head {
+  background: #f2ecff;
+}
+
+.graph-node.node-turn.handoff-role-tooling-engineer .node-head {
+  background: #fff3e8;
+}
+
+.graph-node.node-turn.handoff-role-art-pipeline .node-head {
+  background: #fcecf4;
+}
+
+.graph-node.node-turn.handoff-role-qa-engineer .node-head {
+  background: #fff8dd;
+}
+
+.graph-node.node-turn.handoff-role-build-release .node-head {
+  background: #e8f9fb;
+}
+
+.graph-node.node-turn.handoff-role-technical-writer .node-head {
+  background: #f1f2f4;
 }
 
 .node-input-chip {

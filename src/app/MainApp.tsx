@@ -1835,12 +1835,13 @@ function App() {
       },
       config: {
         ...defaultNodeConfig("turn"),
-        role: "Data Pipeline Operator",
+        executor: "web_grok",
+        role: "WEB_AI_RESEARCH AGENT",
         promptTemplate:
-          "Allowlist 소스를 기준으로 최신 데이터를 수집하고 핵심 시그널/출처를 간결하게 정리해줘.",
+          "최신/실시간 웹 자료를 조사해 핵심 근거를 구조화하고, 바로 개발 의사결정에 쓸 수 있게 요약해줘.",
         qualityProfile: "research_evidence",
         artifactType: "EvidenceArtifact",
-        sourceKind: "data_pipeline",
+        sourceKind: "data_research",
       },
     };
     applyGraphChange((prev) => ({
@@ -1850,11 +1851,11 @@ function App() {
     setNodeSelection([nodeId], nodeId);
     appendWorkspaceEvent({
       source: "workflow",
-      message: "데이터 노드 추가",
+      message: "데이터 조사 노드 추가",
       actor: "user",
       level: "info",
     });
-    setStatus("그래프에 데이터 노드를 추가했습니다.");
+    setStatus("그래프에 데이터 조사 노드를 추가했습니다.");
   }, [appendWorkspaceEvent, applyGraphChange, graph.nodes, setNodeSelection, setStatus]);
 
   const onAddHandoffNodes = useCallback(
@@ -1882,7 +1883,6 @@ function App() {
           sourceKind: "handoff",
           handoffRoleId: fromRole,
           handoffToRoleId: toRole,
-          handoffStage: "analyze",
         },
       };
       const toNode: GraphNode | null = toNodeId
@@ -1899,7 +1899,6 @@ function App() {
               sourceKind: "handoff",
               handoffRoleId: toRole,
               handoffToRoleId: toRole,
-              handoffStage: "implement",
             },
           }
         : null;

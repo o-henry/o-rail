@@ -249,11 +249,35 @@
 }
 
 .workflow-conversation-toggle {
-  min-height: 30px;
-  height: 30px;
-  padding: 4px 10px;
-  background: rgba(34, 43, 55, 0.84);
-  color: #f6f9ff;
+  min-height: 44px;
+  height: 44px;
+  padding: 0 16px;
+  border: 1px solid #d8dde6;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #ffffff 0%, #f5f7fb 100%);
+  color: #2a3340;
+  box-shadow: 0 8px 18px rgba(50, 61, 80, 0.16);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.workflow-conversation-toggle .mini-action-button-label {
+  font-size: 13px;
+  line-height: 1;
+  letter-spacing: -0.1px;
+}
+
+.workflow-conversation-toggle:hover {
+  background: linear-gradient(180deg, #ffffff 0%, #f0f4fb 100%);
+  border-color: #cdd5e2;
+}
+
+.workflow-conversation-toggle:active {
+  transform: translateY(1px);
 }
 
 @media (max-width: 1180px) {

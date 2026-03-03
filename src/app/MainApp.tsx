@@ -37,6 +37,11 @@ import { useWorkflowHandoffPanel } from "./hooks/useWorkflowHandoffPanel";
 import { STUDIO_ROLE_TEMPLATES } from "../features/studio/roleTemplates";
 import type { StudioRoleId } from "../features/studio/handoffTypes";
 import {
+  persistKnowledgeIndexToWorkspace,
+  readKnowledgeEntries,
+  upsertKnowledgeEntry,
+} from "../features/studio/knowledgeIndex";
+import {
   COST_PRESET_DEFAULT_MODEL,
   DEFAULT_TURN_MODEL,
   TURN_EXECUTOR_OPTIONS,
@@ -2440,6 +2445,33 @@ function App() {
           },
         }));
       }
+      const normalizedTaskId = String(payload.taskId ?? "").trim() || "TASK-001";
+      const knowledgeRoleId: StudioRoleId = roleId ?? "technical_writer";
+      const roleLabel = roleId
+        ? STUDIO_ROLE_TEMPLATES.find((row) => row.id === roleId)?.label ?? payload.roleId
+        : payload.roleId;
+      const promptSummary = String(payload.prompt ?? payload.handoffRequest ?? "").trim();
+      const dedupedArtifactPaths = [...new Set(payload.artifactPaths.map((row) => String(row ?? "").trim()).filter(Boolean))];
+      for (const [index, artifactPath] of dedupedArtifactPaths.entries()) {
+        const fileName = artifactPath.split(/[\\/]/).filter(Boolean).pop() ?? artifactPath;
+        upsertKnowledgeEntry({
+          id: `${payload.runId}:${index}:${fileName}`,
+          runId: payload.runId,
+          taskId: normalizedTaskId,
+          roleId: knowledgeRoleId,
+          sourceKind: "artifact",
+          title: `${roleLabel} · ${normalizedTaskId} · ${fileName}`,
+          summary: promptSummary || `${roleLabel} 역할 실행 산출물`,
+          createdAt: new Date().toISOString(),
+          markdownPath: /\.md$/i.test(artifactPath) ? artifactPath : undefined,
+          jsonPath: /\.json$/i.test(artifactPath) ? artifactPath : undefined,
+        });
+      }
+      void persistKnowledgeIndexToWorkspace({
+        cwd,
+        invokeFn: invoke,
+        rows: readKnowledgeEntries(),
+      });
       const targetRole = toStudioRoleId(payload.handoffToRole ?? "");
       const requestText =
         String(payload.handoffRequest ?? payload.prompt ?? "").trim() ||

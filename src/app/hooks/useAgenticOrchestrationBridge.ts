@@ -55,7 +55,7 @@ export function useAgenticOrchestrationBridge(params: {
   invokeFn: InvokeFn;
   appendWorkspaceEvent: AppendWorkspaceEvent;
   triggerBatchByUserEvent: () => void;
-  runGraphCore: (skipWebConnectPreflight?: boolean) => Promise<void>;
+  runGraphCore: (skipWebConnectPreflight?: boolean, questionOverride?: string) => Promise<void>;
   graphRunOverrideIdRef: MutableRefObject<string | null>;
   publishAction: (action: AgenticAction) => void;
   subscribeAction: (handler: AgenticActionSubscriber) => () => void;
@@ -104,7 +104,7 @@ export function useAgenticOrchestrationBridge(params: {
   } = params;
 
   const runGraphWithAgenticCoordinator = useCallback(
-    async (skipWebConnectPreflight = false) => {
+    async (skipWebConnectPreflight = false, questionOverride?: string) => {
       await runGraphWithCoordinator({
         cwd,
         sourceTab: "workflow",
@@ -115,7 +115,7 @@ export function useAgenticOrchestrationBridge(params: {
           graphRunOverrideIdRef.current = runId;
           try {
             triggerBatchByUserEvent();
-            await runGraphCore(skipWebConnectPreflight);
+            await runGraphCore(skipWebConnectPreflight, questionOverride);
           } finally {
             graphRunOverrideIdRef.current = null;
           }
@@ -191,7 +191,7 @@ export function useAgenticOrchestrationBridge(params: {
           if (params.prompt) {
             setStatus(`역할 요청: ${params.prompt.slice(0, 72)}`);
           }
-          await runGraphWithAgenticCoordinator(false);
+              await runGraphWithAgenticCoordinator(false, params.prompt?.trim() || undefined);
         },
         appendWorkspaceEvent,
       });
@@ -282,7 +282,9 @@ export function useAgenticOrchestrationBridge(params: {
             ? `그래프 역할 실행 요청: ${action.payload.roleId} (${action.payload.taskId})`
             : `역할 실행 요청: ${action.payload.roleId} (${action.payload.taskId})`,
         );
-        applyPreset(presetForRole(action.payload.roleId));
+        if (sourceTab === "agents") {
+          applyPreset(presetForRole(action.payload.roleId));
+        }
         void runRoleDirect({ ...action.payload, sourceTab });
         return;
       }

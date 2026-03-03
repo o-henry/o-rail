@@ -2,7 +2,7 @@ import { createRunGraphProcessNode } from "./runGraphProcessNode";
 import { finalizeRunGraphExecution } from "./runGraphFinalize";
 
 export function createRunGraphRunner(params: any) {
-  return async function onRunGraph(skipWebConnectPreflight = false) {
+  return async function onRunGraph(skipWebConnectPreflight = false, questionOverride?: string) {
     if (params.isGraphRunning && params.isGraphPaused) {
       params.pauseRequestedRef.current = false;
       params.setIsGraphPaused(false);
@@ -19,7 +19,10 @@ export function createRunGraphRunner(params: any) {
       return;
     }
 
-    const unifiedInputResult = params.validateUnifiedRunInput(params.workflowQuestion, params.locale);
+    const unifiedInputResult = params.validateUnifiedRunInput(
+      typeof questionOverride === "string" ? questionOverride : params.workflowQuestion,
+      params.locale,
+    );
     if (!unifiedInputResult.ok) {
       params.setError(unifiedInputResult.errors.join("\n"));
       params.setStatus("그래프 실행 대기");

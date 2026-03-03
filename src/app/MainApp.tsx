@@ -2080,6 +2080,11 @@ function App() {
       roleId={workflowRoleId}
       runDisabled={isWorkflowBusy}
       taskId={workflowRoleTaskId}
+      onClearRecentHandoffs={() => workflowHandoffPanel.clearHandoffsByRole(workflowRoleId)}
+      onOpenKnowledge={() => {
+        setWorkspaceTab("knowledge");
+        setStatus("데이터베이스 탭으로 이동");
+      }}
     />
   );
   const showRoleDockFirst = Boolean(selectedNode);

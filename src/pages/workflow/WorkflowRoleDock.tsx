@@ -16,6 +16,8 @@ type WorkflowRoleDockProps = {
   roleStatusById: Partial<Record<StudioRoleId, { status: RoleDockStatus; taskId?: string }>>;
   selectedRoleHandoffs: HandoffRecord[];
   selectedRoleBlockers: HandoffRecord[];
+  onClearRecentHandoffs: () => void;
+  onOpenKnowledge: () => void;
 };
 
 export default function WorkflowRoleDock(props: WorkflowRoleDockProps) {
@@ -85,7 +87,12 @@ export default function WorkflowRoleDock(props: WorkflowRoleDockProps) {
       </section>
 
       <section className="workflow-role-summary">
-        <strong>최근 인수인계</strong>
+        <div className="workflow-role-summary-head">
+          <strong>최근 인수인계</strong>
+          <button className="mini-action-button workflow-role-summary-clear" onClick={props.onClearRecentHandoffs} type="button">
+            <span className="mini-action-button-label">CLEAR</span>
+          </button>
+        </div>
         {props.selectedRoleHandoffs.length === 0 ? (
           <p className="workflow-role-summary-empty">HANDOFF 없음</p>
         ) : (
@@ -101,7 +108,12 @@ export default function WorkflowRoleDock(props: WorkflowRoleDockProps) {
       </section>
 
       <section className="workflow-role-summary">
-        <strong>최근 산출물</strong>
+        <div className="workflow-role-summary-head">
+          <strong>최근 산출물</strong>
+          <button className="mini-action-button workflow-role-summary-open" onClick={props.onOpenKnowledge} type="button">
+            <span className="mini-action-button-label">데이터베이스에서 보기</span>
+          </button>
+        </div>
         <p className="workflow-role-summary-path">
           {latestArtifactPath || "산출물 없음"}
         </p>

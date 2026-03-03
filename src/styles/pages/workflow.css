@@ -416,10 +416,25 @@
   gap: 6px;
   font-size: 11px;
   color: var(--text-muted);
+  margin-top: 6px;
 }
 
 .workflow-role-summary strong {
   color: var(--text-main);
+}
+
+.workflow-role-summary-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.workflow-role-summary-clear,
+.workflow-role-summary-open {
+  min-height: 24px;
+  height: 24px;
+  padding: 0 8px;
 }
 
 .workflow-role-summary-empty {
@@ -468,6 +483,18 @@
   font-size: 11px;
   color: var(--text-main);
   word-break: break-all;
+}
+
+.workflow-right-stack .inspector-pane.is-node-selected {
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.workflow-right-stack .inspector-pane.is-node-selected .inspector-content {
+  padding-top: 0;
+}
+
+.workflow-right-stack .inspector-pane.is-node-selected .inspector-block {
+  padding-top: 0;
 }
 
 @media (max-width: 1180px) {

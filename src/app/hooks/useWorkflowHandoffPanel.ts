@@ -138,9 +138,17 @@ export function useWorkflowHandoffPanel(params: UseWorkflowHandoffPanelParams) {
     params.setStatus(`핸드오프 컨텍스트 주입: ${selectedHandoff.taskId}`);
   };
 
+  const clearHandoffsByRole = (roleId: StudioRoleId) => {
+    const next = handoffRecords.filter((row) => row.fromRole !== roleId && row.toRole !== roleId);
+    saveRows(next);
+    setSelectedHandoffId(next[0]?.id ?? "");
+    params.setStatus(`핸드오프 정리 완료: ${roleId.toUpperCase()}`);
+  };
+
   return {
     createAutoHandoff,
     createHandoff,
+    clearHandoffsByRole,
     consumeHandoff,
     handoffFromRole,
     handoffRecords,

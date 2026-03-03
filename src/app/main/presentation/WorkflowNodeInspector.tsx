@@ -10,6 +10,7 @@ import type { GateConfig, TransformConfig } from "../../../features/workflow/typ
 import { useI18n } from "../../../i18n";
 import { InspectorSectionTitle } from "../../mainAppGraphHelpers";
 import type { WorkflowInspectorNodeProps } from "../workflowInspectorTypes";
+import { STUDIO_ROLE_TEMPLATES } from "../../../features/studio/roleTemplates";
 
 export default function WorkflowNodeInspector({
   simpleWorkflowUI,
@@ -20,7 +21,6 @@ export default function WorkflowNodeInspector({
   turnExecutorLabel,
   turnModelOptions,
   model,
-  cwd,
   selectedTurnConfig,
   selectedQualityProfile,
   qualityProfileOptions,
@@ -37,9 +37,123 @@ export default function WorkflowNodeInspector({
     return null;
   }
 
+  const selectedConfig = selectedNode.config as TurnConfig & Record<string, unknown>;
+  const isHandoffTurnNode =
+    selectedNode.type === "turn" && String(selectedConfig.sourceKind ?? "").trim().toLowerCase() === "handoff";
+  const studioRoleOptions = STUDIO_ROLE_TEMPLATES.map((row) => ({
+    value: row.id,
+    label: row.label,
+  }));
+  const handoffStageValue = String(selectedConfig.handoffStage ?? "analyze");
+
   return (
     <>
-      {selectedNode.type === "turn" && (
+      {isHandoffTurnNode && (
+        <section className="inspector-block form-grid">
+          <InspectorSectionTitle
+            help="핸드오프 노드는 역할 간 인수인계 전용입니다. 실행기/모델/역할/요청사항만 유지해 협업 흐름을 단순화합니다."
+            title="핸드오프 노드 설정"
+          />
+          <label>
+            에이전트
+            <FancySelect
+              ariaLabel="에이전트"
+              className="modern-select"
+              onChange={(next) => updateSelectedNodeConfig("executor", next)}
+              options={turnExecutorOptions.map((option) => ({
+                value: option,
+                label: turnExecutorLabel(option),
+              }))}
+              value={selectedTurnExecutor}
+            />
+          </label>
+          {selectedTurnExecutor === "codex" && (
+            <label>
+              모델
+              <FancySelect
+                ariaLabel="모델"
+                className="modern-select"
+                onChange={(next) => updateSelectedNodeConfig("model", next)}
+                options={turnModelOptions.map((option) => ({ value: option, label: option }))}
+                value={toTurnModelDisplayName(String(selectedConfig.model ?? model))}
+              />
+            </label>
+          )}
+          <label>
+            담당 역할
+            <FancySelect
+              ariaLabel="담당 역할"
+              className="modern-select"
+              onChange={(next) => {
+                const role = String(next);
+                updateSelectedNodeConfig("handoffRoleId", role);
+                const matched = STUDIO_ROLE_TEMPLATES.find((row) => row.id === role);
+                if (matched) {
+                  updateSelectedNodeConfig("role", `${matched.label} AGENT`);
+                }
+              }}
+              options={studioRoleOptions}
+              value={String(selectedConfig.handoffRoleId ?? "pm_planner")}
+            />
+          </label>
+          <label>
+            인수인계 대상
+            <FancySelect
+              ariaLabel="인수인계 대상"
+              className="modern-select"
+              onChange={(next) => updateSelectedNodeConfig("handoffToRoleId", next)}
+              options={studioRoleOptions}
+              value={String(selectedConfig.handoffToRoleId ?? "client_programmer")}
+            />
+          </label>
+          <label>
+            단계
+            <FancySelect
+              ariaLabel="핸드오프 단계"
+              className="modern-select"
+              onChange={(next) => updateSelectedNodeConfig("handoffStage", next)}
+              options={[
+                { value: "analyze", label: "분석" },
+                { value: "implement", label: "구현" },
+                { value: "test", label: "테스트" },
+                { value: "verify", label: "검증" },
+                { value: "document", label: "문서화" },
+              ]}
+              value={handoffStageValue}
+            />
+          </label>
+          <label>
+            역할 표시명
+            <input
+              onChange={(e) => updateSelectedNodeConfig("role", e.currentTarget.value)}
+              value={String(selectedConfig.role ?? "")}
+            />
+          </label>
+          <label>
+            요청사항
+            <textarea
+              className="prompt-template-textarea"
+              onChange={(e) => updateSelectedNodeConfig("promptTemplate", e.currentTarget.value)}
+              rows={5}
+              value={String(selectedConfig.promptTemplate ?? "{{input}}")}
+            />
+          </label>
+          <label>
+            완료 산출물 체크
+            <textarea
+              className="prompt-template-textarea"
+              onChange={(e) => updateSelectedNodeConfig("handoffChecklist", e.currentTarget.value)}
+              rows={3}
+              value={String(selectedConfig.handoffChecklist ?? "완료 기준과 인수인계 파일 경로를 함께 보고")}
+            />
+          </label>
+          <div className="inspector-empty">
+            핸드오프 노드는 역할 간 전달을 위한 전용 노드입니다. 일반 노드 설정(품질 프로필/출력 스키마)은 최소화되어 표시됩니다.
+          </div>
+        </section>
+      )}
+
+      {selectedNode.type === "turn" && !isHandoffTurnNode && (
         <section className="inspector-block form-grid">
           <InspectorSectionTitle
             help={t("workflow.inspector.agent.help")}
@@ -77,16 +191,6 @@ export default function WorkflowNodeInspector({
                 onChange={(e) => updateSelectedNodeConfig("ollamaModel", e.currentTarget.value)}
                 placeholder={t("feed.ollamaPlaceholder")}
                 value={String((selectedNode.config as TurnConfig).ollamaModel ?? "llama3.1:8b")}
-              />
-            </label>
-          )}
-          {selectedTurnExecutor === "codex" && (
-            <label>
-              {t("feed.cwd")}
-              <input
-                className="lowercase-path-input"
-                onChange={(e) => updateSelectedNodeConfig("cwd", e.currentTarget.value)}
-                value={String((selectedNode.config as TurnConfig).cwd ?? cwd)}
               />
             </label>
           )}

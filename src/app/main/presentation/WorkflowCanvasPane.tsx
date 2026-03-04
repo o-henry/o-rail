@@ -170,7 +170,7 @@ export default function WorkflowCanvasPane({
   questionInputRef,
 }: WorkflowCanvasPaneProps) {
   const { t } = useI18n();
-  const [isConversationPanelOpen, setIsConversationPanelOpen] = useState(true);
+  const [isConversationPanelOpen, setIsConversationPanelOpen] = useState(false);
   const [conversationByNodeId, setConversationByNodeId] = useState<Record<string, WorkflowConversationMessage[]>>({});
   const nodeLogCursorRef = useRef<Record<string, number>>({});
   const conversationPanelRef = useRef<HTMLElement | null>(null);

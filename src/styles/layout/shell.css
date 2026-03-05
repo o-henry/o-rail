@@ -1864,6 +1864,9 @@
 }
 
 .canvas-runbar .play .canvas-icon-image {
+  width: 15px;
+  height: 15px;
+  transform: translateX(0.8px);
   filter: var(--canvas-control-icon-filter);
   opacity: var(--canvas-control-icon-opacity);
 }

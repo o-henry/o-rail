@@ -60,7 +60,7 @@ export const VIA_NODE_ICON_SRC_BY_TYPE: Record<ViaNodeType, string> = {
   "source.market": "/rag-node-icons/stock.svg",
   "transform.normalize": "/rag-node-icons/normalize.svg",
   "transform.verify": "/rag-node-icons/verification.svg",
-  "transform.rank": "",
+  "transform.rank": "/rag-node-icons/lv.svg",
   "agent.codex": "/rag-node-icons/summary.svg",
   "export.rag": "/rag-node-icons/export.svg",
   "source.x": "/rag-node-icons/sns.svg",

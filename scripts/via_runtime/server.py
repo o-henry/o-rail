@@ -15,7 +15,9 @@ from __future__ import annotations
 import argparse
 import csv
 import hashlib
+import importlib
 import ipaddress
+import inspect
 import json
 import os
 import re
@@ -24,6 +26,7 @@ import sqlite3
 import subprocess
 import tempfile
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
@@ -60,6 +63,9 @@ PINCHTAB_BLOCK_MEDIA_ENV = "RAIL_VIA_PINCHTAB_BLOCK_MEDIA"
 PINCHTAB_STARTUP_DELAY_ENV = "RAIL_VIA_PINCHTAB_STARTUP_DELAY_SEC"
 PINCHTAB_TARGET_DELAY_ENV = "RAIL_VIA_PINCHTAB_TARGET_DELAY_SEC"
 PINCHTAB_TAB_READ_DELAY_ENV = "RAIL_VIA_PINCHTAB_TAB_READ_DELAY_SEC"
+SCRAPLING_ENABLED_ENV = "RAIL_VIA_SCRAPLING_ENABLED"
+SCRAPLING_STEALTH_ENV = "RAIL_VIA_SCRAPLING_STEALTH"
+SCRAPLING_TIMEOUT_ENV = "RAIL_VIA_SCRAPLING_TIMEOUT_SEC"
 TRANSLATE_TO_KO_ENV = "RAIL_VIA_TRANSLATE_TO_KO"
 CODEX_EXEC_ENABLED_ENV = "RAIL_VIA_CODEX_EXEC_ENABLED"
 CODEX_EXEC_BIN_ENV = "RAIL_VIA_CODEX_BIN"
@@ -70,6 +76,7 @@ PINCHTAB_DEFAULT_MODE = "headless"
 PINCHTAB_STARTUP_DELAY_SECONDS = 1.1
 PINCHTAB_TARGET_DELAY_SECONDS = 0.55
 PINCHTAB_TAB_READ_DELAY_SECONDS = 0.65
+SCRAPLING_DEFAULT_TIMEOUT_SECONDS = 18
 
 SOURCE_TYPE_SNS = "source.sns"
 SOURCE_TYPE_COMMUNITY = "source.community"
@@ -701,6 +708,19 @@ def pinchtab_tab_read_delay_seconds() -> float:
     )
 
 
+def scrapling_timeout_seconds() -> int:
+    return env_int(
+        SCRAPLING_TIMEOUT_ENV,
+        SCRAPLING_DEFAULT_TIMEOUT_SECONDS,
+        min_value=4,
+        max_value=45,
+    )
+
+
+def scrapling_stealth_enabled() -> bool:
+    return env_flag_enabled(SCRAPLING_STEALTH_ENV, default=True)
+
+
 def build_pinchtab_launch_payload() -> dict[str, Any]:
     payload: dict[str, Any] = {"mode": PINCHTAB_DEFAULT_MODE}
     stealth = resolve_pinchtab_stealth_mode()
@@ -866,6 +886,199 @@ def collect_pinchtab_targets(
                 )
             except Exception as exc:
                 warnings.append(f"{adapter}: failed to stop instance: {trim_text(exc, 180)}")
+
+    return AdapterResult(adapter=adapter, items=items[:MAX_TOTAL_ITEMS], warnings=warnings)
+
+
+def _extract_scrapling_text(payload: Any) -> str:
+    if payload is None:
+        return ""
+    if isinstance(payload, bytes):
+        return trim_text(payload.decode("utf-8", errors="replace"), 9000)
+    if isinstance(payload, str):
+        return trim_text(payload, 9000)
+    if isinstance(payload, dict):
+        for key in ("text", "html", "content", "markdown", "raw", "body"):
+            value = payload.get(key)
+            if isinstance(value, (str, bytes)):
+                text = _extract_scrapling_text(value)
+                if text:
+                    return text
+    for attr in ("text", "html", "content", "markdown", "raw", "body"):
+        value = getattr(payload, attr, None)
+        if isinstance(value, (str, bytes)):
+            text = _extract_scrapling_text(value)
+            if text:
+                return text
+    for attr in ("to_text", "get_text"):
+        fn = getattr(payload, attr, None)
+        if callable(fn):
+            try:
+                text = _extract_scrapling_text(fn())
+                if text:
+                    return text
+            except Exception:
+                continue
+    return ""
+
+
+def _invoke_scrapling_callable(
+    fn: Callable[..., Any],
+    *,
+    url: str,
+    timeout_sec: int,
+    stealth: bool,
+) -> Any:
+    kwargs: dict[str, Any] = {}
+    try:
+        signature = inspect.signature(fn)
+        params = signature.parameters
+        accepts_var_kw = any(param.kind == inspect.Parameter.VAR_KEYWORD for param in params.values())
+    except Exception:
+        params = {}
+        accepts_var_kw = True
+
+    def supports(name: str) -> bool:
+        return accepts_var_kw or name in params
+
+    if supports("timeout"):
+        kwargs["timeout"] = timeout_sec
+    if supports("timeout_sec"):
+        kwargs["timeout_sec"] = timeout_sec
+    if supports("request_timeout"):
+        kwargs["request_timeout"] = timeout_sec
+    if supports("stealth"):
+        kwargs["stealth"] = stealth
+    if supports("headless"):
+        kwargs["headless"] = True
+
+    if "url" in params:
+        return fn(url=url, **kwargs)
+    return fn(url, **kwargs)
+
+
+def _scrapling_fetch_text(url: str, *, timeout_sec: int, stealth: bool) -> tuple[str, list[str]]:
+    warnings: list[str] = []
+    candidates: list[Callable[..., Any]] = []
+
+    module_class_paths = [
+        ("scrapling.fetchers", "Fetcher"),
+        ("scrapling.fetchers", "PlaywrightFetcher"),
+        ("scrapling.fetchers", "StealthFetcher"),
+        ("scrapling", "Fetcher"),
+    ]
+    module_function_paths = [
+        ("scrapling", "fetch"),
+        ("scrapling", "scrape"),
+        ("scrapling", "get"),
+        ("scrapling", "request"),
+    ]
+
+    for module_name, class_name in module_class_paths:
+        try:
+            module = importlib.import_module(module_name)
+            klass = getattr(module, class_name, None)
+            if not callable(klass):
+                continue
+            instance = klass()
+            for method_name in ("get", "fetch", "request", "scrape"):
+                method = getattr(instance, method_name, None)
+                if callable(method):
+                    candidates.append(method)
+        except Exception:
+            continue
+
+    for module_name, fn_name in module_function_paths:
+        try:
+            module = importlib.import_module(module_name)
+            fn = getattr(module, fn_name, None)
+            if callable(fn):
+                candidates.append(fn)
+        except Exception:
+            continue
+
+    if not candidates:
+        return "", ["scrapling module/callable not found"]
+
+    for fn in candidates:
+        try:
+            payload = _invoke_scrapling_callable(
+                fn,
+                url=url,
+                timeout_sec=timeout_sec,
+                stealth=stealth,
+            )
+            text = _extract_scrapling_text(payload)
+            if text.strip():
+                return text, warnings
+        except Exception as exc:
+            warnings.append(trim_text(exc, 160))
+
+    return "", warnings[:3]
+
+
+def collect_scrapling_targets(
+    source_type: str,
+    adapter: str,
+    targets: list[dict[str, str]],
+    *,
+    snippets_per_target: int = 2,
+) -> AdapterResult:
+    if not env_flag_enabled(SCRAPLING_ENABLED_ENV, default=True):
+        return AdapterResult(adapter=adapter, items=[], warnings=[])
+
+    warnings: list[str] = []
+    items: list[dict[str, Any]] = []
+    timeout_sec = scrapling_timeout_seconds()
+    stealth = scrapling_stealth_enabled()
+
+    for target in targets:
+        if len(items) >= MAX_TOTAL_ITEMS:
+            break
+        target_url = str(target.get("url") or "").strip()
+        source_name = target.get("name") or parse_host(target_url) or "unknown"
+        country = target.get("country") or "GLOBAL"
+        if not target_url:
+            warnings.append(f"{adapter}: missing target url for {source_name}")
+            continue
+
+        try:
+            page_text, fetch_warnings = _scrapling_fetch_text(target_url, timeout_sec=timeout_sec, stealth=stealth)
+            warnings.extend([f"{adapter}: {row}" for row in fetch_warnings[:2]])
+            if not page_text:
+                continue
+            normalized_text = strip_tags(page_text) if "<" in page_text[:1200] else trim_text(page_text, 9000)
+            snippets = parse_pinchtab_snippets(normalized_text, limit=max(1, snippets_per_target))
+            if not snippets and normalized_text:
+                snippets = [trim_text(normalized_text, 220)]
+            if not snippets:
+                continue
+            for snippet in snippets:
+                title = trim_text(snippet, 130)
+                next_rank = len(items) + 1
+                items.append(
+                    make_item(
+                        source_type=source_type,
+                        source_name=source_name,
+                        country=country,
+                        adapter=adapter,
+                        title=title,
+                        url=target_url,
+                        summary=snippet,
+                        published_at=None,
+                        extra={
+                            "scrapling": True,
+                            "scrapling_stealth": stealth,
+                            "headline": True,
+                            "hot_rank": next_rank,
+                            "hot_topic_hint": has_hot_topic_keyword(title, snippet, source_name, target_url),
+                        },
+                    )
+                )
+                if len(items) >= MAX_TOTAL_ITEMS:
+                    break
+        except Exception as exc:
+            warnings.append(f"{adapter}: {trim_text(exc, 180)}")
 
     return AdapterResult(adapter=adapter, items=items[:MAX_TOTAL_ITEMS], warnings=warnings)
 
@@ -1484,6 +1697,18 @@ def collect_naver_korea_news(adapter: str) -> AdapterResult:
     return AdapterResult(adapter=adapter, items=items[:MAX_TOTAL_ITEMS], warnings=warnings)
 
 
+def news_scrapling_adapter() -> AdapterResult:
+    targets = [
+        {"country": "US", "name": "Google News US", "url": google_news_search_rss("technology OR market", "US")},
+        {"country": "JP", "name": "Google News JP", "url": google_news_search_rss("テクノロジー OR 株式", "JP")},
+        {"country": "CN", "name": "Google News CN", "url": google_news_search_rss("科技 OR 市场", "CN")},
+        {"country": "KR", "name": "Google News KR", "url": google_news_search_rss("기술 OR 주식", "KR")},
+        {"country": "KR", "name": "Naver News Ranking", "url": "https://news.naver.com/main/ranking/popularDay.naver"},
+        {"country": "US", "name": "Reuters", "url": "https://www.reuters.com/world/"},
+    ]
+    return collect_scrapling_targets("source.news", "news.scrapling", targets, snippets_per_target=2)
+
+
 def news_pinchtab_adapter() -> AdapterResult:
     targets = [
         {"country": "US", "name": "Google News US", "url": google_news_search_rss("technology OR market", "US")},
@@ -1496,6 +1721,16 @@ def news_pinchtab_adapter() -> AdapterResult:
     return collect_pinchtab_targets("source.news", "news.pinchtab", targets, snippets_per_target=2)
 
 
+def sns_scrapling_adapter() -> AdapterResult:
+    targets = [
+        {"country": "US", "name": "X Explore Technology", "url": "https://x.com/explore/tabs/for_you?f=top"},
+        {"country": "GLOBAL", "name": "Threads AI", "url": "https://www.threads.com/search?q=AI"},
+        {"country": "JP", "name": "X JP Search", "url": "https://x.com/search?q=%E3%83%86%E3%82%AF&src=typed_query"},
+        {"country": "KR", "name": "X KR Search", "url": "https://x.com/search?q=%EA%B8%B0%EC%88%A0&src=typed_query"},
+    ]
+    return collect_scrapling_targets(SOURCE_TYPE_SNS, "sns.scrapling", targets, snippets_per_target=2)
+
+
 def sns_pinchtab_adapter() -> AdapterResult:
     targets = [
         {"country": "US", "name": "X Explore Technology", "url": "https://x.com/explore/tabs/for_you?f=top"},
@@ -1504,6 +1739,17 @@ def sns_pinchtab_adapter() -> AdapterResult:
         {"country": "KR", "name": "X KR Search", "url": "https://x.com/search?q=%EA%B8%B0%EC%88%A0&src=typed_query"},
     ]
     return collect_pinchtab_targets(SOURCE_TYPE_SNS, "sns.pinchtab", targets, snippets_per_target=2)
+
+
+def community_scrapling_adapter() -> AdapterResult:
+    targets = [
+        {"country": "US", "name": "Reddit Technology", "url": "https://www.reddit.com/r/technology/"},
+        {"country": "JP", "name": "Hatena IT", "url": "https://b.hatena.ne.jp/hotentry/it"},
+        {"country": "CN", "name": "V2EX Hot", "url": "https://www.v2ex.com/?tab=hot"},
+        {"country": "KR", "name": "DCInside Stock", "url": "https://gall.dcinside.com/mgallery/board/lists/?id=stock"},
+        {"country": "KR", "name": "Clien", "url": "https://www.clien.net/service/board/park"},
+    ]
+    return collect_scrapling_targets(SOURCE_TYPE_COMMUNITY, "community.scrapling", targets, snippets_per_target=2)
 
 
 def community_pinchtab_adapter() -> AdapterResult:
@@ -1517,6 +1763,16 @@ def community_pinchtab_adapter() -> AdapterResult:
     return collect_pinchtab_targets(SOURCE_TYPE_COMMUNITY, "community.pinchtab", targets, snippets_per_target=2)
 
 
+def dev_scrapling_adapter() -> AdapterResult:
+    targets = [
+        {"country": "GLOBAL", "name": "GitHub Trending", "url": "https://github.com/trending"},
+        {"country": "GLOBAL", "name": "DEV Community", "url": "https://dev.to/top/week"},
+        {"country": "GLOBAL", "name": "Lobsters", "url": "https://lobste.rs"},
+        {"country": "GLOBAL", "name": "StackOverflow Blog", "url": "https://stackoverflow.blog/"},
+    ]
+    return collect_scrapling_targets(SOURCE_TYPE_DEV, "dev.scrapling", targets, snippets_per_target=2)
+
+
 def dev_pinchtab_adapter() -> AdapterResult:
     targets = [
         {"country": "GLOBAL", "name": "GitHub Trending", "url": "https://github.com/trending"},
@@ -1525,6 +1781,17 @@ def dev_pinchtab_adapter() -> AdapterResult:
         {"country": "GLOBAL", "name": "StackOverflow Blog", "url": "https://stackoverflow.blog/"},
     ]
     return collect_pinchtab_targets(SOURCE_TYPE_DEV, "dev.pinchtab", targets, snippets_per_target=2)
+
+
+def market_scrapling_adapter() -> AdapterResult:
+    targets = [
+        {"country": "US", "name": "Yahoo Finance S&P 500", "url": "https://finance.yahoo.com/quote/%5EGSPC/"},
+        {"country": "JP", "name": "Yahoo Finance Nikkei", "url": "https://finance.yahoo.com/quote/%5EN225/"},
+        {"country": "CN", "name": "Yahoo Finance SSE", "url": "https://finance.yahoo.com/quote/000001.SS/"},
+        {"country": "KR", "name": "Yahoo Finance KOSPI", "url": "https://finance.yahoo.com/quote/%5EKS11/"},
+        {"country": "US", "name": "MarketWatch Markets", "url": "https://www.marketwatch.com/markets"},
+    ]
+    return collect_scrapling_targets(SOURCE_TYPE_MARKET, "market.scrapling", targets, snippets_per_target=2)
 
 
 def market_pinchtab_adapter() -> AdapterResult:
@@ -1675,15 +1942,15 @@ def market_fallback_adapter() -> AdapterResult:
 
 
 SOURCE_ADAPTER_CHAIN: dict[str, list[Callable[[], AdapterResult]]] = {
-    "source.news": [news_pinchtab_adapter, news_primary_adapter, news_fallback_adapter],
-    SOURCE_TYPE_SNS: [sns_pinchtab_adapter, sns_primary_adapter, sns_fallback_adapter],
-    SOURCE_TYPE_COMMUNITY: [community_pinchtab_adapter, community_primary_adapter, community_fallback_adapter],
-    SOURCE_TYPE_DEV: [dev_pinchtab_adapter, dev_primary_adapter, dev_fallback_adapter],
-    SOURCE_TYPE_MARKET: [market_pinchtab_adapter, market_primary_adapter, market_fallback_adapter],
-    "source.x": [sns_pinchtab_adapter, sns_primary_adapter, sns_fallback_adapter],
-    "source.threads": [sns_pinchtab_adapter, sns_primary_adapter, sns_fallback_adapter],
-    "source.reddit": [community_pinchtab_adapter, community_primary_adapter, community_fallback_adapter],
-    "source.hn": [dev_pinchtab_adapter, dev_primary_adapter, dev_fallback_adapter],
+    "source.news": [news_scrapling_adapter, news_pinchtab_adapter, news_primary_adapter, news_fallback_adapter],
+    SOURCE_TYPE_SNS: [sns_scrapling_adapter, sns_pinchtab_adapter, sns_primary_adapter, sns_fallback_adapter],
+    SOURCE_TYPE_COMMUNITY: [community_scrapling_adapter, community_pinchtab_adapter, community_primary_adapter, community_fallback_adapter],
+    SOURCE_TYPE_DEV: [dev_scrapling_adapter, dev_pinchtab_adapter, dev_primary_adapter, dev_fallback_adapter],
+    SOURCE_TYPE_MARKET: [market_scrapling_adapter, market_pinchtab_adapter, market_primary_adapter, market_fallback_adapter],
+    "source.x": [sns_scrapling_adapter, sns_pinchtab_adapter, sns_primary_adapter, sns_fallback_adapter],
+    "source.threads": [sns_scrapling_adapter, sns_pinchtab_adapter, sns_primary_adapter, sns_fallback_adapter],
+    "source.reddit": [community_scrapling_adapter, community_pinchtab_adapter, community_primary_adapter, community_fallback_adapter],
+    "source.hn": [dev_scrapling_adapter, dev_pinchtab_adapter, dev_primary_adapter, dev_fallback_adapter],
 }
 
 
@@ -1901,6 +2168,70 @@ def execute_dynamic_source_query(source_type: str, source_options: dict[str, Any
     return AdapterResult(adapter=f"{source_type}.dynamic", items=[], warnings=warnings)
 
 
+def _is_parallel_crawler_adapter(adapter: Callable[[], AdapterResult]) -> bool:
+    name = str(getattr(adapter, "__name__", "") or "").strip().lower()
+    return name.endswith("_scrapling_adapter") or name.endswith("_pinchtab_adapter")
+
+
+def _dedupe_adapter_items(items: list[dict[str, Any]], limit: int) -> list[dict[str, Any]]:
+    deduped: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for row in items:
+        key = stable_id(
+            str(row.get("url") or ""),
+            str(row.get("title") or ""),
+            str(row.get("source_name") or row.get("source") or ""),
+            str(row.get("country") or ""),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(row)
+        if len(deduped) >= limit:
+            break
+    return deduped
+
+
+def _run_parallel_crawler_adapters(
+    source_type: str,
+    adapters: list[Callable[[], AdapterResult]],
+    *,
+    limit: int,
+) -> AdapterResult:
+    if not adapters:
+        return AdapterResult(adapter=f"{source_type}.parallel", items=[], warnings=[])
+
+    warnings: list[str] = []
+    items: list[dict[str, Any]] = []
+    adapter_names: list[str] = []
+
+    with ThreadPoolExecutor(max_workers=max(1, min(4, len(adapters)))) as executor:
+        future_by_adapter = {
+            executor.submit(adapter): adapter
+            for adapter in adapters
+        }
+        for future in as_completed(future_by_adapter):
+            adapter_fn = future_by_adapter[future]
+            fn_name = str(getattr(adapter_fn, "__name__", "") or "adapter")
+            try:
+                result = future.result()
+            except Exception as exc:
+                warnings.append(f"{fn_name}: {trim_text(exc, 180)}")
+                continue
+            warnings.extend(result.warnings)
+            items.extend(result.items)
+            normalized_adapter_name = str(result.adapter or "").strip()
+            if normalized_adapter_name:
+                adapter_names.append(normalized_adapter_name)
+
+    deduped_items = _dedupe_adapter_items(items, limit=limit)
+    if adapter_names:
+        merged_adapter_label = f"{source_type}.parallel[{'+'.join(sorted(set(adapter_names)))}]"
+    else:
+        merged_adapter_label = f"{source_type}.parallel"
+    return AdapterResult(adapter=merged_adapter_label, items=deduped_items, warnings=warnings)
+
+
 def execute_source_node(source_type: str, source_options: dict[str, Any] | None = None) -> AdapterResult:
     chain = SOURCE_ADAPTER_CHAIN.get(source_type) or []
     options = _normalize_dynamic_source_options(source_options)
@@ -1919,7 +2250,25 @@ def execute_source_node(source_type: str, source_options: dict[str, Any] | None 
     warnings: list[str] = []
     if dynamic_result and dynamic_result.warnings:
         warnings.extend(dynamic_result.warnings)
-    for adapter in chain:
+
+    parallel_adapters = [adapter for adapter in chain if _is_parallel_crawler_adapter(adapter)]
+    sequential_adapters = [adapter for adapter in chain if not _is_parallel_crawler_adapter(adapter)]
+
+    if parallel_adapters:
+        parallel_result = _run_parallel_crawler_adapters(
+            source_type,
+            parallel_adapters,
+            limit=max_items,
+        )
+        warnings.extend(parallel_result.warnings)
+        if parallel_result.items:
+            return AdapterResult(
+                adapter=parallel_result.adapter,
+                items=parallel_result.items[:max_items],
+                warnings=warnings,
+            )
+
+    for adapter in sequential_adapters:
         result = adapter()
         warnings.extend(result.warnings)
         if result.items:

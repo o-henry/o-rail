@@ -1238,13 +1238,15 @@
   min-height: 80px;
   height: 80px;
   width: 80px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: block;
   gap: 0;
 }
 
 .rag-node-icon {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
   width: 48px;
   height: 48px;
   border-radius: 12px;
@@ -1260,6 +1262,10 @@
 }
 
 .rag-node-icon img {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
   width: 32px;
   height: 32px;
   object-fit: contain;

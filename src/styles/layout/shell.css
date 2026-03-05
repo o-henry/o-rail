@@ -7079,7 +7079,7 @@ html[data-locale="ko"] .agents-topbar .agents-thread-brief p :lang(en) {
 
 pre {
   margin: 0;
-  max-height: 250px;
+  /* max-height: 250px; */
   overflow: auto;
   white-space: pre-wrap;
   word-break: break-word;

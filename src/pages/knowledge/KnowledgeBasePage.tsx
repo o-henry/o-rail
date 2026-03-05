@@ -54,7 +54,24 @@ function isHiddenKnowledgeEntry(entry: Pick<KnowledgeEntry, "runId" | "taskId">)
   return /GLOBAL_HEADLINES|MARKET_SUMMARY|TREND_RADAR|COMMUNITY_HOT_TOPICS|EVENT_CALENDAR|RISK_ALERT_BOARD|DEV_ECOSYSTEM_UPDATES/.test(raw);
 }
 
-function toKnowledgeEntry(post: KnowledgeSourcePost): KnowledgeEntry | null {
+function findAttachmentPath(post: KnowledgeSourcePost, kind: string): string | undefined {
+  const match = post.attachments.find((row) => row.kind === kind);
+  const path = String(match?.filePath ?? "").trim();
+  return path || undefined;
+}
+
+function formatArtifactFileNames(entry: Pick<KnowledgeEntry, "markdownPath" | "jsonPath">): string {
+  const names = [entry.markdownPath, entry.jsonPath]
+    .map((path) => String(path ?? "").trim())
+    .filter(Boolean)
+    .map((path) => toFileName(path));
+  if (names.length === 0) {
+    return "-";
+  }
+  return names.join(" · ");
+}
+
+export function toKnowledgeEntry(post: KnowledgeSourcePost): KnowledgeEntry | null {
   const runId = String(post.runId ?? "").trim();
   const taskId = toUpperSnakeToken(String(post.topicLabel ?? post.topic ?? "TASK_UNKNOWN"));
   if (isHiddenKnowledgeEntry({ runId, taskId })) {
@@ -69,8 +86,8 @@ function toKnowledgeEntry(post: KnowledgeSourcePost): KnowledgeEntry | null {
     title: String(post.summary ?? "").slice(0, 72) || post.agentName,
     summary: String(post.summary ?? ""),
     createdAt: post.createdAt,
-    markdownPath: undefined,
-    jsonPath: post.attachments.find((row) => row.kind === "json")?.filePath,
+    markdownPath: findAttachmentPath(post, "markdown"),
+    jsonPath: findAttachmentPath(post, "json"),
   };
 }
 
@@ -152,6 +169,7 @@ export default function KnowledgeBasePage({ cwd, posts, onInjectContextSources }
     readKnowledgeEntries().filter((row) => !isHiddenKnowledgeEntry(row)),
   );
   const [collapsedByGroup, setCollapsedByGroup] = useState<Record<string, boolean>>({});
+  const [markdownContent, setMarkdownContent] = useState("");
   const [jsonContent, setJsonContent] = useState("");
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState("");
@@ -217,8 +235,10 @@ export default function KnowledgeBasePage({ cwd, posts, onInjectContextSources }
 
   useEffect(() => {
     let cancelled = false;
+    const selectedMarkdownPath = String(selected?.markdownPath ?? "").trim();
     const selectedJsonPath = String(selected?.jsonPath ?? "").trim();
-    if (!selected || !selectedJsonPath) {
+    if (!selected || (!selectedMarkdownPath && !selectedJsonPath)) {
+      setMarkdownContent("");
       setJsonContent("");
       setDetailError("");
       setDetailLoading(false);
@@ -229,20 +249,45 @@ export default function KnowledgeBasePage({ cwd, posts, onInjectContextSources }
     setDetailLoading(true);
     setDetailError("");
     void (async () => {
+      const errors: string[] = [];
       try {
-        const jsonText = await invoke<string>("workspace_read_text", {
-          path: selectedJsonPath,
-        });
-        if (cancelled) {
-          return;
+        if (selectedMarkdownPath) {
+          try {
+            const markdownText = await invoke<string>("workspace_read_text", {
+              path: selectedMarkdownPath,
+            });
+            if (cancelled) {
+              return;
+            }
+            setMarkdownContent(String(markdownText ?? ""));
+          } catch (error) {
+            errors.push(`Markdown 읽기 실패: ${String(error)}`);
+            setMarkdownContent("");
+          }
+        } else {
+          setMarkdownContent("");
         }
-        setJsonContent(String(jsonText ?? ""));
-      } catch (error) {
-        if (cancelled) {
-          return;
+
+        if (selectedJsonPath) {
+          try {
+            const jsonText = await invoke<string>("workspace_read_text", {
+              path: selectedJsonPath,
+            });
+            if (cancelled) {
+              return;
+            }
+            setJsonContent(String(jsonText ?? ""));
+          } catch (error) {
+            errors.push(`JSON 읽기 실패: ${String(error)}`);
+            setJsonContent("");
+          }
+        } else {
+          setJsonContent("");
         }
-        setDetailError(`문서 읽기 실패: ${String(error)}`);
-        setJsonContent("");
+
+        if (errors.length > 0) {
+          setDetailError(errors.join(" / "));
+        }
       } finally {
         if (!cancelled) {
           setDetailLoading(false);
@@ -252,7 +297,7 @@ export default function KnowledgeBasePage({ cwd, posts, onInjectContextSources }
     return () => {
       cancelled = true;
     };
-  }, [selected?.id, selected?.jsonPath]);
+  }, [selected?.id, selected?.markdownPath, selected?.jsonPath]);
 
   const persistRows = (rows: KnowledgeEntry[]) => {
     setEntries(rows);
@@ -286,7 +331,7 @@ export default function KnowledgeBasePage({ cwd, posts, onInjectContextSources }
     <section className="panel-card knowledge-view workspace-tab-panel">
       <header className="knowledge-head">
         <h2>데이터베이스</h2>
-        <p>역할 실행으로 생성된 산출물(JSON)을 탐색하고 에이전트 컨텍스트로 재주입합니다.</p>
+        <p>역할 실행으로 생성된 산출물(Markdown/JSON)을 탐색하고 에이전트 컨텍스트로 재주입합니다.</p>
       </header>
       <section className="knowledge-overview">
         <article className="knowledge-overview-card panel-card">
@@ -350,7 +395,7 @@ export default function KnowledgeBasePage({ cwd, posts, onInjectContextSources }
                           type="button"
                         >
                           <strong>{entry.title}</strong>
-                          <span>{`${formatSourceKindLabel(entry.sourceKind)} · ${toFileName(entry.jsonPath || "")}`}</span>
+                          <span>{`${formatSourceKindLabel(entry.sourceKind)} · ${formatArtifactFileNames(entry)}`}</span>
                           <small>{new Date(entry.createdAt).toLocaleString()}</small>
                         </button>
                       ))}
@@ -383,20 +428,37 @@ export default function KnowledgeBasePage({ cwd, posts, onInjectContextSources }
                 <dd>{selected.sourceUrl || "-"}</dd>
                 <dt>TASK</dt>
                 <dd>{toUpperSnakeToken(selected.taskId)}</dd>
+                <dt>MARKDOWN</dt>
+                <dd>{toFileName(selected.markdownPath ?? "")}</dd>
                 <dt>JSON</dt>
                 <dd>{toFileName(selected.jsonPath ?? "")}</dd>
               </dl>
               <div className="knowledge-artifact-actions">
                 <button
+                  disabled={!selected.markdownPath}
+                  onClick={() => void onRevealPath(String(selected.markdownPath ?? ""))}
+                  type="button"
+                >
+                  Markdown 열기
+                </button>
+                <button
                   disabled={!selected.jsonPath}
                   onClick={() => void onRevealPath(String(selected.jsonPath ?? ""))}
                   type="button"
                 >
-                  파일 열기
+                  JSON 열기
                 </button>
               </div>
               {detailError ? <p className="knowledge-detail-error">{detailError}</p> : null}
               {detailLoading ? <p className="knowledge-empty">문서를 불러오는 중...</p> : null}
+              {!detailLoading && markdownContent ? (
+                <section className="knowledge-doc-block">
+                  <header className="knowledge-doc-head">
+                    <strong>문서 (Markdown)</strong>
+                  </header>
+                  <pre className="knowledge-doc-markdown">{markdownContent}</pre>
+                </section>
+              ) : null}
               {!detailLoading && jsonContent ? (
                 <section className="knowledge-doc-block">
                   <header className="knowledge-doc-head">

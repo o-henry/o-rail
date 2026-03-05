@@ -1,4 +1,4 @@
-import type { MouseEvent as ReactMouseEvent } from "react";
+import { useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from "react";
 import { useI18n } from "../../../i18n";
 import type { GraphNode, NodeAnchorSide, NodeExecutionStatus } from "../../../features/workflow/types";
 import type { MarqueeSelection, NodeRunState } from "../types";
@@ -34,6 +34,9 @@ type WorkflowCanvasNodesLayerProps = {
   onOpenFeedFromNode: (nodeId: string) => void;
   onOpenWebInputForNode: (nodeId: string) => void;
   marqueeSelection: MarqueeSelection | null;
+  selectedConversationNodeId: string;
+  conversationMessagesByNodeId: Record<string, Array<{ id: string; role: "user" | "agent"; text: string }>>;
+  onSubmitConversationMessage: (nodeId: string, message: string) => void;
 };
 
 export default function WorkflowCanvasNodesLayer({
@@ -65,8 +68,29 @@ export default function WorkflowCanvasNodesLayer({
   onOpenFeedFromNode,
   onOpenWebInputForNode,
   marqueeSelection,
+  selectedConversationNodeId,
+  conversationMessagesByNodeId,
+  onSubmitConversationMessage,
 }: WorkflowCanvasNodesLayerProps) {
   const { t } = useI18n();
+  const [conversationDraftByNodeId, setConversationDraftByNodeId] = useState<Record<string, string>>({});
+
+  const submitConversationDraft = (nodeId: string) => {
+    const draft = String(conversationDraftByNodeId[nodeId] ?? "").trim();
+    if (!draft) {
+      return;
+    }
+    onSubmitConversationMessage(nodeId, draft);
+    setConversationDraftByNodeId((prev) => ({ ...prev, [nodeId]: "" }));
+  };
+
+  const onConversationDraftKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>, nodeId: string) => {
+    if (event.key !== "Enter" || event.shiftKey) {
+      return;
+    }
+    event.preventDefault();
+    submitConversationDraft(nodeId);
+  };
 
   return (
     <>
@@ -94,6 +118,14 @@ export default function WorkflowCanvasNodesLayer({
           node.type === "turn" && sourceKind === "data_pipeline";
         const isDataResearchNode = node.type === "turn" && sourceKind === "data_research";
         const isRagModeNode = graphViewMode === "rag";
+        const showConversationIsland =
+          graphViewMode === "graph" &&
+          node.type === "turn" &&
+          selectedConversationNodeId === node.id;
+        const nodeConversationMessages = showConversationIsland ? (conversationMessagesByNodeId[node.id] ?? []) : [];
+        const requirementMessages = nodeConversationMessages.filter((row) => row.role === "user").slice(-4);
+        const executionMessages = nodeConversationMessages.filter((row) => row.role === "agent").slice(-8);
+        const draftMessage = String(conversationDraftByNodeId[node.id] ?? "");
         return (
           <div
             className={`graph-node node-${node.type} ${isRagModeNode ? "is-rag-mode-node" : ""} ${isDataPipelineNode ? "is-data-pipeline-node" : ""} ${isDataResearchNode ? "is-data-research-node" : ""} ${handoffRoleClass} ${isNodeSelected ? "selected" : ""} ${isNodeDragging ? "is-dragging" : ""}`.trim()}
@@ -228,6 +260,68 @@ export default function WorkflowCanvasNodesLayer({
                   />
                 ))}
               </div>
+            )}
+            {showConversationIsland && (
+              <section
+                className="node-conversation-island"
+                onClick={(event) => event.stopPropagation()}
+                onMouseDown={(event) => event.stopPropagation()}
+              >
+                <header className="node-conversation-island-head">
+                  <strong>{turnRoleLabel(node)}</strong>
+                  <span>{turnModelLabel(node)}</span>
+                </header>
+                <div className="node-conversation-island-body">
+                  <section className="node-conversation-block">
+                    <h4>요구사항</h4>
+                    {requirementMessages.length > 0 ? (
+                      <ul className="node-conversation-list">
+                        {requirementMessages.map((message) => (
+                          <li className="is-user" key={message.id}>
+                            {message.text}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="node-conversation-empty">아직 입력된 요구사항이 없습니다.</p>
+                    )}
+                  </section>
+                  <section className="node-conversation-block">
+                    <h4>실행과정</h4>
+                    {executionMessages.length > 0 ? (
+                      <ul className="node-conversation-list">
+                        {executionMessages.map((message) => (
+                          <li className="is-agent" key={message.id}>
+                            {message.text}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="node-conversation-empty">실행 로그가 아직 없습니다.</p>
+                    )}
+                  </section>
+                </div>
+                <div className="node-conversation-input-row">
+                  <textarea
+                    onChange={(event) =>
+                      setConversationDraftByNodeId((prev) => ({
+                        ...prev,
+                        [node.id]: event.currentTarget.value,
+                      }))
+                    }
+                    onKeyDown={(event) => onConversationDraftKeyDown(event, node.id)}
+                    placeholder="이 노드에 대한 요구사항을 입력하세요"
+                    rows={1}
+                    value={draftMessage}
+                  />
+                  <button
+                    onClick={() => submitConversationDraft(node.id)}
+                    type="button"
+                  >
+                    전송
+                  </button>
+                </div>
+              </section>
             )}
           </div>
         );

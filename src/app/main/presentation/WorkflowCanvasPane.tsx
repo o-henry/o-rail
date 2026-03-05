@@ -5,7 +5,6 @@ import type { GraphNode, NodeAnchorSide, NodeExecutionStatus } from "../../../fe
 import type { TurnExecutor } from "../../../features/workflow/domain";
 import type { WorkflowGraphViewMode } from "../../../features/workflow/viaGraph";
 import WorkflowCanvasNodesLayer from "./WorkflowCanvasNodesLayer";
-import WorkflowAgentConversationPanel from "./WorkflowAgentConversationPanel";
 import WorkflowQuestionComposer from "./WorkflowQuestionComposer";
 
 type EdgeLine = {
@@ -177,10 +176,8 @@ export default function WorkflowCanvasPane({
   questionInputRef,
 }: WorkflowCanvasPaneProps) {
   const { t } = useI18n();
-  const [isConversationPanelOpen, setIsConversationPanelOpen] = useState(false);
   const [conversationByNodeId, setConversationByNodeId] = useState<Record<string, WorkflowConversationMessage[]>>({});
   const nodeLogCursorRef = useRef<Record<string, number>>({});
-  const conversationPanelRef = useRef<HTMLElement | null>(null);
 
   const canvasNodeById = useMemo(() => {
     const next = new Map<string, GraphNode>();
@@ -235,40 +232,29 @@ export default function WorkflowCanvasPane({
     });
   }, [nodeStates]);
 
-  const selectedConversationMessages = useMemo(
-    () => (selectedConversationNodeId ? conversationByNodeId[selectedConversationNodeId] ?? [] : []),
-    [conversationByNodeId, selectedConversationNodeId],
-  );
-
-  const conversationAgentTitle = selectedConversationNode
-    ? `${turnRoleLabel(selectedConversationNode)} · ${nodeTypeLabel(selectedConversationNode.type)}`
-    : "";
-  const conversationAgentMeta = selectedConversationNode
-    ? `${turnModelLabel(selectedConversationNode)} · ${selectedConversationNode.id}`
-    : "";
-
   const onSubmitConversationMessage = useCallback(
-    (message: string) => {
+    (nodeId: string, message: string) => {
       const trimmed = String(message ?? "").trim();
-      if (!trimmed || !selectedConversationNodeId) {
+      const normalizedNodeId = String(nodeId ?? "").trim();
+      if (!trimmed || !normalizedNodeId) {
         return;
       }
       setConversationByNodeId((prev) => {
         const next = { ...prev };
-        const existing = next[selectedConversationNodeId] ?? [];
+        const existing = next[normalizedNodeId] ?? [];
         const nextMessage: WorkflowConversationMessage = {
-          id: `${selectedConversationNodeId}-user-${Date.now()}`,
+          id: `${normalizedNodeId}-user-${Date.now()}`,
           role: "user",
           text: trimmed,
         };
-        next[selectedConversationNodeId] = [
+        next[normalizedNodeId] = [
           ...existing,
           nextMessage,
         ].slice(-120);
         return next;
       });
     },
-    [selectedConversationNodeId],
+    [],
   );
 
   return (
@@ -405,6 +391,9 @@ export default function WorkflowCanvasPane({
                 turnModelLabel={turnModelLabel}
                 turnRoleLabel={turnRoleLabel}
                 deleteNode={deleteNode}
+                conversationMessagesByNodeId={conversationByNodeId}
+                onSubmitConversationMessage={onSubmitConversationMessage}
+                selectedConversationNodeId={selectedConversationNodeId}
               />
             </div>
           </div>
@@ -466,17 +455,6 @@ export default function WorkflowCanvasPane({
           </div>
         </div>
 
-        <div className="workflow-conversation-floating-layer">
-          <WorkflowAgentConversationPanel
-            agentMeta={conversationAgentMeta}
-            agentTitle={conversationAgentTitle}
-            hasSelectedAgent={Boolean(selectedConversationNode)}
-            isOpen={isConversationPanelOpen}
-            messages={selectedConversationMessages}
-            onToggleOpen={() => setIsConversationPanelOpen((prev) => !prev)}
-            panelRef={conversationPanelRef}
-          />
-        </div>
       </div>
 
       <div className="canvas-topbar">
@@ -485,7 +463,12 @@ export default function WorkflowCanvasPane({
           isWorkflowBusy={isWorkflowBusy}
           onApplyModelSelection={onApplyModelSelection}
           onRunGraph={onRunGraph}
-          onSubmitMessage={onSubmitConversationMessage}
+          onSubmitMessage={(message) => {
+            if (!selectedConversationNodeId) {
+              return;
+            }
+            onSubmitConversationMessage(selectedConversationNodeId, message);
+          }}
           questionInputRef={questionInputRef}
           setWorkflowQuestion={setWorkflowQuestion}
           workflowQuestion={workflowQuestion}

@@ -1272,6 +1272,19 @@
   display: block;
 }
 
+.rag-node-icon.is-loading {
+  animation: rag-node-loader-spin 900ms linear infinite;
+}
+
+@keyframes rag-node-loader-spin {
+  from {
+    transform: translate(-50%, -50%) rotate(0deg);
+  }
+  to {
+    transform: translate(-50%, -50%) rotate(360deg);
+  }
+}
+
 .rag-node-type {
   position: absolute;
   left: 50%;

@@ -94,6 +94,8 @@ export default function WorkflowCanvasNodesLayer({
           node.type === "turn" && sourceKind === "data_pipeline";
         const isDataResearchNode = node.type === "turn" && sourceKind === "data_research";
         const isRagModeNode = graphViewMode === "rag";
+        const isRagNodeRunning = isRagModeNode && nodeStatus === "running";
+        const activeRagNodeIconSrc = isRagNodeRunning ? "/rag-node-icons/loader.svg" : ragNodeIconSrc;
         return (
           <div
             className={`graph-node node-${node.type} ${isRagModeNode ? "is-rag-mode-node" : ""} ${isDataPipelineNode ? "is-data-pipeline-node" : ""} ${isDataResearchNode ? "is-data-research-node" : ""} ${handoffRoleClass} ${isNodeSelected ? "selected" : ""} ${isNodeDragging ? "is-dragging" : ""}`.trim()}
@@ -126,9 +128,9 @@ export default function WorkflowCanvasNodesLayer({
             {isRagModeNode ? (
               <>
                 <div className="rag-node-shell">
-                  <div className="rag-node-icon">
-                    {ragNodeIconSrc ? (
-                      <img alt="" aria-hidden="true" src={ragNodeIconSrc} />
+                  <div className={`rag-node-icon${isRagNodeRunning ? " is-loading" : ""}`}>
+                    {activeRagNodeIconSrc ? (
+                      <img alt="" aria-hidden="true" src={activeRagNodeIconSrc} />
                     ) : (
                       ragNodeIconText
                     )}

@@ -47,6 +47,14 @@ function toRecord(input: unknown): Record<string, unknown> | null {
   return input as Record<string, unknown>;
 }
 
+function toNonNegativeNumber(input: unknown): number | null {
+  const parsed = Number(input);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return null;
+  }
+  return parsed;
+}
+
 function toStringArray(input: unknown): string[] {
   if (!Array.isArray(input)) {
     return [];
@@ -54,6 +62,20 @@ function toStringArray(input: unknown): string[] {
   return input
     .map((row) => String(row ?? "").trim())
     .filter((row) => row.length > 0);
+}
+
+function parseCsvList(input: unknown, maxItems = 12): string[] {
+  const text = String(input ?? "").trim();
+  if (!text) {
+    return [];
+  }
+  const normalized = text.replace(/\r\n?/g, "\n");
+  const rows = normalized
+    .split(/[\n,]+/g)
+    .map((row) => row.trim())
+    .filter((row) => row.length > 0);
+  const unique = Array.from(new Set(rows));
+  return unique.slice(0, maxItems);
 }
 
 function normalizeWhitespace(input: string): string {
@@ -151,7 +173,7 @@ function buildViaTextSummary(params: {
   const steps = Array.isArray(detailRecord?.steps) ? detailRecord?.steps : [];
   const highlights = toStringArray(payload?.highlights).slice(0, 8);
   const rankedItems = Array.isArray(payload?.items) ? payload?.items : [];
-  const codexBriefing = normalizeWhitespace(String(payload?.codex_briefing ?? ""));
+  const codexBriefing = String(payload?.codex_briefing ?? "").replace(/\r\n?/g, "\n").trim();
   const itemsAllCountRaw = payload?.items_all_count;
   const itemsAllCount =
     typeof itemsAllCountRaw === "number"
@@ -168,6 +190,20 @@ function buildViaTextSummary(params: {
   const totalItems = Number(crawlDepth?.items_total ?? 0);
   const statusLabel = toViaStatusLabel(params.status);
   const lines = [`RAG 실행 결과: ${statusLabel}`, `- 실행 ID: ${params.runId}`, `- 산출물: ${params.artifacts.length}개`];
+  const codexUsage = toRecord(payload?.codex_usage) ?? toRecord(detailRecord?.codex_usage);
+  if (codexUsage) {
+    const promptTokens = toNonNegativeNumber(codexUsage.prompt_tokens);
+    const completionTokens = toNonNegativeNumber(codexUsage.completion_tokens);
+    const totalTokens = toNonNegativeNumber(codexUsage.total_tokens);
+    const usageParts = [
+      promptTokens !== null ? `입력 ${promptTokens}` : "",
+      completionTokens !== null ? `출력 ${completionTokens}` : "",
+      totalTokens !== null ? `합계 ${totalTokens}` : "",
+    ].filter((row) => row.length > 0);
+    if (usageParts.length > 0) {
+      lines.push(`- Codex 토큰: ${usageParts.join(" / ")}`);
+    }
+  }
   if (typeof itemsAllCount === "number" && Number.isFinite(itemsAllCount)) {
     lines.push(`- 수집 항목: ${itemsAllCount}개`);
   }
@@ -210,10 +246,7 @@ function buildViaTextSummary(params: {
   }
 
   if (codexBriefing) {
-    lines.push("", "상세 브리핑:");
-    for (const paragraph of codexBriefing.split("\n").map((row) => row.trim()).filter(Boolean).slice(0, 16)) {
-      lines.push(`- ${toKoreanReadableText(paragraph, 260)}`);
-    }
+    lines.push("", "상세 브리핑:", codexBriefing);
   }
   if (params.warnings.length > 0) {
     lines.push("", `경고 ${params.warnings.length}건:`);
@@ -317,6 +350,7 @@ export async function runViaFlowTurn(params: {
   const normalizedFlowIdRaw = String(params.config.viaFlowId ?? "").trim();
   const flowId = Number(normalizedFlowIdRaw);
   if (!normalizedFlowIdRaw || !Number.isInteger(flowId) || flowId <= 0) {
+    params.addNodeLog(params.node.id, "[VIA][오류] flow_id가 비어 있거나 올바르지 않습니다.");
     return {
       ok: false,
       error: "VIA flow_id를 올바르게 입력하세요. (양의 정수)",
@@ -328,6 +362,7 @@ export async function runViaFlowTurn(params: {
   }
 
   if (params.pauseRequestedRef.current) {
+    params.addNodeLog(params.node.id, "[VIA] 일시정지 요청으로 실행을 중단했습니다.");
     return {
       ok: false,
       error: params.pauseErrorToken,
@@ -339,6 +374,7 @@ export async function runViaFlowTurn(params: {
   }
 
   if (params.cancelRequestedRef.current) {
+    params.addNodeLog(params.node.id, "[VIA] 사용자 취소 요청으로 실행을 중단했습니다.");
     return {
       ok: false,
       error: params.t("run.cancelledByUserShort"),
@@ -359,6 +395,25 @@ export async function runViaFlowTurn(params: {
       .toLowerCase();
   const normalizedSourceType =
     preferredSourceType.startsWith("source.") ? preferredSourceType : "";
+  const sourceOptions = (() => {
+    const configRecord = params.config as Record<string, unknown>;
+    const keywords = parseCsvList(configRecord?.viaCustomKeywords, 10);
+    const countries = parseCsvList(configRecord?.viaCustomCountries, 8).map((row) => row.toUpperCase());
+    const sites = parseCsvList(configRecord?.viaCustomSites, 20);
+    const maxItemsRaw = Number(configRecord?.viaCustomMaxItems);
+    const maxItems = Number.isFinite(maxItemsRaw) && maxItemsRaw > 0
+      ? Math.max(1, Math.min(120, Math.floor(maxItemsRaw)))
+      : undefined;
+    if (keywords.length === 0 && countries.length === 0 && sites.length === 0 && maxItems === undefined) {
+      return undefined;
+    }
+    return {
+      keywords: keywords.length > 0 ? keywords : undefined,
+      countries: countries.length > 0 ? countries : undefined,
+      sites: sites.length > 0 ? sites : undefined,
+      maxItems,
+    };
+  })();
 
   params.addNodeLog(params.node.id, `[VIA] flow_id=${flowId} 실행 요청`);
 
@@ -369,9 +424,11 @@ export async function runViaFlowTurn(params: {
       flowId,
       trigger: "manual",
       sourceType: normalizedSourceType || undefined,
+      sourceOptions,
     });
 
     if (!initial.runId) {
+      params.addNodeLog(params.node.id, "[VIA][오류] 실행 응답에 run_id가 없어 중단합니다.");
       return {
         ok: false,
         error: "VIA 실행 응답에 run_id가 없습니다.",
@@ -474,6 +531,7 @@ export async function runViaFlowTurn(params: {
     }
 
     if (!isTerminalStatus(status)) {
+      params.addNodeLog(params.node.id, `[VIA][오류] 타임아웃(${timeoutMs}ms) run_id=${runId}`);
       return {
         ok: false,
         error: `VIA 실행 타임아웃(${timeoutMs}ms): run_id=${runId}`,
@@ -485,6 +543,7 @@ export async function runViaFlowTurn(params: {
     }
 
     if (status !== "done") {
+      params.addNodeLog(params.node.id, `[VIA][오류] 실패 status=${status}, run_id=${runId}`);
       return {
         ok: false,
         error: `VIA 실행 실패: status=${status}, run_id=${runId}`,
@@ -523,6 +582,7 @@ export async function runViaFlowTurn(params: {
       memoryTrace: params.memoryTrace,
     };
   } catch (error) {
+    params.addNodeLog(params.node.id, `[VIA][오류] ${String(error)}`);
     return {
       ok: false,
       error: `VIA 실행 실패: ${String(error)}`,

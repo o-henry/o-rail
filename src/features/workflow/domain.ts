@@ -60,6 +60,10 @@ export type TurnConfig = {
   viaFlowId?: string;
   viaSourceTypeHint?: string;
   viaTemplateLabel?: string;
+  viaCustomKeywords?: string;
+  viaCustomCountries?: string;
+  viaCustomSites?: string;
+  viaCustomMaxItems?: number;
 };
 
 export const TURN_EXECUTOR_OPTIONS = [

@@ -14,6 +14,7 @@ export type KnowledgeEntry = {
   createdAt: string;
   markdownPath?: string;
   jsonPath?: string;
+  sourceFile?: string;
 };
 
 export type KnowledgeSourcePost = {
@@ -29,4 +30,5 @@ export type KnowledgeSourcePost = {
     kind: string;
     filePath?: string;
   }>;
+  sourceFile?: string;
 };

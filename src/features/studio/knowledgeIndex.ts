@@ -1,6 +1,54 @@
 import type { KnowledgeEntry } from "./knowledgeTypes";
 
 const KNOWLEDGE_INDEX_STORAGE_KEY = "rail.studio.knowledge.index.v1";
+const KNOWLEDGE_HIDDEN_RUN_IDS_STORAGE_KEY = "rail.studio.knowledge.hiddenRuns.v1";
+const KNOWLEDGE_HIDDEN_ENTRY_IDS_STORAGE_KEY = "rail.studio.knowledge.hiddenEntries.v1";
+
+let memoryHiddenRunIds = new Set<string>();
+let memoryHiddenEntryIds = new Set<string>();
+
+function normalizeToken(value: unknown): string {
+  return String(value ?? "").trim();
+}
+
+function canUseLocalStorage(): boolean {
+  return typeof window !== "undefined" && !!window.localStorage;
+}
+
+function readHiddenTokens(storageKey: string, memorySet: Set<string>): Set<string> {
+  if (!canUseLocalStorage()) {
+    return new Set(memorySet);
+  }
+  try {
+    const raw = window.localStorage.getItem(storageKey);
+    if (!raw) {
+      return new Set();
+    }
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) {
+      return new Set();
+    }
+    return new Set(parsed.map((row) => normalizeToken(row)).filter((row) => row.length > 0));
+  } catch {
+    return new Set();
+  }
+}
+
+function writeHiddenTokens(storageKey: string, memorySet: Set<string>, next: Set<string>): void {
+  const normalized = new Set(Array.from(next).map((row) => normalizeToken(row)).filter((row) => row.length > 0));
+  memorySet.clear();
+  for (const token of normalized) {
+    memorySet.add(token);
+  }
+  if (!canUseLocalStorage()) {
+    return;
+  }
+  try {
+    window.localStorage.setItem(storageKey, JSON.stringify(Array.from(normalized)));
+  } catch {
+    // ignore storage failures
+  }
+}
 
 function normalizeEntry(raw: unknown): KnowledgeEntry | null {
   if (!raw || typeof raw !== "object") {
@@ -33,6 +81,7 @@ function normalizeEntry(raw: unknown): KnowledgeEntry | null {
     createdAt: String(row.createdAt ?? "").trim() || new Date().toISOString(),
     markdownPath: String(row.markdownPath ?? "").trim() || undefined,
     jsonPath: String(row.jsonPath ?? "").trim() || undefined,
+    sourceFile: String(row.sourceFile ?? "").trim() || undefined,
   };
 }
 
@@ -63,6 +112,9 @@ export function writeKnowledgeEntries(rows: KnowledgeEntry[]): void {
 }
 
 export function upsertKnowledgeEntry(entry: KnowledgeEntry): KnowledgeEntry[] {
+  if (isKnowledgeRunIdHidden(entry.runId) || isKnowledgeEntryIdHidden(entry.id)) {
+    return readKnowledgeEntries();
+  }
   const current = readKnowledgeEntries();
   const next = current.some((row) => row.id === entry.id)
     ? current.map((row) => (row.id === entry.id ? entry : row))
@@ -76,10 +128,89 @@ export function removeKnowledgeEntry(entryId: string): KnowledgeEntry[] {
   if (!targetId) {
     return readKnowledgeEntries();
   }
+  hideKnowledgeEntryId(targetId);
   const current = readKnowledgeEntries();
   const next = current.filter((row) => row.id !== targetId);
   writeKnowledgeEntries(next);
   return next;
+}
+
+export function removeKnowledgeEntriesByRunId(runId: string): KnowledgeEntry[] {
+  const targetRunId = String(runId ?? "").trim();
+  if (!targetRunId) {
+    return readKnowledgeEntries();
+  }
+  hideKnowledgeRunId(targetRunId);
+  const current = readKnowledgeEntries();
+  const next = current.filter((row) => String(row.runId ?? "").trim() !== targetRunId);
+  writeKnowledgeEntries(next);
+  return next;
+}
+
+export function readHiddenKnowledgeRunIds(): Set<string> {
+  return readHiddenTokens(KNOWLEDGE_HIDDEN_RUN_IDS_STORAGE_KEY, memoryHiddenRunIds);
+}
+
+export function writeHiddenKnowledgeRunIds(ids: Set<string>): void {
+  writeHiddenTokens(KNOWLEDGE_HIDDEN_RUN_IDS_STORAGE_KEY, memoryHiddenRunIds, ids);
+}
+
+export function hideKnowledgeRunId(runId: string): void {
+  const normalized = normalizeToken(runId);
+  if (!normalized) {
+    return;
+  }
+  const next = readHiddenKnowledgeRunIds();
+  next.add(normalized);
+  writeHiddenKnowledgeRunIds(next);
+}
+
+export function isKnowledgeRunIdHidden(runId: string): boolean {
+  const normalized = normalizeToken(runId);
+  if (!normalized) {
+    return false;
+  }
+  return readHiddenKnowledgeRunIds().has(normalized);
+}
+
+export function readHiddenKnowledgeEntryIds(): Set<string> {
+  return readHiddenTokens(KNOWLEDGE_HIDDEN_ENTRY_IDS_STORAGE_KEY, memoryHiddenEntryIds);
+}
+
+export function writeHiddenKnowledgeEntryIds(ids: Set<string>): void {
+  writeHiddenTokens(KNOWLEDGE_HIDDEN_ENTRY_IDS_STORAGE_KEY, memoryHiddenEntryIds, ids);
+}
+
+export function hideKnowledgeEntryId(entryId: string): void {
+  const normalized = normalizeToken(entryId);
+  if (!normalized) {
+    return;
+  }
+  const next = readHiddenKnowledgeEntryIds();
+  next.add(normalized);
+  writeHiddenKnowledgeEntryIds(next);
+}
+
+export function isKnowledgeEntryIdHidden(entryId: string): boolean {
+  const normalized = normalizeToken(entryId);
+  if (!normalized) {
+    return false;
+  }
+  return readHiddenKnowledgeEntryIds().has(normalized);
+}
+
+export function clearHiddenKnowledgeIdsForTest(): void {
+  memoryHiddenRunIds = new Set();
+  memoryHiddenEntryIds = new Set();
+  if (!canUseLocalStorage()) {
+    return;
+  }
+  try {
+    window.localStorage.removeItem(KNOWLEDGE_HIDDEN_RUN_IDS_STORAGE_KEY);
+    window.localStorage.removeItem(KNOWLEDGE_HIDDEN_ENTRY_IDS_STORAGE_KEY);
+  } catch {
+    // ignore storage failures
+  }
 }
 
 export async function persistKnowledgeIndexToWorkspace(params: {

@@ -1,12 +1,17 @@
 import { useEffect, useState } from "react";
 import FancySelect from "../../components/FancySelect";
 import type { ViaNodeType } from "../../features/workflow/viaCatalog";
+import { RAG_SOURCE_PRESETS, type RagSourcePresetId } from "../../features/workflow/ragSourcePresets";
 
 type RagNodeSummary = {
   id: string;
   flowId: string;
   viaNodeType: string;
   viaNodeLabel: string;
+  viaCustomKeywords: string;
+  viaCustomCountries: string;
+  viaCustomSites: string;
+  viaCustomMaxItems: number;
 };
 
 type WorkflowRagModeDockProps = {
@@ -22,6 +27,15 @@ type WorkflowRagModeDockProps = {
   selectedNodeId: string;
   onSelectNode: (nodeId: string) => void;
   onUpdateFlowId: (nodeId: string, nextFlowId: string) => void;
+  onUpdateSourceOptions: (
+    nodeId: string,
+    patch: {
+      viaCustomKeywords?: string;
+      viaCustomCountries?: string;
+      viaCustomSites?: string;
+      viaCustomMaxItems?: number;
+    },
+  ) => void;
   onAddRagNode: (nodeType: ViaNodeType) => void;
   onApplyTemplate: (templateId: string) => void;
   viaNodeOptions: Array<{ value: ViaNodeType; label: string }>;
@@ -31,6 +45,7 @@ type WorkflowRagModeDockProps = {
 export default function WorkflowRagModeDock(props: WorkflowRagModeDockProps) {
   const [nextNodeType, setNextNodeType] = useState<ViaNodeType>(props.viaNodeOptions[0]?.value ?? "source.news");
   const [nextTemplateId, setNextTemplateId] = useState<string>(props.ragTemplateOptions[0]?.value ?? "rag.market");
+  const [nextSourcePresetId, setNextSourcePresetId] = useState<RagSourcePresetId>(RAG_SOURCE_PRESETS[0]?.id ?? "rag.source.market_hot");
   const showProgressIsland =
     props.ragNodes.length > 0 ||
     props.isGraphRunning ||
@@ -43,6 +58,13 @@ export default function WorkflowRagModeDock(props: WorkflowRagModeDockProps) {
       }
     });
   }, [props.ragNodes, props.onUpdateFlowId]);
+
+  const selectedRagNode =
+    props.ragNodes.find((node) => node.id === props.selectedNodeId) ?? props.ragNodes[0] ?? null;
+  const selectedSourceNode =
+    selectedRagNode && String(selectedRagNode.viaNodeType ?? "").startsWith("source.")
+      ? selectedRagNode
+      : null;
 
   return (
     <>
@@ -90,6 +112,98 @@ export default function WorkflowRagModeDock(props: WorkflowRagModeDockProps) {
             <span className="mini-action-button-label">추가</span>
           </button>
         </section>
+
+        {selectedSourceNode ? (
+          <section className="workflow-rag-custom-section" aria-label="동적 크롤링 옵션">
+            <header className="workflow-rag-custom-head">
+              <strong>동적 크롤링 옵션</strong>
+              <span>{selectedSourceNode.viaNodeLabel}</span>
+            </header>
+            <section className="workflow-rag-template-row" aria-label="동적 크롤링 프리셋">
+              <FancySelect
+                ariaLabel="동적 크롤링 프리셋"
+                className="modern-select"
+                onChange={(next) => setNextSourcePresetId(next as RagSourcePresetId)}
+                options={RAG_SOURCE_PRESETS.map((preset) => ({
+                  value: preset.id,
+                  label: preset.label,
+                }))}
+                value={nextSourcePresetId}
+              />
+              <button
+                className="mini-action-button"
+                onClick={() => {
+                  const preset = RAG_SOURCE_PRESETS.find((row) => row.id === nextSourcePresetId) ?? RAG_SOURCE_PRESETS[0];
+                  if (!preset) {
+                    return;
+                  }
+                  props.onUpdateSourceOptions(selectedSourceNode.id, {
+                    viaCustomKeywords: preset.keywords,
+                    viaCustomCountries: preset.countries,
+                    viaCustomSites: preset.sites,
+                    viaCustomMaxItems: preset.maxItems,
+                  });
+                }}
+                type="button"
+              >
+                <span className="mini-action-button-label">적용</span>
+              </button>
+            </section>
+            <label className="workflow-rag-custom-field">
+              키워드 (쉼표)
+              <input
+                onChange={(event) =>
+                  props.onUpdateSourceOptions(selectedSourceNode.id, {
+                    viaCustomKeywords: event.currentTarget.value,
+                  })}
+                placeholder="예: unity, indie game, steam"
+                value={String(selectedSourceNode.viaCustomKeywords ?? "")}
+              />
+            </label>
+            <label className="workflow-rag-custom-field">
+              국가 코드 (쉼표)
+              <input
+                onChange={(event) =>
+                  props.onUpdateSourceOptions(selectedSourceNode.id, {
+                    viaCustomCountries: event.currentTarget.value,
+                  })}
+                placeholder="예: KR,US,JP"
+                value={String(selectedSourceNode.viaCustomCountries ?? "")}
+              />
+            </label>
+            <label className="workflow-rag-custom-field">
+              사이트/URL (쉼표 또는 줄바꿈)
+              <textarea
+                onChange={(event) =>
+                  props.onUpdateSourceOptions(selectedSourceNode.id, {
+                    viaCustomSites: event.currentTarget.value,
+                  })}
+                placeholder={"예: reddit.com, gamasutra.com\n또는 https://example.com/feed"}
+                rows={3}
+                value={String(selectedSourceNode.viaCustomSites ?? "")}
+              />
+            </label>
+            <label className="workflow-rag-custom-field">
+              최대 수집 건수
+              <input
+                onChange={(event) =>
+                  {
+                    const digitsOnly = event.currentTarget.value.replace(/[^0-9]/g, "");
+                    const parsed = Number(digitsOnly || "24");
+                    props.onUpdateSourceOptions(selectedSourceNode.id, {
+                      viaCustomMaxItems: Math.max(1, parsed),
+                    });
+                  }
+                }
+                inputMode="numeric"
+                pattern="[0-9]*"
+                placeholder="예: 24"
+                type="text"
+                value={String(selectedSourceNode.viaCustomMaxItems || 24)}
+              />
+            </label>
+          </section>
+        ) : null}
       </aside>
 
       {showProgressIsland && (

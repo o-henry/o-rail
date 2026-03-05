@@ -585,15 +585,16 @@
 }
 
 .workflow-rag-progress-dock {
-  display: grid;
-  align-content: start;
+  display: flex;
+  flex-direction: column;
   gap: 0;
+  flex: 1 1 auto;
   border-radius: 8px;
   background: #ffffff;
   padding: 10px 10px;
   overflow: visible;
-  min-height: 0;
-  height: auto;
+  min-height: 140px;
+  height: 100%;
   box-sizing: border-box;
 }
 
@@ -609,9 +610,83 @@
   align-items: center;
 }
 
+.workflow-rag-custom-section {
+  display: grid;
+  gap: 16px;
+  padding-top: 1rem;
+}
+
+.workflow-rag-custom-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.workflow-rag-custom-head strong {
+  font-size: 15px;
+  color: var(--text-main);
+}
+
+.workflow-rag-custom-head span {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.workflow-rag-custom-field {
+  display: grid;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.workflow-rag-custom-field input,
+.workflow-rag-custom-field textarea {
+  border: 0;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--surface-panel) 84%, var(--surface));
+  color: var(--text-main);
+  font-size: 12px;
+  padding: 8px 10px;
+  outline: none;
+  box-shadow: none;
+}
+
+.workflow-rag-custom-field input {
+  min-height: 36px;
+  height: 36px;
+}
+
+.workflow-rag-custom-field input:focus,
+.workflow-rag-custom-field input:focus-visible,
+.workflow-rag-custom-field textarea:focus,
+.workflow-rag-custom-field textarea:focus-visible {
+  border: 0;
+  outline: none;
+  box-shadow: none;
+}
+
+.workflow-rag-custom-field input[type="number"]::-webkit-outer-spin-button,
+.workflow-rag-custom-field input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.workflow-rag-custom-field input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+.workflow-rag-custom-field textarea {
+  min-height: 70px;
+  resize: vertical;
+}
+
 .workflow-rag-progress-island {
   display: grid;
+  align-content: start;
   gap: 8px;
+  flex: 1 1 auto;
+  min-height: 0;
   padding: 0;
   border-radius: 0;
   background: transparent;
@@ -647,7 +722,7 @@
 .workflow-rag-progress-item {
   display: grid;
   gap: 4px;
-  padding: 6px 8px;
+  padding: 9px 10px;
   border-radius: 6px;
   background: color-mix(in srgb, var(--surface-soft) 74%, var(--surface-elevated));
   border: 0;

@@ -261,6 +261,22 @@ pub fn workspace_read_text(path: String) -> Result<String, String> {
 }
 
 #[tauri::command]
+pub fn workspace_delete_file(path: String) -> Result<(), String> {
+    let raw = path.trim();
+    if raw.is_empty() {
+        return Err("path is required".to_string());
+    }
+    let target = PathBuf::from(raw);
+    if !target.exists() {
+        return Err("file not found".to_string());
+    }
+    if !target.is_file() {
+        return Err("target is not file".to_string());
+    }
+    fs::remove_file(&target).map_err(|e| format!("failed to delete text file: {e}"))
+}
+
+#[tauri::command]
 pub async fn dialog_pick_directory(app: tauri::AppHandle) -> Result<Option<String>, String> {
     let (tx, mut rx) = channel::<Option<String>>(1);
     app.dialog()

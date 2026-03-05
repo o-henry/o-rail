@@ -114,8 +114,16 @@
   gap: 4px;
 }
 
+.knowledge-group-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .knowledge-group-trigger {
-  width: 100%;
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
   border: 0;
   border-radius: 4px;
   background: #e9f8ee;
@@ -128,7 +136,23 @@
   text-align: left;
 }
 
+.knowledge-group-delete {
+  min-height: 30px;
+  border: 0;
+  border-radius: 4px;
+  background: color-mix(in srgb, #cc3131 14%, var(--surface));
+  color: #8a1f1f;
+  font-size: 11px;
+  padding: 0 9px;
+  white-space: nowrap;
+}
+
 .knowledge-group-trigger strong {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 12px;
   color: var(--text-main);
 }

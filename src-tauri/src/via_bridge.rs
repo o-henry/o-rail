@@ -439,6 +439,7 @@ pub async fn via_run_flow(
     flow_id: i64,
     trigger: Option<String>,
     source_type: Option<String>,
+    source_options: Option<Value>,
 ) -> ViaResult<Value> {
     if flow_id <= 0 {
         return Err("flow_id must be a positive integer".to_string());
@@ -459,7 +460,8 @@ pub async fn via_run_flow(
                 .unwrap_or_else(|| "manual".to_string()),
             "source_type": source_type
                 .map(|value| value.trim().to_string())
-                .filter(|value| value.starts_with("source."))
+                .filter(|value| value.starts_with("source.")),
+            "source_options": source_options
         })),
     )
     .await

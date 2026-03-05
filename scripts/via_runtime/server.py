@@ -196,6 +196,45 @@ SOURCE_TYPE_LABEL: dict[str, str] = {
     SOURCE_TYPE_MARKET: "주식/마켓",
 }
 
+HOT_TOPIC_KEYWORDS = {
+    "breaking",
+    "live",
+    "hot",
+    "trending",
+    "trend",
+    "top",
+    "most read",
+    "most viewed",
+    "viral",
+    "급상승",
+    "실시간",
+    "인기",
+    "핫",
+    "속보",
+    "랭킹",
+    "트렌드",
+    "热搜",
+    "热门",
+    "实时",
+    "排行",
+    "バズ",
+    "人気",
+    "速報",
+    "トレンド",
+    "ランキング",
+}
+
+HOT_URL_MARKERS = {
+    "ranking",
+    "popular",
+    "trending",
+    "top",
+    "hot",
+    "mostread",
+    "most-viewed",
+    "hotentry",
+}
+
 TRUSTED_DOMAINS = {
     "news.google.com",
     "news.naver.com",
@@ -391,18 +430,46 @@ def contains_korean(text: str) -> bool:
     return bool(re.search(r"[가-힣]", text or ""))
 
 
-def translate_to_korean(text: str, max_len: int = 280) -> str:
-    normalized = trim_text(text or "", 1200)
+def _normalize_translation_text(raw: str, *, preserve_newlines: bool) -> str:
+    text = str(raw or "")
+    if preserve_newlines:
+        text = text.replace("\r\n", "\n").replace("\r", "\n")
+        text = re.sub(r"[ \t]+", " ", text)
+        text = re.sub(r"\n{3,}", "\n\n", text)
+        return text.strip()
+    return trim_text(text, 120000)
+
+
+def _truncate_text(text: str, max_len: int, *, preserve_newlines: bool) -> str:
+    if max_len <= 0:
+        return text
+    if preserve_newlines:
+        if len(text) <= max_len:
+            return text
+        return text[:max_len].rstrip()
+    return trim_text(text, max_len)
+
+
+def translate_to_korean(
+    text: str,
+    max_len: int = 280,
+    *,
+    source_max_len: int | None = 1200,
+    preserve_newlines: bool = False,
+) -> str:
+    normalized = _normalize_translation_text(text or "", preserve_newlines=preserve_newlines)
+    if source_max_len and source_max_len > 0 and len(normalized) > source_max_len:
+        normalized = normalized[:source_max_len].rstrip()
     if not normalized:
         return ""
     if contains_korean(normalized):
-        return trim_text(normalized, max_len)
+        return _truncate_text(normalized, max_len, preserve_newlines=preserve_newlines)
     if not env_flag_enabled(TRANSLATE_TO_KO_ENV, default=True):
-        return trim_text(normalized, max_len)
+        return _truncate_text(normalized, max_len, preserve_newlines=preserve_newlines)
 
     cached = TRANSLATION_CACHE.get(normalized)
     if cached:
-        return trim_text(cached, max_len)
+        return _truncate_text(cached, max_len, preserve_newlines=preserve_newlines)
 
     try:
         qs = urlencode(
@@ -435,10 +502,10 @@ def translate_to_korean(text: str, max_len: int = 280) -> str:
             ).strip()
         if translated:
             TRANSLATION_CACHE[normalized] = translated
-            return trim_text(translated, max_len)
+            return _truncate_text(translated, max_len, preserve_newlines=preserve_newlines)
     except Exception:
         pass
-    return trim_text(normalized, max_len)
+    return _truncate_text(normalized, max_len, preserve_newlines=preserve_newlines)
 
 
 def is_local_hostname(hostname: str | None) -> bool:
@@ -761,6 +828,7 @@ def collect_pinchtab_targets(
 
                 for snippet in snippets:
                     title = trim_text(snippet, 130)
+                    next_rank = len(items) + 1
                     items.append(
                         make_item(
                             source_type=source_type,
@@ -771,7 +839,13 @@ def collect_pinchtab_targets(
                             url=target_url,
                             summary=snippet,
                             published_at=None,
-                            extra={"pinchtab": True, "pinchtab_stealth": pinchtab_stealth},
+                            extra={
+                                "pinchtab": True,
+                                "pinchtab_stealth": pinchtab_stealth,
+                                "headline": True,
+                                "hot_rank": next_rank,
+                                "hot_topic_hint": has_hot_topic_keyword(title, snippet, source_name, target_url),
+                            },
                         )
                     )
                     if len(items) >= MAX_TOTAL_ITEMS:
@@ -1070,17 +1144,21 @@ def make_item(
     extra: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     normalized_type = LEGACY_SOURCE_TYPE_MAP.get(source_type, source_type)
+    title_text = trim_text(title, 220)
+    url_text = trim_text(url, 500)
+    summary_text = trim_text(summary, 420)
     item = {
         "id": stable_id(normalized_type, source_name, title, url),
         "source_type": normalized_type,
         "source_name": source_name,
         "country": country,
         "adapter": adapter,
-        "title": trim_text(title, 220),
-        "url": trim_text(url, 500),
-        "summary": trim_text(summary, 420),
+        "title": title_text,
+        "url": url_text,
+        "summary": summary_text,
         "published_at": published_at or now_iso(),
         "fetched_at": now_iso(),
+        "hot_topic_hint": has_hot_topic_keyword(title_text, summary_text, source_name, url_text),
     }
     if extra:
         item.update(extra)
@@ -1110,7 +1188,7 @@ def collect_rss_targets(
             if not parsed:
                 warnings.append(f"{adapter}: empty feed for {url}")
                 continue
-            for row in parsed:
+            for index, row in enumerate(parsed, start=1):
                 items.append(
                     make_item(
                         source_type=source_type,
@@ -1121,6 +1199,10 @@ def collect_rss_targets(
                         url=row.get("url") or "",
                         summary=row.get("summary") or "",
                         published_at=row.get("published_at"),
+                        extra={
+                            "headline": True,
+                            "hot_rank": index,
+                        },
                     )
                 )
         except Exception as exc:
@@ -1160,6 +1242,10 @@ def collect_dcinside_lists(adapter: str) -> AdapterResult:
                     url=article_url,
                     summary="DCInside 갤러리 게시글",
                     published_at=None,
+                    extra={
+                        "headline": True,
+                        "hot_rank": len(items) + 1,
+                    },
                 )
             )
 
@@ -1181,16 +1267,27 @@ def collect_github_trending(adapter: str) -> AdapterResult:
         if status < 200 or status >= 300:
             return AdapterResult(adapter=adapter, items=[], warnings=[f"{adapter}: status {status} for github trending"])
 
-        matches = re.findall(
-            r"<h2[^>]*class=\"h3[^\"]*\"[^>]*>\s*<a[^>]*href=\"([^\"]+)\"[^>]*>(.*?)</a>",
-            html_text,
-            flags=re.IGNORECASE | re.DOTALL,
-        )
-        for path, title_html in matches[:MAX_ITEMS_PER_TARGET]:
+        article_blocks = re.findall(r"<article[^>]*>(.*?)</article>", html_text, flags=re.IGNORECASE | re.DOTALL)
+        for block in article_blocks:
+            if len(items) >= MAX_ITEMS_PER_TARGET:
+                break
+            link_match = re.search(
+                r"<h2[^>]*>\s*<a[^>]*href=\"([^\"]+)\"[^>]*>(.*?)</a>",
+                block,
+                flags=re.IGNORECASE | re.DOTALL,
+            )
+            if not link_match:
+                continue
+            path, title_html = link_match.groups()
             name = trim_text(strip_tags(title_html).replace("/", " / "), 160)
             if not name:
                 continue
             repo_url = f"https://github.com{path.strip()}"
+            stars_today_match = re.search(r"([0-9][0-9,]*)\s+stars?\s+today", block, flags=re.IGNORECASE)
+            stars_today = trim_text(stars_today_match.group(1) if stars_today_match else "", 30)
+            summary = "GitHub Trending repository"
+            if stars_today:
+                summary = f"GitHub Trending repository · today stars {stars_today}"
             items.append(
                 make_item(
                     source_type=SOURCE_TYPE_DEV,
@@ -1199,8 +1296,13 @@ def collect_github_trending(adapter: str) -> AdapterResult:
                     adapter=adapter,
                     title=name,
                     url=repo_url,
-                    summary="GitHub Trending repository",
+                    summary=summary,
                     published_at=None,
+                    extra={
+                        "headline": True,
+                        "hot_rank": len(items) + 1,
+                        "stars_today": stars_today or None,
+                    },
                 )
             )
 
@@ -1249,7 +1351,11 @@ def collect_market_indices(adapter: str) -> AdapterResult:
                     url=url,
                     summary=summary,
                     published_at=None,
-                    extra={"quote_close": close or None},
+                    extra={
+                        "quote_close": close or None,
+                        "headline": True,
+                        "hot_rank": len(items) + 1,
+                    },
                 )
             )
         except Exception as exc:
@@ -1293,6 +1399,9 @@ def collect_naver_korea_news(adapter: str) -> AdapterResult:
     for target_url in targets:
         if len(items) >= MAX_TOTAL_ITEMS:
             break
+        is_ranking_target = "ranking" in target_url.lower() or "popular" in target_url.lower()
+        source_name = "Naver News Popular" if is_ranking_target else "Naver News"
+        default_summary = "네이버 많이 본 뉴스 헤드라인" if is_ranking_target else "네이버 뉴스 헤드라인"
         try:
             html_text, status, _ = http_get_text(target_url)
             if status < 200 or status >= 300:
@@ -1317,13 +1426,17 @@ def collect_naver_korea_news(adapter: str) -> AdapterResult:
                 items.append(
                     make_item(
                         source_type="source.news",
-                        source_name="Naver News",
+                        source_name=source_name,
                         country="KR",
                         adapter=adapter,
                         title=title,
                         url=article_url,
-                        summary="네이버 뉴스 기사",
+                        summary=default_summary,
                         published_at=None,
+                        extra={
+                            "headline": True,
+                            "hot_rank": matched,
+                        },
                     )
                 )
                 if matched >= MAX_ITEMS_PER_TARGET:
@@ -1349,13 +1462,17 @@ def collect_naver_korea_news(adapter: str) -> AdapterResult:
                     items.append(
                         make_item(
                             source_type="source.news",
-                            source_name="Naver News",
+                            source_name=source_name,
                             country="KR",
                             adapter=adapter,
                             title=title,
                             url=article_url,
-                            summary="네이버 뉴스 기사",
+                            summary=default_summary,
                             published_at=None,
+                            extra={
+                                "headline": True,
+                                "hot_rank": matched,
+                            },
                         )
                     )
 
@@ -1570,14 +1687,243 @@ SOURCE_ADAPTER_CHAIN: dict[str, list[Callable[[], AdapterResult]]] = {
 }
 
 
-def execute_source_node(source_type: str) -> AdapterResult:
-    chain = SOURCE_ADAPTER_CHAIN.get(source_type) or []
+def _parse_option_list(raw: Any, max_items: int = 20) -> list[str]:
+    values: list[str] = []
+    if isinstance(raw, list):
+        values = [trim_text(row or "", 180) for row in raw]
+    elif isinstance(raw, str):
+        values = [trim_text(row, 180) for row in re.split(r"[\n,]+", raw)]
+    else:
+        values = []
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for row in values:
+        normalized = row.strip()
+        if not normalized:
+            continue
+        key = normalized.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(normalized)
+        if len(deduped) >= max_items:
+            break
+    return deduped
+
+
+def _normalize_dynamic_source_options(raw: dict[str, Any] | None) -> dict[str, Any]:
+    payload = raw if isinstance(raw, dict) else {}
+    keywords = _parse_option_list(payload.get("keywords"), max_items=12)
+    countries_raw = _parse_option_list(payload.get("countries"), max_items=8)
+    countries = [row.upper() for row in countries_raw if row.upper() in LOCALE_BY_COUNTRY]
+    sites_raw = _parse_option_list(payload.get("sites"), max_items=24)
+    urls: list[str] = []
+    domains: list[str] = []
+    for row in sites_raw:
+        candidate = row.strip()
+        if not candidate:
+            continue
+        if candidate.startswith("http://") or candidate.startswith("https://"):
+            urls.append(candidate)
+            continue
+        normalized_domain = candidate.lower().replace("https://", "").replace("http://", "").strip("/")
+        if normalized_domain:
+            domains.append(normalized_domain)
+
+    max_items = 0
+    max_items_raw = payload.get("max_items")
+    try:
+        max_items = int(max_items_raw) if max_items_raw is not None else 0
+    except Exception:
+        max_items = 0
+    max_items = max(0, min(120, max_items))
+
+    return {
+        "keywords": keywords,
+        "countries": countries,
+        "urls": urls,
+        "domains": domains,
+        "max_items": max_items,
+    }
+
+
+def _default_query_for_source(source_type: str) -> str:
+    if source_type == "source.news":
+        return "technology OR startup OR market"
+    if source_type in {SOURCE_TYPE_SNS, "source.x", "source.threads"}:
+        return "AI OR game dev OR startup"
+    if source_type in {SOURCE_TYPE_COMMUNITY, "source.reddit"}:
+        return "game dev OR indie OR steam"
+    if source_type in {SOURCE_TYPE_DEV, "source.hn"}:
+        return "unity OR gamedev OR programming"
+    if source_type == SOURCE_TYPE_MARKET:
+        return "stock market OR earnings OR tech market"
+    return "technology OR trend"
+
+
+def _build_dynamic_google_news_targets(source_type: str, options: dict[str, Any]) -> list[dict[str, str]]:
+    countries = list(options.get("countries") or [])
+    if not countries:
+        countries = ["US", "JP", "CN", "KR"]
+    keywords = list(options.get("keywords") or [])
+    domains = list(options.get("domains") or [])
+    base_query = " OR ".join(keywords[:6]) if keywords else _default_query_for_source(source_type)
+    if domains:
+        site_clause = " OR ".join([f"site:{domain}" for domain in domains[:8]])
+        query = f"({base_query}) AND ({site_clause})"
+    else:
+        query = base_query
+    targets: list[dict[str, str]] = []
+    for country in countries:
+        targets.append(
+            {
+                "country": country,
+                "name": f"Custom {SOURCE_TYPE_LABEL.get(source_type, source_type)} {country}",
+                "url": google_news_search_rss(query, country),
+            }
+        )
+    return targets
+
+
+def _extract_custom_snippets_from_html(html_text: str, limit: int = 3) -> list[str]:
+    if not html_text.strip():
+        return []
+    payload = re.sub(r"<(script|style|noscript|svg|iframe)[^>]*>.*?</\\1>", " ", html_text, flags=re.IGNORECASE | re.DOTALL)
+    payload = re.sub(r"<[^>]+>", " ", payload)
+    payload = unescape(payload)
+    payload = re.sub(r"\s+", " ", payload).strip()
+    snippets = parse_pinchtab_snippets(payload, limit=max(1, limit))
+    if snippets:
+        return snippets
+    fallback = trim_text(payload, 220)
+    return [fallback] if fallback else []
+
+
+def collect_custom_url_targets(
+    source_type: str,
+    adapter: str,
+    targets: list[dict[str, str]],
+    *,
+    snippets_per_target: int = 2,
+) -> AdapterResult:
     warnings: list[str] = []
+    items: list[dict[str, Any]] = []
+    for target in targets:
+        if len(items) >= MAX_TOTAL_ITEMS:
+            break
+        target_url = str(target.get("url") or "").strip()
+        if not target_url:
+            continue
+        country = str(target.get("country") or "GLOBAL")
+        source_name = str(target.get("name") or parse_host(target_url) or "custom")
+        try:
+            text, status, content_type = http_get_text(target_url, timeout=REQUEST_TIMEOUT_SECONDS)
+            if status < 200 or status >= 300:
+                warnings.append(f"{adapter}: status {status} for {target_url}")
+                continue
+            if ("xml" in content_type.lower() or "<rss" in text.lower() or "<feed" in text.lower()) and len(text) < 2_000_000:
+                parsed = parse_rss_items(text, limit=max(1, snippets_per_target))
+                for index, row in enumerate(parsed, start=1):
+                    items.append(
+                        make_item(
+                            source_type=source_type,
+                            source_name=source_name,
+                            country=country,
+                            adapter=adapter,
+                            title=row.get("title") or f"custom-{index}",
+                            url=row.get("url") or target_url,
+                            summary=row.get("summary") or row.get("title") or "",
+                            published_at=row.get("published_at"),
+                            extra={"headline": True, "hot_rank": len(items) + 1},
+                        )
+                    )
+                    if len(items) >= MAX_TOTAL_ITEMS:
+                        break
+                continue
+            snippets = _extract_custom_snippets_from_html(text, limit=max(1, snippets_per_target))
+            if not snippets:
+                warnings.append(f"{adapter}: empty content for {target_url}")
+                continue
+            for snippet in snippets:
+                items.append(
+                    make_item(
+                        source_type=source_type,
+                        source_name=source_name,
+                        country=country,
+                        adapter=adapter,
+                        title=trim_text(snippet, 130),
+                        url=target_url,
+                        summary=snippet,
+                        published_at=None,
+                        extra={"headline": True, "hot_rank": len(items) + 1},
+                    )
+                )
+                if len(items) >= MAX_TOTAL_ITEMS:
+                    break
+        except Exception as exc:
+            warnings.append(f"{adapter}: {trim_text(exc, 200)}")
+    return AdapterResult(adapter=adapter, items=items[:MAX_TOTAL_ITEMS], warnings=warnings)
+
+
+def execute_dynamic_source_query(source_type: str, source_options: dict[str, Any]) -> AdapterResult | None:
+    options = _normalize_dynamic_source_options(source_options)
+    urls = list(options.get("urls") or [])
+    keywords = list(options.get("keywords") or [])
+    domains = list(options.get("domains") or [])
+    countries = list(options.get("countries") or [])
+    is_dynamic_requested = bool(urls or keywords or domains or countries)
+    if not is_dynamic_requested:
+        return None
+
+    warnings: list[str] = []
+    items: list[dict[str, Any]] = []
+    if urls:
+        custom_url_targets = [
+            {
+                "country": "GLOBAL",
+                "name": parse_host(url) or "custom-url",
+                "url": url,
+            }
+            for url in urls
+        ]
+        custom_result = collect_custom_url_targets(source_type, f"{source_type}.dynamic.urls", custom_url_targets, snippets_per_target=3)
+        items.extend(custom_result.items)
+        warnings.extend(custom_result.warnings)
+
+    rss_targets = _build_dynamic_google_news_targets(source_type, options)
+    if rss_targets:
+        dynamic_rss_result = collect_rss_targets(source_type, f"{source_type}.dynamic.search", rss_targets)
+        items.extend(dynamic_rss_result.items)
+        warnings.extend(dynamic_rss_result.warnings)
+
+    if items:
+        return AdapterResult(adapter=f"{source_type}.dynamic", items=items[:MAX_TOTAL_ITEMS], warnings=warnings)
+    return AdapterResult(adapter=f"{source_type}.dynamic", items=[], warnings=warnings)
+
+
+def execute_source_node(source_type: str, source_options: dict[str, Any] | None = None) -> AdapterResult:
+    chain = SOURCE_ADAPTER_CHAIN.get(source_type) or []
+    options = _normalize_dynamic_source_options(source_options)
+    max_items = int(options.get("max_items") or 0)
+    if max_items <= 0:
+        max_items = MAX_TOTAL_ITEMS
+
+    dynamic_result = execute_dynamic_source_query(source_type, options)
+    if dynamic_result and dynamic_result.items:
+        return AdapterResult(
+            adapter=dynamic_result.adapter,
+            items=dynamic_result.items[:max_items],
+            warnings=dynamic_result.warnings,
+        )
+
+    warnings: list[str] = []
+    if dynamic_result and dynamic_result.warnings:
+        warnings.extend(dynamic_result.warnings)
     for adapter in chain:
         result = adapter()
         warnings.extend(result.warnings)
         if result.items:
-            return AdapterResult(adapter=result.adapter, items=result.items, warnings=warnings)
+            return AdapterResult(adapter=result.adapter, items=result.items[:max_items], warnings=warnings)
 
     normalized = LEGACY_SOURCE_TYPE_MAP.get(source_type, source_type)
     warnings.append(f"{normalized}: all adapters returned empty")
@@ -1604,6 +1950,49 @@ def display_source_type(source_type: str) -> str:
     return SOURCE_TYPE_LABEL.get(normalized, normalized or "기타")
 
 
+def parse_numeric_signal(value: Any) -> int:
+    text = trim_text(value or "", 60)
+    if not text:
+        return 0
+    normalized = re.sub(r"[^0-9]", "", text)
+    if not normalized:
+        return 0
+    try:
+        return int(normalized)
+    except Exception:
+        return 0
+
+
+def has_hot_topic_keyword(*parts: Any) -> bool:
+    merged = " ".join(trim_text(part or "", 400).lower() for part in parts if trim_text(part or "", 400))
+    if not merged:
+        return False
+    return any(keyword in merged for keyword in HOT_TOPIC_KEYWORDS)
+
+
+def hot_topic_signal_score(row: dict[str, Any]) -> int:
+    score = 0
+    hot_rank = parse_numeric_signal(row.get("hot_rank") or row.get("rank"))
+    if hot_rank > 0:
+        score += max(0, 30 - min(hot_rank, 30))
+
+    if has_hot_topic_keyword(row.get("title"), row.get("summary"), row.get("source_name")):
+        score += 8
+
+    url = str(row.get("url") or "").strip().lower()
+    if any(marker in url for marker in HOT_URL_MARKERS):
+        score += 6
+
+    score += min(22, parse_numeric_signal(row.get("engagement")) // 20)
+    score += min(18, parse_numeric_signal(row.get("upvotes")) // 20)
+    score += min(12, parse_numeric_signal(row.get("comments")) // 10)
+    score += min(20, parse_numeric_signal(row.get("view_count")) // 500)
+    score += min(14, parse_numeric_signal(row.get("stars_today")) // 10)
+    score += min(10, parse_numeric_signal(row.get("like_count")) // 20)
+    score += min(10, parse_numeric_signal(row.get("repost_count")) // 10)
+    return score
+
+
 def normalize_items(raw_items: list[dict[str, Any]], limit: int = MAX_TOTAL_ITEMS) -> list[dict[str, Any]]:
     effective_items = [row for row in raw_items if isinstance(row, dict) and not is_fallback_item(row)]
     source = effective_items if effective_items else raw_items
@@ -1625,6 +2014,19 @@ def normalize_items(raw_items: list[dict[str, Any]], limit: int = MAX_TOTAL_ITEM
         existing["source_count"] = int(existing.get("source_count") or 1) + 1
         if len(trim_text(row.get("summary") or "", 420)) > len(trim_text(existing.get("summary") or "", 420)):
             existing["summary"] = trim_text(row.get("summary") or "", 420)
+        if parse_numeric_signal(existing.get("hot_rank")) == 0:
+            existing["hot_rank"] = row.get("hot_rank")
+        else:
+            incoming_rank = parse_numeric_signal(row.get("hot_rank"))
+            current_rank = parse_numeric_signal(existing.get("hot_rank"))
+            if incoming_rank > 0 and (current_rank == 0 or incoming_rank < current_rank):
+                existing["hot_rank"] = incoming_rank
+        existing["hot_topic_hint"] = bool(existing.get("hot_topic_hint") or row.get("hot_topic_hint"))
+        for signal in ("engagement", "upvotes", "comments", "view_count", "stars_today", "like_count", "repost_count"):
+            incoming = parse_numeric_signal(row.get(signal))
+            current = parse_numeric_signal(existing.get(signal))
+            if incoming > current:
+                existing[signal] = row.get(signal)
 
     return list(dedup.values())[:limit]
 
@@ -1673,10 +2075,12 @@ def rank_items(items: list[dict[str, Any]], top_k: int = 40) -> list[dict[str, A
             verification_bonus = -10
 
         source_count = int(row.get("source_count") or 1)
-        score = base + freshness + verification_bonus + min(source_count, 5)
+        popularity = hot_topic_signal_score(row)
+        score = base + freshness + verification_bonus + min(source_count, 5) + popularity
 
         next_row = dict(row)
         next_row["score"] = int(score)
+        next_row["hot_score"] = int(popularity)
         ranked.append(next_row)
 
     ranked.sort(key=lambda item: (int(item.get("score") or 0), str(item.get("published_at") or "")), reverse=True)
@@ -1720,13 +2124,15 @@ def summarize_ranked_items(items: list[dict[str, Any]], max_lines: int = 8) -> l
         country = str(row.get("country") or "GLOBAL")
         source = str(row.get("source_name") or display_source_type(str(row.get("source_type") or "")) or "source")
         status = str(row.get("verification_status") or "warning")
+        hot_score = int(row.get("hot_score") or hot_topic_signal_score(row))
         title = translate_to_korean(str(row.get("title_ko") or row.get("title") or ""), 180)
         excerpt = trim_text(row.get("content_excerpt") or row.get("summary") or "", 140)
         excerpt = translate_to_korean(str(row.get("content_excerpt_ko") or row.get("summary_ko") or excerpt), 160)
+        hot_tag = "핫토픽" if hot_score >= 10 or bool(row.get("hot_topic_hint")) else "일반"
         if excerpt:
-            lines.append(f"[{country}] ({status}) {source}: {title} - {excerpt}")
+            lines.append(f"[{country}] ({status}/{hot_tag}) {source}: {title} - {excerpt}")
         else:
-            lines.append(f"[{country}] ({status}) {source}: {title}")
+            lines.append(f"[{country}] ({status}/{hot_tag}) {source}: {title}")
         if len(lines) >= max_lines:
             break
     return lines
@@ -1765,7 +2171,10 @@ def build_codex_cli_prompt(
     lines.append("조건:")
     lines.append("- 모든 문장은 한국어.")
     lines.append("- highlights는 5~8개.")
-    lines.append("- detail_markdown에는 '## 시장/트렌드 핵심', '## 주의할 리스크', '## 지금 확인할 항목' 섹션 포함.")
+    lines.append("- detail_markdown은 리서치 리포트 스타일로, 사람이 바로 읽을 수 있는 완결된 문서여야 한다.")
+    lines.append("- detail_markdown에는 반드시 '## 핵심 결론', '## 토픽별 상세 분석', '## 리스크와 불확실성', '## 지금 바로 볼 체크리스트' 섹션 포함.")
+    lines.append("- detail_markdown 각 섹션은 데이터 기반 근거를 포함하고, URL 근거를 항목 단위로 명시한다.")
+    lines.append("- 단순 나열/로그 형식 금지. 맥락-원인-영향-시사점 순서로 서술한다.")
     lines.append("- key_points는 최대 8개.")
     if topic:
         lines.append(f"- 요청 주제: {topic}")
@@ -1775,6 +2184,8 @@ def build_codex_cli_prompt(
         country = trim_text(row.get("country") or "GLOBAL", 20)
         source = trim_text(row.get("source_name") or display_source_type(str(row.get("source_type") or "")), 80)
         title = trim_text(row.get("title_ko") or row.get("title") or "", 220)
+        hot_rank = parse_numeric_signal(row.get("hot_rank"))
+        hot_score = int(row.get("hot_score") or hot_topic_signal_score(row))
         summary = trim_text(
             row.get("content_excerpt_ko")
             or row.get("summary_ko")
@@ -1786,6 +2197,9 @@ def build_codex_cli_prompt(
         url = trim_text(row.get("url") or "", 500)
         lines.append(f"{index}. [{country}] {source}")
         lines.append(f"   title: {title}")
+        if hot_rank > 0:
+            lines.append(f"   hot_rank: {hot_rank}")
+        lines.append(f"   hot_score: {hot_score}")
         if summary:
             lines.append(f"   summary: {summary}")
         if url:
@@ -1830,15 +2244,131 @@ def parse_bullet_lines(raw_text: str, max_lines: int = 8) -> list[str]:
     return lines
 
 
+def parse_int(value: Any) -> int | None:
+    if isinstance(value, bool):
+        return None
+    try:
+        number = int(value)
+    except Exception:
+        return None
+    return number if number >= 0 else None
+
+
+def normalize_usage_candidate(raw: Any) -> dict[str, int]:
+    if not isinstance(raw, dict):
+        return {}
+    prompt_tokens = parse_int(raw.get("input_tokens"))
+    if prompt_tokens is None:
+        prompt_tokens = parse_int(raw.get("prompt_tokens"))
+    completion_tokens = parse_int(raw.get("output_tokens"))
+    if completion_tokens is None:
+        completion_tokens = parse_int(raw.get("completion_tokens"))
+    total_tokens = parse_int(raw.get("total_tokens"))
+    reasoning_tokens = parse_int(raw.get("reasoning_tokens"))
+    cached_input_tokens = parse_int(raw.get("cached_input_tokens"))
+    if cached_input_tokens is None:
+        cached_input_tokens = parse_int(raw.get("cached_tokens"))
+
+    if total_tokens is None and prompt_tokens is not None and completion_tokens is not None:
+        total_tokens = prompt_tokens + completion_tokens
+
+    usage: dict[str, int] = {}
+    if prompt_tokens is not None:
+        usage["prompt_tokens"] = prompt_tokens
+    if completion_tokens is not None:
+        usage["completion_tokens"] = completion_tokens
+    if total_tokens is not None:
+        usage["total_tokens"] = total_tokens
+    if reasoning_tokens is not None:
+        usage["reasoning_tokens"] = reasoning_tokens
+    if cached_input_tokens is not None:
+        usage["cached_input_tokens"] = cached_input_tokens
+    return usage
+
+
+def merge_usage_dict(base: dict[str, int], candidate: dict[str, int]) -> dict[str, int]:
+    if not candidate:
+        return base
+    if not base:
+        return dict(candidate)
+    base_total = int(base.get("total_tokens") or -1)
+    candidate_total = int(candidate.get("total_tokens") or -1)
+    if candidate_total > base_total:
+        merged = dict(base)
+        merged.update(candidate)
+        return merged
+    merged = dict(base)
+    for key, value in candidate.items():
+        if key not in merged:
+            merged[key] = value
+    return merged
+
+
+def extract_usage_from_value(value: Any) -> dict[str, int]:
+    usage = normalize_usage_candidate(value)
+    if usage:
+        return usage
+    if isinstance(value, dict):
+        merged: dict[str, int] = {}
+        nested_usage = normalize_usage_candidate(value.get("usage"))
+        if nested_usage:
+            merged = merge_usage_dict(merged, nested_usage)
+        for nested in value.values():
+            merged = merge_usage_dict(merged, extract_usage_from_value(nested))
+        return merged
+    if isinstance(value, list):
+        merged: dict[str, int] = {}
+        for nested in value:
+            merged = merge_usage_dict(merged, extract_usage_from_value(nested))
+        return merged
+    return {}
+
+
+def parse_codex_usage_from_jsonl(stdout_text: str) -> dict[str, int]:
+    usage: dict[str, int] = {}
+    for row in str(stdout_text or "").splitlines():
+        line = row.strip()
+        if not line.startswith("{"):
+            continue
+        try:
+            payload = json.loads(line)
+        except Exception:
+            continue
+        usage = merge_usage_dict(usage, extract_usage_from_value(payload))
+    return usage
+
+
+def format_codex_usage_line(usage: dict[str, int]) -> str:
+    if not usage:
+        return "usage=unavailable"
+    parts: list[str] = []
+    prompt_tokens = parse_int(usage.get("prompt_tokens"))
+    completion_tokens = parse_int(usage.get("completion_tokens"))
+    total_tokens = parse_int(usage.get("total_tokens"))
+    if prompt_tokens is not None:
+        parts.append(f"in={prompt_tokens}")
+    if completion_tokens is not None:
+        parts.append(f"out={completion_tokens}")
+    if total_tokens is not None:
+        parts.append(f"total={total_tokens}")
+    reasoning_tokens = parse_int(usage.get("reasoning_tokens"))
+    if reasoning_tokens is not None:
+        parts.append(f"reasoning={reasoning_tokens}")
+    cached_input_tokens = parse_int(usage.get("cached_input_tokens"))
+    if cached_input_tokens is not None:
+        parts.append(f"cached_in={cached_input_tokens}")
+    return "usage=" + (", ".join(parts) if parts else "unavailable")
+
+
 def run_codex_cli_briefing(
     items: list[dict[str, Any]],
     topic: str,
     run_root: Path,
-) -> tuple[str, list[str], list[str]]:
+) -> tuple[str, list[str], list[str], dict[str, int]]:
     if not env_flag_enabled(CODEX_EXEC_ENABLED_ENV, default=True):
-        return "", [], ["codex.cli: disabled by env"]
+        return "", [], ["codex.cli: disabled by env"], {}
     if not items:
-        return "", [], ["codex.cli: no ranked items"]
+        return "", [], ["codex.cli: no ranked items"], {}
 
     codex_bin = env_text(CODEX_EXEC_BIN_ENV, "codex")
     model = env_text(CODEX_EXEC_MODEL_ENV, "")
@@ -1853,6 +2383,7 @@ def run_codex_cli_briefing(
         "--full-auto",
         "--sandbox",
         "workspace-write",
+        "--json",
         "--output-last-message",
         str(output_file),
         "-",
@@ -1871,16 +2402,17 @@ def run_codex_cli_briefing(
             check=False,
         )
     except FileNotFoundError:
-        return "", [], [f"codex.cli: binary not found ({codex_bin})"]
+        return "", [], [f"codex.cli: binary not found ({codex_bin})"], {}
     except Exception as exc:
-        return "", [], [f"codex.cli: spawn failed ({trim_text(exc, 200)})"]
+        return "", [], [f"codex.cli: spawn failed ({trim_text(exc, 200)})"], {}
 
     stderr = trim_text(completed.stderr or "", 320)
+    usage = parse_codex_usage_from_jsonl(completed.stdout or "")
     if completed.returncode != 0:
         warning = f"codex.cli: exit={completed.returncode}"
         if stderr:
             warning = f"{warning}, {stderr}"
-        return "", [], [warning]
+        return "", [], [warning], usage
 
     raw_output = ""
     if output_file.is_file():
@@ -1891,7 +2423,7 @@ def run_codex_cli_briefing(
     if not raw_output:
         raw_output = trim_text(completed.stdout or "", 24000)
     if not raw_output:
-        return "", [], ["codex.cli: empty response"]
+        return "", [], ["codex.cli: empty response"], usage
 
     parsed = parse_json_object_block(raw_output)
     if parsed:
@@ -1902,7 +2434,12 @@ def run_codex_cli_briefing(
             if isinstance(highlights_raw, list)
             else []
         )
-        detail_markdown = translate_to_korean(str(parsed.get("detail_markdown") or ""), 5000)
+        detail_markdown = translate_to_korean(
+            str(parsed.get("detail_markdown") or ""),
+            0,
+            source_max_len=None,
+            preserve_newlines=True,
+        )
         key_points = parsed.get("key_points")
         detail_lines: list[str] = []
         if detail_markdown:
@@ -1930,11 +2467,16 @@ def run_codex_cli_briefing(
         final_highlights = highlights[:8]
         if headline:
             final_highlights = [headline, *final_highlights][:8]
-        return briefing, final_highlights, []
+        return briefing, final_highlights, [], usage
 
     fallback_highlights = parse_bullet_lines(raw_output, max_lines=8)
-    briefing = translate_to_korean(raw_output, 5000)
-    return briefing, fallback_highlights, ["codex.cli: non-json response parsed as text"]
+    briefing = translate_to_korean(
+        raw_output,
+        0,
+        source_max_len=None,
+        preserve_newlines=True,
+    )
+    return briefing, fallback_highlights, ["codex.cli: non-json response parsed as text"], usage
 
 
 def build_source_coverage(items: list[dict[str, Any]]) -> dict[str, Any]:
@@ -1958,6 +2500,74 @@ def build_source_coverage(items: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def build_readable_briefing_fallback(
+    top_items: list[dict[str, Any]],
+    highlights: list[str],
+    max_topics: int = 8,
+) -> str:
+    effective = [row for row in top_items if not is_fallback_item(row)]
+    if not effective:
+        return "신뢰 가능한 수집 데이터가 부족해 상세 브리핑을 생성하지 못했습니다."
+
+    lines: list[str] = []
+    lines.append("## 핵심 결론")
+    if highlights:
+        for line in highlights[:6]:
+            lines.append(f"- {line}")
+    else:
+        for row in effective[:6]:
+            title = translate_to_korean(str(row.get("title_ko") or row.get("title") or ""), 180)
+            source = translate_to_korean(str(row.get("source_name") or display_source_type(str(row.get("source_type") or ""))), 80)
+            lines.append(f"- {title} ({source})")
+
+    lines.append("\n## 토픽별 상세 분석")
+    for index, row in enumerate(effective[:max_topics], start=1):
+        country = str(row.get("country") or "GLOBAL")
+        source = translate_to_korean(str(row.get("source_name") or display_source_type(str(row.get("source_type") or ""))), 80)
+        title = translate_to_korean(str(row.get("title_ko") or row.get("title") or ""), 180)
+        excerpt = translate_to_korean(
+            str(
+                row.get("content_excerpt_ko")
+                or row.get("summary_ko")
+                or row.get("content_excerpt")
+                or row.get("summary")
+                or ""
+            ),
+            320,
+        )
+        status = str(row.get("verification_status") or "warning")
+        hot_score = int(row.get("hot_score") or hot_topic_signal_score(row))
+        lines.append(f"### {index}. {title}")
+        lines.append(f"- 출처: [{country}] {source}")
+        lines.append(f"- 신뢰: {status} · 인기지수: {hot_score}")
+        if excerpt:
+            lines.append(f"- 핵심 내용: {excerpt}")
+        url = trim_text(row.get("url") or "", 500)
+        if url:
+            lines.append(f"- 근거 URL: {url}")
+
+    risk_rows = [row for row in effective if str(row.get("verification_status") or "") in {"warning", "conflicted"}]
+    lines.append("\n## 리스크와 불확실성")
+    if risk_rows:
+        for row in risk_rows[:6]:
+            title = translate_to_korean(str(row.get("title_ko") or row.get("title") or ""), 180)
+            status = str(row.get("verification_status") or "warning")
+            lines.append(f"- {title} ({status})")
+    else:
+        lines.append("- 상위 항목 기준으로 출처 충돌/신뢰 경고가 두드러지지 않았습니다.")
+
+    lines.append("\n## 지금 바로 볼 체크리스트")
+    for row in effective[:6]:
+        title = translate_to_korean(str(row.get("title_ko") or row.get("title") or ""), 180)
+        url = trim_text(row.get("url") or "", 500)
+        if url:
+            lines.append(f"- [ ] {title} · {url}")
+        else:
+            lines.append(f"- [ ] {title}")
+
+    return "\n".join(lines).strip()
+
+
 def build_markdown(
     flow: dict[str, Any],
     run_id: str,
@@ -1970,6 +2580,7 @@ def build_markdown(
     top_items: list[dict[str, Any]],
     warnings: list[str],
     codex_briefing: str = "",
+    codex_usage: dict[str, int] | None = None,
 ) -> str:
     effective_top_items = [row for row in top_items if not is_fallback_item(row)]
     source_buckets: dict[str, list[dict[str, Any]]] = {}
@@ -1979,20 +2590,22 @@ def build_markdown(
 
     lines: list[str] = []
     lines.append(f"# {flow.get('name', 'RAIL VIA Flow')}\n")
-    lines.append("## 실행 요약")
+    lines.append("## 문서 개요")
     lines.append(f"- 실행 ID: `{run_id}`")
     lines.append(f"- 트리거: `{trigger}`")
     lines.append(f"- 실행 시간: {started_at} ~ {finished_at}")
-    lines.append(f"- 상위 분석 대상: {len(effective_top_items)}건")
+    lines.append(f"- 분석 대상: {len(effective_top_items)}건")
     lines.append(f"- 경고: {len(warnings)}건")
+    usage_line = format_codex_usage_line(codex_usage or {})
+    lines.append(f"- Codex 토큰: {usage_line}")
     lines.append("")
 
-    lines.append("## 핵심 브리핑")
+    lines.append("## 한눈에 보기")
     if highlights:
-        for line in highlights[:10]:
+        for line in highlights[:8]:
             lines.append(f"- {line}")
     elif effective_top_items:
-        for row in effective_top_items[:10]:
+        for row in effective_top_items[:8]:
             title = trim_text(row.get("title_ko") or row.get("title") or "", 180)
             excerpt = trim_text(row.get("content_excerpt_ko") or row.get("summary_ko") or row.get("content_excerpt") or row.get("summary") or "", 180)
             if excerpt:
@@ -2000,25 +2613,38 @@ def build_markdown(
             else:
                 lines.append(f"- {title}")
     else:
-        lines.append("- 신뢰 가능한 수집 결과가 없어 브리핑을 생성하지 못했습니다.")
+        lines.append("- 신뢰 가능한 수집 결과가 없어 핵심 요약을 생성하지 못했습니다.")
 
+    lines.append("")
     if codex_briefing:
-        lines.append("\n## Codex 분석")
-        lines.append(codex_briefing)
+        lines.append("## 본문 분석")
+        lines.append(codex_briefing.strip())
+    else:
+        lines.append(build_readable_briefing_fallback(effective_top_items, highlights))
 
-    lines.append("\n## 소스별 인사이트")
+    lines.append("\n## 채널별 핫토픽")
     source_order = ["source.news", SOURCE_TYPE_SNS, SOURCE_TYPE_COMMUNITY, SOURCE_TYPE_DEV, SOURCE_TYPE_MARKET]
     for source_type in source_order:
         rows = source_buckets.get(source_type) or []
         if not rows:
             continue
         lines.append(f"### {display_source_type(source_type)}")
-        for row in rows[:4]:
+        hot_sorted = sorted(
+            rows,
+            key=lambda row: (
+                int(row.get("hot_score") or 0),
+                int(row.get("score") or 0),
+                str(row.get("published_at") or ""),
+            ),
+            reverse=True,
+        )
+        for row in hot_sorted[:4]:
             country = str(row.get("country") or "GLOBAL")
             title = trim_text(row.get("title_ko") or row.get("title") or "", 180)
             status = str(row.get("verification_status") or "warning")
+            hot_score = int(row.get("hot_score") or hot_topic_signal_score(row))
             excerpt = trim_text(row.get("content_excerpt_ko") or row.get("summary_ko") or row.get("content_excerpt") or row.get("summary") or "", 220)
-            lines.append(f"- [{country}] {title} ({status})")
+            lines.append(f"- [{country}] {title} ({status}, 인기지수 {hot_score})")
             if excerpt:
                 lines.append(f"  - 요약: {excerpt}")
             close = trim_text(row.get("quote_close") or "", 80)
@@ -2026,30 +2652,27 @@ def build_markdown(
                 lines.append(f"  - 가격: {close}")
             url = trim_text(row.get("url") or "", 500)
             if url:
-                lines.append(f"  - 출처: {url}")
+                lines.append(f"  - 근거: {url}")
 
-    lines.append("\n## 원문 근거 발췌")
+    lines.append("\n## 참고 출처")
     if effective_top_items:
-        for index, row in enumerate(effective_top_items[:20], start=1):
+        for index, row in enumerate(effective_top_items[:30], start=1):
             country = str(row.get("country") or "GLOBAL")
             source = str(row.get("source_name") or display_source_type(str(row.get("source_type") or "")) or "source")
-            status = str(row.get("verification_status") or "warning")
             title = trim_text(row.get("title_ko") or row.get("title") or "", 180)
-            excerpt = trim_text(row.get("content_excerpt_ko") or row.get("summary_ko") or row.get("content_excerpt") or row.get("summary") or "", 320)
-            lines.append(f"{index}. [{country}] {source} · {title} ({status})")
-            if excerpt:
-                lines.append(f"   - 발췌: {excerpt}")
             url = trim_text(row.get("url") or "", 500)
             if url:
-                lines.append(f"   - URL: {url}")
+                lines.append(f"{index}. [{country}] {source} · {title} · {url}")
+            else:
+                lines.append(f"{index}. [{country}] {source} · {title}")
     else:
-        lines.append("- 표시 가능한 수집 데이터가 없습니다.")
+        lines.append("- 표시 가능한 출처가 없습니다.")
 
     lines.append("\n## 실행 메타")
     lines.append(f"- run_id: {run_id}")
     lines.append(f"- trigger: {trigger}")
     lines.append(f"- started_at: {started_at}")
-    lines.append(f"- finished_at: {finished_at}\n")
+    lines.append(f"- finished_at: {finished_at}")
 
     lines.append("## Source Coverage")
     lines.append("### By Source Type")
@@ -2372,6 +2995,7 @@ class ViaStore:
         crawl_depth: dict[str, int],
         warnings: list[str],
         codex_briefing: str = "",
+        codex_usage: dict[str, int] | None = None,
     ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
         flow_slug = slugify(str(flow.get("name") or f"flow-{flow.get('id', 'x')}"))
         run_root = self.docs_root / "rag" / flow_slug / run_id
@@ -2389,6 +3013,7 @@ class ViaStore:
             top_items=ranked_items,
             warnings=warnings,
             codex_briefing=codex_briefing,
+            codex_usage=codex_usage or {},
         )
 
         payload = {
@@ -2401,6 +3026,7 @@ class ViaStore:
             "crawl_depth": crawl_depth,
             "highlights": highlights,
             "codex_briefing": codex_briefing,
+            "codex_usage": codex_usage or {},
             "items": ranked_items,
             "items_all_count": len(all_items),
             "items_all": all_items,
@@ -2432,7 +3058,13 @@ class ViaStore:
         ]
         return artifacts, payload
 
-    def run_flow(self, flow_id: int, trigger: str, source_type: str | None = None) -> dict[str, Any]:
+    def run_flow(
+        self,
+        flow_id: int,
+        trigger: str,
+        source_type: str | None = None,
+        source_options: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         flow = self.get_flow(flow_id)
         if flow is None:
             raise ValueError("flow_not_found")
@@ -2454,6 +3086,7 @@ class ViaStore:
         ranked_items: list[dict[str, Any]] = []
         highlights: list[str] = []
         codex_briefing = ""
+        codex_usage: dict[str, int] = {}
         artifacts: list[dict[str, Any]] = []
         crawl_depth_stats: dict[str, int] = {"items_total": 0, "items_with_content": 0, "total_content_chars": 0}
         payload: dict[str, Any] = {}
@@ -2491,7 +3124,7 @@ class ViaStore:
                             error=None,
                         )
                         continue
-                    source_result = execute_source_node(node_type)
+                    source_result = execute_source_node(node_type, source_options or {})
                     raw_items.extend(source_result.items)
                     warnings.extend(source_result.warnings)
                     self._append_step(
@@ -2567,7 +3200,7 @@ class ViaStore:
                     topic = trim_text((node.get("config") or {}).get("topic") or "", 120) if isinstance(node.get("config"), dict) else ""
                     run_root = self.docs_root / "rag" / slugify(str(flow.get("name") or f"flow-{flow.get('id', 'x')}")) / run_id
                     run_root.mkdir(parents=True, exist_ok=True)
-                    codex_briefing, codex_highlights, codex_warnings = run_codex_cli_briefing(
+                    codex_briefing, codex_highlights, codex_warnings, codex_usage = run_codex_cli_briefing(
                         source_items,
                         topic,
                         run_root,
@@ -2581,7 +3214,11 @@ class ViaStore:
                         started_at=step_started_at,
                         started_ms=step_started_ms,
                         input_summary=f"ranked={len(source_items)}",
-                        output_summary=f"highlights={len(highlights)}, briefing={'yes' if codex_briefing else 'no'}",
+                        output_summary=(
+                            f"highlights={len(highlights)}, "
+                            f"briefing={'yes' if codex_briefing else 'no'}, "
+                            f"{format_codex_usage_line(codex_usage)}"
+                        ),
                         error=None,
                     )
                     continue
@@ -2606,6 +3243,7 @@ class ViaStore:
                         crawl_depth=crawl_depth,
                         warnings=warnings,
                         codex_briefing=codex_briefing,
+                        codex_usage=codex_usage,
                     )
                     crawl_depth_stats = crawl_depth
                     self._append_step(
@@ -2664,6 +3302,7 @@ class ViaStore:
                 crawl_depth=crawl_depth,
                 warnings=warnings,
                 codex_briefing=codex_briefing,
+                codex_usage=codex_usage,
             )
             crawl_depth_stats = crawl_depth
             self._append_step(
@@ -2684,6 +3323,7 @@ class ViaStore:
             "flow_id": flow_id,
             "trigger": trigger,
             "source_type_filter": source_type_filter or None,
+            "source_options": source_options or {},
             "status": "done",
             "started_at": started_at,
             "finished_at": finished_at,
@@ -2692,6 +3332,7 @@ class ViaStore:
             "payload": payload,
             "crawl_depth": crawl_depth_stats,
             "codex_briefing": codex_briefing,
+            "codex_usage": codex_usage,
         }
 
         with self._connect() as conn:
@@ -2834,8 +3475,15 @@ class Handler(BaseHTTPRequestHandler):
                 trigger = str(payload.get("trigger") or "manual")[:20]
                 source_type_raw = str(payload.get("source_type") or "").strip().lower()
                 source_type = source_type_raw if source_type_raw.startswith("source.") else None
+                source_options_raw = payload.get("source_options")
+                source_options = source_options_raw if isinstance(source_options_raw, dict) else None
                 try:
-                    result = self.context.store.run_flow(flow_id=flow_id, trigger=trigger, source_type=source_type)
+                    result = self.context.store.run_flow(
+                        flow_id=flow_id,
+                        trigger=trigger,
+                        source_type=source_type,
+                        source_options=source_options,
+                    )
                 except ValueError as exc:
                     detail = str(exc)
                     if detail == "flow_not_found":

@@ -163,4 +163,108 @@ describe("runViaFlowTurn", () => {
     expect(text).toContain("market-title");
     expect(text).not.toContain("news-title");
   });
+
+  it("renders full codex briefing without line clamp or ellipsis truncation", async () => {
+    const longParagraph = `이 문단은 길이 제한 없이 그대로 보여야 합니다. ${"핵심정보 ".repeat(60)}`.trim();
+    const invokeFn = vi.fn(async (command: string) => {
+      if (command === "via_run_flow") {
+        return {
+          run_id: "run-4",
+          status: "done",
+          warnings: [],
+          detail: {
+            run_id: "run-4",
+            status: "done",
+            steps: [],
+            payload: {
+              codex_briefing: `## 시장/트렌드 핵심\n${longParagraph}\n\n## 후속 체크\n- 체크포인트 A`,
+            },
+          },
+          artifacts: [{ node_id: "export.rag", format: "md", path: "/tmp/export.md" }],
+        };
+      }
+      throw new Error(`unexpected command: ${command}`);
+    });
+
+    const params = buildBaseParams({ invokeFn });
+    const result = await runViaFlowTurn(params as any);
+    const text = String((result.output as any)?.text ?? "");
+
+    expect(result.ok).toBe(true);
+    expect(text).toContain("상세 브리핑:");
+    expect(text).toContain("## 시장/트렌드 핵심");
+    expect(text).toContain(longParagraph);
+    expect(text).not.toContain("핵심정보 핵심정보 핵심정보…");
+  });
+
+  it("shows codex token usage when available in payload", async () => {
+    const invokeFn = vi.fn(async (command: string) => {
+      if (command === "via_run_flow") {
+        return {
+          run_id: "run-5",
+          status: "done",
+          warnings: [],
+          detail: {
+            run_id: "run-5",
+            status: "done",
+            steps: [],
+            payload: {
+              codex_usage: {
+                prompt_tokens: 1500,
+                completion_tokens: 900,
+                total_tokens: 2400,
+              },
+            },
+          },
+          artifacts: [{ node_id: "export.rag", format: "md", path: "/tmp/export.md" }],
+        };
+      }
+      throw new Error(`unexpected command: ${command}`);
+    });
+
+    const params = buildBaseParams({ invokeFn });
+    const result = await runViaFlowTurn(params as any);
+    const text = String((result.output as any)?.text ?? "");
+
+    expect(result.ok).toBe(true);
+    expect(text).toContain("Codex 토큰: 입력 1500 / 출력 900 / 합계 2400");
+  });
+
+  it("passes dynamic source options to via_run_flow", async () => {
+    const invokeFn = vi.fn(async (command: string, args?: Record<string, unknown>) => {
+      if (command === "via_run_flow") {
+        expect(args?.sourceType).toBe("source.news");
+        expect(args?.sourceOptions).toEqual({
+          keywords: ["unity", "indie game"],
+          countries: ["KR", "US"],
+          sites: ["reddit.com", "https://store.steampowered.com"],
+          maxItems: 55,
+        });
+        return {
+          run_id: "run-6",
+          status: "done",
+          warnings: [],
+          detail: { run_id: "run-6", status: "done", steps: [] },
+          artifacts: [{ node_id: "export.rag", format: "md", path: "/tmp/export.md" }],
+        };
+      }
+      throw new Error(`unexpected command: ${command}`);
+    });
+
+    const params = buildBaseParams({
+      invokeFn,
+      config: {
+        executor: "via_flow",
+        viaFlowId: "1",
+        viaSourceTypeHint: "source.news",
+        viaCustomKeywords: "unity, indie game",
+        viaCustomCountries: "kr,us",
+        viaCustomSites: "reddit.com\nhttps://store.steampowered.com",
+        viaCustomMaxItems: 55,
+      },
+    });
+
+    const result = await runViaFlowTurn(params as any);
+    expect(result.ok).toBe(true);
+  });
 });

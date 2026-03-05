@@ -92,12 +92,19 @@ export async function viaRunFlow(params: {
   flowId: number;
   trigger?: string;
   sourceType?: string;
+  sourceOptions?: {
+    keywords?: string[];
+    countries?: string[];
+    sites?: string[];
+    maxItems?: number;
+  };
 }): Promise<ViaRunPayload> {
   const raw = await params.invokeFn<unknown>("via_run_flow", {
     cwd: params.cwd,
     flowId: params.flowId,
     trigger: params.trigger,
     sourceType: params.sourceType,
+    sourceOptions: params.sourceOptions,
   });
   return normalizeViaRunPayload(raw);
 }

@@ -95,10 +95,9 @@ export default function WorkflowCanvasNodesLayer({
         const isDataResearchNode = node.type === "turn" && sourceKind === "data_research";
         const isRagModeNode = graphViewMode === "rag";
         const isRagNodeRunning = isRagModeNode && nodeStatus === "running";
-        const activeRagNodeIconSrc = isRagNodeRunning ? "/rag-node-icons/loader.svg" : ragNodeIconSrc;
         return (
           <div
-            className={`graph-node node-${node.type} ${isRagModeNode ? "is-rag-mode-node" : ""} ${isDataPipelineNode ? "is-data-pipeline-node" : ""} ${isDataResearchNode ? "is-data-research-node" : ""} ${handoffRoleClass} ${isNodeSelected ? "selected" : ""} ${isNodeDragging ? "is-dragging" : ""}`.trim()}
+            className={`graph-node node-${node.type} ${isRagModeNode ? "is-rag-mode-node" : ""} ${isRagNodeRunning ? "is-rag-running" : ""} ${isDataPipelineNode ? "is-data-pipeline-node" : ""} ${isDataResearchNode ? "is-data-research-node" : ""} ${handoffRoleClass} ${isNodeSelected ? "selected" : ""} ${isNodeDragging ? "is-dragging" : ""}`.trim()}
             data-node-id={node.id}
             key={node.id}
             onClick={(event) => {
@@ -129,8 +128,8 @@ export default function WorkflowCanvasNodesLayer({
               <>
                 <div className="rag-node-shell">
                   <div className={`rag-node-icon${isRagNodeRunning ? " is-loading" : ""}`}>
-                    {activeRagNodeIconSrc ? (
-                      <img alt="" aria-hidden="true" src={activeRagNodeIconSrc} />
+                    {ragNodeIconSrc ? (
+                      <img alt="" aria-hidden="true" src={ragNodeIconSrc} />
                     ) : (
                       ragNodeIconText
                     )}

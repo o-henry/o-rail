@@ -71,6 +71,7 @@ pub fn run() {
             storage::workspace_write_markdown,
             storage::workspace_write_text,
             storage::workspace_read_text,
+            storage::workspace_delete_file,
             storage::dialog_pick_directory,
             storage::dialog_pick_knowledge_files,
         ])

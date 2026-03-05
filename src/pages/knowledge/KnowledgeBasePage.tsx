@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  isKnowledgeEntryIdHidden,
+  isKnowledgeRunIdHidden,
   persistKnowledgeIndexToWorkspace,
   readKnowledgeEntries,
   removeKnowledgeEntry,
+  removeKnowledgeEntriesByRunId,
   upsertKnowledgeEntry,
 } from "../../features/studio/knowledgeIndex";
 import type { KnowledgeEntry, KnowledgeSourcePost } from "../../features/studio/knowledgeTypes";
@@ -75,7 +78,11 @@ function formatArtifactFileNames(entry: Pick<KnowledgeEntry, "markdownPath" | "j
 }
 
 export function toKnowledgeEntry(post: KnowledgeSourcePost): KnowledgeEntry | null {
+  const entryId = String(post.id ?? "").trim();
   const runId = String(post.runId ?? "").trim();
+  if (isKnowledgeRunIdHidden(runId) || isKnowledgeEntryIdHidden(entryId)) {
+    return null;
+  }
   const taskBase = String(post.topicLabel ?? post.groupName ?? post.topic ?? runId ?? "TASK_UNKNOWN").trim();
   const taskId = toUpperSnakeToken(taskBase);
   if (isHiddenKnowledgeEntry({ runId, taskId })) {
@@ -84,7 +91,7 @@ export function toKnowledgeEntry(post: KnowledgeSourcePost): KnowledgeEntry | nu
   const summary = String(post.summary ?? "").trim();
   const displayTitle = summary.slice(0, 72) || String(post.topicLabel ?? post.groupName ?? "").trim() || post.agentName;
   return {
-    id: post.id,
+    id: entryId,
     runId,
     taskId,
     roleId: "technical_writer",
@@ -94,6 +101,7 @@ export function toKnowledgeEntry(post: KnowledgeSourcePost): KnowledgeEntry | nu
     createdAt: post.createdAt,
     markdownPath: findAttachmentPath(post, "markdown"),
     jsonPath: findAttachmentPath(post, "json"),
+    sourceFile: String(post.sourceFile ?? "").trim() || undefined,
   };
 }
 
@@ -328,9 +336,141 @@ export default function KnowledgeBasePage({ cwd, posts, onInjectContextSources }
     if (!selected) {
       return;
     }
-    const next = removeKnowledgeEntry(selected.id);
-    persistRows(next);
-    setSelectedId("");
+    void (async () => {
+      const normalizedSourceFile = String(selected.sourceFile ?? "").trim();
+      const normalizedMarkdownPath = String(selected.markdownPath ?? "").trim();
+      const normalizedJsonPath = String(selected.jsonPath ?? "").trim();
+      const deleteErrors: string[] = [];
+
+      const shouldDeleteRunRecord =
+        normalizedSourceFile.length > 0
+        && !normalizedSourceFile.includes("/")
+        && !normalizedSourceFile.includes("\\")
+        && normalizedSourceFile.toLowerCase().endsWith(".json")
+        && !normalizedSourceFile.toLowerCase().startsWith("dashboard-");
+      if (shouldDeleteRunRecord) {
+        try {
+          await invoke("run_delete", { name: normalizedSourceFile });
+        } catch (error) {
+          const message = String(error ?? "").toLowerCase();
+          if (!message.includes("not found") && !message.includes("enoent")) {
+            deleteErrors.push(`실행 파일 삭제 실패: ${String(error)}`);
+          }
+        }
+      }
+      if (normalizedSourceFile.includes("/") || normalizedSourceFile.includes("\\")) {
+        try {
+          await invoke("workspace_delete_file", { path: normalizedSourceFile });
+        } catch (error) {
+          const message = String(error ?? "").toLowerCase();
+          if (!message.includes("not found") && !message.includes("enoent")) {
+            deleteErrors.push(`원본 실행 파일 삭제 실패: ${String(error)}`);
+          }
+        }
+      }
+
+      for (const filePath of [normalizedMarkdownPath, normalizedJsonPath]) {
+        if (!filePath) {
+          continue;
+        }
+        try {
+          await invoke("workspace_delete_file", { path: filePath });
+        } catch (error) {
+          const message = String(error ?? "").toLowerCase();
+          if (!message.includes("not found") && !message.includes("enoent")) {
+            deleteErrors.push(`산출물 삭제 실패: ${String(error)}`);
+          }
+        }
+      }
+
+      const next = removeKnowledgeEntry(selected.id);
+      persistRows(next);
+      setSelectedId("");
+      if (deleteErrors.length > 0) {
+        setDetailError(deleteErrors.join(" / "));
+      }
+    })();
+  };
+
+  const onDeleteGroup = (runId: string, taskId: string) => {
+    const normalizedRunId = String(runId ?? "").trim();
+    if (!normalizedRunId) {
+      return;
+    }
+    const normalizedTaskId = toUpperSnakeToken(String(taskId ?? ""));
+    const shouldDelete = window.confirm(`'${normalizedTaskId} · ${normalizedRunId}' 그룹을 삭제할까요?`);
+    if (!shouldDelete) {
+      return;
+    }
+    void (async () => {
+      const targetGroup = grouped.find((group) => String(group.runId ?? "").trim() === normalizedRunId) ?? null;
+      const targetEntries = Array.isArray(targetGroup?.entries) ? targetGroup.entries : [];
+      const deleteErrors: string[] = [];
+
+      const sourceFiles = Array.from(
+        new Set(
+          targetEntries
+            .map((row) => String(row.sourceFile ?? "").trim())
+            .filter((row) => row.length > 0),
+        ),
+      );
+      for (const sourceFile of sourceFiles) {
+        const normalizedSourceFile = sourceFile.toLowerCase();
+        const shouldDeleteRunRecord =
+          !sourceFile.includes("/")
+          && !sourceFile.includes("\\")
+          && normalizedSourceFile.endsWith(".json")
+          && !normalizedSourceFile.startsWith("dashboard-");
+        if (!shouldDeleteRunRecord) {
+          if (sourceFile.includes("/") || sourceFile.includes("\\")) {
+            try {
+              await invoke("workspace_delete_file", { path: sourceFile });
+            } catch (error) {
+              const message = String(error ?? "").toLowerCase();
+              if (!message.includes("not found") && !message.includes("enoent")) {
+                deleteErrors.push(`원본 실행 파일 삭제 실패: ${String(error)}`);
+              }
+            }
+          }
+          continue;
+        }
+        try {
+          await invoke("run_delete", { name: sourceFile });
+        } catch (error) {
+          const message = String(error ?? "").toLowerCase();
+          if (!message.includes("not found") && !message.includes("enoent")) {
+            deleteErrors.push(`실행 파일 삭제 실패: ${String(error)}`);
+          }
+        }
+      }
+
+      const artifactPaths = Array.from(
+        new Set(
+          targetEntries
+            .flatMap((row) => [String(row.markdownPath ?? "").trim(), String(row.jsonPath ?? "").trim()])
+            .filter((row) => row.length > 0),
+        ),
+      );
+      for (const filePath of artifactPaths) {
+        try {
+          await invoke("workspace_delete_file", { path: filePath });
+        } catch (error) {
+          const message = String(error ?? "").toLowerCase();
+          if (!message.includes("not found") && !message.includes("enoent")) {
+            deleteErrors.push(`산출물 삭제 실패: ${String(error)}`);
+          }
+        }
+      }
+
+      const next = removeKnowledgeEntriesByRunId(normalizedRunId);
+      persistRows(next);
+      if (selected && String(selected.runId ?? "").trim() === normalizedRunId) {
+        setSelectedId("");
+      }
+      if (deleteErrors.length > 0) {
+        setDetailError(deleteErrors.join(" / "));
+      }
+    })();
   };
 
   const onRevealPath = async (path: string) => {
@@ -384,27 +524,36 @@ export default function KnowledgeBasePage({ cwd, posts, onInjectContextSources }
               const collapsed = collapsedByGroup[group.id] === true;
               return (
                 <section key={group.id} className="knowledge-group">
-                  <button
-                    className="knowledge-group-trigger"
-                    onClick={() =>
-                      setCollapsedByGroup((prev) => ({
-                        ...prev,
-                        [group.id]: !collapsed,
-                      }))
-                    }
-                    type="button"
-                  >
-                    <strong>{`${group.taskId} · ${group.runId}`}</strong>
-                    <span className="knowledge-group-count">
-                      <img
-                        alt=""
-                        aria-hidden="true"
-                        className={`knowledge-group-arrow${collapsed ? " is-collapsed" : ""}`}
-                        src="/down-arrow2.svg"
-                      />
-                      <span>{`${group.entries.length}개`}</span>
-                    </span>
-                  </button>
+                  <div className="knowledge-group-head">
+                    <button
+                      className="knowledge-group-trigger"
+                      onClick={() =>
+                        setCollapsedByGroup((prev) => ({
+                          ...prev,
+                          [group.id]: !collapsed,
+                        }))
+                      }
+                      type="button"
+                    >
+                      <strong>{group.taskId}</strong>
+                      <span className="knowledge-group-count">
+                        <img
+                          alt=""
+                          aria-hidden="true"
+                          className={`knowledge-group-arrow${collapsed ? " is-collapsed" : ""}`}
+                          src="/down-arrow2.svg"
+                        />
+                        <span>{`${group.entries.length}개`}</span>
+                      </span>
+                    </button>
+                    <button
+                      className="knowledge-group-delete"
+                      onClick={() => onDeleteGroup(group.runId, group.taskId)}
+                      type="button"
+                    >
+                      그룹 삭제
+                    </button>
+                  </div>
                   {!collapsed ? (
                     <div className="knowledge-group-items">
                       {group.entries.map((entry) => (

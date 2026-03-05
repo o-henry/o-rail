@@ -592,6 +592,10 @@ function App() {
             flowId: String(config.viaFlowId ?? "").trim(),
             viaNodeType: viaType,
             viaNodeLabel: viaNodeLabel(viaType),
+            viaCustomKeywords: String(config.viaCustomKeywords ?? "").trim(),
+            viaCustomCountries: String(config.viaCustomCountries ?? "").trim(),
+            viaCustomSites: String(config.viaCustomSites ?? "").trim(),
+            viaCustomMaxItems: Math.max(1, Number(config.viaCustomMaxItems) || 24),
           };
         }),
     [graph.nodes],
@@ -1998,6 +2002,10 @@ function App() {
         viaNodeLabel: viaNodeLabel(viaNodeType),
         viaSourceTypeHint: sourceTypeHint,
         viaTemplateLabel: templateLabel || undefined,
+        viaCustomKeywords: "",
+        viaCustomCountries: "",
+        viaCustomSites: "",
+        viaCustomMaxItems: 24,
       },
     };
   }, []);
@@ -2086,6 +2094,33 @@ function App() {
     }
     const numericOnly = String(nextFlowId ?? "").replace(/[^\d]/g, "");
     updateNodeConfigById(normalizedNodeId, "viaFlowId", numericOnly);
+  }, [updateNodeConfigById]);
+
+  const onUpdateRagSourceOptions = useCallback((
+    nodeId: string,
+    patch: {
+      viaCustomKeywords?: string;
+      viaCustomCountries?: string;
+      viaCustomSites?: string;
+      viaCustomMaxItems?: number;
+    },
+  ) => {
+    const normalizedNodeId = String(nodeId ?? "").trim();
+    if (!normalizedNodeId) {
+      return;
+    }
+    if (typeof patch.viaCustomKeywords === "string") {
+      updateNodeConfigById(normalizedNodeId, "viaCustomKeywords", patch.viaCustomKeywords);
+    }
+    if (typeof patch.viaCustomCountries === "string") {
+      updateNodeConfigById(normalizedNodeId, "viaCustomCountries", patch.viaCustomCountries);
+    }
+    if (typeof patch.viaCustomSites === "string") {
+      updateNodeConfigById(normalizedNodeId, "viaCustomSites", patch.viaCustomSites);
+    }
+    if (typeof patch.viaCustomMaxItems === "number" && Number.isFinite(patch.viaCustomMaxItems)) {
+      updateNodeConfigById(normalizedNodeId, "viaCustomMaxItems", Math.max(1, Math.floor(patch.viaCustomMaxItems)));
+    }
   }, [updateNodeConfigById]);
 
   const onActivateWorkflowPanels = useCallback(() => {
@@ -2955,6 +2990,7 @@ function App() {
                     onApplyTemplate={onApplyRagTemplate}
                     onSelectNode={onSelectRagModeNode}
                     onUpdateFlowId={onUpdateRagModeFlowId}
+                    onUpdateSourceOptions={onUpdateRagSourceOptions}
                     ragNodeProgress={ragNodeProgress}
                     ragNodes={ragModeNodes}
                     ragTemplateOptions={RAG_TEMPLATE_OPTIONS}

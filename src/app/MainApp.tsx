@@ -1945,15 +1945,27 @@ function App() {
     setStatus("그래프에 데이터 조사 노드를 추가했습니다.");
   }, [appendWorkspaceEvent, applyGraphChange, graph.nodes, setNodeSelection, setStatus]);
 
-  const buildViaFlowNode = useCallback((nodeId: string, viaNodeType: ViaNodeType, sameTypeCount: number): GraphNode => {
+  const buildViaFlowNode = useCallback((
+    nodeId: string,
+    viaNodeType: ViaNodeType,
+    sameTypeCount: number,
+    layoutMode: "default" | "compact" = "default",
+  ): GraphNode => {
     const basePosition = VIA_NODE_BASE_POSITION_BY_TYPE[viaNodeType] ?? { x: 300, y: 120 };
+    const position =
+      layoutMode === "compact"
+        ? {
+            x: Math.round(basePosition.x * 0.62 + 32 + sameTypeCount * 16),
+            y: Math.round(basePosition.y * 0.62 + 28 + sameTypeCount * 30),
+          }
+        : {
+            x: basePosition.x + sameTypeCount * 24,
+            y: basePosition.y + sameTypeCount * 48,
+          };
     return {
       id: nodeId,
       type: "turn",
-      position: {
-        x: basePosition.x + sameTypeCount * 24,
-        y: basePosition.y + sameTypeCount * 48,
-      },
+      position,
       config: {
         ...defaultNodeConfig("turn"),
         executor: "via_flow",
@@ -2009,7 +2021,8 @@ function App() {
         nodes: prev.nodes,
         edges: prev.edges,
         templateNodeTypes,
-        createNode: (nodeType, sameTypeCount) => buildViaFlowNode(makeNodeId("turn"), nodeType, sameTypeCount),
+        createNode: (nodeType, sameTypeCount) =>
+          buildViaFlowNode(makeNodeId("turn"), nodeType, sameTypeCount, "compact"),
       });
       insertedNodeIds.push(...inserted.insertedNodeIds);
       return { ...prev, nodes: inserted.nodes, edges: inserted.edges };

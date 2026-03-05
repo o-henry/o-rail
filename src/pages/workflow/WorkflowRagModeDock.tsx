@@ -54,7 +54,7 @@ export default function WorkflowRagModeDock(props: WorkflowRagModeDockProps) {
           onClick={() => props.onApplyTemplate(nextTemplateId)}
           type="button"
         >
-          <span className="mini-action-button-label">템플릿 적용</span>
+          <span className="mini-action-button-label">적용</span>
         </button>
       </section>
 

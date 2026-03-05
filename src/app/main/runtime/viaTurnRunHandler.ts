@@ -82,11 +82,13 @@ function buildViaTextSummary(params: {
   warnings: string[];
   detail: unknown;
   artifacts: ViaArtifact[];
+  preferredSourceType?: string;
 }): string {
   const detailRecord = toRecord(params.detail);
   const payload = toRecord(detailRecord?.payload);
   const steps = Array.isArray(detailRecord?.steps) ? detailRecord?.steps : [];
   const highlights = toStringArray(payload?.highlights).slice(0, 8);
+  const rankedItems = Array.isArray(payload?.items) ? payload?.items : [];
   const itemsAllCountRaw = payload?.items_all_count;
   const itemsAllCount =
     typeof itemsAllCountRaw === "number"
@@ -127,6 +129,40 @@ function buildViaTextSummary(params: {
   if (steps.length > 0) {
     lines.push(`steps=${steps.length}`);
   }
+  const preferredSourceType = String(params.preferredSourceType ?? "").trim().toLowerCase();
+  const preferredItems =
+    preferredSourceType && preferredSourceType.startsWith("source.")
+      ? rankedItems.filter((row) => {
+          const record = toRecord(row);
+          const sourceType = String(record?.source_type ?? record?.sourceType ?? "").trim().toLowerCase();
+          return sourceType === preferredSourceType;
+        })
+      : rankedItems;
+  const topRows = preferredItems.slice(0, 6);
+  if (topRows.length > 0) {
+    lines.push("top_items:");
+    for (const row of topRows) {
+      const record = toRecord(row);
+      if (!record) {
+        continue;
+      }
+      const title = String(record.title ?? "").trim() || "(no title)";
+      const source = String(record.source_name ?? record.sourceName ?? "").trim();
+      const country = String(record.country ?? "").trim();
+      const url = String(record.url ?? "").trim();
+      const summary = String(record.content_excerpt ?? record.summary ?? "").replace(/\s+/g, " ").trim();
+      const header = [source ? `[${source}]` : "", country ? `(${country})` : "", title]
+        .filter((part) => part.length > 0)
+        .join(" ");
+      lines.push(`- ${header}`);
+      if (url) {
+        lines.push(`  url: ${url}`);
+      }
+      if (summary) {
+        lines.push(`  summary: ${summary.slice(0, 260)}`);
+      }
+    }
+  }
   return lines.join("\n");
 }
 
@@ -137,6 +173,7 @@ function buildViaOutput(params: {
   warnings: string[];
   detail: unknown;
   artifacts: ViaArtifact[];
+  preferredSourceType?: string;
 }): unknown {
   const timestamp = new Date().toISOString();
   return {
@@ -233,6 +270,9 @@ export async function runViaFlowTurn(params: {
     let warnings = Array.isArray(initial.warnings) ? initial.warnings : [];
     let detail = initial.detail;
     let artifacts = Array.isArray(initial.artifacts) ? initial.artifacts : [];
+    const preferredSourceType = String((params.config as Record<string, unknown>)?.viaNodeType ?? "")
+      .trim()
+      .toLowerCase();
     const seenStepLogs = new Set<string>();
     const seenWarnings = new Set<string>();
     let lastLoggedStatus = "";
@@ -345,6 +385,7 @@ export async function runViaFlowTurn(params: {
           warnings,
           detail,
           artifacts,
+          preferredSourceType,
         }),
       };
     }
@@ -360,6 +401,7 @@ export async function runViaFlowTurn(params: {
         warnings,
         detail,
         artifacts,
+        preferredSourceType,
       }),
       executor: params.executor,
       provider: "via",

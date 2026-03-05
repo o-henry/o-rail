@@ -175,7 +175,7 @@ export function isCriticalTurnNode(node: GraphNode): boolean {
 
 export function buildFeedSummary(status: string, output: unknown, error?: string, summary?: string): string {
   const trimmedSummary = (summary ?? "").trim();
-  if (trimmedSummary) {
+  if (trimmedSummary && !isPlaceholderRunSummary(trimmedSummary)) {
     return trimmedSummary;
   }
   if (status === "draft") {
@@ -184,11 +184,91 @@ export function buildFeedSummary(status: string, output: unknown, error?: string
   if (status !== "done" && status !== "low_quality") {
     return error?.trim() || t("feed.summary.failed");
   }
+  const viaSummary = summarizeViaReadableOutput(output);
+  if (viaSummary) {
+    return viaSummary;
+  }
   const outputText = toHumanReadableFeedText(extractFeedOutputText(output));
   if (!outputText) {
     return t("feed.summary.noText");
   }
   return outputText.length > 360 ? `${outputText.slice(0, 360)}...` : outputText;
+}
+
+function isPlaceholderRunSummary(value: string): boolean {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+  const placeholders = new Set([
+    t("run.turnCompleted").trim().toLowerCase(),
+    "turn completed",
+    "턴 실행 완료",
+    "轮次执行完成",
+    "ターン実行完了",
+  ]);
+  return placeholders.has(normalized);
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  return value as Record<string, unknown>;
+}
+
+function summarizeViaReadableOutput(output: unknown): string {
+  const outputRecord = asRecord(output);
+  if (!outputRecord) {
+    return "";
+  }
+  const viaRecord = asRecord(outputRecord.via);
+  if (!viaRecord) {
+    return "";
+  }
+  const detailRecord = asRecord(viaRecord.detail);
+  const payloadRecord = asRecord(detailRecord?.payload);
+  const highlightsRaw = Array.isArray(payloadRecord?.highlights) ? payloadRecord?.highlights : [];
+  const highlights = highlightsRaw.map((row) => String(row ?? "").trim()).filter(Boolean);
+  if (highlights.length > 0) {
+    const headline = highlights.slice(0, 3).join(" / ");
+    return headline.length > 360 ? `${headline.slice(0, 360)}...` : headline;
+  }
+
+  const rankedItems = Array.isArray(payloadRecord?.items) ? payloadRecord?.items : [];
+  const firstItem = asRecord(rankedItems[0]);
+  if (firstItem) {
+    const source = String(firstItem.source_name ?? firstItem.sourceType ?? "").trim();
+    const title = String(firstItem.title ?? "").trim();
+    const excerpt = String(firstItem.content_excerpt ?? firstItem.summary ?? "").replace(/\s+/g, " ").trim();
+    const line = [source ? `[${source}]` : "", title, excerpt].filter(Boolean).join(" ");
+    if (line) {
+      return line.length > 360 ? `${line.slice(0, 360)}...` : line;
+    }
+  }
+
+  const outputText = toHumanReadableFeedText(extractFeedOutputText(output));
+  const meaningful = outputText
+    .split("\n")
+    .map((row) => row.trim())
+    .filter(Boolean)
+    .find((line) => {
+      const lowered = line.toLowerCase();
+      if (lowered.startsWith("via flow ")) return false;
+      if (lowered.startsWith("artifacts=")) return false;
+      if (lowered.startsWith("items_all_count=")) return false;
+      if (lowered.startsWith("coverage_sources=")) return false;
+      if (lowered.startsWith("content_enriched=")) return false;
+      if (lowered.startsWith("highlights:")) return false;
+      if (lowered.startsWith("top_items:")) return false;
+      if (lowered.startsWith("warnings:")) return false;
+      if (lowered.startsWith("steps=")) return false;
+      return true;
+    });
+  if (!meaningful) {
+    return "";
+  }
+  return meaningful.length > 360 ? `${meaningful.slice(0, 360)}...` : meaningful;
 }
 
 function summarizeSnapshotText(input: unknown, maxLen: number): string {
@@ -706,6 +786,7 @@ export function buildFeedPost(input: any): {
 } {
   const config = input.node.config as TurnConfig;
   const executor = input.node.type === "turn" ? getTurnExecutor(config) : undefined;
+  const isViaFlowPost = executor === "via_flow";
   const viaTemplateLabel =
     executor === "via_flow" ? String((config as Record<string, unknown>).viaTemplateLabel ?? "").trim() : "";
   const topicLabelFromInput =
@@ -740,10 +821,10 @@ export function buildFeedPost(input: any): {
     "",
     `## ${t("feed.share.summary")}`,
     summary || t("common.none"),
-    ...(inputSources.length > 0
+    ...(!isViaFlowPost && inputSources.length > 0
       ? ["", `## ${t("feed.inputSources")}`, ...inputSources.map((source) => `- ${formatFeedInputSourceLabel(source)}`)]
       : []),
-    ...(inputContextMasked
+    ...(!isViaFlowPost && inputContextMasked
       ? ["", `## ${t("feed.inputSnapshot")}`, inputContextMasked]
       : []),
     "",
@@ -755,9 +836,7 @@ export function buildFeedPost(input: any): {
     ...(Array.isArray(input.dataIssues) && input.dataIssues.length > 0
       ? ["", "## 데이터 이슈", ...input.dataIssues.map((issue: string) => `- ${issue}`)]
       : []),
-    "",
-    `## ${t("feed.logs.title")}`,
-    logsText,
+    ...(!isViaFlowPost ? ["", `## ${t("feed.logs.title")}`, logsText] : []),
     "",
     `## ${t("feed.reference.title")}`,
     `- ${t("feed.reference.autoGenerated")}`,

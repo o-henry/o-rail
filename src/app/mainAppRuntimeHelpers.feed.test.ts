@@ -35,7 +35,7 @@ describe("buildFeedPost dashboard snapshot output", () => {
     const markdown = String(
       built.post.attachments.find((attachment: { kind: string }) => attachment.kind === "markdown")?.content ?? "",
     );
-    expect(markdown).toContain("## 실행 요약");
+    expect(markdown).toContain("## 요약");
     expect(markdown).toContain("## 핵심 포인트");
     expect(markdown).toContain("## 리스크");
     expect(markdown).toContain("## 참고 링크");
@@ -63,5 +63,48 @@ describe("buildFeedPost dashboard snapshot output", () => {
     expect(built.post.topicLabel).toBe("뉴스");
     expect(built.post.groupName).toBe("뉴스");
     expect(built.post.executor).toBe("via_flow");
+  });
+
+  it("builds via markdown without input snapshot/sources/logs and uses content summary", () => {
+    const built = buildFeedPost({
+      runId: "run-rag-2",
+      node: {
+        id: "turn-rag-community",
+        type: "turn",
+        config: {
+          executor: "via_flow",
+          viaTemplateLabel: "커뮤니티",
+        },
+      },
+      status: "done",
+      createdAt: "2026-03-05T11:00:00.000Z",
+      summary: "턴 실행 완료",
+      logs: ["[VIA] flow_id=1 실행 요청", "[VIA] 완료 run_id=via-2, artifacts=2"],
+      inputSources: [{ kind: "node", agentName: "RAG", roleLabel: "source", summary: "x" }],
+      inputData: { text: "snapshot" },
+      output: {
+        via: {
+          flowId: 1,
+          runId: "via-2",
+          status: "done",
+          detail: {
+            payload: {
+              highlights: ["한국 커뮤니티에서 AI 생산성 도구 급증", "미국 레딧에서 반도체 실적 논의 확대"],
+              items: [],
+            },
+          },
+        },
+      },
+    });
+
+    const markdown = String(
+      built.post.attachments.find((attachment: { kind: string }) => attachment.kind === "markdown")?.content ?? "",
+    );
+    expect(markdown).toContain("## 요약");
+    expect(markdown).toContain("한국 커뮤니티에서 AI 생산성 도구 급증");
+    expect(markdown).not.toContain("## 입력 출처");
+    expect(markdown).not.toContain("## 전달 입력 스냅샷");
+    expect(markdown).not.toContain("## 노드 로그");
+    expect(markdown).not.toContain("턴 실행 완료");
   });
 });

@@ -2078,7 +2078,7 @@ class ViaStore:
         ]
         return artifacts, payload
 
-    def run_flow(self, flow_id: int, trigger: str) -> dict[str, Any]:
+    def run_flow(self, flow_id: int, trigger: str, source_type: str | None = None) -> dict[str, Any]:
         flow = self.get_flow(flow_id)
         if flow is None:
             raise ValueError("flow_not_found")
@@ -2090,6 +2090,9 @@ class ViaStore:
 
         flow_nodes, resolve_warnings = self._resolve_flow_nodes(flow)
         warnings.extend(resolve_warnings)
+        source_type_filter = str(source_type or "").strip().lower()
+        if source_type_filter and not source_type_filter.startswith("source."):
+            source_type_filter = ""
 
         raw_items: list[dict[str, Any]] = []
         normalized_items: list[dict[str, Any]] = []
@@ -2121,6 +2124,18 @@ class ViaStore:
                     continue
 
                 if node_type.startswith("source."):
+                    if source_type_filter and node_type.lower() != source_type_filter:
+                        self._append_step(
+                            steps=steps,
+                            node_id=node_id,
+                            status="skipped",
+                            started_at=step_started_at,
+                            started_ms=step_started_ms,
+                            input_summary="run_context",
+                            output_summary=f"filtered by source_type={source_type_filter}",
+                            error=None,
+                        )
+                        continue
                     source_result = execute_source_node(node_type)
                     raw_items.extend(source_result.items)
                     warnings.extend(source_result.warnings)
@@ -2298,6 +2313,7 @@ class ViaStore:
             "run_id": run_id,
             "flow_id": flow_id,
             "trigger": trigger,
+            "source_type_filter": source_type_filter or None,
             "status": "done",
             "started_at": started_at,
             "finished_at": finished_at,
@@ -2445,8 +2461,10 @@ class Handler(BaseHTTPRequestHandler):
                 flow_id = int(parts[3])
                 payload = self._read_json_body()
                 trigger = str(payload.get("trigger") or "manual")[:20]
+                source_type_raw = str(payload.get("source_type") or "").strip().lower()
+                source_type = source_type_raw if source_type_raw.startswith("source.") else None
                 try:
-                    result = self.context.store.run_flow(flow_id=flow_id, trigger=trigger)
+                    result = self.context.store.run_flow(flow_id=flow_id, trigger=trigger, source_type=source_type)
                 except ValueError as exc:
                     detail = str(exc)
                     if detail == "flow_not_found":

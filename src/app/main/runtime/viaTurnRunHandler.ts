@@ -243,6 +243,14 @@ export async function runViaFlowTurn(params: {
 
   const timeoutMs = Math.max(10_000, Number(params.config.webTimeoutMs ?? 180_000) || 180_000);
   const pollIntervalMs = 1_200;
+  const preferredSourceType = String((params.config as Record<string, unknown>)?.viaSourceTypeHint ?? "")
+    .trim()
+    .toLowerCase()
+    || String((params.config as Record<string, unknown>)?.viaNodeType ?? "")
+      .trim()
+      .toLowerCase();
+  const normalizedSourceType =
+    preferredSourceType.startsWith("source.") ? preferredSourceType : "";
 
   params.addNodeLog(params.node.id, `[VIA] flow_id=${flowId} 실행 요청`);
 
@@ -252,6 +260,7 @@ export async function runViaFlowTurn(params: {
       cwd: params.cwd,
       flowId,
       trigger: "manual",
+      sourceType: normalizedSourceType || undefined,
     });
 
     if (!initial.runId) {
@@ -270,9 +279,6 @@ export async function runViaFlowTurn(params: {
     let warnings = Array.isArray(initial.warnings) ? initial.warnings : [];
     let detail = initial.detail;
     let artifacts = Array.isArray(initial.artifacts) ? initial.artifacts : [];
-    const preferredSourceType = String((params.config as Record<string, unknown>)?.viaNodeType ?? "")
-      .trim()
-      .toLowerCase();
     const seenStepLogs = new Set<string>();
     const seenWarnings = new Set<string>();
     let lastLoggedStatus = "";

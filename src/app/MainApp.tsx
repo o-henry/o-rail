@@ -1965,6 +1965,7 @@ function App() {
     viaNodeType: ViaNodeType,
     sameTypeCount: number,
     layoutMode: "default" | "compact" = "default",
+    sourceTypeHint = "",
   ): GraphNode => {
     const basePosition = VIA_NODE_BASE_POSITION_BY_TYPE[viaNodeType] ?? { x: 300, y: 120 };
     const position =
@@ -1992,15 +1993,17 @@ function App() {
         viaFlowId: "1",
         viaNodeType,
         viaNodeLabel: viaNodeLabel(viaNodeType),
+        viaSourceTypeHint: sourceTypeHint,
       },
     };
   }, []);
 
   const onAddViaFlowNode = useCallback((viaNodeType: ViaNodeType) => {
     const nodeId = makeNodeId("turn");
+    const sourceTypeHint = viaNodeType.startsWith("source.") ? viaNodeType : "";
     applyGraphChange((prev) => {
       const sameTypeCount = countViaNodesByType(prev.nodes, viaNodeType);
-      const nextNode = buildViaFlowNode(nodeId, viaNodeType, sameTypeCount);
+      const nextNode = buildViaFlowNode(nodeId, viaNodeType, sameTypeCount, "default", sourceTypeHint);
       const nextNodes = [...prev.nodes, nextNode];
       const nextEdges = connectViaDefaultEdges({
         nodes: nextNodes,
@@ -2030,6 +2033,7 @@ function App() {
     if (!templateNodeTypes) {
       return;
     }
+    const templateSourceTypeHint = templateNodeTypes.find((type) => type.startsWith("source.")) ?? "";
     const insertedNodeIds: string[] = [];
     applyGraphChange((prev) => {
       const inserted = insertMissingViaTemplateNodes({
@@ -2037,7 +2041,7 @@ function App() {
         edges: prev.edges,
         templateNodeTypes,
         createNode: (nodeType, sameTypeCount) =>
-          buildViaFlowNode(makeNodeId("turn"), nodeType, sameTypeCount, "compact"),
+          buildViaFlowNode(makeNodeId("turn"), nodeType, sameTypeCount, "compact", templateSourceTypeHint),
       });
       insertedNodeIds.push(...inserted.insertedNodeIds);
       return { ...prev, nodes: inserted.nodes, edges: inserted.edges };

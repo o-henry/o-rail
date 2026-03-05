@@ -103,4 +103,61 @@ describe("runViaFlowTurn", () => {
     expect(result.ok).toBe(false);
     expect(result.error).toContain("flow_id");
   });
+
+  it("passes source_type hint and prioritizes source-specific top items in output text", async () => {
+    const invokeFn = vi.fn(async (command: string, args?: Record<string, unknown>) => {
+      if (command === "via_run_flow") {
+        expect(args?.sourceType).toBe("source.market");
+        return {
+          run_id: "run-3",
+          status: "done",
+          warnings: [],
+          detail: {
+            run_id: "run-3",
+            status: "done",
+            steps: [],
+            payload: {
+              items: [
+                {
+                  source_type: "source.news",
+                  source_name: "Naver News",
+                  country: "KR",
+                  title: "news-title",
+                  url: "https://example.com/news",
+                  summary: "news-summary",
+                },
+                {
+                  source_type: "source.market",
+                  source_name: "Yahoo S&P500",
+                  country: "US",
+                  title: "market-title",
+                  url: "https://example.com/market",
+                  summary: "market-summary",
+                },
+              ],
+            },
+          },
+          artifacts: [{ node_id: "export.rag", format: "md", path: "/tmp/export.md" }],
+        };
+      }
+      throw new Error(`unexpected command: ${command}`);
+    });
+
+    const params = buildBaseParams({
+      invokeFn,
+      config: {
+        executor: "via_flow",
+        viaFlowId: "1",
+        viaSourceTypeHint: "source.market",
+      },
+    });
+
+    const result = await runViaFlowTurn(params as any);
+    const text = String((result.output as any)?.text ?? "");
+
+    expect(result.ok).toBe(true);
+    expect(text).toContain("top_items:");
+    expect(text).toContain("market-title");
+    expect(text).not.toContain("news-title");
+  });
 });

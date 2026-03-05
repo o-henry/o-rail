@@ -48,11 +48,14 @@ describe("runViaFlowTurn", () => {
     const params = buildBaseParams();
 
     const result = await runViaFlowTurn(params as any);
+    const text = String((result.output as any)?.text ?? "");
 
     expect(result.ok).toBe(true);
     expect(result.provider).toBe("via");
     expect((result.output as any)?.via?.runId).toBe("run-1");
     expect((result.output as any)?.via?.artifacts?.length).toBe(1);
+    expect(text).toContain("RAG 실행 결과");
+    expect(text).not.toContain("VIA flow 1 run");
   });
 
   it("polls run and artifacts when initial response is non-terminal", async () => {
@@ -104,7 +107,7 @@ describe("runViaFlowTurn", () => {
     expect(result.error).toContain("flow_id");
   });
 
-  it("passes source_type hint and prioritizes source-specific top items in output text", async () => {
+  it("passes source_type hint and prioritizes source-specific evidence in Korean summary text", async () => {
     const invokeFn = vi.fn(async (command: string, args?: Record<string, unknown>) => {
       if (command === "via_run_flow") {
         expect(args?.sourceType).toBe("source.market");
@@ -156,7 +159,7 @@ describe("runViaFlowTurn", () => {
     const text = String((result.output as any)?.text ?? "");
 
     expect(result.ok).toBe(true);
-    expect(text).toContain("top_items:");
+    expect(text).toContain("핵심 근거:");
     expect(text).toContain("market-title");
     expect(text).not.toContain("news-title");
   });

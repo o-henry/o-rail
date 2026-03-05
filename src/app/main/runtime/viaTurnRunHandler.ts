@@ -56,6 +56,68 @@ function toStringArray(input: unknown): string[] {
     .filter((row) => row.length > 0);
 }
 
+function normalizeWhitespace(input: string): string {
+  return String(input ?? "").replace(/\s+/g, " ").trim();
+}
+
+function hasKorean(input: string): boolean {
+  return /[가-힣]/.test(String(input ?? ""));
+}
+
+function toKoreanReadableText(input: unknown, maxLength = 260): string {
+  const normalized = normalizeWhitespace(String(input ?? ""));
+  if (!normalized) {
+    return "";
+  }
+  const clipped = normalized.length > maxLength ? `${normalized.slice(0, maxLength)}...` : normalized;
+  if (hasKorean(clipped)) {
+    return clipped;
+  }
+  return `원문: ${clipped}`;
+}
+
+function toViaStatusLabel(status: string): string {
+  const normalized = String(status ?? "").trim().toLowerCase();
+  if (normalized === "done") {
+    return "완료";
+  }
+  if (normalized === "running") {
+    return "실행 중";
+  }
+  if (normalized === "failed" || normalized === "error") {
+    return "실패";
+  }
+  if (normalized === "cancelled") {
+    return "취소";
+  }
+  return normalized || "알 수 없음";
+}
+
+function toSourceTypeLabel(input: string): string {
+  const normalized = String(input ?? "").trim().toLowerCase();
+  if (normalized === "source.news") return "뉴스";
+  if (normalized === "source.sns" || normalized === "source.x" || normalized === "source.threads") return "SNS";
+  if (normalized === "source.community" || normalized === "source.reddit") return "커뮤니티";
+  if (normalized === "source.dev" || normalized === "source.hn") return "개발 커뮤니티";
+  if (normalized === "source.market") return "주식/마켓";
+  return normalized || "기타";
+}
+
+function summarizeViaHighlight(line: string): string {
+  const raw = normalizeWhitespace(line);
+  if (!raw) {
+    return "";
+  }
+  const marker = raw.indexOf(":");
+  if (marker < 0) {
+    return toKoreanReadableText(raw, 220);
+  }
+  const prefix = raw.slice(0, marker).trim();
+  const body = raw.slice(marker + 1).trim();
+  const localizedBody = toKoreanReadableText(body, 220);
+  return [prefix, localizedBody].filter(Boolean).join(": ");
+}
+
 function formatViaStepLog(stepInput: unknown): string {
   const step = toRecord(stepInput);
   if (!step) {
@@ -97,37 +159,62 @@ function buildViaTextSummary(params: {
         ? Number(itemsAllCountRaw)
         : undefined;
   const coverage = toRecord(payload?.coverage);
-  const coverageCount = coverage ? Object.keys(coverage).length : 0;
+  const bySource = toRecord(coverage?.by_source);
+  const byCountry = toRecord(coverage?.by_country);
+  const byStatus = toRecord(coverage?.by_status);
   const crawlDepth = toRecord(detailRecord?.crawl_depth);
   const enriched = Number(crawlDepth?.items_with_content ?? 0);
   const totalItems = Number(crawlDepth?.items_total ?? 0);
-  const lines = [
-    `VIA flow ${params.flowId} run ${params.runId} status ${params.status}`,
-    `artifacts=${params.artifacts.length}`,
-  ];
+  const statusLabel = toViaStatusLabel(params.status);
+  const lines = [`RAG 실행 결과: ${statusLabel}`, `- 실행 ID: ${params.runId}`, `- 산출물: ${params.artifacts.length}개`];
   if (typeof itemsAllCount === "number" && Number.isFinite(itemsAllCount)) {
-    lines.push(`items_all_count=${itemsAllCount}`);
-  }
-  if (coverageCount > 0) {
-    lines.push(`coverage_sources=${coverageCount}`);
+    lines.push(`- 수집 항목: ${itemsAllCount}개`);
   }
   if (totalItems > 0) {
-    lines.push(`content_enriched=${enriched}/${totalItems}`);
+    lines.push(`- 본문 확보: ${enriched}/${totalItems}`);
   }
+
+  if (bySource && Object.keys(bySource).length > 0) {
+    lines.push("", "소스 커버리지:");
+    for (const [sourceType, count] of Object.entries(bySource)) {
+      const amount = Number(count ?? 0);
+      lines.push(`- ${toSourceTypeLabel(sourceType)}: ${Number.isFinite(amount) ? amount : count}`);
+    }
+  }
+
+  if (byCountry && Object.keys(byCountry).length > 0) {
+    lines.push("", "국가 분포:");
+    for (const [country, count] of Object.entries(byCountry)) {
+      const amount = Number(count ?? 0);
+      lines.push(`- ${country}: ${Number.isFinite(amount) ? amount : count}`);
+    }
+  }
+
+  if (byStatus && Object.keys(byStatus).length > 0) {
+    lines.push("", "검증 상태 분포:");
+    for (const [status, count] of Object.entries(byStatus)) {
+      const amount = Number(count ?? 0);
+      lines.push(`- ${status}: ${Number.isFinite(amount) ? amount : count}`);
+    }
+  }
+
   if (highlights.length > 0) {
-    lines.push("highlights:");
+    lines.push("", "핵심 요약:");
     for (const line of highlights) {
-      lines.push(`- ${line}`);
+      const summaryLine = summarizeViaHighlight(line);
+      if (summaryLine) {
+        lines.push(`- ${summaryLine}`);
+      }
     }
   }
   if (params.warnings.length > 0) {
-    lines.push("warnings:");
+    lines.push("", `경고 ${params.warnings.length}건:`);
     for (const warning of params.warnings.slice(0, 8)) {
-      lines.push(`- ${warning}`);
+      lines.push(`- ${toKoreanReadableText(warning, 220)}`);
     }
   }
   if (steps.length > 0) {
-    lines.push(`steps=${steps.length}`);
+    lines.push("", `실행 단계: ${steps.length}개`);
   }
   const preferredSourceType = String(params.preferredSourceType ?? "").trim().toLowerCase();
   const preferredItems =
@@ -140,7 +227,7 @@ function buildViaTextSummary(params: {
       : rankedItems;
   const topRows = preferredItems.slice(0, 6);
   if (topRows.length > 0) {
-    lines.push("top_items:");
+    lines.push("", "핵심 근거:");
     for (const row of topRows) {
       const record = toRecord(row);
       if (!record) {
@@ -148,18 +235,23 @@ function buildViaTextSummary(params: {
       }
       const title = String(record.title ?? "").trim() || "(no title)";
       const source = String(record.source_name ?? record.sourceName ?? "").trim();
+      const sourceType = String(record.source_type ?? record.sourceType ?? "").trim();
       const country = String(record.country ?? "").trim();
       const url = String(record.url ?? "").trim();
-      const summary = String(record.content_excerpt ?? record.summary ?? "").replace(/\s+/g, " ").trim();
-      const header = [source ? `[${source}]` : "", country ? `(${country})` : "", title]
+      const summary = normalizeWhitespace(String(record.content_excerpt ?? record.summary ?? ""));
+      const header = [
+        country ? `[${country}]` : "",
+        source ? source : toSourceTypeLabel(sourceType),
+        toKoreanReadableText(title, 180),
+      ]
         .filter((part) => part.length > 0)
-        .join(" ");
+        .join(" · ");
       lines.push(`- ${header}`);
       if (url) {
-        lines.push(`  url: ${url}`);
+        lines.push(`  - 출처: ${url}`);
       }
       if (summary) {
-        lines.push(`  summary: ${summary.slice(0, 260)}`);
+        lines.push(`  - 요약: ${toKoreanReadableText(summary, 260)}`);
       }
     }
   }

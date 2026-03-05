@@ -2060,7 +2060,7 @@ function App() {
     });
     setStatus(
       nextMode === "rag"
-        ? "RAG 모드로 전환했습니다. VIA Flow 전용 그래프와 메뉴를 표시합니다."
+        ? "RAG 모드로 전환했습니다. RAG 전용 그래프와 메뉴를 표시합니다."
         : "DAG 모드로 전환했습니다.",
     );
   }, [appendWorkspaceEvent, setStatus, workflowGraphViewMode]);

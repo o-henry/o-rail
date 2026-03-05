@@ -73,7 +73,7 @@ export const TURN_EXECUTOR_OPTIONS = [
 
 export const TURN_EXECUTOR_LABELS: Record<TurnExecutor, string> = {
   codex: "Codex",
-  via_flow: "VIA Flow",
+  via_flow: "RAG",
   web_gemini: "WEB / GEMINI",
   web_gpt: "WEB / GPT",
   web_grok: "WEB / GROK",
@@ -184,7 +184,7 @@ export function turnExecutorLabel(executor: TurnExecutor): string {
     return t("feed.executor.ollama");
   }
   if (executor === "via_flow") {
-    return "VIA Flow";
+    return "RAG";
   }
   return TURN_EXECUTOR_LABELS[executor];
 }

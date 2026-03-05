@@ -151,6 +151,7 @@ function buildViaTextSummary(params: {
   const steps = Array.isArray(detailRecord?.steps) ? detailRecord?.steps : [];
   const highlights = toStringArray(payload?.highlights).slice(0, 8);
   const rankedItems = Array.isArray(payload?.items) ? payload?.items : [];
+  const codexBriefing = normalizeWhitespace(String(payload?.codex_briefing ?? ""));
   const itemsAllCountRaw = payload?.items_all_count;
   const itemsAllCount =
     typeof itemsAllCountRaw === "number"
@@ -205,6 +206,13 @@ function buildViaTextSummary(params: {
       if (summaryLine) {
         lines.push(`- ${summaryLine}`);
       }
+    }
+  }
+
+  if (codexBriefing) {
+    lines.push("", "상세 브리핑:");
+    for (const paragraph of codexBriefing.split("\n").map((row) => row.trim()).filter(Boolean).slice(0, 16)) {
+      lines.push(`- ${toKoreanReadableText(paragraph, 260)}`);
     }
   }
   if (params.warnings.length > 0) {

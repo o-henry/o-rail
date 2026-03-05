@@ -228,6 +228,16 @@ function summarizeViaReadableOutput(output: unknown): string {
   }
   const detailRecord = asRecord(viaRecord.detail);
   const payloadRecord = asRecord(detailRecord?.payload);
+  const codexBriefing = String(payloadRecord?.codex_briefing ?? "").trim();
+  if (codexBriefing) {
+    const firstLine = codexBriefing
+      .split("\n")
+      .map((row) => row.trim())
+      .find((line) => line.length > 0 && !line.startsWith("#"));
+    if (firstLine) {
+      return firstLine.length > 360 ? `${firstLine.slice(0, 360)}...` : firstLine;
+    }
+  }
   const highlightsRaw = Array.isArray(payloadRecord?.highlights) ? payloadRecord?.highlights : [];
   const highlights = highlightsRaw.map((row) => String(row ?? "").trim()).filter(Boolean);
   if (highlights.length > 0) {
@@ -239,8 +249,10 @@ function summarizeViaReadableOutput(output: unknown): string {
   const firstItem = asRecord(rankedItems[0]);
   if (firstItem) {
     const source = String(firstItem.source_name ?? firstItem.sourceType ?? "").trim();
-    const title = String(firstItem.title ?? "").trim();
-    const excerpt = String(firstItem.content_excerpt ?? firstItem.summary ?? "").replace(/\s+/g, " ").trim();
+    const title = String(firstItem.title_ko ?? firstItem.title ?? "").trim();
+    const excerpt = String(firstItem.content_excerpt_ko ?? firstItem.summary_ko ?? firstItem.content_excerpt ?? firstItem.summary ?? "")
+      .replace(/\s+/g, " ")
+      .trim();
     const line = [source ? `[${source}]` : "", title, excerpt].filter(Boolean).join(" ");
     if (line) {
       return line.length > 360 ? `${line.slice(0, 360)}...` : line;

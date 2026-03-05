@@ -21,6 +21,8 @@ import os
 import re
 import secrets
 import sqlite3
+import subprocess
+import tempfile
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -59,6 +61,10 @@ PINCHTAB_STARTUP_DELAY_ENV = "RAIL_VIA_PINCHTAB_STARTUP_DELAY_SEC"
 PINCHTAB_TARGET_DELAY_ENV = "RAIL_VIA_PINCHTAB_TARGET_DELAY_SEC"
 PINCHTAB_TAB_READ_DELAY_ENV = "RAIL_VIA_PINCHTAB_TAB_READ_DELAY_SEC"
 TRANSLATE_TO_KO_ENV = "RAIL_VIA_TRANSLATE_TO_KO"
+CODEX_EXEC_ENABLED_ENV = "RAIL_VIA_CODEX_EXEC_ENABLED"
+CODEX_EXEC_BIN_ENV = "RAIL_VIA_CODEX_BIN"
+CODEX_EXEC_MODEL_ENV = "RAIL_VIA_CODEX_MODEL"
+CODEX_EXEC_TIMEOUT_ENV = "RAIL_VIA_CODEX_TIMEOUT_SEC"
 DEFAULT_PINCHTAB_BASE_URL = "http://127.0.0.1:9867"
 PINCHTAB_DEFAULT_MODE = "headless"
 PINCHTAB_STARTUP_DELAY_SECONDS = 1.1
@@ -1744,6 +1750,193 @@ def localize_ranked_items_for_ko(items: list[dict[str, Any]], max_items: int = 2
     return localized
 
 
+def build_codex_cli_prompt(
+    items: list[dict[str, Any]],
+    topic: str,
+    max_items: int = 18,
+) -> str:
+    lines: list[str] = []
+    lines.append("당신은 한국어 리서치 브리핑 작성자다.")
+    lines.append("입력 데이터만 사용하고, 추측/환각 없이 요약한다.")
+    lines.append("출력은 반드시 JSON 하나만 반환한다. 마크다운/코드블록 금지.")
+    lines.append(
+        'JSON 스키마: {"headline":"string","highlights":["string"],"detail_markdown":"string","key_points":[{"title":"string","summary":"string","source":"string","url":"string"}]}'
+    )
+    lines.append("조건:")
+    lines.append("- 모든 문장은 한국어.")
+    lines.append("- highlights는 5~8개.")
+    lines.append("- detail_markdown에는 '## 시장/트렌드 핵심', '## 주의할 리스크', '## 지금 확인할 항목' 섹션 포함.")
+    lines.append("- key_points는 최대 8개.")
+    if topic:
+        lines.append(f"- 요청 주제: {topic}")
+    lines.append("")
+    lines.append("수집 데이터:")
+    for index, row in enumerate(items[:max_items], start=1):
+        country = trim_text(row.get("country") or "GLOBAL", 20)
+        source = trim_text(row.get("source_name") or display_source_type(str(row.get("source_type") or "")), 80)
+        title = trim_text(row.get("title_ko") or row.get("title") or "", 220)
+        summary = trim_text(
+            row.get("content_excerpt_ko")
+            or row.get("summary_ko")
+            or row.get("content_excerpt")
+            or row.get("summary")
+            or "",
+            400,
+        )
+        url = trim_text(row.get("url") or "", 500)
+        lines.append(f"{index}. [{country}] {source}")
+        lines.append(f"   title: {title}")
+        if summary:
+            lines.append(f"   summary: {summary}")
+        if url:
+            lines.append(f"   url: {url}")
+    return "\n".join(lines).strip()
+
+
+def parse_json_object_block(raw_text: str) -> dict[str, Any] | None:
+    text = str(raw_text or "").strip()
+    if not text:
+        return None
+    candidates: list[str] = [text]
+    fenced = re.search(r"```json\s*(\{.*?\})\s*```", text, flags=re.IGNORECASE | re.DOTALL)
+    if fenced:
+        candidates.append(fenced.group(1).strip())
+    braces = re.search(r"(\{.*\})", text, flags=re.DOTALL)
+    if braces:
+        candidates.append(braces.group(1).strip())
+
+    for candidate in candidates:
+        try:
+            parsed = json.loads(candidate)
+        except Exception:
+            continue
+        if isinstance(parsed, dict):
+            return parsed
+    return None
+
+
+def parse_bullet_lines(raw_text: str, max_lines: int = 8) -> list[str]:
+    lines: list[str] = []
+    for row in str(raw_text or "").splitlines():
+        normalized = row.strip()
+        if not normalized:
+            continue
+        normalized = re.sub(r"^[-*]\s*", "", normalized).strip()
+        if not normalized:
+            continue
+        lines.append(translate_to_korean(normalized, 220))
+        if len(lines) >= max_lines:
+            break
+    return lines
+
+
+def run_codex_cli_briefing(
+    items: list[dict[str, Any]],
+    topic: str,
+    run_root: Path,
+) -> tuple[str, list[str], list[str]]:
+    if not env_flag_enabled(CODEX_EXEC_ENABLED_ENV, default=True):
+        return "", [], ["codex.cli: disabled by env"]
+    if not items:
+        return "", [], ["codex.cli: no ranked items"]
+
+    codex_bin = env_text(CODEX_EXEC_BIN_ENV, "codex")
+    model = env_text(CODEX_EXEC_MODEL_ENV, "")
+    timeout_sec = env_float(CODEX_EXEC_TIMEOUT_ENV, 90.0, min_value=20.0, max_value=300.0)
+    prompt = build_codex_cli_prompt(items, topic)
+
+    output_file = run_root / "codex_last_message.txt"
+    args = [
+        codex_bin,
+        "exec",
+        "--skip-git-repo-check",
+        "--full-auto",
+        "--sandbox",
+        "workspace-write",
+        "--output-last-message",
+        str(output_file),
+        "-",
+    ]
+    if model:
+        args.extend(["-m", model])
+
+    try:
+        completed = subprocess.run(
+            args,
+            input=prompt,
+            text=True,
+            capture_output=True,
+            cwd=str(run_root),
+            timeout=timeout_sec,
+            check=False,
+        )
+    except FileNotFoundError:
+        return "", [], [f"codex.cli: binary not found ({codex_bin})"]
+    except Exception as exc:
+        return "", [], [f"codex.cli: spawn failed ({trim_text(exc, 200)})"]
+
+    stderr = trim_text(completed.stderr or "", 320)
+    if completed.returncode != 0:
+        warning = f"codex.cli: exit={completed.returncode}"
+        if stderr:
+            warning = f"{warning}, {stderr}"
+        return "", [], [warning]
+
+    raw_output = ""
+    if output_file.is_file():
+        try:
+            raw_output = output_file.read_text(encoding="utf-8").strip()
+        except Exception:
+            raw_output = ""
+    if not raw_output:
+        raw_output = trim_text(completed.stdout or "", 24000)
+    if not raw_output:
+        return "", [], ["codex.cli: empty response"]
+
+    parsed = parse_json_object_block(raw_output)
+    if parsed:
+        headline = translate_to_korean(str(parsed.get("headline") or ""), 200)
+        highlights_raw = parsed.get("highlights")
+        highlights = (
+            [translate_to_korean(str(row or ""), 220) for row in highlights_raw if str(row or "").strip()]
+            if isinstance(highlights_raw, list)
+            else []
+        )
+        detail_markdown = translate_to_korean(str(parsed.get("detail_markdown") or ""), 5000)
+        key_points = parsed.get("key_points")
+        detail_lines: list[str] = []
+        if detail_markdown:
+            detail_lines.append(detail_markdown)
+        if isinstance(key_points, list) and key_points:
+            if detail_lines:
+                detail_lines.append("")
+            detail_lines.append("## 근거 포인트")
+            for row in key_points[:8]:
+                if not isinstance(row, dict):
+                    continue
+                title = translate_to_korean(str(row.get("title") or ""), 180)
+                summary = translate_to_korean(str(row.get("summary") or ""), 220)
+                source = translate_to_korean(str(row.get("source") or ""), 80)
+                url = trim_text(row.get("url") or "", 500)
+                if title:
+                    detail_lines.append(f"- {title}")
+                if summary:
+                    detail_lines.append(f"  - 요약: {summary}")
+                if source:
+                    detail_lines.append(f"  - 출처: {source}")
+                if url:
+                    detail_lines.append(f"  - URL: {url}")
+        briefing = "\n".join(detail_lines).strip()
+        final_highlights = highlights[:8]
+        if headline:
+            final_highlights = [headline, *final_highlights][:8]
+        return briefing, final_highlights, []
+
+    fallback_highlights = parse_bullet_lines(raw_output, max_lines=8)
+    briefing = translate_to_korean(raw_output, 5000)
+    return briefing, fallback_highlights, ["codex.cli: non-json response parsed as text"]
+
+
 def build_source_coverage(items: list[dict[str, Any]]) -> dict[str, Any]:
     by_source: dict[str, int] = {}
     by_country: dict[str, int] = {}
@@ -1776,6 +1969,7 @@ def build_markdown(
     highlights: list[str],
     top_items: list[dict[str, Any]],
     warnings: list[str],
+    codex_briefing: str = "",
 ) -> str:
     effective_top_items = [row for row in top_items if not is_fallback_item(row)]
     source_buckets: dict[str, list[dict[str, Any]]] = {}
@@ -1799,14 +1993,18 @@ def build_markdown(
             lines.append(f"- {line}")
     elif effective_top_items:
         for row in effective_top_items[:10]:
-            title = trim_text(row.get("title") or "", 180)
-            excerpt = trim_text(row.get("content_excerpt") or row.get("summary") or "", 180)
+            title = trim_text(row.get("title_ko") or row.get("title") or "", 180)
+            excerpt = trim_text(row.get("content_excerpt_ko") or row.get("summary_ko") or row.get("content_excerpt") or row.get("summary") or "", 180)
             if excerpt:
                 lines.append(f"- {title}: {excerpt}")
             else:
                 lines.append(f"- {title}")
     else:
         lines.append("- 신뢰 가능한 수집 결과가 없어 브리핑을 생성하지 못했습니다.")
+
+    if codex_briefing:
+        lines.append("\n## Codex 분석")
+        lines.append(codex_briefing)
 
     lines.append("\n## 소스별 인사이트")
     source_order = ["source.news", SOURCE_TYPE_SNS, SOURCE_TYPE_COMMUNITY, SOURCE_TYPE_DEV, SOURCE_TYPE_MARKET]
@@ -2173,6 +2371,7 @@ class ViaStore:
         coverage: dict[str, Any],
         crawl_depth: dict[str, int],
         warnings: list[str],
+        codex_briefing: str = "",
     ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
         flow_slug = slugify(str(flow.get("name") or f"flow-{flow.get('id', 'x')}"))
         run_root = self.docs_root / "rag" / flow_slug / run_id
@@ -2189,6 +2388,7 @@ class ViaStore:
             highlights=highlights,
             top_items=ranked_items,
             warnings=warnings,
+            codex_briefing=codex_briefing,
         )
 
         payload = {
@@ -2200,6 +2400,7 @@ class ViaStore:
             "coverage": coverage,
             "crawl_depth": crawl_depth,
             "highlights": highlights,
+            "codex_briefing": codex_briefing,
             "items": ranked_items,
             "items_all_count": len(all_items),
             "items_all": all_items,
@@ -2252,6 +2453,7 @@ class ViaStore:
         verified_items: list[dict[str, Any]] = []
         ranked_items: list[dict[str, Any]] = []
         highlights: list[str] = []
+        codex_briefing = ""
         artifacts: list[dict[str, Any]] = []
         crawl_depth_stats: dict[str, int] = {"items_total": 0, "items_with_content": 0, "total_content_chars": 0}
         payload: dict[str, Any] = {}
@@ -2361,7 +2563,17 @@ class ViaStore:
                 if node_type == "agent.codex":
                     source_items = ranked_items if ranked_items else rank_items(verify_items(normalize_items(raw_items)))
                     source_items = localize_ranked_items_for_ko(source_items)
-                    highlights = summarize_ranked_items(source_items)
+                    ranked_items = source_items
+                    topic = trim_text((node.get("config") or {}).get("topic") or "", 120) if isinstance(node.get("config"), dict) else ""
+                    run_root = self.docs_root / "rag" / slugify(str(flow.get("name") or f"flow-{flow.get('id', 'x')}")) / run_id
+                    run_root.mkdir(parents=True, exist_ok=True)
+                    codex_briefing, codex_highlights, codex_warnings = run_codex_cli_briefing(
+                        source_items,
+                        topic,
+                        run_root,
+                    )
+                    warnings.extend(codex_warnings)
+                    highlights = codex_highlights or summarize_ranked_items(source_items)
                     self._append_step(
                         steps=steps,
                         node_id=node_id,
@@ -2369,7 +2581,7 @@ class ViaStore:
                         started_at=step_started_at,
                         started_ms=step_started_ms,
                         input_summary=f"ranked={len(source_items)}",
-                        output_summary=f"highlights={len(highlights)}",
+                        output_summary=f"highlights={len(highlights)}, briefing={'yes' if codex_briefing else 'no'}",
                         error=None,
                     )
                     continue
@@ -2393,6 +2605,7 @@ class ViaStore:
                         coverage=coverage,
                         crawl_depth=crawl_depth,
                         warnings=warnings,
+                        codex_briefing=codex_briefing,
                     )
                     crawl_depth_stats = crawl_depth
                     self._append_step(
@@ -2450,6 +2663,7 @@ class ViaStore:
                 coverage=coverage,
                 crawl_depth=crawl_depth,
                 warnings=warnings,
+                codex_briefing=codex_briefing,
             )
             crawl_depth_stats = crawl_depth
             self._append_step(
@@ -2477,6 +2691,7 @@ class ViaStore:
             "warnings": deduped_warnings,
             "payload": payload,
             "crawl_depth": crawl_depth_stats,
+            "codex_briefing": codex_briefing,
         }
 
         with self._connect() as conn:

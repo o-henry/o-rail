@@ -1940,7 +1940,7 @@ function App() {
       config: {
         ...defaultNodeConfig("turn"),
         executor: "web_grok",
-        role: "WEB_AI_RESEARCH AGENT",
+        role: "DATA NODE AGENT",
         promptTemplate:
           "최신/실시간 웹 자료를 조사해 핵심 근거를 구조화하고, 바로 개발 의사결정에 쓸 수 있게 요약해줘.",
         qualityProfile: "research_evidence",
@@ -1955,11 +1955,11 @@ function App() {
     setNodeSelection([nodeId], nodeId);
     appendWorkspaceEvent({
       source: "workflow",
-      message: "데이터 조사 노드 추가",
+      message: "데이터 노드 추가",
       actor: "user",
       level: "info",
     });
-    setStatus("그래프에 데이터 조사 노드를 추가했습니다.");
+    setStatus("그래프에 데이터 노드를 추가했습니다.");
   }, [appendWorkspaceEvent, applyGraphChange, graph.nodes, setNodeSelection, setStatus]);
 
   const buildViaFlowNode = useCallback((

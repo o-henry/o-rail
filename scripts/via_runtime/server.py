@@ -181,6 +181,14 @@ SOURCE_TYPE_WEIGHT: dict[str, int] = {
     SOURCE_TYPE_MARKET: 78,
 }
 
+SOURCE_TYPE_LABEL: dict[str, str] = {
+    "source.news": "뉴스",
+    SOURCE_TYPE_SNS: "SNS",
+    SOURCE_TYPE_COMMUNITY: "커뮤니티",
+    SOURCE_TYPE_DEV: "개발 커뮤니티",
+    SOURCE_TYPE_MARKET: "주식/마켓",
+}
+
 TRUSTED_DOMAINS = {
     "news.google.com",
     "news.naver.com",
@@ -1508,24 +1516,35 @@ def execute_source_node(source_type: str) -> AdapterResult:
             return AdapterResult(adapter=result.adapter, items=result.items, warnings=warnings)
 
     normalized = LEGACY_SOURCE_TYPE_MAP.get(source_type, source_type)
-    fallback_item = make_item(
-        source_type=normalized,
-        source_name="fallback",
-        country="GLOBAL",
-        adapter="fallback",
-        title=f"{normalized} 수집 결과 없음",
-        url="https://fallback.local/empty",
-        summary="네트워크/원본 피드 상태로 인해 데이터를 수집하지 못했습니다.",
-        published_at=None,
-        extra={"fallback": True},
-    )
     warnings.append(f"{normalized}: all adapters returned empty")
-    return AdapterResult(adapter="fallback", items=[fallback_item], warnings=warnings)
+    return AdapterResult(adapter="empty", items=[], warnings=warnings)
+
+
+def is_fallback_item(row: dict[str, Any]) -> bool:
+    if bool(row.get("fallback")):
+        return True
+    adapter = str(row.get("adapter") or "").strip().lower()
+    if adapter in {"fallback", "empty"}:
+        return True
+    url = str(row.get("url") or "").strip().lower()
+    if "fallback.local/empty" in url:
+        return True
+    title = str(row.get("title") or "").strip()
+    if title.endswith("수집 결과 없음"):
+        return True
+    return False
+
+
+def display_source_type(source_type: str) -> str:
+    normalized = LEGACY_SOURCE_TYPE_MAP.get(source_type, source_type)
+    return SOURCE_TYPE_LABEL.get(normalized, normalized or "기타")
 
 
 def normalize_items(raw_items: list[dict[str, Any]], limit: int = MAX_TOTAL_ITEMS) -> list[dict[str, Any]]:
+    effective_items = [row for row in raw_items if isinstance(row, dict) and not is_fallback_item(row)]
+    source = effective_items if effective_items else raw_items
     dedup: dict[str, dict[str, Any]] = {}
-    for row in raw_items:
+    for row in source:
         title = trim_text(row.get("title") or "", 220)
         url = trim_text(row.get("url") or "", 500)
         if not title and not url:
@@ -1631,12 +1650,20 @@ def rank_items(items: list[dict[str, Any]], top_k: int = 40) -> list[dict[str, A
 
 def summarize_ranked_items(items: list[dict[str, Any]], max_lines: int = 8) -> list[str]:
     lines: list[str] = []
-    for row in items[:max_lines]:
+    for row in items:
+        if is_fallback_item(row):
+            continue
         country = str(row.get("country") or "GLOBAL")
-        source = str(row.get("source_name") or row.get("source_type") or "source")
+        source = str(row.get("source_name") or display_source_type(str(row.get("source_type") or "")) or "source")
         status = str(row.get("verification_status") or "warning")
         title = trim_text(row.get("title") or "", 180)
-        lines.append(f"[{country}] ({status}) {source}: {title}")
+        excerpt = trim_text(row.get("content_excerpt") or row.get("summary") or "", 140)
+        if excerpt:
+            lines.append(f"[{country}] ({status}) {source}: {title} - {excerpt}")
+        else:
+            lines.append(f"[{country}] ({status}) {source}: {title}")
+        if len(lines) >= max_lines:
+            break
     return lines
 
 
@@ -1673,9 +1700,77 @@ def build_markdown(
     top_items: list[dict[str, Any]],
     warnings: list[str],
 ) -> str:
+    effective_top_items = [row for row in top_items if not is_fallback_item(row)]
+    source_buckets: dict[str, list[dict[str, Any]]] = {}
+    for row in effective_top_items:
+        source_type = str(row.get("source_type") or "unknown")
+        source_buckets.setdefault(source_type, []).append(row)
+
     lines: list[str] = []
     lines.append(f"# {flow.get('name', 'RAIL VIA Flow')}\n")
-    lines.append("## Run Meta")
+    lines.append("## 실행 요약")
+    lines.append(f"- 실행 ID: `{run_id}`")
+    lines.append(f"- 트리거: `{trigger}`")
+    lines.append(f"- 실행 시간: {started_at} ~ {finished_at}")
+    lines.append(f"- 상위 분석 대상: {len(effective_top_items)}건")
+    lines.append(f"- 경고: {len(warnings)}건")
+    lines.append("")
+
+    lines.append("## 핵심 브리핑")
+    if highlights:
+        for line in highlights[:10]:
+            lines.append(f"- {line}")
+    elif effective_top_items:
+        for row in effective_top_items[:10]:
+            title = trim_text(row.get("title") or "", 180)
+            excerpt = trim_text(row.get("content_excerpt") or row.get("summary") or "", 180)
+            if excerpt:
+                lines.append(f"- {title}: {excerpt}")
+            else:
+                lines.append(f"- {title}")
+    else:
+        lines.append("- 신뢰 가능한 수집 결과가 없어 브리핑을 생성하지 못했습니다.")
+
+    lines.append("\n## 소스별 인사이트")
+    source_order = ["source.news", SOURCE_TYPE_SNS, SOURCE_TYPE_COMMUNITY, SOURCE_TYPE_DEV, SOURCE_TYPE_MARKET]
+    for source_type in source_order:
+        rows = source_buckets.get(source_type) or []
+        if not rows:
+            continue
+        lines.append(f"### {display_source_type(source_type)}")
+        for row in rows[:4]:
+            country = str(row.get("country") or "GLOBAL")
+            title = trim_text(row.get("title") or "", 180)
+            status = str(row.get("verification_status") or "warning")
+            excerpt = trim_text(row.get("content_excerpt") or row.get("summary") or "", 220)
+            lines.append(f"- [{country}] {title} ({status})")
+            if excerpt:
+                lines.append(f"  - 요약: {excerpt}")
+            close = trim_text(row.get("quote_close") or "", 80)
+            if close:
+                lines.append(f"  - 가격: {close}")
+            url = trim_text(row.get("url") or "", 500)
+            if url:
+                lines.append(f"  - 출처: {url}")
+
+    lines.append("\n## 원문 근거 발췌")
+    if effective_top_items:
+        for index, row in enumerate(effective_top_items[:20], start=1):
+            country = str(row.get("country") or "GLOBAL")
+            source = str(row.get("source_name") or display_source_type(str(row.get("source_type") or "")) or "source")
+            status = str(row.get("verification_status") or "warning")
+            title = trim_text(row.get("title") or "", 180)
+            excerpt = trim_text(row.get("content_excerpt") or row.get("summary") or "", 320)
+            lines.append(f"{index}. [{country}] {source} · {title} ({status})")
+            if excerpt:
+                lines.append(f"   - 발췌: {excerpt}")
+            url = trim_text(row.get("url") or "", 500)
+            if url:
+                lines.append(f"   - URL: {url}")
+    else:
+        lines.append("- 표시 가능한 수집 데이터가 없습니다.")
+
+    lines.append("\n## 실행 메타")
     lines.append(f"- run_id: {run_id}")
     lines.append(f"- trigger: {trigger}")
     lines.append(f"- started_at: {started_at}")
@@ -1701,25 +1796,6 @@ def build_markdown(
     lines.append(f"- items_total: {int(crawl_depth.get('items_total') or 0)}")
     lines.append(f"- items_with_content: {int(crawl_depth.get('items_with_content') or 0)}")
     lines.append(f"- total_content_chars: {int(crawl_depth.get('total_content_chars') or 0)}")
-
-    lines.append("\n## Highlights")
-    if highlights:
-        for line in highlights:
-            lines.append(f"- {line}")
-    else:
-        lines.append("- 수집 결과가 충분하지 않아 하이라이트를 생성하지 못했습니다.")
-
-    lines.append("\n## Top Ranked Items")
-    if top_items:
-        for index, row in enumerate(top_items[:25], start=1):
-            lines.append(
-                f"{index}. [{row.get('country', 'GLOBAL')}] {row.get('title', '')} "
-                f"(score={row.get('score', 0)}, status={row.get('verification_status', 'warning')})"
-            )
-            if row.get("url"):
-                lines.append(f"   - url: {row.get('url')}")
-    else:
-        lines.append("- top ranked item 없음")
 
     if warnings:
         lines.append("\n## Warnings")

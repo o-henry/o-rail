@@ -41,7 +41,7 @@ export default function WorkflowInspectorTools({
             onClick={props.addCrawlerNode}
             type="button"
           >
-            <span className="mini-action-button-label">{tp("데이터 조사 노드 추가")}</span>
+            <span className="mini-action-button-label">{tp("데이터 노드 추가")}</span>
           </button>
         </div>
       </div>

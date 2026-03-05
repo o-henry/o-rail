@@ -612,7 +612,7 @@
 .workflow-rag-progress-island {
   display: grid;
   gap: 8px;
-  padding: 1rem 0 0;
+  padding: 0;
   border-radius: 0;
   background: transparent;
 }
@@ -626,7 +626,7 @@
 }
 
 .workflow-rag-progress-head strong {
-  font-size: 12px;
+  font-size: 15px;
   font-weight: 700;
   color: var(--text-main);
 }

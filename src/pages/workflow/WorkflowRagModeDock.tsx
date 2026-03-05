@@ -32,6 +32,7 @@ export default function WorkflowRagModeDock(props: WorkflowRagModeDockProps) {
   const [nextNodeType, setNextNodeType] = useState<ViaNodeType>(props.viaNodeOptions[0]?.value ?? "source.news");
   const [nextTemplateId, setNextTemplateId] = useState<string>(props.ragTemplateOptions[0]?.value ?? "rag.market");
   const showProgressIsland =
+    props.ragNodes.length > 0 ||
     props.isGraphRunning ||
     props.ragNodeProgress.some((row) => row.recentLogs.length > 0 || row.status !== "idle");
 

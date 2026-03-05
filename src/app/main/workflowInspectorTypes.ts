@@ -1,6 +1,7 @@
 import type { CostPreset, PresetKind, TurnConfig, TurnExecutor } from "../../features/workflow/domain";
 import type { GateConfig, GraphData, GraphNode, KnowledgeConfig, NodeType, TransformConfig } from "../../features/workflow/types";
 import type { HandoffRecord, StudioRoleId } from "../../features/studio/handoffTypes";
+import type { WorkflowGraphViewMode } from "../../features/workflow/viaGraph";
 
 export type SelectOption = {
   value: string;
@@ -12,6 +13,8 @@ export type WorkflowInspectorToolsProps = {
   addNode: (type: NodeType) => void;
   addHandoffNodes: (fromRole: StudioRoleId, toRole: StudioRoleId) => void;
   addCrawlerNode: () => void;
+  graphViewMode: WorkflowGraphViewMode;
+  onSetGraphViewMode: (mode: WorkflowGraphViewMode) => void;
   applyPreset: (preset: PresetKind) => void;
   applyCostPreset: (preset: CostPreset) => void;
   isPresetKind: (value: string) => value is PresetKind;

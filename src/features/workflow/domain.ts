@@ -3,6 +3,7 @@ import { t } from "../../i18n";
 
 export type TurnExecutor =
   | "codex"
+  | "via_flow"
   | "web_gemini"
   | "web_gpt"
   | "web_grok"
@@ -56,10 +57,12 @@ export type TurnConfig = {
   qualityCommandEnabled?: boolean;
   qualityCommands?: string;
   artifactType?: ArtifactType;
+  viaFlowId?: string;
 };
 
 export const TURN_EXECUTOR_OPTIONS = [
   "codex",
+  "via_flow",
   "web_gemini",
   "web_gpt",
   "web_grok",
@@ -70,6 +73,7 @@ export const TURN_EXECUTOR_OPTIONS = [
 
 export const TURN_EXECUTOR_LABELS: Record<TurnExecutor, string> = {
   codex: "Codex",
+  via_flow: "VIA Flow",
   web_gemini: "WEB / GEMINI",
   web_gpt: "WEB / GPT",
   web_grok: "WEB / GROK",
@@ -179,6 +183,9 @@ export function turnExecutorLabel(executor: TurnExecutor): string {
   if (executor === "ollama") {
     return t("feed.executor.ollama");
   }
+  if (executor === "via_flow") {
+    return "VIA Flow";
+  }
   return TURN_EXECUTOR_LABELS[executor];
 }
 
@@ -265,6 +272,7 @@ export function inferQualityProfile(node: GraphNode, config: TurnConfig): Qualit
   const executor = getTurnExecutor(config);
   const signal = `${String(config.role ?? "")} ${String(config.promptTemplate ?? "")} ${node.id}`.toLowerCase();
   if (
+    executor === "via_flow" ||
     executor === "web_gemini" ||
     executor === "web_gpt" ||
     executor === "web_grok" ||

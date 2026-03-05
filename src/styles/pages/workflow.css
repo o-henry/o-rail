@@ -485,6 +485,19 @@
   min-height: 30px;
 }
 
+.workflow-mode-toggle {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 4px;
+}
+
+.workflow-mode-toggle-button {
+  width: 100%;
+  justify-self: stretch;
+  height: 30px;
+  min-height: 30px;
+}
+
 .workflow-right-stack {
   min-height: 0;
   height: 100%;
@@ -558,8 +571,125 @@
   gap: 2px;
 }
 
-.workflow-role-dock-head strong {
-  font-size: 13px;
+.workflow-rag-dock {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 10px 10px 24px;
+  overflow: visible;
+  min-height: 0;
+  height: auto;
+  box-sizing: border-box;
+}
+
+.workflow-rag-dock-head {
+  display: grid;
+  gap: 2px;
+}
+
+.workflow-rag-add-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.workflow-rag-mode-toggle {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 4px;
+}
+
+.workflow-rag-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+}
+
+.workflow-rag-node-list {
+  display: grid;
+  gap: 8px;
+}
+
+.workflow-rag-node-list-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.workflow-rag-node-list ul {
+  margin: 0;
+  padding: 6px 0 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+}
+
+.workflow-rag-node-list li {
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 8px;
+  border: 0;
+  background: color-mix(in srgb, var(--surface-panel) 86%, var(--surface));
+}
+
+.workflow-rag-node-list li.is-selected {
+  background: color-mix(in srgb, #159a69 12%, var(--surface-panel));
+}
+
+.workflow-rag-node-select {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--text-main);
+  text-align: left;
+  display: grid;
+  gap: 2px;
+  cursor: pointer;
+}
+
+.workflow-rag-node-select strong {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.workflow-rag-node-select code {
+  font-size: 10px;
+  color: var(--text-muted);
+  border: 0;
+  background: transparent;
+  padding: 0;
+}
+
+.workflow-rag-node-list label {
+  display: grid;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.workflow-rag-node-list input {
+  border: 0;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--surface-panel) 84%, var(--surface));
+  color: var(--text-main);
+  padding: 8px 10px;
+  font-size: 12px;
+}
+
+.workflow-rag-empty {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.workflow-role-dock-head strong,
+.workflow-rag-dock-head strong {
+  font-size: 15px;
   color: var(--text-main);
 }
 

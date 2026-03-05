@@ -32,6 +32,10 @@ src-tauri/graphs/
 # Local automation/runtime temp artifacts
 .tmp/
 tmp/
+.rail/
+data/sqlite/
+scripts/via_runtime/__pycache__/
+*.pyc
 
 # Secrets / local credentials
 .env

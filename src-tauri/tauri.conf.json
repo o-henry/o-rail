@@ -30,7 +30,9 @@
         "active": true,
         "targets": "all",
         "resources": [
-            "../scripts/web_worker/index.mjs"
+            "../scripts/web_worker/index.mjs",
+            "../scripts/via_runtime/server.py",
+            "../scripts/via_runtime/requirements.lock"
         ],
         "icon": [
             "icons/32x32.png",

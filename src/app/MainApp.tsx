@@ -12,6 +12,7 @@ import SettingsPage from "../pages/settings/SettingsPage";
 import DashboardIntelligenceSettings from "../pages/settings/DashboardIntelligenceSettings";
 import WorkflowPage from "../pages/workflow/WorkflowPage";
 import WorkflowRoleDock from "../pages/workflow/WorkflowRoleDock";
+import WorkflowRagModeDock from "../pages/workflow/WorkflowRagModeDock";
 import { buildRoleDockStatusByRole, type RoleDockRuntimeState } from "../pages/workflow/roleDockState";
 import KnowledgeBasePage from "../pages/knowledge/KnowledgeBasePage";
 import { useFloatingPanel } from "../features/ui/useFloatingPanel";
@@ -68,6 +69,22 @@ import {
   type TurnExecutor,
   type WebProvider,
 } from "../features/workflow/domain";
+import {
+  buildGraphForViewMode,
+  isViaFlowTurnNode,
+  type WorkflowGraphViewMode,
+} from "../features/workflow/viaGraph";
+import {
+  connectViaDefaultEdges,
+  countViaNodesByType,
+  VIA_NODE_BASE_POSITION_BY_TYPE,
+} from "../features/workflow/viaGraphBuilder";
+import {
+  isViaNodeType,
+  VIA_NODE_OPTIONS,
+  viaNodeLabel,
+  type ViaNodeType,
+} from "../features/workflow/viaCatalog";
 import {
   applyPresetOutputSchemaPolicies,
   applyPresetTurnPolicies,
@@ -393,6 +410,8 @@ function App() {
   const [workflowQuestion, setWorkflowQuestion] = useState(
     "",
   );
+  const [workflowGraphViewMode, setWorkflowGraphViewMode] = useState<WorkflowGraphViewMode>("graph");
+  const [workflowSidePanelsVisible, setWorkflowSidePanelsVisible] = useState(true);
 
   const {
     engineStarted,
@@ -555,6 +574,27 @@ function App() {
     defaultStageWidth: DEFAULT_STAGE_WIDTH,
     defaultStageHeight: DEFAULT_STAGE_HEIGHT,
   });
+  const graphForCanvas = useMemo(
+    () => buildGraphForViewMode(graph, workflowGraphViewMode),
+    [graph, workflowGraphViewMode],
+  );
+  const ragModeNodes = useMemo(
+    () =>
+      graph.nodes
+        .filter((node) => isViaFlowTurnNode(node))
+        .map((node) => {
+          const config = node.config as TurnConfig;
+          const viaTypeRaw = String((node.config as Record<string, unknown>).viaNodeType ?? "").trim();
+          const viaType = isViaNodeType(viaTypeRaw) ? viaTypeRaw : "source.news";
+          return {
+            id: node.id,
+            flowId: String(config.viaFlowId ?? "").trim(),
+            viaNodeType: viaType,
+            viaNodeLabel: viaNodeLabel(viaType),
+          };
+        }),
+    [graph.nodes],
+  );
   const {
     feedPosts,
     setFeedPosts,
@@ -617,6 +657,13 @@ function App() {
       setWorkspaceTab("dashboard");
     }
   }, [workspaceTab]);
+  useEffect(() => {
+    if (workspaceTab !== "workflow") {
+      return;
+    }
+    setWorkflowGraphViewMode("graph");
+    setWorkflowSidePanelsVisible(true);
+  }, [workspaceTab]);
   const { publishAction, subscribeAction } = useAgenticActionBus();
   const {
     snapshotsByTopic: dashboardSnapshotsByTopic,
@@ -658,7 +705,7 @@ function App() {
     enabledKnowledgeFiles,
     selectedKnowledgeMaxCharsOption,
   } = useCanvasGraphDerivedState({
-    graph,
+    graph: graphForCanvas,
     selectedNodeId,
     selectedEdgeKey,
     simpleWorkflowUi: SIMPLE_WORKFLOW_UI,
@@ -1551,7 +1598,7 @@ function App() {
     setError,
     setStatus,
     collectRequiredWebProviders,
-    graph,
+    graph: graphForCanvas,
     refreshWebBridgeStatus,
     webBridgeStatus,
     buildWebConnectPreflightReasons,
@@ -1615,7 +1662,7 @@ function App() {
     cancelRequestedRef,
     collectingRunRef,
     createRunNodeStateSnapshot,
-    graph,
+    graph: graphForCanvas,
     runLogCollectorRef,
     setNodeStates,
     createRunRecord: (params: Parameters<typeof createRunRecord>[0]) =>
@@ -1767,7 +1814,7 @@ function App() {
   const isWorkspaceCwdConfigured = String(cwd ?? "").trim().length > 0 && String(cwd ?? "").trim() !== ".";
   const canRunGraphNow =
     canResumeGraph ||
-    (isWorkspaceCwdConfigured && !isWorkflowBusy && graph.nodes.length > 0 && workflowQuestion.trim().length > 0);
+    (isWorkspaceCwdConfigured && !isWorkflowBusy && graphForCanvas.nodes.length > 0 && workflowQuestion.trim().length > 0);
   const {
     currentFeedPosts,
     feedCategoryPosts,
@@ -1893,6 +1940,96 @@ function App() {
     setStatus("그래프에 데이터 조사 노드를 추가했습니다.");
   }, [appendWorkspaceEvent, applyGraphChange, graph.nodes, setNodeSelection, setStatus]);
 
+  const onAddViaFlowNode = useCallback((viaNodeType: ViaNodeType) => {
+    const nodeId = makeNodeId("turn");
+    const sameTypeCount = countViaNodesByType(graph.nodes, viaNodeType);
+    const basePosition = VIA_NODE_BASE_POSITION_BY_TYPE[viaNodeType] ?? { x: 300, y: 120 };
+    const nextNode: GraphNode = {
+      id: nodeId,
+      type: "turn",
+      position: {
+        x: basePosition.x + sameTypeCount * 24,
+        y: basePosition.y + sameTypeCount * 48,
+      },
+      config: {
+        ...defaultNodeConfig("turn"),
+        executor: "via_flow",
+        role: `${viaNodeLabel(viaNodeType)} NODE`,
+        promptTemplate: `VIA ${viaNodeType} 단계 실행`,
+        qualityProfile: "research_evidence",
+        artifactType: "EvidenceArtifact",
+        sourceKind: "data_pipeline",
+        viaFlowId: "1",
+        viaNodeType,
+        viaNodeLabel: viaNodeLabel(viaNodeType),
+      },
+    };
+
+    applyGraphChange((prev) => {
+      const nextNodes = [...prev.nodes, nextNode];
+      const nextEdges = connectViaDefaultEdges({
+        nodes: nextNodes,
+        edges: prev.edges,
+        insertedNodeId: nodeId,
+        insertedNodeType: viaNodeType,
+      });
+
+      return {
+        ...prev,
+        nodes: nextNodes,
+        edges: nextEdges,
+      };
+    });
+
+    setNodeSelection([nodeId], nodeId);
+    appendWorkspaceEvent({
+      source: "workflow",
+      message: `${viaNodeLabel(viaNodeType)} 노드 추가`,
+      actor: "user",
+      level: "info",
+    });
+    setStatus(`RAG 그래프에 ${viaNodeLabel(viaNodeType)} 노드를 추가했습니다.`);
+  }, [appendWorkspaceEvent, applyGraphChange, graph.nodes, setNodeSelection, setStatus]);
+
+  const onSelectRagModeNode = useCallback((nodeId: string) => {
+    const normalizedNodeId = String(nodeId ?? "").trim();
+    if (!normalizedNodeId) {
+      return;
+    }
+    setNodeSelection([normalizedNodeId], normalizedNodeId);
+  }, [setNodeSelection]);
+
+  const onUpdateRagModeFlowId = useCallback((nodeId: string, nextFlowId: string) => {
+    const normalizedNodeId = String(nodeId ?? "").trim();
+    if (!normalizedNodeId) {
+      return;
+    }
+    const numericOnly = String(nextFlowId ?? "").replace(/[^\d]/g, "");
+    updateNodeConfigById(normalizedNodeId, "viaFlowId", numericOnly);
+  }, [updateNodeConfigById]);
+
+  const onActivateWorkflowPanels = useCallback(() => {
+    setWorkflowSidePanelsVisible((prev) => (prev ? prev : true));
+  }, []);
+
+  const onSetGraphViewMode = useCallback((nextMode: WorkflowGraphViewMode) => {
+    if (nextMode === workflowGraphViewMode) {
+      return;
+    }
+    setWorkflowGraphViewMode(nextMode);
+    appendWorkspaceEvent({
+      source: "workflow",
+      message: nextMode === "rag" ? "RAG 모드 전환" : "DAG 모드 전환",
+      actor: "user",
+      level: "info",
+    });
+    setStatus(
+      nextMode === "rag"
+        ? "RAG 모드로 전환했습니다. VIA Flow 전용 그래프와 메뉴를 표시합니다."
+        : "DAG 모드로 전환했습니다.",
+    );
+  }, [appendWorkspaceEvent, setStatus, workflowGraphViewMode]);
+
   const onAddHandoffNodes = useCallback(
     (fromRole: StudioRoleId, toRole: StudioRoleId) => {
       const maxX = graph.nodes.reduce((max, node) => Math.max(max, Number(node.position?.x ?? 0)), 40);
@@ -2012,6 +2149,8 @@ function App() {
       addNode,
       addHandoffNodes: onAddHandoffNodes,
       addCrawlerNode: onAddCrawlerNode,
+      graphViewMode: workflowGraphViewMode,
+      onSetGraphViewMode,
       applyCostPreset,
       applyGraphChange,
       applyPreset,
@@ -2652,12 +2791,14 @@ function App() {
               canvasFullscreen={canvasFullscreen}
               canvasNodes={canvasNodes}
               canvasZoom={canvasZoom}
+              graphViewMode={workflowGraphViewMode}
               connectPreviewLine={connectPreviewLine}
               deleteNode={deleteNode}
               draggingNodeIds={draggingNodeIds}
               edgeLines={edgeLines}
               formatNodeElapsedTime={formatNodeElapsedTime}
               graphCanvasRef={graphCanvasRef}
+              onActivateWorkspacePanels={onActivateWorkflowPanels}
               isConnectingDrag={isConnectingDrag}
               isGraphRunning={isGraphRunning}
               isNodeDragAllowedTarget={isNodeDragAllowedTarget}
@@ -2676,6 +2817,7 @@ function App() {
               onCanvasWheel={onCanvasWheel}
               onCanvasZoomIn={onCanvasZoomIn}
               onCanvasZoomOut={onCanvasZoomOut}
+              onSetGraphViewMode={onSetGraphViewMode}
               onEdgeDragStart={onEdgeDragStart}
               onAssignSelectedEdgeAnchor={onAssignSelectedEdgeAnchor}
               onNodeAnchorDragStart={onNodeAnchorDragStart}
@@ -2724,10 +2866,26 @@ function App() {
               workflowQuestion={workflowQuestion}
             />
 
-            {!canvasFullscreen && (
+            {!canvasFullscreen && workflowSidePanelsVisible && (
               <div className="workflow-right-stack">
-                {showRoleDockFirst ? workflowRoleDockElement : workflowInspectorPaneElement}
-                {showRoleDockFirst ? workflowInspectorPaneElement : workflowRoleDockElement}
+                {workflowGraphViewMode === "rag" ? (
+                  <WorkflowRagModeDock
+                    onAddRagNode={onAddViaFlowNode}
+                    onSelectNode={onSelectRagModeNode}
+                    onUpdateFlowId={onUpdateRagModeFlowId}
+                    ragNodes={ragModeNodes}
+                    selectedNodeId={selectedNodeId}
+                    viaNodeOptions={VIA_NODE_OPTIONS.map((row) => ({
+                      value: row.value,
+                      label: row.label,
+                    }))}
+                  />
+                ) : (
+                  <>
+                    {showRoleDockFirst ? workflowRoleDockElement : workflowInspectorPaneElement}
+                    {showRoleDockFirst ? workflowInspectorPaneElement : workflowRoleDockElement}
+                  </>
+                )}
               </div>
             )}
           </WorkflowPage>

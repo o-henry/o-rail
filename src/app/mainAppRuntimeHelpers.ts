@@ -1735,6 +1735,9 @@ export function resolveProviderByExecutor(executor: TurnExecutor): string {
   if (webProvider) {
     return webProvider;
   }
+  if (executor === "via_flow") {
+    return "via";
+  }
   if (executor === "ollama") {
     return "ollama";
   }

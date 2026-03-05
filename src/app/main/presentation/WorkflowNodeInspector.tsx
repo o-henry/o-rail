@@ -178,6 +178,16 @@ export default function WorkflowNodeInspector({
               />
             </label>
           )}
+          {selectedTurnExecutor === "via_flow" && (
+            <label>
+              VIA flow_id
+              <input
+                onChange={(e) => updateSelectedNodeConfig("viaFlowId", e.currentTarget.value)}
+                placeholder="예: 1"
+                value={String((selectedNode.config as TurnConfig).viaFlowId ?? "")}
+              />
+            </label>
+          )}
           {getWebProviderFromExecutor(selectedTurnExecutor) && (
             <>
               <label>

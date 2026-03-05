@@ -1,5 +1,59 @@
 import type { QualityReport } from "../types";
 
+function applyViaArtifactPathsToFeedPost(post: any, output: unknown): any {
+  if (!output || typeof output !== "object" || Array.isArray(output)) {
+    return post;
+  }
+  const row = output as Record<string, unknown>;
+  const via = row.via;
+  if (!via || typeof via !== "object" || Array.isArray(via)) {
+    return post;
+  }
+  const viaRecord = via as Record<string, unknown>;
+  const artifacts = Array.isArray(viaRecord.artifacts) ? viaRecord.artifacts : [];
+  if (artifacts.length === 0) {
+    return post;
+  }
+
+  let markdownPath = "";
+  let jsonPath = "";
+  for (const item of artifacts) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      continue;
+    }
+    const artifact = item as Record<string, unknown>;
+    const format = String(artifact.format ?? "").trim().toLowerCase();
+    const path = String(artifact.path ?? "").trim();
+    if (!path) {
+      continue;
+    }
+    if (!markdownPath && (format === "md" || format === "markdown")) {
+      markdownPath = path;
+    } else if (!jsonPath && format === "json") {
+      jsonPath = path;
+    }
+  }
+
+  if (!markdownPath && !jsonPath) {
+    return post;
+  }
+
+  const attachments = Array.isArray(post.attachments) ? post.attachments : [];
+  const nextAttachments = attachments.map((attachment: any) => {
+    if (!attachment || typeof attachment !== "object") {
+      return attachment;
+    }
+    if (attachment.kind === "markdown" && markdownPath) {
+      return { ...attachment, filePath: markdownPath };
+    }
+    if (attachment.kind === "json" && jsonPath) {
+      return { ...attachment, filePath: jsonPath };
+    }
+    return attachment;
+  });
+  return { ...post, attachments: nextAttachments };
+}
+
 export async function handleRunGraphTurnNode(params: any): Promise<boolean> {
   const {
     node,
@@ -125,10 +179,11 @@ export async function handleRunGraphTurnNode(params: any): Promise<boolean> {
       confidenceBand: failedEvidence.confidenceBand,
       dataIssues: failedEvidence.dataIssues,
     });
-    runRecord.feedPosts?.push(failedFeed.post);
-    rememberFeedSource(latestFeedSourceByNodeId, failedFeed.post);
-    feedRawAttachmentRef.current[feedAttachmentRawKey(failedFeed.post.id, "markdown")] = failedFeed.rawAttachments.markdown;
-    feedRawAttachmentRef.current[feedAttachmentRawKey(failedFeed.post.id, "json")] = failedFeed.rawAttachments.json;
+    const failedPost = applyViaArtifactPathsToFeedPost(failedFeed.post, result.output);
+    runRecord.feedPosts?.push(failedPost);
+    rememberFeedSource(latestFeedSourceByNodeId, failedPost);
+    feedRawAttachmentRef.current[feedAttachmentRawKey(failedPost.id, "markdown")] = failedFeed.rawAttachments.markdown;
+    feedRawAttachmentRef.current[feedAttachmentRawKey(failedPost.id, "json")] = failedFeed.rawAttachments.json;
     terminalStateByNodeId[nodeId] = "failed";
     scheduleChildren(nodeId);
     return true;
@@ -228,11 +283,12 @@ export async function handleRunGraphTurnNode(params: any): Promise<boolean> {
         confidenceBand: lowQualityEvidence.confidenceBand,
         dataIssues: lowQualityEvidence.dataIssues,
       });
-      runRecord.feedPosts?.push(lowQualityFeed.post);
-      rememberFeedSource(latestFeedSourceByNodeId, lowQualityFeed.post);
-      feedRawAttachmentRef.current[feedAttachmentRawKey(lowQualityFeed.post.id, "markdown")] =
+      const lowQualityPost = applyViaArtifactPathsToFeedPost(lowQualityFeed.post, normalizedOutput);
+      runRecord.feedPosts?.push(lowQualityPost);
+      rememberFeedSource(latestFeedSourceByNodeId, lowQualityPost);
+      feedRawAttachmentRef.current[feedAttachmentRawKey(lowQualityPost.id, "markdown")] =
         lowQualityFeed.rawAttachments.markdown;
-      feedRawAttachmentRef.current[feedAttachmentRawKey(lowQualityFeed.post.id, "json")] =
+      feedRawAttachmentRef.current[feedAttachmentRawKey(lowQualityPost.id, "json")] =
         lowQualityFeed.rawAttachments.json;
       params.setLastDoneNodeId(nodeId);
       terminalStateByNodeId[nodeId] = "low_quality";
@@ -304,10 +360,11 @@ export async function handleRunGraphTurnNode(params: any): Promise<boolean> {
     confidenceBand: doneEvidence.confidenceBand,
     dataIssues: doneEvidence.dataIssues,
   });
-  runRecord.feedPosts?.push(doneFeed.post);
-  rememberFeedSource(latestFeedSourceByNodeId, doneFeed.post);
-  feedRawAttachmentRef.current[feedAttachmentRawKey(doneFeed.post.id, "markdown")] = doneFeed.rawAttachments.markdown;
-  feedRawAttachmentRef.current[feedAttachmentRawKey(doneFeed.post.id, "json")] = doneFeed.rawAttachments.json;
+  const donePost = applyViaArtifactPathsToFeedPost(doneFeed.post, normalizedOutput);
+  runRecord.feedPosts?.push(donePost);
+  rememberFeedSource(latestFeedSourceByNodeId, donePost);
+  feedRawAttachmentRef.current[feedAttachmentRawKey(donePost.id, "markdown")] = doneFeed.rawAttachments.markdown;
+  feedRawAttachmentRef.current[feedAttachmentRawKey(donePost.id, "json")] = doneFeed.rawAttachments.json;
   params.setLastDoneNodeId(nodeId);
   terminalStateByNodeId[nodeId] = "done";
   scheduleChildren(nodeId);

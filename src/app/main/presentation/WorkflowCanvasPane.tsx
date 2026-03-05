@@ -3,6 +3,7 @@ import { useI18n } from "../../../i18n";
 import type { MarqueeSelection, NodeRunState, PendingWebTurn } from "../types";
 import type { GraphNode, NodeAnchorSide, NodeExecutionStatus } from "../../../features/workflow/types";
 import type { TurnExecutor } from "../../../features/workflow/domain";
+import type { WorkflowGraphViewMode } from "../../../features/workflow/viaGraph";
 import WorkflowCanvasNodesLayer from "./WorkflowCanvasNodesLayer";
 import WorkflowAgentConversationPanel from "./WorkflowAgentConversationPanel";
 import WorkflowQuestionComposer from "./WorkflowQuestionComposer";
@@ -24,9 +25,11 @@ type WorkflowCanvasPaneProps = {
   onCanvasMouseUp: (event: ReactMouseEvent<HTMLDivElement>) => void;
   onCanvasWheel: (event: ReactWheelEvent<HTMLDivElement>) => void;
   graphCanvasRef: RefObject<HTMLDivElement | null>;
+  onActivateWorkspacePanels: () => void;
   boundedStageWidth: number;
   boundedStageHeight: number;
   canvasZoom: number;
+  graphViewMode: WorkflowGraphViewMode;
   stageInsetX: number;
   stageInsetY: number;
   stageInsetBottom: number;
@@ -66,6 +69,7 @@ type WorkflowCanvasPaneProps = {
   marqueeSelection: MarqueeSelection | null;
   onCanvasZoomIn: () => void;
   onCanvasZoomOut: () => void;
+  onSetGraphViewMode: (mode: WorkflowGraphViewMode) => void;
   canvasFullscreen: boolean;
   setCanvasFullscreen: Dispatch<SetStateAction<boolean>>;
   setPanMode: Dispatch<SetStateAction<boolean>>;
@@ -109,9 +113,11 @@ export default function WorkflowCanvasPane({
   onCanvasMouseUp,
   onCanvasWheel,
   graphCanvasRef,
+  onActivateWorkspacePanels,
   boundedStageWidth,
   boundedStageHeight,
   canvasZoom,
+  graphViewMode,
   stageInsetX,
   stageInsetY,
   stageInsetBottom,
@@ -146,6 +152,7 @@ export default function WorkflowCanvasPane({
   marqueeSelection,
   onCanvasZoomIn,
   onCanvasZoomOut,
+  onSetGraphViewMode,
   canvasFullscreen,
   setCanvasFullscreen,
   setPanMode,
@@ -270,7 +277,10 @@ export default function WorkflowCanvasPane({
         <div
           className={`graph-canvas ${panMode ? "pan-mode" : ""}`}
           onKeyDown={onCanvasKeyDown}
-          onMouseDown={onCanvasMouseDown}
+          onMouseDown={(event) => {
+            onActivateWorkspacePanels();
+            onCanvasMouseDown(event);
+          }}
           onMouseMove={onCanvasMouseMove}
           onMouseUp={onCanvasMouseUp}
           onWheel={onCanvasWheel}
@@ -368,6 +378,7 @@ export default function WorkflowCanvasPane({
 
               <WorkflowCanvasNodesLayer
                 canvasNodes={canvasNodes}
+                graphViewMode={graphViewMode}
                 draggingNodeIds={draggingNodeIds}
                 formatNodeElapsedTime={formatNodeElapsedTime}
                 isConnectingDrag={isConnectingDrag}
@@ -400,6 +411,29 @@ export default function WorkflowCanvasPane({
         </div>
 
         <div className="canvas-overlay">
+          <div className="canvas-mode-topbar">
+            <div className="canvas-mode-toggle" role="group" aria-label="DAG 모드 전환">
+              <button
+                aria-label="DAG 모드"
+                className={`canvas-view-toggle ${graphViewMode === "graph" ? "is-active" : ""}`}
+                onClick={() => onSetGraphViewMode("graph")}
+                title="DAG 모드"
+                type="button"
+              >
+                DAG
+              </button>
+              <button
+                aria-label="RAG 모드"
+                className={`canvas-view-toggle ${graphViewMode === "rag" ? "is-active" : ""}`}
+                onClick={() => onSetGraphViewMode("rag")}
+                title="RAG 모드"
+                type="button"
+              >
+                RAG
+              </button>
+            </div>
+          </div>
+
           <div className="canvas-zoom-controls">
             <div className="canvas-zoom-group">
               <button onClick={onCanvasZoomIn} title={t("workflow.canvas.zoomIn")} type="button"><img alt="" aria-hidden="true" className="canvas-control-icon" src="/plus.svg" /></button>

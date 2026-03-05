@@ -34,6 +34,7 @@ import {
   type WebProvider,
 } from "../../../features/workflow/domain";
 import { normalizeWebEvidenceOutput } from "../../mainAppRuntimeHelpers";
+import { runViaFlowTurn } from "./viaTurnRunHandler";
 import type {
   InternalMemoryTraceEntry,
   KnowledgeTraceEntry,
@@ -198,6 +199,22 @@ export async function executeTurnNodeWithContext(
         memoryTrace,
       };
     }
+  }
+  if (executor === "via_flow") {
+    return runViaFlowTurn({
+      node,
+      config,
+      cwd: nodeCwd,
+      invokeFn: ctx.invokeFn,
+      pauseRequestedRef: ctx.pauseRequestedRef,
+      cancelRequestedRef: ctx.cancelRequestedRef,
+      pauseErrorToken: ctx.pauseErrorToken,
+      addNodeLog: ctx.addNodeLog,
+      t: ctx.t,
+      executor,
+      knowledgeTrace,
+      memoryTrace,
+    });
   }
   const webProvider = getWebProviderFromExecutor(executor);
   if (webProvider) {

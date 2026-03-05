@@ -2,9 +2,12 @@ import type { MouseEvent as ReactMouseEvent } from "react";
 import { useI18n } from "../../../i18n";
 import type { GraphNode, NodeAnchorSide, NodeExecutionStatus } from "../../../features/workflow/types";
 import type { MarqueeSelection, NodeRunState } from "../types";
+import type { WorkflowGraphViewMode } from "../../../features/workflow/viaGraph";
+import { viaNodeIconText, viaNodeLabel } from "../../../features/workflow/viaCatalog";
 
 type WorkflowCanvasNodesLayerProps = {
   canvasNodes: GraphNode[];
+  graphViewMode: WorkflowGraphViewMode;
   nodeStates: Record<string, NodeRunState>;
   selectedNodeIds: string[];
   draggingNodeIds: string[];
@@ -35,6 +38,7 @@ type WorkflowCanvasNodesLayerProps = {
 
 export default function WorkflowCanvasNodesLayer({
   canvasNodes,
+  graphViewMode,
   nodeStates,
   selectedNodeIds,
   draggingNodeIds,
@@ -76,6 +80,9 @@ export default function WorkflowCanvasNodesLayer({
         const receivesQuestionDirectly = questionDirectInputNodeIds.has(node.id);
         const isWebTurnNode = node.type === "turn" && String(node.config?.executor ?? "").startsWith("web_");
         const sourceKind = String((node.config as Record<string, unknown>)?.sourceKind ?? "").trim().toLowerCase();
+        const viaNodeType = String((node.config as Record<string, unknown>)?.viaNodeType ?? "").trim();
+        const ragNodeLabel = viaNodeLabel(viaNodeType);
+        const ragNodeIconText = viaNodeIconText(viaNodeType);
         const handoffRoleId = String((node.config as Record<string, unknown>)?.handoffRoleId ?? "")
           .trim()
           .toLowerCase();
@@ -84,9 +91,10 @@ export default function WorkflowCanvasNodesLayer({
         const isDataPipelineNode =
           node.type === "turn" && sourceKind === "data_pipeline";
         const isDataResearchNode = node.type === "turn" && sourceKind === "data_research";
+        const isRagModeNode = graphViewMode === "rag";
         return (
           <div
-            className={`graph-node node-${node.type} ${isDataPipelineNode ? "is-data-pipeline-node" : ""} ${isDataResearchNode ? "is-data-research-node" : ""} ${handoffRoleClass} ${isNodeSelected ? "selected" : ""} ${isNodeDragging ? "is-dragging" : ""}`.trim()}
+            className={`graph-node node-${node.type} ${isRagModeNode ? "is-rag-mode-node" : ""} ${isDataPipelineNode ? "is-data-pipeline-node" : ""} ${isDataResearchNode ? "is-data-research-node" : ""} ${handoffRoleClass} ${isNodeSelected ? "selected" : ""} ${isNodeDragging ? "is-dragging" : ""}`.trim()}
             data-node-id={node.id}
             key={node.id}
             onClick={(event) => {
@@ -113,71 +121,90 @@ export default function WorkflowCanvasNodesLayer({
                 : "left 220ms cubic-bezier(0.22, 1, 0.36, 1), top 220ms cubic-bezier(0.22, 1, 0.36, 1)",
             }}
           >
-            <div className="node-head">
-              <div className="node-head-main">
-                {node.type === "turn" ? (
-                  <>
-                    <div className="node-head-title-row">
-                      <strong>{turnModelLabel(node)}</strong>
-                    </div>
-                    <span className="node-head-subtitle">{turnRoleLabel(node)}</span>
-                  </>
-                ) : (
-                  <div className="node-head-title-row">
-                    <strong className={node.type === "gate" ? "gate-node-title" : undefined}>{nodeTypeLabel(node.type)}</strong>
-                  </div>
-                )}
-              </div>
-              <div className="node-head-actions">
-                {isDataPipelineNode ? <span className="node-type-badge data node-head-action-badge">DATA</span> : null}
-                {isDataResearchNode ? <span className="node-type-badge research node-head-action-badge">RAG</span> : null}
-                <button className="node-head-delete-button" onClick={() => deleteNode(node.id)} type="button">
-                  {t("common.delete")}
+            {isRagModeNode ? (
+              <div className="rag-node-shell">
+                <button
+                  aria-label={t("common.delete")}
+                  className="rag-node-delete-button"
+                  onClick={() => deleteNode(node.id)}
+                  type="button"
+                >
+                  ×
                 </button>
+                <div className="rag-node-icon">{ragNodeIconText}</div>
+                <strong className="rag-node-label">{ragNodeLabel}</strong>
+                <span className="rag-node-type">{viaNodeType || turnRoleLabel(node)}</span>
+                <span className={`status-pill status-${nodeStatus}`}>{nodeStatusLabel(nodeStatus)}</span>
               </div>
-            </div>
-            <div className="node-body">
-              {nodeSummary ? <div className="node-summary-row"><div>{nodeSummary}</div></div> : null}
-              <div className="node-runtime-meta">
-                <div>
-                  {t("workflow.node.completion")}: {" "}
-                  {nodeStatus === "done"
-                    ? t("label.status.done")
-                    : nodeStatus === "low_quality"
-                      ? t("label.status.low_quality")
-                      : nodeStatus === "failed"
-                        ? t("label.status.failed")
-                        : nodeStatus === "cancelled"
-                          ? t("label.status.cancelled")
-                          : t("label.status.idle")}
+            ) : (
+              <>
+                <div className="node-head">
+                  <div className="node-head-main">
+                    {node.type === "turn" ? (
+                      <>
+                        <div className="node-head-title-row">
+                          <strong>{turnModelLabel(node)}</strong>
+                        </div>
+                        <span className="node-head-subtitle">{turnRoleLabel(node)}</span>
+                      </>
+                    ) : (
+                      <div className="node-head-title-row">
+                        <strong className={node.type === "gate" ? "gate-node-title" : undefined}>{nodeTypeLabel(node.type)}</strong>
+                      </div>
+                    )}
+                  </div>
+                  <div className="node-head-actions">
+                    {isDataPipelineNode ? <span className="node-type-badge data node-head-action-badge">DATA</span> : null}
+                    {isDataResearchNode ? <span className="node-type-badge research node-head-action-badge">RAG</span> : null}
+                    <button className="node-head-delete-button" onClick={() => deleteNode(node.id)} type="button">
+                      {t("common.delete")}
+                    </button>
+                  </div>
                 </div>
-                <div>{t("workflow.node.elapsed")}: {formatNodeElapsedTime(runState, runtimeNowMs)}</div>
-              </div>
-              <button className="node-feed-link" onClick={() => onOpenFeedFromNode(node.id)} type="button">{t("workflow.node.outputInFeed")}</button>
-            </div>
-            <div className="node-wait-slot">
-              <span className={`status-pill status-${nodeStatus}`}>{nodeStatusLabel(nodeStatus)}</span>
-              <div className="node-wait-actions">
-                {receivesQuestionDirectly && (
-                  <span className="node-input-chip">
-                    <span className="node-input-chip-text">{t("workflow.node.inputDirect")}</span>
-                  </span>
-                )}
-                {isWebTurnNode && (
-                  <button
-                    className="node-manual-web-input-button"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onOpenWebInputForNode(node.id);
-                    }}
-                    title={t("workflow.node.manualWebInput")}
-                    type="button"
-                  >
-                    {t("workflow.node.manualWebInput")}
-                  </button>
-                )}
-              </div>
-            </div>
+                <div className="node-body">
+                  {nodeSummary ? <div className="node-summary-row"><div>{nodeSummary}</div></div> : null}
+                  <div className="node-runtime-meta">
+                    <div>
+                      {t("workflow.node.completion")}: {" "}
+                      {nodeStatus === "done"
+                        ? t("label.status.done")
+                        : nodeStatus === "low_quality"
+                          ? t("label.status.low_quality")
+                          : nodeStatus === "failed"
+                            ? t("label.status.failed")
+                            : nodeStatus === "cancelled"
+                              ? t("label.status.cancelled")
+                              : t("label.status.idle")}
+                    </div>
+                    <div>{t("workflow.node.elapsed")}: {formatNodeElapsedTime(runState, runtimeNowMs)}</div>
+                  </div>
+                  <button className="node-feed-link" onClick={() => onOpenFeedFromNode(node.id)} type="button">{t("workflow.node.outputInFeed")}</button>
+                </div>
+                <div className="node-wait-slot">
+                  <span className={`status-pill status-${nodeStatus}`}>{nodeStatusLabel(nodeStatus)}</span>
+                  <div className="node-wait-actions">
+                    {receivesQuestionDirectly && (
+                      <span className="node-input-chip">
+                        <span className="node-input-chip-text">{t("workflow.node.inputDirect")}</span>
+                      </span>
+                    )}
+                    {isWebTurnNode && (
+                      <button
+                        className="node-manual-web-input-button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onOpenWebInputForNode(node.id);
+                        }}
+                        title={t("workflow.node.manualWebInput")}
+                        type="button"
+                      >
+                        {t("workflow.node.manualWebInput")}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
             {showNodeAnchors && (
               <div className="node-anchors">
                 {nodeAnchorSides.map((side) => (

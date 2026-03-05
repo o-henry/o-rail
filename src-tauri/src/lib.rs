@@ -3,6 +3,7 @@ mod engine;
 mod knowledge;
 mod quality;
 mod storage;
+mod via_bridge;
 use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -50,6 +51,10 @@ pub fn run() {
             dashboard_crawler::dashboard_scrapling_bridge_install,
             dashboard_crawler::dashboard_scrapling_bridge_stop,
             dashboard_crawler::dashboard_scrapling_fetch_url,
+            via_bridge::via_health,
+            via_bridge::via_run_flow,
+            via_bridge::via_get_run,
+            via_bridge::via_list_artifacts,
             knowledge::knowledge_probe,
             knowledge::knowledge_retrieve,
             quality::quality_run_checks,
@@ -87,6 +92,7 @@ pub fn run() {
                 let _ = engine::shutdown_all_runtimes(state.inner()).await;
             });
             dashboard_crawler::shutdown_scrapling_bridge_runtime();
+            via_bridge::shutdown_via_runtime();
         }
         _ => {}
     });

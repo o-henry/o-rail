@@ -101,7 +101,7 @@ export async function exportRunFeedMarkdownFiles(params: {
         content,
       });
       const markdownAttachment = post.attachments.find((attachment) => attachment.kind === "markdown");
-      if (markdownAttachment) {
+      if (markdownAttachment && !String(markdownAttachment.filePath ?? "").trim()) {
         markdownAttachment.filePath = String(writtenPath ?? "").trim();
       }
     } catch (error) {

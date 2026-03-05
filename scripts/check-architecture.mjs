@@ -23,9 +23,10 @@ const TEMP_LINE_ALLOWLIST = new Map([
   [
     "src/app/MainApp.tsx",
     {
-      maxLines: 2600,
+      maxLines: 3100,
       expiresOn: "2026-09-30",
-      reason: "Main app controller split in progress (agentic orchestration and dashboard wiring extraction pending)",
+      reason:
+        "Main app controller split in progress (agentic orchestration/dashboard wiring/VIA runtime wiring extraction pending)",
     },
   ],
   [

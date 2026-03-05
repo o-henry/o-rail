@@ -515,6 +515,10 @@
   scroll-padding-bottom: 0;
 }
 
+.workflow-right-stack.is-hidden-in-rag {
+  display: none;
+}
+
 .workflow-right-stack > .panel-card {
   flex: 0 0 auto;
   overflow: visible;

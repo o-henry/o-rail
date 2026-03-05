@@ -1248,7 +1248,7 @@
   width: 48px;
   height: 48px;
   border-radius: 12px;
-  background: linear-gradient(145deg, #22324d 0%, #2b4a78 100%);
+  background: transparent;
   color: #f4f8ff;
   font-size: 11px;
   font-weight: 700;
@@ -1260,8 +1260,8 @@
 }
 
 .rag-node-icon img {
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   object-fit: contain;
   display: block;
 }
@@ -1324,7 +1324,7 @@
 }
 
 .graph-node.node-turn.is-rag-mode-node.is-data-pipeline-node {
-  border-radius: 20px;
+  border-radius: 999px;
 }
 
 .graph-node.node-turn.is-data-pipeline-node .node-head {

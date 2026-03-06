@@ -1,5 +1,92 @@
 /* workflow page styles (extracted from layout/shell.css) */
 
+.workflow-layout {
+  min-height: 0;
+  height: 100%;
+  margin: 0 10px 10px;
+  display: grid;
+  background: transparent;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 10px;
+  overflow: hidden;
+}
+
+.workflow-layout.canvas-only-layout {
+  grid-template-columns: minmax(0, 1fr);
+  height: 100%;
+  margin: 0 10px 10px;
+}
+
+.workflow-question-input .agents-composer-left {
+  min-width: 0;
+  overflow: visible;
+  padding-bottom: 1px;
+}
+
+.workflow-question-input {
+  position: relative;
+  z-index: 21;
+  margin-bottom: 0;
+  overflow: visible;
+}
+
+.workflow-question-input .agents-composer-left::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+.workflow-question-input .question-create-button {
+  flex: 0 0 auto;
+}
+
+.workflow-question-input .question-create-icon {
+  width: 12px;
+  height: 12px;
+}
+
+.workflow-question-input .agents-model-dropdown,
+.workflow-question-input .agents-reason-dropdown {
+  width: 210px;
+}
+
+.workflow-question-input .agents-model-menu,
+.workflow-question-input .agents-reason-menu {
+  top: auto;
+  bottom: calc(100% + 8px);
+  width: 100%;
+  min-width: 0;
+  z-index: 80;
+}
+
+.workflow-question-input .agents-model-button,
+.workflow-question-input .agents-reason-button {
+  width: 100%;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.workflow-question-input .agents-model-button span,
+.workflow-question-input .agents-reason-button span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workflow-question-input .agents-file-chip {
+  max-width: 210px;
+}
+
+.workflow-question-input .agents-send-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.workflow-question-input .agents-send-button:disabled .question-create-icon {
+  filter: grayscale(1);
+  opacity: 0.72;
+}
+
 .graph-file-actions {
   display: flex;
   flex-wrap: wrap;
@@ -523,6 +610,13 @@
 }
 
 .workflow-right-stack > .panel-card.workflow-role-dock {
+  flex: 0 0 auto;
+  min-height: auto;
+  display: grid;
+  background: #ffffff;
+}
+
+.workflow-right-stack > .panel-card.workflow-mission-island {
   flex: 0 0 auto;
   min-height: auto;
   display: grid;

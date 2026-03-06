@@ -16,6 +16,14 @@ pub struct ShellCommandResult {
     duration_ms: u128,
 }
 
+fn normalize_allowlist(commands: &[String]) -> Vec<String> {
+    commands
+        .iter()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .collect()
+}
+
 #[tauri::command]
 pub async fn command_exec(
     cwd: String,
@@ -91,4 +99,22 @@ pub async fn command_exec(
         timed_out: false,
         duration_ms: started_at.elapsed().as_millis(),
     })
+}
+
+#[tauri::command]
+pub async fn task_terminal_exec(
+    cwd: String,
+    command: String,
+    allowed_commands: Vec<String>,
+    timeout_sec: Option<u64>,
+) -> Result<ShellCommandResult, String> {
+    let normalized_command = command.trim().to_string();
+    if normalized_command.is_empty() {
+        return Err("task terminal command is empty".to_string());
+    }
+    let allowlist = normalize_allowlist(&allowed_commands);
+    if !allowlist.iter().any(|row| row == &normalized_command) {
+        return Err("task terminal command is not in allowlist".to_string());
+    }
+    command_exec(cwd, normalized_command, timeout_sec).await
 }

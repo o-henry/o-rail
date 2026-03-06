@@ -1,3 +1,10 @@
+import type {
+  AgenticChildRole,
+  AgenticNextAction,
+  AgenticVerificationStatus,
+  AgenticWorkSurface,
+} from "../types";
+
 export type AgenticRunSourceTab =
   | "agents"
   | "workflow"
@@ -28,6 +35,14 @@ export type AgenticRunRecord = {
   queueKey: string;
   status: AgenticRunStatus;
   approvalState?: "none" | "pending" | "approved" | "rejected";
+  surface?: AgenticWorkSurface;
+  agentRole?: AgenticChildRole;
+  parentRunId?: string;
+  childRunIds?: string[];
+  handoffArtifactIds?: string[];
+  verificationStatus?: AgenticVerificationStatus;
+  nextAction?: AgenticNextAction;
+  summary?: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -42,6 +57,7 @@ export type AgenticRunStage = {
 };
 
 export type AgenticArtifactRef = {
+  id?: string;
   kind: "raw" | "snippet" | "snapshot" | "graph" | "log";
   path: string;
   meta?: Record<string, unknown>;
@@ -116,6 +132,14 @@ export function createAgenticRunEnvelope(params: {
   taskId?: string;
   setId?: string;
   approvalState?: "none" | "pending" | "approved" | "rejected";
+  surface?: AgenticWorkSurface;
+  agentRole?: AgenticChildRole;
+  parentRunId?: string;
+  childRunIds?: string[];
+  handoffArtifactIds?: string[];
+  verificationStatus?: AgenticVerificationStatus;
+  nextAction?: AgenticRunRecord["nextAction"];
+  summary?: string;
 }): AgenticRunEnvelope {
   const now = nowIso();
   return {
@@ -130,6 +154,14 @@ export function createAgenticRunEnvelope(params: {
       queueKey: params.queueKey,
       status: "queued",
       approvalState: params.approvalState ?? "none",
+      surface: params.surface,
+      agentRole: params.agentRole,
+      parentRunId: params.parentRunId,
+      childRunIds: params.childRunIds,
+      handoffArtifactIds: params.handoffArtifactIds,
+      verificationStatus: params.verificationStatus,
+      nextAction: params.nextAction,
+      summary: params.summary,
       createdAt: now,
       updatedAt: now,
     },
@@ -139,6 +171,26 @@ export function createAgenticRunEnvelope(params: {
       warnings: [],
       retries: 0,
       startedAt: now,
+    },
+  };
+}
+
+export function patchRunRecord(
+  envelope: AgenticRunEnvelope,
+  patch: Partial<
+    Omit<
+      AgenticRunRecord,
+      "runId" | "runKind" | "sourceTab" | "queueKey" | "createdAt" | "updatedAt"
+    >
+  >,
+): AgenticRunEnvelope {
+  const now = nowIso();
+  return {
+    ...envelope,
+    record: {
+      ...envelope.record,
+      ...patch,
+      updatedAt: now,
     },
   };
 }
@@ -194,6 +246,7 @@ export function appendRunArtifact(envelope: AgenticRunEnvelope, artifact: Agenti
   if (!normalizedPath) {
     return envelope;
   }
+  const artifactId = String(artifact.id ?? `${artifact.kind}:${normalizedPath}`).trim();
   const deduped = envelope.artifacts.some((row) => row.kind === artifact.kind && row.path === normalizedPath);
   if (deduped) {
     return envelope;
@@ -204,6 +257,7 @@ export function appendRunArtifact(envelope: AgenticRunEnvelope, artifact: Agenti
       ...envelope.artifacts,
       {
         ...artifact,
+        id: artifactId,
         path: normalizedPath,
       },
     ],

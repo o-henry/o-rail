@@ -15,7 +15,7 @@ import {
   createStateFromPresetSnapshot,
   restoreSetStateFromPreset,
 } from "./agentSetState";
-import { formatTopicToken, topicFromSetId } from "./agentsTopicUtils";
+import { formatTopicToken, roleFromSetId, topicFromSetId } from "./agentsTopicUtils";
 import type {
   AgentDataSourceItem,
   AgentSetOption,
@@ -24,13 +24,11 @@ import type {
   AgentsPageProps,
   AttachedFile,
 } from "./agentTypes";
-
 type UseAgentsPageStateParams = Pick<AgentsPageProps,
-  "codexMultiAgentMode" | "launchRequest" | "onQuickAction" | "onRunRole" | "onRunDataTopic" | "runStateByTopic" | "topicSnapshots"
+  "codexMultiAgentMode" | "launchRequest" | "missionControl" | "onQuickAction" | "onRunRole" | "onRunDataTopic" | "runStateByTopic" | "topicSnapshots"
 > & {
   translate: (key: string) => string;
 };
-
 export function useAgentsPageState(params: UseAgentsPageStateParams) {
   const setOptions = useMemo<AgentSetOption[]>(
     () =>
@@ -76,7 +74,6 @@ export function useAgentsPageState(params: UseAgentsPageStateParams) {
       return next;
     });
   }, [setOptions, setPresetById]);
-
   useEffect(() => {
     if (!params.launchRequest) {
       return;
@@ -101,7 +98,6 @@ export function useAgentsPageState(params: UseAgentsPageStateParams) {
       };
     });
   }, [params.launchRequest, setOptions]);
-
   const activeSetOption = useMemo(
     () => (activeSetId ? setOptions.find((option) => option.id === activeSetId) ?? null : null),
     [activeSetId, setOptions],
@@ -119,13 +115,11 @@ export function useAgentsPageState(params: UseAgentsPageStateParams) {
       ? String(params.topicSnapshots[activeDataTopicId]?.runId ?? params.topicSnapshots[activeDataTopicId]?.generatedAt ?? "").trim() || null
       : null
   ), [activeDataTopicId, params.topicSnapshots]);
-
   const selectedModelOption = useMemo(
     () => modelOptions.find((option) => option.value === selectedModel) ?? modelOptions[0],
     [modelOptions, selectedModel],
   );
   const isReasonLevelSelectable = selectedModelOption?.allowsReasonLevel !== false;
-
   const threads = currentSetState?.threads ?? [];
   const activeThreadId = currentSetState?.activeThreadId ?? "";
   const draft = currentSetState?.draft ?? "";
@@ -135,7 +129,6 @@ export function useAgentsPageState(params: UseAgentsPageStateParams) {
   const enabledAttachedFileNames = currentSetState?.enabledAttachedFileNames ?? [];
   const enabledDataSourceIds = currentSetState?.enabledDataSourceIds ?? [];
   const requestHistory = currentSetState?.requestHistory ?? [];
-
   const recentDataSources = useMemo<AgentDataSourceItem[]>(
     () =>
       DASHBOARD_TOPIC_IDS.map((topic) => {
@@ -161,12 +154,10 @@ export function useAgentsPageState(params: UseAgentsPageStateParams) {
         .slice(0, 8),
     [params.topicSnapshots, params.translate],
   );
-
   const activeThread = useMemo(
     () => threads.find((thread) => thread.id === activeThreadId) ?? threads[0] ?? null,
     [activeThreadId, threads],
   );
-
   const updateActiveSetState = (updater: (current: AgentSetState) => AgentSetState) => {
     if (!activeSetId) {
       return;
@@ -183,7 +174,6 @@ export function useAgentsPageState(params: UseAgentsPageStateParams) {
       };
     });
   };
-
   useEffect(() => {
     if (!activeSetId) {
       return;
@@ -206,20 +196,17 @@ export function useAgentsPageState(params: UseAgentsPageStateParams) {
       };
     });
   }, [activeSetId, recentDataSources]);
-
   useEffect(() => {
     if (!modelOptions.some((option) => option.value === selectedModel)) {
       setSelectedModel(modelOptions[0].value);
     }
   }, [modelOptions, selectedModel]);
-
   useEffect(() => {
     if (isReasonLevelSelectable) {
       return;
     }
     setIsReasonMenuOpen(false);
   }, [isReasonLevelSelectable]);
-
   useEffect(() => {
     if (!isModelMenuOpen && !isReasonMenuOpen) {
       return;
@@ -235,7 +222,6 @@ export function useAgentsPageState(params: UseAgentsPageStateParams) {
     window.addEventListener("pointerdown", onPointerDown);
     return () => window.removeEventListener("pointerdown", onPointerDown);
   }, [isModelMenuOpen, isReasonMenuOpen]);
-
   const onSelectSet = (setId: string) => {
     setActiveSetId(setId);
     setIsModelMenuOpen(false);
@@ -258,7 +244,6 @@ export function useAgentsPageState(params: UseAgentsPageStateParams) {
     setIsModelMenuOpen(false);
     setIsReasonMenuOpen(false);
   };
-
   const onAddThread = () => {
     updateActiveSetState((current) => {
       const nextIndex =
@@ -277,7 +262,6 @@ export function useAgentsPageState(params: UseAgentsPageStateParams) {
       };
     });
   };
-
   const onCloseThread = (threadId: string) => {
     updateActiveSetState((current) => {
       const filtered = current.threads.filter((thread) => thread.id !== threadId);
@@ -314,7 +298,6 @@ export function useAgentsPageState(params: UseAgentsPageStateParams) {
       draft: current.draft.trim().length > 0 ? `${current.draft.trim()}\n${next}` : next,
     }));
   };
-
   const clearDraftAndAttachments = () => {
     updateActiveSetState((current) => ({
       ...current,
@@ -325,7 +308,6 @@ export function useAgentsPageState(params: UseAgentsPageStateParams) {
       fileInputRef.current.value = "";
     }
   };
-
   const onSend = () => {
     const text = draft.trim();
     if (!text && attachedFiles.length === 0) {
@@ -373,24 +355,35 @@ export function useAgentsPageState(params: UseAgentsPageStateParams) {
       selectedDataSourceDetails: selectedDataSources.map((item) => item.detail),
     });
     if (activeSetOption) {
+      const resolvedRoleId = roleFromSetId(activeSetOption.id);
+      const nextTaskId = activeThread?.id ?? "TASK-UNKNOWN";
+      const missionHandle = resolvedRoleId
+        ? params.missionControl.launchMission({
+            roleId: resolvedRoleId,
+            roleLabel: activeSetOption.label,
+            taskId: nextTaskId,
+            prompt: text || activeThread?.starterPrompt || activeSetOption.description || nextTaskId,
+          })
+        : null;
       params.onRunRole?.({
-        roleId: activeSetOption.id,
-        taskId: activeThread?.id ?? "TASK-UNKNOWN",
+        roleId: resolvedRoleId ?? activeSetOption.id,
+        taskId: nextTaskId,
         prompt: text || undefined,
+        runId: missionHandle?.implementerRunId,
       });
       requestApproval({
         id: `approval-${Date.now()}`,
-        runId: undefined,
-        roleId: "technical_writer",
-        taskId: activeThread?.id ?? "TASK-UNKNOWN",
+        runId: missionHandle?.parentRunId,
+        roleId: resolvedRoleId ?? "technical_writer",
+        taskId: nextTaskId,
         title: `${activeSetOption.label} 변경 제안`,
         summary: text.slice(0, 120),
         patchPreview: text,
       });
+      params.missionControl.recordCompanionEvent("approval_requested", `${activeSetOption.label} 승인 요청`);
     }
     clearDraftAndAttachments();
   };
-
   const onOpenFilePicker = () => {
     fileInputRef.current?.click();
   };
@@ -444,7 +437,6 @@ export function useAgentsPageState(params: UseAgentsPageStateParams) {
       };
     });
   };
-
   return {
     activeDataRunState,
     activeDataSnapshotRunId,

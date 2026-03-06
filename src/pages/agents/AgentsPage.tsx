@@ -9,6 +9,7 @@ export default function AgentsPage(props: AgentsPageProps) {
   const state = useAgentsPageState({
     codexMultiAgentMode: props.codexMultiAgentMode,
     launchRequest: props.launchRequest,
+    missionControl: props.missionControl,
     onQuickAction: props.onQuickAction,
     onRunDataTopic: props.onRunDataTopic,
     onRunRole: props.onRunRole,
@@ -51,8 +52,12 @@ export default function AgentsPage(props: AgentsPageProps) {
       onBackToSetList={state.onBackToSetList}
       onCloseThread={state.onCloseThread}
       onOpenDataTab={props.onOpenDataTab}
+      onClearMission={props.missionControl.clearMission}
+      onExecuteTaskCommand={props.missionControl.executeTaskCommand}
       pendingApprovals={state.pendingApprovals}
       onOpenFilePicker={state.onOpenFilePicker}
+      onRecordCompanionEvent={props.missionControl.recordCompanionEvent}
+      onRecordUnityVerification={props.missionControl.recordUnityVerification}
       onQueuePrompt={state.onQueuePrompt}
       onResolveApproval={state.onResolveApproval}
       onRestoreTemplateSet={state.onRestoreTemplateSet}
@@ -72,6 +77,7 @@ export default function AgentsPage(props: AgentsPageProps) {
       setIsModelMenuOpen={state.setIsModelMenuOpen}
       setIsReasonMenuOpen={state.setIsReasonMenuOpen}
       setMission={state.setMission}
+      mission={props.missionControl.activeMission}
       dataTopicId={state.activeDataTopicId}
       dataTopicRunState={state.activeDataRunState ?? null}
       dataTopicRunId={state.activeDataRunState?.runId ?? state.activeDataSnapshotRunId}

@@ -1,5 +1,7 @@
 import { useState, type ChangeEvent, type RefObject } from "react";
 import type { DashboardTopicId, DashboardTopicRunState } from "../../features/dashboard/intelligence";
+import type { MissionControlState } from "../../features/orchestration/agentic/missionControl";
+import type { CompanionEventType } from "../../features/orchestration/types";
 import type { CodexMultiAgentMode } from "./agentPrompt";
 import type {
   AgentDataSourceItem,
@@ -11,6 +13,7 @@ import type {
 } from "./agentTypes";
 import type { CodeChangeApproval } from "../../features/studio/approvalTypes";
 import { AgentGridCard } from "./workspace/AgentGridCard";
+import { AgentsMissionControlPanel } from "./workspace/AgentsMissionControlPanel";
 import { AgentsWorkspaceSidebar } from "./workspace/AgentsWorkspaceSidebar";
 import { AgentsWorkspaceTopbar } from "./workspace/AgentsWorkspaceTopbar";
 
@@ -21,6 +24,7 @@ type AgentsWorkspaceViewProps = {
   activeThreadId: string;
   activeSetOption: AgentSetOption | null;
   setMission: string;
+  mission: MissionControlState | null;
   dashboardInsights: string[];
   recentDataSources: AgentDataSourceItem[];
   requestHistory: AgentRequestHistoryItem[];
@@ -29,6 +33,7 @@ type AgentsWorkspaceViewProps = {
   codexMultiAgentMode: CodexMultiAgentMode;
   onSetActiveThreadId: (threadId: string) => void;
   onBackToSetList: () => void;
+  onClearMission: () => void;
   onRestoreTemplateSet: () => void;
   onAddThread: () => void;
   onCloseThread: (threadId: string) => void;
@@ -54,6 +59,9 @@ type AgentsWorkspaceViewProps = {
   onSelectReasonLevel: (level: string) => void;
   onSend: () => void;
   sendDisabled: boolean;
+  onExecuteTaskCommand: (command: string) => void;
+  onRecordCompanionEvent: (type: Exclude<CompanionEventType, "unity_verification_completed">, message?: string) => void;
+  onRecordUnityVerification: (success: boolean, message: string) => void;
   onQueuePrompt: (prompt: string) => void;
   onToggleAttachedFile: (fileName: string) => void;
   onToggleDataSource: (sourceId: string) => void;
@@ -72,6 +80,7 @@ export function AgentsWorkspaceView({
   activeThreadId,
   activeSetOption,
   setMission,
+  mission,
   dashboardInsights,
   recentDataSources,
   requestHistory,
@@ -80,6 +89,7 @@ export function AgentsWorkspaceView({
   codexMultiAgentMode,
   onSetActiveThreadId,
   onBackToSetList,
+  onClearMission,
   onRestoreTemplateSet,
   onAddThread,
   onCloseThread,
@@ -105,6 +115,9 @@ export function AgentsWorkspaceView({
   onSelectReasonLevel,
   onSend,
   sendDisabled,
+  onExecuteTaskCommand,
+  onRecordCompanionEvent,
+  onRecordUnityVerification,
   onQueuePrompt,
   onToggleAttachedFile,
   onToggleDataSource,
@@ -134,6 +147,13 @@ export function AgentsWorkspaceView({
 
       <section className={`agents-workspace-shell${isSidebarCollapsed ? " is-sidebar-collapsed" : ""}`}>
         <section className="agents-workspace-main">
+          <AgentsMissionControlPanel
+            mission={mission}
+            onClearMission={onClearMission}
+            onExecuteTaskCommand={onExecuteTaskCommand}
+            onRecordCompanionEvent={onRecordCompanionEvent}
+            onRecordUnityVerification={onRecordUnityVerification}
+          />
           <section
             className={`agents-grid${threads.length === 1 ? " is-single" : threads.length === 2 ? " is-two" : ""}`}
             aria-label="Agents grid"

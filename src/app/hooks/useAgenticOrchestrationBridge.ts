@@ -1,7 +1,8 @@
 import { useCallback, useEffect, type MutableRefObject } from "react";
 import type { DashboardTopicId } from "../../features/dashboard/intelligence";
 import type { AgenticAction, AgenticActionSubscriber } from "../../features/orchestration/agentic/actionBus";
-import type { StudioRoleId } from "../../features/studio/handoffTypes";
+import type { AgenticRunEnvelope } from "../../features/orchestration/agentic/runContract";
+import { toStudioRoleId } from "../../features/studio/roleUtils";
 import type { PresetKind } from "../../features/workflow/domain";
 import type { WorkspaceTab } from "../mainAppGraphHelpers";
 import { runGraphWithCoordinator, runTopicWithCoordinator } from "../main/runtime/agenticCoordinator";
@@ -51,23 +52,6 @@ function presetForRole(roleId: string): PresetKind {
     return "expert";
   }
   return "development";
-}
-
-function toStudioRoleId(raw: string): StudioRoleId | null {
-  const normalized = String(raw ?? "").trim();
-  if (
-    normalized === "pm_planner" ||
-    normalized === "client_programmer" ||
-    normalized === "system_programmer" ||
-    normalized === "tooling_engineer" ||
-    normalized === "art_pipeline" ||
-    normalized === "qa_engineer" ||
-    normalized === "build_release" ||
-    normalized === "technical_writer"
-  ) {
-    return normalized;
-  }
-  return null;
 }
 
 function sanitizeToken(raw: string): string {
@@ -171,6 +155,7 @@ export function useAgenticOrchestrationBridge(params: {
     sourceTab: "agents" | "workflow";
     artifactPaths: string[];
     runStatus: "done" | "error";
+    envelope?: AgenticRunEnvelope;
   }) => void;
 }) {
   const {
@@ -263,6 +248,7 @@ export function useAgenticOrchestrationBridge(params: {
 
   const runRoleDirect = useCallback(
     async (params: {
+      runId?: string;
       roleId: string;
       taskId: string;
       prompt?: string;
@@ -273,6 +259,7 @@ export function useAgenticOrchestrationBridge(params: {
       const sourceTab = params.sourceTab === "workflow" ? "workflow" : "agents";
       const normalizedRoleId = toStudioRoleId(params.roleId);
       const result = await runRoleWithCoordinator({
+        runId: params.runId,
         cwd,
         sourceTab,
         roleId: params.roleId,
@@ -373,6 +360,7 @@ export function useAgenticOrchestrationBridge(params: {
         sourceTab,
         artifactPaths: dedupedArtifactPaths,
         runStatus: result.envelope.record.status === "done" ? "done" : "error",
+        envelope: result.envelope,
       });
     },
     [appendWorkspaceEvent, cwd, invokeFn, onRoleRunCompleted, queue, runGraphWithAgenticCoordinator, setStatus],

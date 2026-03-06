@@ -172,3 +172,74 @@ export type PatchBundle = {
   createdAt: string;
   files: PatchFile[];
 };
+
+export type AgenticWorkSurface = "rail" | "vscode" | "unity";
+export type AgenticChildRole = "planner" | "implementer" | "reviewer";
+export type AgenticVerificationStatus = "pending" | "verified" | "failed";
+export type AgenticNextActionStatus = "ready" | "blocked" | "done";
+
+export type AgenticNextAction = {
+  surface: AgenticWorkSurface;
+  title: string;
+  detail?: string;
+  cta?: string;
+  status?: AgenticNextActionStatus;
+};
+
+export type CompanionEventType =
+  | "task_received"
+  | "patch_ready"
+  | "test_passed"
+  | "test_failed"
+  | "approval_requested"
+  | "unity_verification_completed";
+
+export type CompanionEvent = {
+  id: string;
+  at: string;
+  runId: string;
+  taskId: string;
+  source: Extract<AgenticWorkSurface, "vscode" | "unity">;
+  type: CompanionEventType;
+  message: string;
+  payload?: Record<string, unknown>;
+};
+
+export type TaskTerminalSessionStatus = "idle" | "running" | "done" | "error";
+
+export type TaskTerminalSession = {
+  runId: string;
+  taskId: string;
+  cwd: string;
+  allowedCommands: string[];
+  status: TaskTerminalSessionStatus;
+  lastCommand?: string;
+  lastResultAt?: string;
+};
+
+export type TaskTerminalResult = {
+  id: string;
+  at: string;
+  runId: string;
+  taskId: string;
+  command: string;
+  exitCode: number;
+  stdoutTail: string;
+  stderrTail: string;
+  timedOut: boolean;
+  durationMs: number;
+  artifacts: string[];
+};
+
+export type AgenticFeatureMemory = {
+  id: string;
+  parentRunId: string;
+  taskId: string;
+  title: string;
+  summary: string;
+  decisionSummary: string;
+  modifiedArtifacts: string[];
+  verificationStatus: AgenticVerificationStatus;
+  openRisks: string[];
+  updatedAt: string;
+};

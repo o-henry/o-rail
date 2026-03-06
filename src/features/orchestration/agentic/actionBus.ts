@@ -47,6 +47,7 @@ export type AgenticAction =
         roleId: string;
         taskId: string;
         prompt?: string;
+        runId?: string;
         sourceTab?: "agents" | "workflow";
         handoffToRole?: string;
         handoffRequest?: string;

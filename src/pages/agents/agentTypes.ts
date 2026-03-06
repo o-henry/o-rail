@@ -5,6 +5,8 @@ import type {
   DashboardTopicRunState,
   DashboardTopicSnapshot,
 } from "../../features/dashboard/intelligence";
+import type { MissionControlState } from "../../features/orchestration/agentic/missionControl";
+import type { CompanionEventType } from "../../features/orchestration/types";
 import type { CodexMultiAgentMode } from "./agentPrompt";
 import type { AgentSetOptionLike, AgentThreadPreset } from "./agentSetPresets";
 
@@ -20,13 +22,27 @@ export type AgentQuickActionRequest = {
 
 export type AgentsPageProps = {
   onQuickAction: (request: AgentQuickActionRequest) => void;
-  onRunRole?: (params: { roleId: string; taskId: string; prompt?: string }) => void;
+  onRunRole?: (params: { roleId: string; taskId: string; prompt?: string; runId?: string }) => void;
   topicSnapshots: Partial<Record<DashboardTopicId, DashboardTopicSnapshot>>;
   codexMultiAgentMode: CodexMultiAgentMode;
   runStateByTopic: Record<DashboardTopicId, DashboardTopicRunState>;
   onRunDataTopic: (topic: DashboardTopicId, followupInstruction?: string) => void;
   launchRequest: AgentWorkspaceLaunchRequest | null;
   onOpenDataTab: () => void;
+  missionControl: {
+    activeMission: MissionControlState | null;
+    clearMission: () => void;
+    executeTaskCommand: (command: string) => void;
+    launchMission: (params: {
+      roleId: string;
+      roleLabel: string;
+      taskId: string;
+      prompt: string;
+      allowedCommands?: string[];
+    }) => { parentRunId: string; implementerRunId: string };
+    recordCompanionEvent: (type: Exclude<CompanionEventType, "unity_verification_completed">, message?: string) => void;
+    recordUnityVerification: (success: boolean, message: string) => void;
+  };
 };
 
 export type AgentWorkspaceLaunchRequest = {

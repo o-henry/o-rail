@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   createAgenticRunEnvelope,
+  patchRunRecord,
   queueKeyForGraph,
   queueKeyForRole,
   queueKeyForTopic,
@@ -39,5 +40,32 @@ describe("runContract", () => {
     expect(envelope.record.taskId).toBe("SYSTEM-001");
     expect(envelope.record.approvalState).toBe("pending");
   });
-});
 
+  it("patches orchestration metadata on a run record", () => {
+    const envelope = createAgenticRunEnvelope({
+      sourceTab: "agents",
+      runKind: "studio_role",
+      queueKey: queueKeyForRole("client_programmer"),
+      roleId: "client_programmer",
+      taskId: "CLIENT-001",
+    });
+
+    const next = patchRunRecord(envelope, {
+      surface: "vscode",
+      agentRole: "implementer",
+      parentRunId: "mission-1",
+      childRunIds: ["planner-1", "reviewer-1"],
+      verificationStatus: "pending",
+      nextAction: {
+        surface: "vscode",
+        title: "VS Code에서 구현",
+      },
+    });
+
+    expect(next.record.surface).toBe("vscode");
+    expect(next.record.agentRole).toBe("implementer");
+    expect(next.record.parentRunId).toBe("mission-1");
+    expect(next.record.childRunIds).toEqual(["planner-1", "reviewer-1"]);
+    expect(next.record.nextAction?.title).toBe("VS Code에서 구현");
+  });
+});

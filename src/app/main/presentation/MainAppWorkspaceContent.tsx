@@ -58,14 +58,16 @@ export function MainAppWorkspaceContent(props: any) {
         <AgentsPage
           codexMultiAgentMode={props.codexMultiAgentMode}
           launchRequest={props.agentLaunchRequest}
+          missionControl={props.missionControl}
           onQuickAction={props.onAgentQuickAction}
-          onRunRole={({ roleId, taskId, prompt }) => {
+          onRunRole={({ roleId, taskId, prompt, runId }) => {
             props.publishAction({
               type: "run_role",
               payload: {
                 roleId,
                 taskId,
                 prompt,
+                runId,
                 sourceTab: "agents",
               },
             });

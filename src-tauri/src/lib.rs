@@ -3,6 +3,7 @@ mod engine;
 mod knowledge;
 mod quality;
 mod storage;
+mod system;
 mod via_bridge;
 use tauri::Manager;
 
@@ -74,6 +75,7 @@ pub fn run() {
             storage::workspace_delete_file,
             storage::dialog_pick_directory,
             storage::dialog_pick_knowledge_files,
+            system::task_terminal_exec,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");

@@ -37,6 +37,7 @@ type RoleKnowledgeInjectResult = {
 };
 
 export type AgenticRunRoleInput = {
+  runId?: string;
   cwd: string;
   sourceTab: AgenticRunSourceTab;
   roleId: string;
@@ -170,7 +171,7 @@ function appendArtifactsFromPaths(params: {
 }
 
 export async function runRoleWithCoordinator(input: AgenticRunRoleInput): Promise<AgenticCoordinatorRunResult> {
-  const runId = createAgenticRunId("role");
+  const runId = String(input.runId ?? "").trim() || createAgenticRunId("role");
   const queueKey = queueKeyForRole(input.roleId);
   const context: MutableRunContext = {
     envelope: createAgenticRunEnvelope({

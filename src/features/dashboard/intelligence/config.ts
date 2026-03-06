@@ -150,7 +150,7 @@ const BLOCKED_SOURCES_BY_TOPIC: Record<DashboardTopicId, string[]> = {
     "ft.com",
   ],
   industryTrendRadar: [],
-  communityHotTopics: [],
+  communityHotTopics: ["clien.net", "www.clien.net"],
   devCommunityHotTopics: [],
   paperResearch: [],
   eventCalendar: [],

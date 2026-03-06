@@ -103,4 +103,14 @@ describe("dashboard intelligence config", () => {
     ]);
     expect(normalized.globalHeadlines.model.length).toBeGreaterThan(0);
   });
+
+  it("blacklists clien sources from community topics", () => {
+    const normalized = normalizeDashboardTopicConfig("communityHotTopics", {
+      allowlist: ["reddit.com", "clien.net", "www.clien.net", "v2ex.com"],
+    });
+    expect(normalized.allowlist).toContain("reddit.com");
+    expect(normalized.allowlist).toContain("v2ex.com");
+    expect(normalized.allowlist).not.toContain("clien.net");
+    expect(normalized.allowlist).not.toContain("www.clien.net");
+  });
 });

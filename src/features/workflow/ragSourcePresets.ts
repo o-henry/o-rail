@@ -27,7 +27,7 @@ export const RAG_SOURCE_PRESETS: RagSourcePreset[] = [
     label: "커뮤니티 핫토픽",
     keywords: "indie game, unity, steam, ai tool, startup",
     countries: "US,JP,CN,KR",
-    sites: "reddit.com, clien.net, v2ex.com, dcinside.com",
+    sites: "reddit.com, v2ex.com, dcinside.com",
     maxItems: 50,
   },
   {

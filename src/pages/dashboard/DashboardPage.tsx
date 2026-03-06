@@ -1,14 +1,8 @@
 import { useMemo } from "react";
 import MissionControlPanel from "../../components/MissionControlPanel";
-import {
-  DASHBOARD_TOPIC_IDS,
-  type DashboardTopicId,
-  type DashboardTopicRunState,
-  type DashboardTopicSnapshot,
-} from "../../features/dashboard/intelligence";
+import type { DashboardTopicId, DashboardTopicRunState, DashboardTopicSnapshot } from "../../features/dashboard/intelligence";
 import type { MissionControlState } from "../../features/orchestration/agentic/missionControl";
 import type { CompanionEventType } from "../../features/orchestration/types";
-import { useI18n } from "../../i18n";
 import { type DashboardStockDocumentPost } from "./stockWidgetChartData";
 import type { DashboardDetailTopic } from "./DashboardDetailPage";
 
@@ -59,46 +53,40 @@ function formatSurface(surface: string | undefined): string {
 }
 
 export default function DashboardPage(props: DashboardPageProps) {
-  const { t } = useI18n();
-
   const cards = useMemo<OpsCard[]>(() => {
     const nextAction = props.mission?.parentEnvelope.record.nextAction;
+    const verification = props.mission?.parentEnvelope.record.verificationStatus ?? "pending";
+    const doneRoles = props.mission?.childEnvelopes.filter((row) => row.record.status === "done").length ?? 0;
+    const totalRoles = props.mission?.childEnvelopes.length ?? 3;
     return [
       {
         id: "surface",
-        title: "Current Surface",
+        title: "현재 작업면",
         value: formatSurface(props.mission?.parentEnvelope.record.surface),
         caption: nextAction?.title ?? "활성 미션 없음",
       },
       {
         id: "nextAction",
-        title: "Next Action",
+        title: "다음 행동",
         value: nextAction?.detail ?? "그래프 탭에서 역할 실행을 시작하세요.",
-        caption: nextAction?.cta ?? "Workflow tab",
+        caption: nextAction?.cta ?? "그래프 탭으로 이동",
       },
       {
-        id: "approvals",
-        title: t("dashboard.card.approvals"),
-        value: String(props.pendingApprovalsCount),
-        caption: props.pendingApprovalsCount > 0 ? t("modal.approvalRequired") : t("label.status.done"),
+        id: "verification",
+        title: "Unity 검증",
+        value: verification,
+        caption: verification === "verified" ? "검증 완료" : "검증 대기 또는 실패",
       },
       {
-        id: "ops",
-        title: "Ops",
-        value: `${props.enabledScheduleCount}/${props.scheduleCount}`,
-        caption: props.webBridgeRunning
-          ? `bridge on · ${props.connectedProviderCount} providers`
-          : "bridge off",
+        id: "roles",
+        title: "역할 진행",
+        value: `${doneRoles}/${totalRoles}`,
+        caption: props.pendingApprovalsCount > 0 ? `승인 대기 ${props.pendingApprovalsCount}건` : "승인 대기 없음",
       },
     ];
   }, [
-    props.connectedProviderCount,
-    props.enabledScheduleCount,
     props.mission,
     props.pendingApprovalsCount,
-    props.scheduleCount,
-    props.webBridgeRunning,
-    t,
   ]);
 
   const pendingItems = useMemo(() => {
@@ -113,16 +101,25 @@ export default function DashboardPage(props: DashboardPageProps) {
     if (props.pendingApprovalsCount > 0) {
       items.push(`승인 대기 ${props.pendingApprovalsCount}건`);
     }
-    DASHBOARD_TOPIC_IDS.forEach((topic) => {
-      const runState = props.runStateByTopic[topic];
-      if (runState.running || runState.lastError) {
-        items.push(
-          `${t(`dashboard.widget.${topic}.title`)} · ${runState.running ? "running" : runState.lastError ? "error" : "idle"}`,
-        );
-      }
-    });
+    if (props.isGraphRunning) {
+      items.push("그래프 실행이 진행 중입니다.");
+    }
+    if (props.webBridgeRunning) {
+      items.push(`웹 브리지 연결 중 · provider ${props.connectedProviderCount}개`);
+    }
+    if (props.enabledScheduleCount > 0) {
+      items.push(`예약 실행 ${props.enabledScheduleCount}/${props.scheduleCount}개 활성`);
+    }
     return items.slice(0, 6);
-  }, [props.mission, props.pendingApprovalsCount, props.runStateByTopic, t]);
+  }, [
+    props.connectedProviderCount,
+    props.enabledScheduleCount,
+    props.isGraphRunning,
+    props.mission,
+    props.pendingApprovalsCount,
+    props.scheduleCount,
+    props.webBridgeRunning,
+  ]);
 
   const recentEvents = useMemo(
     () =>
@@ -133,43 +130,32 @@ export default function DashboardPage(props: DashboardPageProps) {
     [props.workspaceEvents],
   );
 
-  const topicSummaries = useMemo(
+  const roleSummaries = useMemo(
     () =>
-      DASHBOARD_TOPIC_IDS
-        .map((topic) => {
-          const snapshot = props.topicSnapshots[topic];
-          if (!snapshot) {
-            return null;
-          }
-          return {
-            topic,
-            title: t(`dashboard.widget.${topic}.title`),
-            summary: String(snapshot.summary ?? "").trim() || "요약 없음",
-            generatedAt: snapshot.generatedAt,
-          };
-        })
-        .filter((item): item is NonNullable<typeof item> => item !== null)
-        .slice(0, 6),
-    [props.topicSnapshots, t],
+      props.mission?.childEnvelopes.map((row) => ({
+        id: row.record.runId,
+        label: row.record.agentRole ?? "implementer",
+        status: row.record.status,
+        summary: row.record.summary || row.record.nextAction?.title || "요약 없음",
+      })) ?? [],
+    [props.mission],
   );
 
-  const feedSummaries = useMemo(
-    () =>
-      [...props.stockDocumentPosts]
-        .filter((post) => String(post.summary ?? "").trim().length > 0)
-        .sort((left, right) => new Date(right.createdAt ?? 0).getTime() - new Date(left.createdAt ?? 0).getTime())
-        .slice(0, 4)
-        .map((post) => String(post.summary ?? "").trim()),
-    [props.stockDocumentPosts],
-  );
+  const memoryItems = useMemo(() => {
+    if (!props.mission) {
+      return [];
+    }
+    const items = [props.mission.featureMemory.summary, ...props.mission.featureMemory.openRisks];
+    return items.map((row) => String(row ?? "").trim()).filter(Boolean).slice(0, 5);
+  }, [props.mission]);
 
   return (
     <section className="dashboard-ops-layout workspace-tab-panel">
       <section className="dashboard-ops-hero panel-card">
         <div>
-          <span className="dashboard-ops-kicker">PROJECT OPS</span>
-          <h2>그래프 밖 운영 정보만 모아둔 관제 보드</h2>
-          <p>실행은 그래프 탭에서 하고, 현재 미션 상태와 운영 대기열은 여기서 확인합니다.</p>
+          <span className="dashboard-ops-kicker">WORK HOME</span>
+          <h2>지금 해야 할 일과 미션 상태만 보여주는 작업 홈</h2>
+          <p>대시보드 요약 대신, 현재 미션 진행 상황과 다음 행동을 바로 이어서 확인하는 화면입니다.</p>
         </div>
         <div className="dashboard-ops-card-grid">
           {cards.map((card) => (
@@ -197,7 +183,7 @@ export default function DashboardPage(props: DashboardPageProps) {
         <aside className="dashboard-ops-sidebar">
           <section className="panel-card dashboard-ops-panel">
             <div className="dashboard-ops-panel-head">
-              <strong>Pending Work</strong>
+              <strong>현재 대기열</strong>
               <small>{props.isGraphRunning ? "graph running" : "graph idle"}</small>
             </div>
             {pendingItems.length > 0 ? (
@@ -213,7 +199,44 @@ export default function DashboardPage(props: DashboardPageProps) {
 
           <section className="panel-card dashboard-ops-panel">
             <div className="dashboard-ops-panel-head">
-              <strong>Recent Events</strong>
+              <strong>역할 진행</strong>
+              <small>{roleSummaries.length} roles</small>
+            </div>
+            {roleSummaries.length > 0 ? (
+              <ul className="dashboard-ops-event-list">
+                {roleSummaries.map((item) => (
+                  <li key={item.id}>
+                    <span>{item.label}</span>
+                    <p>
+                      {item.status} · {item.summary}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="dashboard-ops-empty">활성 역할이 없습니다.</p>
+            )}
+          </section>
+
+          <section className="panel-card dashboard-ops-panel">
+            <div className="dashboard-ops-panel-head">
+              <strong>Feature Memory</strong>
+              <small>{memoryItems.length} notes</small>
+            </div>
+            {memoryItems.length > 0 ? (
+              <ul className="dashboard-ops-list">
+                {memoryItems.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            ) : (
+              <p className="dashboard-ops-empty">아직 기록된 feature memory가 없습니다.</p>
+            )}
+          </section>
+
+          <section className="panel-card dashboard-ops-panel">
+            <div className="dashboard-ops-panel-head">
+              <strong>최근 이벤트</strong>
               <small>{recentEvents.length} entries</small>
             </div>
             {recentEvents.length > 0 ? (
@@ -227,41 +250,6 @@ export default function DashboardPage(props: DashboardPageProps) {
               </ul>
             ) : (
               <p className="dashboard-ops-empty">최근 이벤트가 없습니다.</p>
-            )}
-          </section>
-
-          <section className="panel-card dashboard-ops-panel">
-            <div className="dashboard-ops-panel-head">
-              <strong>Data Snapshots</strong>
-              <small>{topicSummaries.length} topics</small>
-            </div>
-            {topicSummaries.length > 0 ? (
-              <ul className="dashboard-ops-event-list">
-                {topicSummaries.map((item) => (
-                  <li key={`${item.topic}-${item.generatedAt}`}>
-                    <span>{item.title}</span>
-                    <p>{item.summary}</p>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="dashboard-ops-empty">아직 데이터 스냅샷이 없습니다.</p>
-            )}
-          </section>
-
-          <section className="panel-card dashboard-ops-panel">
-            <div className="dashboard-ops-panel-head">
-              <strong>Recent Briefs</strong>
-              <small>{feedSummaries.length} docs</small>
-            </div>
-            {feedSummaries.length > 0 ? (
-              <ul className="dashboard-ops-list">
-                {feedSummaries.map((summary) => (
-                  <li key={summary}>{summary}</li>
-                ))}
-              </ul>
-            ) : (
-              <p className="dashboard-ops-empty">브리핑 문서가 아직 없습니다.</p>
             )}
           </section>
         </aside>

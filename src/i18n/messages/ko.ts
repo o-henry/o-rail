@@ -7,7 +7,7 @@ export const KO_MESSAGES: Dictionary = {
     "lang.zh": "中文",
     "nav.workflow.short": "워크",
     "nav.workflow.title": "워크플로우",
-    "nav.dashboard": "대시보드",
+    "nav.dashboard": "홈",
     "nav.intelligence": "인텔리전스",
     "nav.agents": "에이전트",
     "nav.feed": "피드",

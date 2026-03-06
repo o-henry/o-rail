@@ -621,6 +621,18 @@
   min-height: auto;
   display: grid;
   background: #ffffff;
+  margin-bottom: 0;
+}
+
+.workflow-right-stack > .panel-card.workflow-mission-island.agents-mission-panel {
+  margin-bottom: 0;
+}
+
+.workflow-right-stack > .panel-card.workflow-mission-island .agents-mission-empty-copy strong,
+.workflow-right-stack > .panel-card.workflow-mission-island .agents-mission-head strong {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.4px;
 }
 
 .workflow-right-stack > .panel-card.inspector-pane:last-child {

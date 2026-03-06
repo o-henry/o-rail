@@ -8,6 +8,7 @@ type MissionControlPanelProps = {
   onRecordCompanionEvent: (type: Exclude<CompanionEventType, "unity_verification_completed">, message?: string) => void;
   onRecordUnityVerification: (success: boolean, message: string) => void;
   emptyCopy?: string;
+  className?: string;
 };
 
 function surfaceLabel(surface: string | undefined): string {
@@ -47,11 +48,13 @@ function eventButtonLabel(type: Exclude<CompanionEventType, "unity_verification_
 }
 
 export default function MissionControlPanel(props: MissionControlPanelProps) {
+  const rootClassName = `panel-card agents-mission-panel${props.mission ? "" : " is-empty"}${props.className ? ` ${props.className}` : ""}`;
+  const title = "미션 컨트롤";
   if (!props.mission) {
     return (
-      <section className="panel-card agents-mission-panel is-empty" aria-label="Mission control">
+      <section className={rootClassName} aria-label="Mission control">
         <div className="agents-mission-empty-copy">
-          <strong>Mission Control</strong>
+          <strong>{title}</strong>
           <p>{props.emptyCopy ?? "역할 실행을 시작하면 Planner, Implementer, Reviewer 흐름이 여기에 정리됩니다."}</p>
         </div>
       </section>
@@ -65,10 +68,10 @@ export default function MissionControlPanel(props: MissionControlPanelProps) {
   const terminalBusy = mission.terminalSession.status === "running";
 
   return (
-    <section className="panel-card agents-mission-panel" aria-label="Mission control">
+    <section className={rootClassName} aria-label="Mission control">
       <header className="agents-mission-head">
         <div>
-          <strong>Mission Control</strong>
+          <strong>{title}</strong>
           <p>{mission.title}</p>
         </div>
         <button className="agents-mission-clear-button" onClick={props.onClearMission} type="button">

@@ -238,6 +238,7 @@ import {
 import WorkflowCanvasPane from "./main/presentation/WorkflowCanvasPane";
 import WorkflowInspectorPane from "./main/presentation/WorkflowInspectorPane";
 import { buildFeedPageVm, buildWorkflowInspectorPaneProps } from "./main/presentation/mainAppPropsBuilders";
+import MissionControlPanel from "../components/MissionControlPanel";
 import {
   cancelFeedReplyFeedbackClearTimer,
   scheduleFeedReplyFeedbackAutoClear,
@@ -323,7 +324,7 @@ import type { FeedCategory, InternalMemorySnippet, WebProviderRunResult, RunReco
 const HIDDEN_WORKSPACE_TABS = new Set<WorkspaceTab>(["intelligence", "feed", "handoff", "agents"]);
 
 const WORKSPACE_TOPBAR_TABS: Array<{ tab: WorkspaceTab; label: string }> = [
-  { tab: "dashboard", label: "대시보드" }, { tab: "workflow", label: "그래프" },
+  { tab: "dashboard", label: "홈" }, { tab: "workflow", label: "그래프" },
   { tab: "knowledge", label: "데이터베이스" }, { tab: "settings", label: "설정" },
 ];
 
@@ -2275,13 +2276,19 @@ function App() {
   const workflowInspectorPaneElement = (
     <WorkflowInspectorPane
       canvasFullscreen={canvasFullscreen}
-      mission={missionControl.activeMission}
       nodeProps={workflowInspectorPaneProps.nodeProps}
+      toolsProps={workflowInspectorPaneProps.toolsProps}
+    />
+  );
+  const workflowMissionControlElement = (
+    <MissionControlPanel
+      className="workflow-mission-island"
+      emptyCopy="그래프 탭에서 역할 실행을 시작하면 현재 미션이 이 island에 정리됩니다."
+      mission={missionControl.activeMission}
       onClearMission={missionControl.clearMission}
       onExecuteTaskCommand={missionControl.executeTaskCommand}
       onRecordCompanionEvent={missionControl.recordCompanionEvent}
       onRecordUnityVerification={missionControl.recordUnityVerification}
-      toolsProps={workflowInspectorPaneProps.toolsProps}
     />
   );
   const workflowRoleDockElement = (
@@ -2971,6 +2978,7 @@ function App() {
                   />
                 ) : (
                   <>
+                    {workflowMissionControlElement}
                     {showRoleDockFirst ? workflowRoleDockElement : workflowInspectorPaneElement}
                     {showRoleDockFirst ? workflowInspectorPaneElement : workflowRoleDockElement}
                   </>

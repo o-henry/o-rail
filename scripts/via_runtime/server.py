@@ -254,7 +254,6 @@ TRUSTED_DOMAINS = {
     "www.v2ex.com",
     "b.hatena.ne.jp",
     "gall.dcinside.com",
-    "www.clien.net",
     "github.com",
     "stackoverflow.blog",
     "dev.to",
@@ -1747,7 +1746,6 @@ def community_scrapling_adapter() -> AdapterResult:
         {"country": "JP", "name": "Hatena IT", "url": "https://b.hatena.ne.jp/hotentry/it"},
         {"country": "CN", "name": "V2EX Hot", "url": "https://www.v2ex.com/?tab=hot"},
         {"country": "KR", "name": "DCInside Stock", "url": "https://gall.dcinside.com/mgallery/board/lists/?id=stock"},
-        {"country": "KR", "name": "Clien", "url": "https://www.clien.net/service/board/park"},
     ]
     return collect_scrapling_targets(SOURCE_TYPE_COMMUNITY, "community.scrapling", targets, snippets_per_target=2)
 
@@ -1758,7 +1756,6 @@ def community_pinchtab_adapter() -> AdapterResult:
         {"country": "JP", "name": "Hatena IT", "url": "https://b.hatena.ne.jp/hotentry/it"},
         {"country": "CN", "name": "V2EX Hot", "url": "https://www.v2ex.com/?tab=hot"},
         {"country": "KR", "name": "DCInside Stock", "url": "https://gall.dcinside.com/mgallery/board/lists/?id=stock"},
-        {"country": "KR", "name": "Clien", "url": "https://www.clien.net/service/board/park"},
     ]
     return collect_pinchtab_targets(SOURCE_TYPE_COMMUNITY, "community.pinchtab", targets, snippets_per_target=2)
 
@@ -1881,7 +1878,6 @@ def community_primary_adapter() -> AdapterResult:
         {"country": "US", "name": "Reddit worldnews", "url": "https://www.reddit.com/r/worldnews/.rss"},
         {"country": "JP", "name": "Hatena IT", "url": "https://b.hatena.ne.jp/hotentry/it.rss"},
         {"country": "CN", "name": "V2EX", "url": "https://www.v2ex.com/index.xml"},
-        {"country": "KR", "name": "Clien", "url": "https://www.clien.net/service/board/park/rss"},
     ]
     return collect_rss_targets(SOURCE_TYPE_COMMUNITY, "community.rss.primary", targets)
 

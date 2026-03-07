@@ -74,8 +74,6 @@ export function MainAppWorkspaceContent(props: any) {
             engineStarted={props.engineStarted}
             isGraphRunning={props.isGraphRunning}
             loginCompleted={props.loginCompleted}
-            themeMode={props.themeMode}
-            themeModeOptions={[...props.themeModeOptions]}
             codexMultiAgentMode={props.codexMultiAgentMode}
             codexMultiAgentModeOptions={[...props.codexMultiAgentModeOptions]}
             userBackgroundImage={props.userBackgroundImage}
@@ -83,7 +81,6 @@ export function MainAppWorkspaceContent(props: any) {
             onCloseUsageResult={() => props.setUsageResultClosed(true)}
             onOpenRunsFolder={() => void props.onOpenRunsFolder()}
             onSelectCwdDirectory={() => void props.onSelectCwdDirectory()}
-            onSetThemeMode={props.setThemeMode}
             onSetCodexMultiAgentMode={(next) => props.setCodexMultiAgentMode(props.normalizeCodexMultiAgentMode(next))}
             onSetUserBackgroundImage={props.setUserBackgroundImage}
             onSetUserBackgroundOpacity={(next) =>

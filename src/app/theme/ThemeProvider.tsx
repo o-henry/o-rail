@@ -2,8 +2,6 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import {
   THEME_MODE_STORAGE_KEY,
   applyThemeModeToDocument,
-  loadPersistedThemeMode,
-  normalizeThemeMode,
   type ThemeModeValue,
 } from "../themeMode";
 
@@ -15,10 +13,10 @@ type ThemeContextValue = {
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [mode, setModeState] = useState<ThemeModeValue>(() => loadPersistedThemeMode());
+  const [mode, setModeState] = useState<ThemeModeValue>("light");
 
-  const setMode = useCallback((nextMode: ThemeModeValue | string) => {
-    setModeState(normalizeThemeMode(nextMode));
+  const setMode = useCallback((_nextMode: ThemeModeValue | string) => {
+    setModeState("light");
   }, []);
 
   useEffect(() => {

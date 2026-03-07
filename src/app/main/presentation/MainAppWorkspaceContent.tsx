@@ -4,6 +4,7 @@ import FeedPage from "../../../pages/feed/FeedPage";
 import KnowledgeBasePage from "../../../pages/knowledge/KnowledgeBasePage";
 import DashboardIntelligenceSettings from "../../../pages/settings/DashboardIntelligenceSettings";
 import SettingsPage from "../../../pages/settings/SettingsPage";
+import WorkflowWorkspaceDock from "../../../pages/workflow/WorkflowWorkspaceDock";
 
 export function MainAppWorkspaceContent(props: any) {
   const handleInjectContextSources = (entries: any[]) => {
@@ -19,6 +20,18 @@ export function MainAppWorkspaceContent(props: any) {
 
   return (
     <>
+      {props.workspaceTab === "workbench" && (
+        <section className="workflow-workspace-tab workspace-tab-panel">
+          <WorkflowWorkspaceDock
+            activeRoleId={props.workflowRoleId}
+            cwd={props.cwd}
+            graphFileName={props.graphFileName}
+            graphNodes={props.graphNodes}
+            nodeStates={props.nodeStates}
+            workspaceEvents={props.workspaceEvents}
+          />
+        </section>
+      )}
       {props.workspaceTab === "feed" && <FeedPage vm={props.feedPageVm} />}
       {props.workspaceTab === "knowledge" && (
         <KnowledgeBasePage

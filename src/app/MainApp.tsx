@@ -7,7 +7,6 @@ import type { AgentQuickActionRequest, AgentWorkspaceLaunchRequest } from "../pa
 import WorkflowPage from "../pages/workflow/WorkflowPage";
 import WorkflowRoleDock from "../pages/workflow/WorkflowRoleDock";
 import WorkflowRagModeDock from "../pages/workflow/WorkflowRagModeDock";
-import WorkflowWorkspaceDock from "../pages/workflow/WorkflowWorkspaceDock";
 import { buildRoleDockStatusByRole, type RoleDockRuntimeState } from "../pages/workflow/roleDockState";
 import { useFloatingPanel } from "../features/ui/useFloatingPanel";
 import { useExecutionState } from "./hooks/useExecutionState";
@@ -322,9 +321,8 @@ import {
 import { executeTurnNodeWithContext } from "./main/runtime/executeTurnNode";
 import type { FeedCategory, InternalMemorySnippet, WebProviderRunResult, RunRecord } from "./main";
 
-const HIDDEN_WORKSPACE_TABS = new Set<WorkspaceTab>(["workbench", "dashboard", "intelligence", "feed", "handoff", "agents"]);
-
-const WORKSPACE_TOPBAR_TABS: Array<{ tab: WorkspaceTab; label: string }> = [{ tab: "workflow", label: "그래프" }, { tab: "knowledge", label: "데이터베이스" }, { tab: "settings", label: "설정" }];
+const HIDDEN_WORKSPACE_TABS = new Set<WorkspaceTab>(["dashboard", "intelligence", "feed", "handoff", "agents"]);
+const WORKSPACE_TOPBAR_TABS: Array<{ tab: WorkspaceTab; label: string }> = [{ tab: "workbench", label: "워크스페이스" }, { tab: "workflow", label: "그래프" }, { tab: "knowledge", label: "데이터베이스" }, { tab: "settings", label: "설정" }];
 
 function App() {
   const USER_BG_IMAGE_STORAGE_KEY = "rail.settings.user_bg_image";
@@ -2340,7 +2338,6 @@ function App() {
       }}
     />
   );
-  const workflowWorkspaceDockElement = <WorkflowWorkspaceDock activeRoleId={workflowRoleId} cwd={cwd} graphFileName={graphFileName} graphNodes={graph.nodes} nodeStates={nodeStates} workspaceEvents={workspaceEvents} />;
   const showRoleDockFirst = Boolean(selectedNode);
   const feedPageVm = buildFeedPageVm({
     feedInspectorTurnNode,
@@ -2872,7 +2869,7 @@ function App() {
         )}
 
         {workspaceTab === "workflow" && (
-          <WorkflowPage canvasFullscreen={canvasFullscreen} workspaceDock={workflowWorkspaceDockElement}>
+          <WorkflowPage canvasFullscreen={canvasFullscreen}>
             <WorkflowCanvasPane
               boundedStageHeight={boundedStageHeight}
               boundedStageWidth={boundedStageWidth}
@@ -3053,6 +3050,7 @@ function App() {
           webBridgeRunning={webBridgeStatus.running}
           webBridgeStatus={webBridgeStatus}
           webWorkerBusy={webWorkerBusy}
+          workflowRoleId={workflowRoleId}
           workbench={workbenchPageProps}
           workspaceEvents={workspaceEvents}
           workspaceTab={workspaceTab}

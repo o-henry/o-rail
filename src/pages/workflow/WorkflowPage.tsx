@@ -3,14 +3,12 @@ import type { ReactNode } from "react";
 type WorkflowPageProps = {
   canvasFullscreen: boolean;
   children: ReactNode;
-  workspaceDock?: ReactNode;
 };
 
-export default function WorkflowPage({ canvasFullscreen, children, workspaceDock }: WorkflowPageProps) {
+export default function WorkflowPage({ canvasFullscreen, children }: WorkflowPageProps) {
   return (
     <div className={`workflow-layout workspace-tab-panel ${canvasFullscreen ? "canvas-only-layout" : ""}`}>
-      <div className="workflow-main-surface">{children}</div>
-      {!canvasFullscreen && workspaceDock}
+      {children}
     </div>
   );
 }

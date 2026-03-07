@@ -6,26 +6,15 @@
   margin: 0 10px 10px;
   display: grid;
   background: transparent;
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr) auto;
-  gap: 12px;
-  overflow: hidden;
-}
-
-.workflow-main-surface {
-  min-height: 0;
-  display: grid;
   grid-template-columns: minmax(0, 1fr) 320px;
   gap: 10px;
   overflow: hidden;
 }
 
 .workflow-layout.canvas-only-layout {
-  grid-template-rows: minmax(0, 1fr);
-}
-
-.workflow-layout.canvas-only-layout .workflow-main-surface {
   grid-template-columns: minmax(0, 1fr);
+  height: 100%;
+  margin: 0 10px 10px;
 }
 
 .workflow-question-input .agents-composer-left {
@@ -1452,14 +1441,21 @@
   color: rgba(194, 210, 224, 0.56);
 }
 
+.workflow-workspace-tab {
+  min-height: 0;
+  height: 100%;
+  margin: 0 10px 10px;
+  background: transparent;
+}
+
 @media (max-width: 1180px) {
-  .workflow-main-surface {
+  .workflow-layout {
     grid-template-columns: minmax(0, 1fr) 320px;
   }
 }
 
 @media (max-width: 900px) {
-  .workflow-main-surface {
+  .workflow-layout {
     grid-template-columns: minmax(0, 1fr) 300px;
   }
 
@@ -1479,7 +1475,7 @@
 }
 
 @media (min-width: 1181px) {
-  .workflow-main-surface {
+  .workflow-layout {
     grid-template-columns: minmax(0, 1fr) 320px;
   }
 }

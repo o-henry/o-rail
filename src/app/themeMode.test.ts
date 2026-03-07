@@ -20,8 +20,8 @@ afterEach(() => {
 });
 
 describe("themeMode", () => {
-  it("normalizes all values to light-only mode", () => {
-    expect(normalizeThemeMode("dark")).toBe("light");
+  it("normalizes light and dark theme values", () => {
+    expect(normalizeThemeMode("dark")).toBe("dark");
     expect(normalizeThemeMode("light")).toBe("light");
     expect(normalizeThemeMode("LIGHT")).toBe("light");
     expect(normalizeThemeMode("unknown")).toBe("light");
@@ -32,13 +32,13 @@ describe("themeMode", () => {
     expect(loadPersistedThemeMode()).toBe("light");
   });
 
-  it("returns light even when persisted mode exists", () => {
+  it("loads persisted mode when available", () => {
     setWindowMock({
       localStorage: {
-        getItem: () => "light",
+        getItem: () => "dark",
       },
     });
-    expect(loadPersistedThemeMode()).toBe("light");
+    expect(loadPersistedThemeMode()).toBe("dark");
 
     setWindowMock({
       localStorage: {

@@ -8,6 +8,8 @@ type SettingsPageProps = {
   loginCompleted: boolean;
   authModeText: string;
   cwd: string;
+  themeMode: string;
+  themeModeOptions: ReadonlyArray<{ value: string; label: string }>;
   codexMultiAgentMode: string;
   codexMultiAgentModeOptions: ReadonlyArray<{ value: string; label: string }>;
   userBackgroundImage: string;
@@ -19,6 +21,7 @@ type SettingsPageProps = {
   isGraphRunning: boolean;
   codexAuthBusy: boolean;
   onSelectCwdDirectory: () => void;
+  onSetThemeMode: (next: string) => void;
   onSetCodexMultiAgentMode: (next: string) => void;
   onSetUserBackgroundImage: (next: string) => void;
   onSetUserBackgroundOpacity: (next: number) => void;
@@ -33,6 +36,8 @@ export default function SettingsPage({
   loginCompleted,
   authModeText,
   cwd,
+  themeMode,
+  themeModeOptions,
   codexMultiAgentMode,
   codexMultiAgentModeOptions,
   userBackgroundImage,
@@ -44,6 +49,7 @@ export default function SettingsPage({
   isGraphRunning,
   codexAuthBusy,
   onSelectCwdDirectory,
+  onSetThemeMode,
   onSetCodexMultiAgentMode,
   onSetUserBackgroundImage,
   onSetUserBackgroundOpacity,
@@ -116,6 +122,16 @@ export default function SettingsPage({
             {t("settings.pickFolder")}
           </button>
         </div>
+      </label>
+      <label>
+        {t("settings.themeMode")}
+        <FancySelect
+          ariaLabel={t("settings.themeMode")}
+          className="modern-select settings-theme-select"
+          onChange={onSetThemeMode}
+          options={[...themeModeOptions]}
+          value={themeMode}
+        />
       </label>
       <label>
         {t("settings.multiAgentMode")}

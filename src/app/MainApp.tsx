@@ -170,6 +170,7 @@ import {
   validateSimpleSchema,
 } from "./mainAppGraphHelpers";
 import { useI18n } from "../i18n";
+import { useThemeMode } from "./theme/ThemeProvider";
 import {
   getArtifactTypeOptions,
   getCodexMultiAgentModeOptions,
@@ -320,7 +321,6 @@ import {
 } from "./main/runtime/turnExecutionUtils";
 import { executeTurnNodeWithContext } from "./main/runtime/executeTurnNode";
 import type { FeedCategory, InternalMemorySnippet, WebProviderRunResult, RunRecord } from "./main";
-
 const HIDDEN_WORKSPACE_TABS = new Set<WorkspaceTab>(["dashboard", "intelligence", "feed", "handoff", "agents"]);
 const WORKSPACE_TOPBAR_TABS: Array<{ tab: WorkspaceTab; label: string }> = [{ tab: "workbench", label: "워크스페이스" }, { tab: "workflow", label: "그래프" }, { tab: "knowledge", label: "데이터베이스" }, { tab: "settings", label: "설정" }];
 
@@ -328,10 +328,12 @@ function App() {
   const USER_BG_IMAGE_STORAGE_KEY = "rail.settings.user_bg_image";
   const USER_BG_OPACITY_STORAGE_KEY = "rail.settings.user_bg_opacity";
   const { locale, t, tp } = useI18n();
+  const { mode: themeMode, setMode: setThemeMode } = useThemeMode();
   const defaultCwd = useMemo(() => loadPersistedCwd(""), []);
   const defaultLoginCompleted = useMemo(() => loadPersistedLoginCompleted(), []);
   const defaultAuthMode = useMemo(() => loadPersistedAuthMode(), []);
   const defaultCodexMultiAgentMode = useMemo(() => loadPersistedCodexMultiAgentMode(), []);
+  const themeModeOptions = useMemo(() => [{ value: "light", label: t("settings.theme.light") }, { value: "dark", label: t("settings.theme.dark") }], [t]);
   const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>("workflow");
   const [workflowRoleId, setWorkflowRoleId] = useState<StudioRoleId>("pm_planner");
   const [workflowRoleTaskId, setWorkflowRoleTaskId] = useState("TASK-001");
@@ -3036,11 +3038,14 @@ function App() {
           setAgentLaunchRequest={setAgentLaunchRequest}
           setCodexMultiAgentMode={setCodexMultiAgentMode}
           setDashboardDetailTopic={setDashboardDetailTopic}
+          setThemeMode={setThemeMode}
           setStatus={setStatus}
           setUsageResultClosed={setUsageResultClosed}
           setUserBackgroundImage={setUserBackgroundImage}
           setUserBackgroundOpacity={setUserBackgroundOpacity}
           status={status}
+          themeMode={themeMode}
+          themeModeOptions={themeModeOptions}
           nodeStates={nodeStates}
           usageInfoText={usageInfoText}
           usageResultClosed={usageResultClosed}

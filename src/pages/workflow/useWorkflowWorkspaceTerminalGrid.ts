@@ -12,8 +12,6 @@ import type {
   WorkflowWorkspaceTerminalStateEvent,
 } from "./workflowWorkspaceTerminalTypes";
 
-const TERMINAL_ROLE_IDS = ["pm_planner", "client_programmer", "system_programmer", "qa_engineer"] as const;
-
 function createPane(id: string, title: string, subtitle: string, roleId?: string): WorkflowWorkspaceTerminalPane {
   return { id, roleId, title, subtitle, startupCommand: "codex", buffer: "", input: "", status: "idle", exitCode: null };
 }
@@ -46,9 +44,9 @@ export function useWorkflowWorkspaceTerminalGrid(params: {
 }) {
   const rolePanes = useMemo(
     () =>
-      TERMINAL_ROLE_IDS.map((roleId) => {
-        const role = STUDIO_ROLE_TEMPLATES.find((item) => item.id === roleId);
-        return createPane(`workspace-${roleId}`, role?.label ?? roleId, role?.goal ?? "Codex CLI", roleId);
+      STUDIO_ROLE_TEMPLATES.map((role) => {
+        const roleId = role.id;
+        return createPane(`workspace-${roleId}`, role.label, role.goal, roleId);
       }),
     [],
   );

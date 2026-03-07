@@ -2282,7 +2282,6 @@ function App() {
     <WorkflowRoleDock
       onChangePrompt={setWorkflowRolePrompt}
       onChangeTaskId={setWorkflowRoleTaskId}
-      onOpenWorkbench={() => setWorkspaceTab("workbench")}
       onRunRole={() => {
         const taskId = workflowRoleTaskId.trim();
         if (!taskId) {

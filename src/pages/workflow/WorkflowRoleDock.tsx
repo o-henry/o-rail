@@ -6,7 +6,6 @@ type RoleDockStatus = "IDLE" | "RUNNING" | "VERIFY" | "DONE";
 type WorkflowRoleDockProps = {
   roleId: StudioRoleId;
   onSelectRoleId: (roleId: StudioRoleId) => void;
-  onOpenWorkbench: () => void;
   roleSelectionLockedTo?: StudioRoleId | null;
   taskId: string;
   onChangeTaskId: (value: string) => void;
@@ -22,21 +21,29 @@ type WorkflowRoleDockProps = {
 };
 
 export default function WorkflowRoleDock(props: WorkflowRoleDockProps) {
-  const selectedRole = STUDIO_ROLE_TEMPLATES.find((role) => role.id === props.roleId);
+  const latestArtifactPath = props.selectedRoleHandoffs
+    .flatMap((row) => row.artifactPaths.map((path) => String(path ?? "").trim()).filter(Boolean))
+    .find((path) => path.toLowerCase().endsWith(".json"))
+    ?? props.selectedRoleHandoffs
+      .flatMap((row) => row.artifactPaths.map((path) => String(path ?? "").trim()).filter(Boolean))[0];
+  const latestArtifactName = latestArtifactPath
+    ? latestArtifactPath.split(/[\\/]/).filter(Boolean).pop() ?? latestArtifactPath
+    : "";
   const lockedRoleId = props.roleSelectionLockedTo ?? null;
 
   return (
-    <aside className="panel-card workflow-role-dock" aria-label="상황실 안내">
+    <aside className="panel-card workflow-role-dock" aria-label="역할 워크스페이스">
       <header className="workflow-role-dock-head">
-        <strong>작업 시작은 상황실에서</strong>
-        <span>그래프 탭은 캔버스 편집과 실행 확인에 집중합니다.</span>
+        <strong>역할 워크스페이스</strong>
+        <span>그래프 단일 실행 보드</span>
       </header>
 
-      <section className="workflow-role-cards" aria-label="역할 참고 카드">
+      <section className="workflow-role-cards" aria-label="역할 카드">
         {STUDIO_ROLE_TEMPLATES.map((role) => {
           const selected = role.id === props.roleId;
           const lockedOut = Boolean(lockedRoleId) && role.id !== lockedRoleId;
           const roleState = props.roleStatusById[role.id]?.status ?? "IDLE";
+          const roleTaskId = props.roleStatusById[role.id]?.taskId ?? "";
           return (
             <button
               key={role.id}
@@ -49,18 +56,39 @@ export default function WorkflowRoleDock(props: WorkflowRoleDockProps) {
               <span>{role.goal}</span>
               <div className="workflow-role-card-meta">
                 <span className={`workflow-role-status-chip is-${roleState.toLowerCase()}`}>{roleState}</span>
+                {roleTaskId ? <code>{roleTaskId}</code> : null}
               </div>
             </button>
           );
         })}
       </section>
 
-      <section className="workflow-role-summary">
-        <strong>현재 선택 역할</strong>
-        <p className="workflow-role-summary-path">{selectedRole?.label ?? props.roleId}</p>
-        <p className="workflow-role-summary-empty">새 역할 실행과 일반 작업 카드는 좌측 `상황실` 탭에서 시작하세요.</p>
-        <button className="mini-action-button workflow-role-run-button" onClick={props.onOpenWorkbench} type="button">
-          <span className="mini-action-button-label">상황실 열기</span>
+      <section className="workflow-role-form">
+        <label>
+          TASK ID
+          <input
+            className="workflow-handoff-task-input"
+            onChange={(event) => props.onChangeTaskId(event.currentTarget.value)}
+            placeholder="TASK-001"
+            value={props.taskId}
+          />
+        </label>
+        <label>
+          요청사항
+          <textarea
+            className="workflow-handoff-request-input"
+            onChange={(event) => props.onChangePrompt(event.currentTarget.value)}
+            placeholder="현재 역할에서 바로 처리할 요청을 입력하세요."
+            value={props.prompt}
+          />
+        </label>
+        <button
+          className="mini-action-button workflow-role-run-button"
+          disabled={props.runDisabled}
+          onClick={props.onRunRole}
+          type="button"
+        >
+          <span className="mini-action-button-label">역할 실행</span>
         </button>
       </section>
 
@@ -68,11 +96,11 @@ export default function WorkflowRoleDock(props: WorkflowRoleDockProps) {
         <div className="workflow-role-summary-head">
           <strong>최근 인수인계</strong>
           <button className="mini-action-button workflow-role-summary-clear" onClick={props.onClearRecentHandoffs} type="button">
-            <span className="mini-action-button-label">정리</span>
+            <span className="mini-action-button-label">CLEAR</span>
           </button>
         </div>
         {props.selectedRoleHandoffs.length === 0 ? (
-          <p className="workflow-role-summary-empty">최근 인수인계 없음</p>
+          <p className="workflow-role-summary-empty">HANDOFF 없음</p>
         ) : (
           <ul className="workflow-role-summary-list">
             {props.selectedRoleHandoffs.map((row) => (
@@ -89,11 +117,18 @@ export default function WorkflowRoleDock(props: WorkflowRoleDockProps) {
         <div className="workflow-role-summary-head">
           <strong>최근 산출물</strong>
           <button className="mini-action-button workflow-role-summary-open" onClick={props.onOpenKnowledge} type="button">
-            <span className="mini-action-button-label">데이터베이스 열기</span>
+            <span className="mini-action-button-label">데이터베이스에서 보기</span>
           </button>
         </div>
+        <p className="workflow-role-summary-path">
+          {latestArtifactName || "산출물 없음"}
+        </p>
+      </section>
+
+      <section className="workflow-role-summary">
+        <strong>차단 이슈</strong>
         {props.selectedRoleBlockers.length === 0 ? (
-          <p className="workflow-role-summary-empty">차단 이슈 없음</p>
+          <p className="workflow-role-summary-empty">BLOCKER 없음</p>
         ) : (
           <ul className="workflow-role-summary-list">
             {props.selectedRoleBlockers.map((row) => (

@@ -32,3 +32,14 @@ export type WorkspaceTerminalPane = {
   status: WorkspaceTerminalPaneStatus;
   exitCode?: number | null;
 };
+
+export type WorkspaceActivityTone = "role" | "graph" | "system" | "user";
+
+export type WorkspaceActivityEntry = {
+  id: string;
+  title: string;
+  body: string;
+  meta: string;
+  tone: WorkspaceActivityTone;
+  paneId?: string;
+};

@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { STUDIO_ROLE_TEMPLATES } from "../../features/studio/roleTemplates";
 import { invoke, listen } from "../../shared/tauri";
 import type { GraphNode } from "../../features/workflow/types";
 import type { WorkbenchNodeState, WorkbenchWorkspaceEvent } from "./workbenchRuntimeTypes";
 import { appendTerminalChunk, buildGraphObserverText } from "./workspaceTerminalState";
 import type {
+  WorkspaceActivityEntry,
   WorkspaceTerminalOutputEvent,
   WorkspaceTerminalPane,
   WorkspaceTerminalPaneStatus,
@@ -45,6 +46,23 @@ function statusMessage(status: WorkspaceTerminalPaneStatus, exitCode?: number | 
   return "idle";
 }
 
+function createActivityEntry(input: {
+  title: string;
+  body: string;
+  meta: string;
+  tone: WorkspaceActivityEntry["tone"];
+  paneId?: string;
+}): WorkspaceActivityEntry {
+  return {
+    id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+    title: input.title,
+    body: input.body,
+    meta: input.meta,
+    tone: input.tone,
+    paneId: input.paneId,
+  };
+}
+
 export function useWorkspaceTerminalGrid(params: {
   cwd: string;
   graphFileName: string;
@@ -62,6 +80,9 @@ export function useWorkspaceTerminalGrid(params: {
   );
 
   const [panes, setPanes] = useState<WorkspaceTerminalPane[]>(rolePanes);
+  const [selectedPaneId, setSelectedPaneId] = useState<string>(rolePanes[0]?.id ?? "");
+  const [activityEntries, setActivityEntries] = useState<WorkspaceActivityEntry[]>([]);
+  const seenWorkspaceEventIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     setPanes((current) =>
@@ -70,6 +91,10 @@ export function useWorkspaceTerminalGrid(params: {
         buffer: pane.buffer,
       })),
     );
+  }, []);
+
+  const appendActivity = useCallback((entry: WorkspaceActivityEntry) => {
+    setActivityEntries((current) => [entry, ...current].slice(0, 120));
   }, []);
 
   useEffect(() => {
@@ -82,6 +107,7 @@ export function useWorkspaceTerminalGrid(params: {
         return;
       }
       const payload = event.payload as WorkspaceTerminalOutputEvent;
+      const pane = rolePanes.find((row) => row.id === payload.sessionId);
       setPanes((current) =>
         current.map((pane) => (
           pane.id === payload.sessionId
@@ -89,6 +115,18 @@ export function useWorkspaceTerminalGrid(params: {
             : pane
         )),
       );
+      const body = String(payload.chunk ?? "").trim();
+      if (body) {
+        appendActivity(
+          createActivityEntry({
+            title: pane?.title ?? payload.sessionId,
+            body,
+            meta: payload.stream,
+            tone: "role",
+            paneId: payload.sessionId,
+          }),
+        );
+      }
     }).then((unlisten) => {
       offOutput = unlisten;
     }).catch(() => undefined);
@@ -98,6 +136,7 @@ export function useWorkspaceTerminalGrid(params: {
         return;
       }
       const payload = event.payload as WorkspaceTerminalStateEvent;
+      const pane = rolePanes.find((row) => row.id === payload.sessionId);
       setPanes((current) =>
         current.map((pane) => (
           pane.id === payload.sessionId
@@ -112,6 +151,15 @@ export function useWorkspaceTerminalGrid(params: {
             : pane
         )),
       );
+      appendActivity(
+        createActivityEntry({
+          title: pane?.title ?? payload.sessionId,
+          body: payload.message ?? statusMessage(payload.state, payload.exitCode ?? null),
+          meta: payload.state,
+          tone: payload.state === "error" ? "system" : "role",
+          paneId: payload.sessionId,
+        }),
+      );
     }).then((unlisten) => {
       offState = unlisten;
     }).catch(() => undefined);
@@ -122,6 +170,30 @@ export function useWorkspaceTerminalGrid(params: {
       void offState?.();
     };
   }, []);
+
+  useEffect(() => {
+    const nextEntries = params.workspaceEvents.filter((event) => !seenWorkspaceEventIdsRef.current.has(event.id));
+    if (nextEntries.length === 0) {
+      return;
+    }
+    for (const event of nextEntries) {
+      seenWorkspaceEventIdsRef.current.add(event.id);
+    }
+    setActivityEntries((current) => [
+      ...nextEntries
+        .slice()
+        .reverse()
+        .map((event) =>
+          createActivityEntry({
+            title: event.source.toUpperCase(),
+            body: event.message,
+            meta: event.level ?? "info",
+            tone: "graph",
+          }),
+        ),
+      ...current,
+    ].slice(0, 120));
+  }, [params.workspaceEvents]);
 
   const graphObserverText = useMemo(
     () =>
@@ -139,6 +211,15 @@ export function useWorkspaceTerminalGrid(params: {
     if (!pane || !params.cwd) {
       return;
     }
+    appendActivity(
+      createActivityEntry({
+        title: pane.title,
+        body: "Codex CLI 세션 시작 요청",
+        meta: "user action",
+        tone: "user",
+        paneId,
+      }),
+    );
     setPanes((current) => current.map((row) => row.id === paneId ? { ...row, status: "starting" } : row));
     try {
       await invoke("workspace_terminal_start", {
@@ -159,9 +240,21 @@ export function useWorkspaceTerminalGrid(params: {
         ),
       );
     }
-  }, [panes, params.cwd]);
+  }, [appendActivity, panes, params.cwd]);
 
   const stopPane = useCallback(async (paneId: string) => {
+    const pane = panes.find((row) => row.id === paneId);
+    if (pane) {
+      appendActivity(
+        createActivityEntry({
+          title: pane.title,
+          body: "세션 중단 요청",
+          meta: "user action",
+          tone: "user",
+          paneId,
+        }),
+      );
+    }
     try {
       await invoke("workspace_terminal_stop", { sessionId: paneId });
     } catch (error) {
@@ -177,7 +270,7 @@ export function useWorkspaceTerminalGrid(params: {
         ),
       );
     }
-  }, []);
+  }, [appendActivity, panes]);
 
   const sendPaneInput = useCallback(async (paneId: string) => {
     const pane = panes.find((row) => row.id === paneId);
@@ -185,6 +278,15 @@ export function useWorkspaceTerminalGrid(params: {
     if (!pane || !chars) {
       return;
     }
+    appendActivity(
+      createActivityEntry({
+        title: pane.title,
+        body: chars,
+        meta: "추가 요구사항",
+        tone: "user",
+        paneId,
+      }),
+    );
     setPanes((current) =>
       current.map((row) =>
         row.id === paneId
@@ -214,7 +316,7 @@ export function useWorkspaceTerminalGrid(params: {
         ),
       );
     }
-  }, [panes]);
+  }, [appendActivity, panes]);
 
   const setPaneInput = useCallback((paneId: string, value: string) => {
     setPanes((current) => current.map((row) => row.id === paneId ? { ...row, input: value } : row));
@@ -233,8 +335,11 @@ export function useWorkspaceTerminalGrid(params: {
   }, [rolePanes, stopPane]);
 
   return {
+    activityEntries,
+    selectedPaneId,
     panes,
     graphObserverText,
+    setSelectedPaneId,
     startPane,
     stopPane,
     sendPaneInput,

@@ -1220,43 +1220,13 @@
 }
 
 .workflow-workspace-dock {
-  position: relative;
   min-height: 0;
   display: grid;
-  gap: 14px;
-  padding: 14px;
-  border-radius: 22px;
-  overflow: hidden;
-  background:
-    linear-gradient(180deg, rgba(34, 39, 51, 0.92), rgba(22, 26, 35, 0.96)),
-    radial-gradient(circle at top left, rgba(125, 176, 255, 0.14), transparent 38%);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 26px 64px rgba(11, 15, 22, 0.32);
-}
-
-.workflow-workspace-dock::before,
-.workflow-workspace-dock::after {
-  content: "";
-  position: absolute;
-  pointer-events: none;
-  inset: 0;
-}
-
-.workflow-workspace-dock::before {
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0.04), transparent 28%, transparent 72%, rgba(255, 255, 255, 0.04));
-  opacity: 0.55;
-}
-
-.workflow-workspace-dock::after {
-  background:
-    linear-gradient(rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.08)) 50% 0 / 1px 100% no-repeat,
-    linear-gradient(rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.08)) 0 50% / 100% 1px no-repeat;
-  opacity: 0.32;
-}
-
-.workflow-workspace-dock > * {
-  position: relative;
-  z-index: 1;
+  gap: 10px;
+  padding: 10px;
+  border-radius: 8px;
+  overflow: auto;
+  background: #ffffff;
 }
 
 .workflow-workspace-dock-head {
@@ -1272,23 +1242,15 @@
 }
 
 .workflow-workspace-dock-title strong {
-  font-size: 16px;
-  color: rgba(244, 248, 252, 0.98);
-  letter-spacing: 0.04em;
-}
-
-.workflow-workspace-dock-title span,
-.workflow-workspace-trace-label,
-.workflow-workspace-trace-lines span,
-.workflow-workspace-pane-path,
-.workflow-workspace-pane-status {
-  font-family: "JetBrains Mono", "IBM Plex Mono", "SFMono-Regular", monospace;
+  font-size: 15px;
+  color: var(--text-main);
+  letter-spacing: -0.3px;
 }
 
 .workflow-workspace-dock-title span {
-  font-size: 12px;
-  line-height: 1.5;
-  color: rgba(214, 225, 237, 0.72);
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--text-subtle);
 }
 
 .workflow-workspace-dock-actions {
@@ -1298,40 +1260,39 @@
 }
 
 .workflow-workspace-dock .mini-action-button {
-  border-color: rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(243, 247, 252, 0.96);
+  border: 0;
+  background: #eef3f8;
+  color: #324559;
+  box-shadow: none;
 }
 
 .workflow-workspace-dock .mini-action-button:hover {
-  background: rgba(255, 255, 255, 0.11);
-  border-color: rgba(255, 255, 255, 0.22);
+  background: #e5ecf4;
 }
 
 .workflow-workspace-trace {
   display: grid;
-  gap: 8px;
+  gap: 4px;
   padding: 10px 12px;
-  border-radius: 14px;
-  background: rgba(5, 9, 14, 0.32);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  background: #f7f9fc;
 }
 
 .workflow-workspace-trace-label {
-  font-size: 11px;
+  font-size: 10px;
   letter-spacing: 0.12em;
-  color: rgba(145, 196, 255, 0.92);
+  color: #6f7d90;
 }
 
 .workflow-workspace-trace-lines {
   display: grid;
-  gap: 4px;
+  gap: 2px;
 }
 
 .workflow-workspace-trace-lines span {
   font-size: 11px;
-  line-height: 1.5;
-  color: rgba(233, 240, 247, 0.78);
+  line-height: 1.45;
+  color: #4b5a70;
 }
 
 .workflow-workspace-grid {
@@ -1345,20 +1306,17 @@
   min-height: 280px;
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr) auto auto;
-  gap: 10px;
+  gap: 8px;
   padding: 10px 12px 12px;
-  border-radius: 16px;
-  background: rgba(9, 13, 20, 0.52);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  border-radius: 8px;
+  background: #f7f9fc;
+  border: 0;
+  box-shadow: none;
   cursor: pointer;
 }
 
 .workflow-workspace-pane.is-selected {
-  border-color: rgba(122, 184, 255, 0.72);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.05),
-    0 0 0 1px rgba(122, 184, 255, 0.12);
+  background: #edf4ff;
 }
 
 .workflow-workspace-pane-topbar {
@@ -1374,32 +1332,30 @@
   justify-content: center;
   width: 18px;
   height: 18px;
-  border-radius: 6px;
-  background: rgba(89, 138, 221, 0.92);
-  color: #f7fbff;
-  font-family: "JetBrains Mono", "IBM Plex Mono", "SFMono-Regular", monospace;
-  font-size: 12px;
-  font-weight: 700;
+  border-radius: 4px;
+  background: #d9e7ff;
+  color: #3163bf;
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .workflow-workspace-pane-role {
   min-width: 0;
   flex: 1 1 auto;
-  font-family: "JetBrains Mono", "IBM Plex Mono", "SFMono-Regular", monospace;
-  font-size: 15px;
-  color: rgba(245, 248, 251, 0.98);
+  font-size: 14px;
+  color: var(--text-main);
 }
 
 .workflow-workspace-pane-status {
-  font-size: 11px;
-  letter-spacing: 0.08em;
+  font-size: 10px;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: rgba(168, 225, 161, 0.92);
+  color: #5e7088;
 }
 
 .workflow-workspace-pane-path {
-  font-size: 12px;
-  color: rgba(190, 222, 141, 0.92);
+  font-size: 11px;
+  color: #76869c;
 }
 
 .workflow-workspace-pane-body {
@@ -1408,10 +1364,9 @@
   overflow: auto;
   white-space: pre-wrap;
   word-break: break-word;
-  font-family: "JetBrains Mono", "IBM Plex Mono", "SFMono-Regular", monospace;
   font-size: 12px;
-  line-height: 1.6;
-  color: rgba(235, 241, 246, 0.94);
+  line-height: 1.55;
+  color: #314255;
 }
 
 .workflow-workspace-pane-actions {
@@ -1429,16 +1384,16 @@
 .workflow-workspace-pane-input {
   min-width: 0;
   height: 36px;
-  border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(0, 0, 0, 0.2);
-  color: rgba(247, 250, 252, 0.96);
+  border-radius: 8px;
+  border: 0;
+  background: #ffffff;
+  color: var(--text-main);
   padding: 0 12px;
   font-size: 12px;
 }
 
 .workflow-workspace-pane-input::placeholder {
-  color: rgba(194, 210, 224, 0.56);
+  color: #94a2b5;
 }
 
 .workflow-workspace-tab {

@@ -14,9 +14,10 @@ import type {
 
 const TERMINAL_ROLE_IDS = ["pm_planner", "client_programmer", "system_programmer", "qa_engineer"] as const;
 
-function createPane(id: string, title: string, subtitle: string): WorkspaceTerminalPane {
+function createPane(id: string, title: string, subtitle: string, roleId?: string): WorkspaceTerminalPane {
   return {
     id,
+    roleId,
     title,
     subtitle,
     startupCommand: "codex",
@@ -74,7 +75,7 @@ export function useWorkspaceTerminalGrid(params: {
     () =>
       TERMINAL_ROLE_IDS.map((roleId) => {
         const role = STUDIO_ROLE_TEMPLATES.find((item) => item.id === roleId);
-        return createPane(`workspace-${roleId}`, role?.label ?? roleId, role?.goal ?? "Codex CLI");
+        return createPane(`workspace-${roleId}`, role?.label ?? roleId, role?.goal ?? "Codex CLI", roleId);
       }),
     [],
   );
@@ -322,6 +323,13 @@ export function useWorkspaceTerminalGrid(params: {
     setPanes((current) => current.map((row) => row.id === paneId ? { ...row, input: value } : row));
   }, []);
 
+  const selectPaneByRoleId = useCallback((roleId: string) => {
+    const matched = rolePanes.find((pane) => pane.roleId === roleId);
+    if (matched) {
+      setSelectedPaneId(matched.id);
+    }
+  }, [rolePanes]);
+
   const clearPane = useCallback((paneId: string) => {
     setPanes((current) => current.map((row) => row.id === paneId ? { ...row, buffer: "" } : row));
   }, []);
@@ -340,6 +348,7 @@ export function useWorkspaceTerminalGrid(params: {
     panes,
     graphObserverText,
     setSelectedPaneId,
+    selectPaneByRoleId,
     startPane,
     stopPane,
     sendPaneInput,

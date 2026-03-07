@@ -6,15 +6,26 @@
   margin: 0 10px 10px;
   display: grid;
   background: transparent;
-  grid-template-columns: minmax(0, 1fr) 300px;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 12px;
+  overflow: hidden;
+}
+
+.workflow-main-surface {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
   gap: 10px;
   overflow: hidden;
 }
 
 .workflow-layout.canvas-only-layout {
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.workflow-layout.canvas-only-layout .workflow-main-surface {
   grid-template-columns: minmax(0, 1fr);
-  height: 100%;
-  margin: 0 10px 10px;
 }
 
 .workflow-question-input .agents-composer-left {
@@ -1219,14 +1230,236 @@
   padding-top: 0;
 }
 
+.workflow-workspace-dock {
+  position: relative;
+  min-height: 0;
+  display: grid;
+  gap: 14px;
+  padding: 14px;
+  border-radius: 22px;
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, rgba(34, 39, 51, 0.92), rgba(22, 26, 35, 0.96)),
+    radial-gradient(circle at top left, rgba(125, 176, 255, 0.14), transparent 38%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 26px 64px rgba(11, 15, 22, 0.32);
+}
+
+.workflow-workspace-dock::before,
+.workflow-workspace-dock::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  inset: 0;
+}
+
+.workflow-workspace-dock::before {
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.04), transparent 28%, transparent 72%, rgba(255, 255, 255, 0.04));
+  opacity: 0.55;
+}
+
+.workflow-workspace-dock::after {
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.08)) 50% 0 / 1px 100% no-repeat,
+    linear-gradient(rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.08)) 0 50% / 100% 1px no-repeat;
+  opacity: 0.32;
+}
+
+.workflow-workspace-dock > * {
+  position: relative;
+  z-index: 1;
+}
+
+.workflow-workspace-dock-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.workflow-workspace-dock-title {
+  display: grid;
+  gap: 4px;
+}
+
+.workflow-workspace-dock-title strong {
+  font-size: 16px;
+  color: rgba(244, 248, 252, 0.98);
+  letter-spacing: 0.04em;
+}
+
+.workflow-workspace-dock-title span,
+.workflow-workspace-trace-label,
+.workflow-workspace-trace-lines span,
+.workflow-workspace-pane-path,
+.workflow-workspace-pane-status {
+  font-family: "JetBrains Mono", "IBM Plex Mono", "SFMono-Regular", monospace;
+}
+
+.workflow-workspace-dock-title span {
+  font-size: 12px;
+  line-height: 1.5;
+  color: rgba(214, 225, 237, 0.72);
+}
+
+.workflow-workspace-dock-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.workflow-workspace-dock .mini-action-button {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(243, 247, 252, 0.96);
+}
+
+.workflow-workspace-dock .mini-action-button:hover {
+  background: rgba(255, 255, 255, 0.11);
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+.workflow-workspace-trace {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(5, 9, 14, 0.32);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.workflow-workspace-trace-label {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: rgba(145, 196, 255, 0.92);
+}
+
+.workflow-workspace-trace-lines {
+  display: grid;
+  gap: 4px;
+}
+
+.workflow-workspace-trace-lines span {
+  font-size: 11px;
+  line-height: 1.5;
+  color: rgba(233, 240, 247, 0.78);
+}
+
+.workflow-workspace-grid {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.workflow-workspace-pane {
+  min-height: 280px;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+  gap: 10px;
+  padding: 10px 12px 12px;
+  border-radius: 16px;
+  background: rgba(9, 13, 20, 0.52);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+}
+
+.workflow-workspace-pane.is-selected {
+  border-color: rgba(122, 184, 255, 0.72);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 0 0 1px rgba(122, 184, 255, 0.12);
+}
+
+.workflow-workspace-pane-topbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.workflow-workspace-pane-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 6px;
+  background: rgba(89, 138, 221, 0.92);
+  color: #f7fbff;
+  font-family: "JetBrains Mono", "IBM Plex Mono", "SFMono-Regular", monospace;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.workflow-workspace-pane-role {
+  min-width: 0;
+  flex: 1 1 auto;
+  font-family: "JetBrains Mono", "IBM Plex Mono", "SFMono-Regular", monospace;
+  font-size: 15px;
+  color: rgba(245, 248, 251, 0.98);
+}
+
+.workflow-workspace-pane-status {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(168, 225, 161, 0.92);
+}
+
+.workflow-workspace-pane-path {
+  font-size: 12px;
+  color: rgba(190, 222, 141, 0.92);
+}
+
+.workflow-workspace-pane-body {
+  min-height: 0;
+  margin: 0;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: "JetBrains Mono", "IBM Plex Mono", "SFMono-Regular", monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  color: rgba(235, 241, 246, 0.94);
+}
+
+.workflow-workspace-pane-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.workflow-workspace-pane-composer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.workflow-workspace-pane-input {
+  min-width: 0;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.2);
+  color: rgba(247, 250, 252, 0.96);
+  padding: 0 12px;
+  font-size: 12px;
+}
+
+.workflow-workspace-pane-input::placeholder {
+  color: rgba(194, 210, 224, 0.56);
+}
+
 @media (max-width: 1180px) {
-  .workflow-layout {
+  .workflow-main-surface {
     grid-template-columns: minmax(0, 1fr) 320px;
   }
 }
 
 @media (max-width: 900px) {
-  .workflow-layout {
+  .workflow-main-surface {
     grid-template-columns: minmax(0, 1fr) 300px;
   }
 
@@ -1239,10 +1472,14 @@
   .workflow-role-cards {
     grid-template-columns: minmax(0, 1fr);
   }
+
+  .workflow-workspace-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (min-width: 1181px) {
-  .workflow-layout {
+  .workflow-main-surface {
     grid-template-columns: minmax(0, 1fr) 320px;
   }
 }

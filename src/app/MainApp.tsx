@@ -7,6 +7,7 @@ import type { AgentQuickActionRequest, AgentWorkspaceLaunchRequest } from "../pa
 import WorkflowPage from "../pages/workflow/WorkflowPage";
 import WorkflowRoleDock from "../pages/workflow/WorkflowRoleDock";
 import WorkflowRagModeDock from "../pages/workflow/WorkflowRagModeDock";
+import WorkflowWorkspaceDock from "../pages/workflow/WorkflowWorkspaceDock";
 import { buildRoleDockStatusByRole, type RoleDockRuntimeState } from "../pages/workflow/roleDockState";
 import { useFloatingPanel } from "../features/ui/useFloatingPanel";
 import { useExecutionState } from "./hooks/useExecutionState";
@@ -2339,6 +2340,7 @@ function App() {
       }}
     />
   );
+  const workflowWorkspaceDockElement = <WorkflowWorkspaceDock activeRoleId={workflowRoleId} cwd={cwd} graphFileName={graphFileName} graphNodes={graph.nodes} nodeStates={nodeStates} workspaceEvents={workspaceEvents} />;
   const showRoleDockFirst = Boolean(selectedNode);
   const feedPageVm = buildFeedPageVm({
     feedInspectorTurnNode,
@@ -2870,7 +2872,7 @@ function App() {
         )}
 
         {workspaceTab === "workflow" && (
-          <WorkflowPage canvasFullscreen={canvasFullscreen}>
+          <WorkflowPage canvasFullscreen={canvasFullscreen} workspaceDock={workflowWorkspaceDockElement}>
             <WorkflowCanvasPane
               boundedStageHeight={boundedStageHeight}
               boundedStageWidth={boundedStageWidth}

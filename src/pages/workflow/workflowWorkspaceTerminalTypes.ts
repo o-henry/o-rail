@@ -1,20 +1,20 @@
-export type WorkspaceTerminalStream = "stdout" | "stderr";
+export type WorkflowWorkspaceTerminalStream = "stdout" | "stderr";
 
-export type WorkspaceTerminalOutputEvent = {
+export type WorkflowWorkspaceTerminalOutputEvent = {
   sessionId: string;
-  stream: WorkspaceTerminalStream;
+  stream: WorkflowWorkspaceTerminalStream;
   chunk: string;
   at: string;
 };
 
-export type WorkspaceTerminalStateEvent = {
+export type WorkflowWorkspaceTerminalStateEvent = {
   sessionId: string;
   state: "starting" | "running" | "stopped" | "error" | "exited";
   exitCode?: number | null;
   message?: string;
 };
 
-export type WorkspaceTerminalPaneStatus =
+export type WorkflowWorkspaceTerminalPaneStatus =
   | "idle"
   | "starting"
   | "running"
@@ -22,7 +22,7 @@ export type WorkspaceTerminalPaneStatus =
   | "error"
   | "exited";
 
-export type WorkspaceTerminalPane = {
+export type WorkflowWorkspaceTerminalPane = {
   id: string;
   roleId?: string;
   title: string;
@@ -30,17 +30,17 @@ export type WorkspaceTerminalPane = {
   startupCommand: string;
   buffer: string;
   input: string;
-  status: WorkspaceTerminalPaneStatus;
+  status: WorkflowWorkspaceTerminalPaneStatus;
   exitCode?: number | null;
 };
 
-export type WorkspaceActivityTone = "role" | "graph" | "system" | "user";
+export type WorkflowWorkspaceActivityTone = "role" | "graph" | "system" | "user";
 
-export type WorkspaceActivityEntry = {
+export type WorkflowWorkspaceActivityEntry = {
   id: string;
   title: string;
   body: string;
   meta: string;
-  tone: WorkspaceActivityTone;
+  tone: WorkflowWorkspaceActivityTone;
   paneId?: string;
 };

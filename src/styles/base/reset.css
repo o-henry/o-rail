@@ -35,21 +35,16 @@ select {
 button {
   border: 0;
   border-radius: 5px;
-  background: var(--button-bg);
-  color: var(--button-text);
+  /* background: #e7ebf1; */
+  background: var(--surface-panel);
+  color: var(--text-main);
   padding: 8px 11px;
-  box-shadow: var(--button-shadow);
   cursor: pointer;
-  transition: background 140ms ease, box-shadow 140ms ease, transform 140ms ease;
 }
 
 button:focus,
 button:focus-visible {
   outline: none;
-}
-
-button:hover:not(:disabled) {
-  background: var(--button-hover-bg);
 }
 
 button:disabled {

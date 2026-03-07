@@ -4,7 +4,6 @@ import FeedPage from "../../../pages/feed/FeedPage";
 import KnowledgeBasePage from "../../../pages/knowledge/KnowledgeBasePage";
 import DashboardIntelligenceSettings from "../../../pages/settings/DashboardIntelligenceSettings";
 import SettingsPage from "../../../pages/settings/SettingsPage";
-import WorkbenchPage from "../../../pages/workbench/WorkbenchPage";
 
 export function MainAppWorkspaceContent(props: any) {
   const handleInjectContextSources = (entries: any[]) => {
@@ -20,15 +19,6 @@ export function MainAppWorkspaceContent(props: any) {
 
   return (
     <>
-      {props.workspaceTab === "workbench" && (
-        <WorkbenchPage
-          cwd={props.cwd}
-          graphFileName={props.graphFileName}
-          graphNodes={props.graphNodes}
-          nodeStates={props.nodeStates}
-          workspaceEvents={props.workspaceEvents}
-        />
-      )}
       {props.workspaceTab === "feed" && <FeedPage vm={props.feedPageVm} />}
       {props.workspaceTab === "knowledge" && (
         <KnowledgeBasePage

@@ -73,7 +73,7 @@ export function useWorkspaceQuickPanel(params: UseWorkspaceQuickPanelParams) {
   };
 
   const onOpenQuickPanelAgents = () => {
-    params.setWorkspaceTab("workbench");
+    params.setWorkspaceTab("workflow");
     setQuickPanelOpen(false);
   };
 

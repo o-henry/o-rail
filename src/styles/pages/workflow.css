@@ -613,14 +613,14 @@
   flex: 0 0 auto;
   min-height: auto;
   display: grid;
-  background: #ffffff;
+  background: var(--surface);
 }
 
 .workflow-right-stack > .panel-card.workflow-mission-island {
   flex: 0 0 auto;
   min-height: auto;
   display: grid;
-  background: #ffffff;
+  background: var(--surface);
   margin-bottom: 0;
   border-radius: 8px;
 }
@@ -661,7 +661,7 @@
   flex: 1 1 auto;
   margin-bottom: 0;
   min-height: 0;
-  background: #ffffff;
+  background: var(--surface);
   display: flex;
   flex-direction: column;
 }
@@ -685,7 +685,7 @@
   align-content: start;
   gap: 10px;
   border-radius: 8px;
-  background: #ffffff;
+  background: var(--surface);
   padding: 10px 10px 24px;
   overflow: visible;
   min-height: 0;
@@ -704,7 +704,7 @@
   align-content: start;
   gap: 10px;
   border-radius: 8px;
-  background: #ffffff;
+  background: var(--surface);
   padding: 10px 10px;
   overflow: visible;
   min-height: 0;
@@ -718,7 +718,7 @@
   gap: 0;
   flex: 1 1 auto;
   border-radius: 8px;
-  background: #ffffff;
+  background: var(--surface);
   padding: 10px 10px;
   overflow: visible;
   min-height: 140px;
@@ -1085,22 +1085,22 @@
 }
 
 .workflow-role-status-chip.is-running {
-  background: #dff4e8;
-  color: #1f6744;
+  background: color-mix(in srgb, #2cab5a 18%, var(--surface-soft));
+  color: color-mix(in srgb, #2cab5a 74%, var(--text-main));
 }
 
 .workflow-role-status-chip.is-verify {
-  background: #fff0d8;
-  color: #8f5724;
+  background: color-mix(in srgb, #d28c55 18%, var(--surface-soft));
+  color: color-mix(in srgb, #d28c55 74%, var(--text-main));
 }
 
 .workflow-role-status-chip.is-done {
-  background: #e8f0ff;
-  color: #1f5ec6;
+  background: color-mix(in srgb, #2c7be5 18%, var(--surface-soft));
+  color: color-mix(in srgb, #2c7be5 78%, var(--text-main));
 }
 
 .workflow-role-card.is-selected {
-  background: #ffffff;
+  background: color-mix(in srgb, var(--focus-ring) 14%, var(--surface));
 }
 
 .workflow-role-card.is-locked-out {
@@ -1227,7 +1227,7 @@
   gap: 10px;
   padding: 10px;
   border-radius: 8px;
-  overflow: auto;
+  overflow: hidden;
   background: var(--surface);
 }
 
@@ -1247,8 +1247,10 @@
   height: 100%;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  grid-auto-rows: minmax(0, 1fr);
+  grid-auto-rows: 460px;
   gap: 12px;
+  overflow: auto;
+  align-content: start;
 }
 
 .workflow-workspace-pane {
@@ -1314,6 +1316,9 @@
   overflow: auto;
   white-space: pre-wrap;
   word-break: break-word;
+  padding: 10px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--canvas-node-body-bg) 92%, var(--surface-panel));
   font-size: 12px;
   line-height: 1.55;
   color: var(--text-main);
@@ -1336,7 +1341,7 @@
   height: 36px;
   border-radius: 8px;
   border: 0;
-  background: var(--surface-elevated);
+  background: color-mix(in srgb, var(--surface-elevated) 88%, var(--canvas-node-body-bg));
   color: var(--text-main);
   padding: 0 12px;
   font-size: 12px;
@@ -1344,6 +1349,23 @@
 
 .workflow-workspace-pane-input::placeholder {
   color: var(--placeholder-color);
+}
+
+:root[data-theme="dark"] .workflow-workspace-dock {
+  background: color-mix(in srgb, #131922 74%, var(--surface));
+}
+
+:root[data-theme="dark"] .workflow-workspace-pane {
+  background: color-mix(in srgb, #11161d 84%, var(--surface-panel));
+}
+
+:root[data-theme="dark"] .workflow-workspace-pane.is-selected {
+  background: color-mix(in srgb, var(--focus-ring) 14%, #11161d);
+}
+
+:root[data-theme="dark"] .workflow-workspace-pane-body,
+:root[data-theme="dark"] .workflow-workspace-pane-input {
+  background: color-mix(in srgb, #0d1218 90%, var(--surface-elevated));
 }
 
 .workflow-workspace-tab {
@@ -1357,6 +1379,7 @@
 @media (max-width: 1560px) {
   .workflow-workspace-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-rows: minmax(260px, calc((100% - 12px) / 2));
   }
 }
 
@@ -1367,6 +1390,7 @@
 
   .workflow-workspace-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-rows: minmax(240px, calc((100% - 12px) / 2));
   }
 }
 
@@ -1387,6 +1411,7 @@
 
   .workflow-workspace-grid {
     grid-template-columns: 1fr;
+    grid-auto-rows: minmax(240px, auto);
   }
 }
 

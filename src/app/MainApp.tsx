@@ -238,7 +238,6 @@ import {
 import WorkflowCanvasPane from "./main/presentation/WorkflowCanvasPane";
 import WorkflowInspectorPane from "./main/presentation/WorkflowInspectorPane";
 import { buildFeedPageVm, buildWorkflowInspectorPaneProps } from "./main/presentation/mainAppPropsBuilders";
-import MissionControlPanel from "../components/MissionControlPanel";
 import {
   cancelFeedReplyFeedbackClearTimer,
   scheduleFeedReplyFeedbackAutoClear,
@@ -2280,17 +2279,6 @@ function App() {
       toolsProps={workflowInspectorPaneProps.toolsProps}
     />
   );
-  const workflowMissionControlElement = (
-    <MissionControlPanel
-      className="workflow-mission-island"
-      emptyCopy="그래프 탭에서 역할 실행을 시작하면 현재 미션이 이 island에 정리됩니다."
-      mission={missionControl.activeMission}
-      onClearMission={missionControl.clearMission}
-      onExecuteTaskCommand={missionControl.executeTaskCommand}
-      onRecordCompanionEvent={missionControl.recordCompanionEvent}
-      onRecordUnityVerification={missionControl.recordUnityVerification}
-    />
-  );
   const workflowRoleDockElement = (
     <WorkflowRoleDock
       onChangePrompt={setWorkflowRolePrompt}
@@ -2978,7 +2966,6 @@ function App() {
                   />
                 ) : (
                   <>
-                    {workflowMissionControlElement}
                     {showRoleDockFirst ? workflowRoleDockElement : workflowInspectorPaneElement}
                     {showRoleDockFirst ? workflowInspectorPaneElement : workflowRoleDockElement}
                   </>

@@ -1220,20 +1220,22 @@
 }
 
 .workflow-workspace-dock {
+  --workspace-surface: #f3f5f8;
+  --workspace-ink: #1d2733;
   min-height: 0;
   height: 100%;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-  gap: 10px;
-  padding: 10px;
+  gap: 12px;
+  padding: 12px;
   border-radius: 8px;
   overflow: hidden;
-  background: var(--surface);
+  background: var(--workspace-surface);
 }
 
 .workflow-workspace-tabs {
   display: flex;
-  gap: 8px;
+  gap: 10px;
   overflow-x: auto;
   overflow-y: hidden;
   padding-bottom: 2px;
@@ -1246,46 +1248,56 @@
 
 .workflow-workspace-tab-button {
   flex: 0 0 auto;
-  min-width: 108px;
-  min-height: 42px;
-  padding: 8px 10px;
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--surface-panel) 84%, var(--surface));
-  color: var(--text-main);
+  min-width: 116px;
+  min-height: 46px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--workspace-ink) 7%, var(--workspace-surface));
+  color: var(--workspace-ink);
   display: grid;
-  gap: 3px;
+  gap: 4px;
   justify-items: start;
   align-content: center;
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--surface-strong) 36%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--workspace-ink) 12%, transparent);
+  transition: background-color 140ms ease, color 140ms ease, transform 140ms ease;
 }
 
 .workflow-workspace-tab-button.is-active {
-  background: color-mix(in srgb, var(--focus-ring) 14%, var(--surface-panel));
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--focus-ring) 28%, transparent);
+  background: var(--workspace-ink);
+  color: #fff;
+  box-shadow: none;
+}
+
+.workflow-workspace-tab-button:hover {
+  transform: translateY(-1px);
 }
 
 .workflow-workspace-tab-label {
   font-size: 12px;
   font-weight: 600;
-  color: var(--text-main);
+  color: currentColor;
 }
 
 .workflow-workspace-tab-status {
   font-size: 10px;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: var(--text-muted);
+  color: color-mix(in srgb, currentColor 58%, transparent);
 }
 
 .workflow-workspace-dock .mini-action-button {
+  min-height: 34px;
   border: 0;
-  background: color-mix(in srgb, var(--surface-soft) 74%, var(--surface-elevated));
-  color: var(--text-main);
+  border-radius: 8px;
+  background: var(--workspace-ink);
+  color: #fff;
   box-shadow: none;
+  transition: transform 140ms ease, opacity 140ms ease;
 }
 
 .workflow-workspace-dock .mini-action-button:hover {
-  background: color-mix(in srgb, var(--focus-ring) 18%, var(--surface-soft));
+  opacity: 0.92;
+  transform: translateY(-1px);
 }
 
 .workflow-workspace-grid {
@@ -1304,17 +1316,26 @@
   height: 100%;
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr) auto auto;
-  gap: 8px;
-  padding: 10px 12px 12px;
+  gap: 10px;
+  padding: 12px;
   border-radius: 8px;
-  background: var(--surface-panel);
+  background: color-mix(in srgb, var(--workspace-ink) 4%, #ffffff);
   border: 0;
-  box-shadow: none;
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--workspace-ink) 8%, transparent),
+    0 14px 28px -24px color-mix(in srgb, var(--workspace-ink) 28%, transparent);
   cursor: pointer;
+  transition: background-color 140ms ease, transform 140ms ease, box-shadow 140ms ease;
 }
 
 .workflow-workspace-pane.is-selected {
-  background: color-mix(in srgb, var(--focus-ring) 18%, var(--surface-panel));
+  background: var(--workspace-ink);
+  color: #fff;
+  box-shadow: 0 18px 32px -26px color-mix(in srgb, var(--workspace-ink) 46%, transparent);
+}
+
+.workflow-workspace-pane:hover {
+  transform: translateY(-1px);
 }
 
 .workflow-workspace-pane-topbar {
@@ -1331,8 +1352,8 @@
   width: 18px;
   height: 18px;
   border-radius: 4px;
-  background: color-mix(in srgb, #2c7be5 22%, var(--surface-soft));
-  color: var(--text-main);
+  background: color-mix(in srgb, var(--workspace-ink) 12%, transparent);
+  color: currentColor;
   font-size: 11px;
   font-weight: 600;
 }
@@ -1341,19 +1362,19 @@
   min-width: 0;
   flex: 1 1 auto;
   font-size: 14px;
-  color: var(--text-main);
+  color: currentColor;
 }
 
 .workflow-workspace-pane-status {
   font-size: 10px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--text-muted);
+  color: color-mix(in srgb, currentColor 58%, transparent);
 }
 
 .workflow-workspace-pane-path {
   font-size: 11px;
-  color: var(--text-muted);
+  color: color-mix(in srgb, currentColor 62%, transparent);
 }
 
 .workflow-workspace-pane-body {
@@ -1362,12 +1383,12 @@
   overflow: auto;
   white-space: pre-wrap;
   word-break: break-word;
-  padding: 10px;
+  padding: 12px;
   border-radius: 6px;
-  background: color-mix(in srgb, var(--canvas-node-body-bg) 92%, var(--surface-panel));
+  background: color-mix(in srgb, var(--workspace-ink) 6%, transparent);
   font-size: 12px;
-  line-height: 1.55;
-  color: var(--text-main);
+  line-height: 1.6;
+  color: currentColor;
 }
 
 .workflow-workspace-pane-actions {
@@ -1384,34 +1405,28 @@
 
 .workflow-workspace-pane-input {
   min-width: 0;
-  height: 36px;
+  height: 38px;
   border-radius: 8px;
   border: 0;
-  background: color-mix(in srgb, var(--surface-elevated) 88%, var(--canvas-node-body-bg));
-  color: var(--text-main);
+  background: color-mix(in srgb, var(--workspace-ink) 7%, transparent);
+  color: currentColor;
   padding: 0 12px;
   font-size: 12px;
 }
 
 .workflow-workspace-pane-input::placeholder {
-  color: var(--placeholder-color);
+  color: color-mix(in srgb, currentColor 50%, transparent);
 }
 
-:root[data-theme="dark"] .workflow-workspace-dock {
-  background: color-mix(in srgb, #131922 74%, var(--surface));
+.workflow-workspace-pane.is-selected .workflow-workspace-pane-chip,
+.workflow-workspace-pane.is-selected .workflow-workspace-pane-body,
+.workflow-workspace-pane.is-selected .workflow-workspace-pane-input {
+  background: color-mix(in srgb, #ffffff 10%, transparent);
 }
 
-:root[data-theme="dark"] .workflow-workspace-pane {
-  background: color-mix(in srgb, #11161d 84%, var(--surface-panel));
-}
-
-:root[data-theme="dark"] .workflow-workspace-pane.is-selected {
-  background: color-mix(in srgb, var(--focus-ring) 14%, #11161d);
-}
-
-:root[data-theme="dark"] .workflow-workspace-pane-body,
-:root[data-theme="dark"] .workflow-workspace-pane-input {
-  background: color-mix(in srgb, #0d1218 90%, var(--surface-elevated));
+.workflow-workspace-pane.is-selected .mini-action-button {
+  background: #fff;
+  color: var(--workspace-ink);
 }
 
 .workflow-workspace-tab {

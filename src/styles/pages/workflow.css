@@ -576,29 +576,49 @@
   min-height: 30px;
 }
 
+.canvas-main-row {
+  min-height: 0;
+  display: flex;
+  gap: 12px;
+  overflow: hidden;
+}
+
+.canvas-main-row > .graph-canvas-shell {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .canvas-agent-terminal-slot {
-  position: absolute;
-  top: 14px;
-  right: 14px;
-  bottom: 56px;
-  width: min(50%, 700px);
-  min-width: 380px;
-  z-index: 18;
+  position: relative;
+  flex: 0 0 0;
+  width: 0;
+  min-width: 0;
+  max-width: 0;
   pointer-events: none;
+  overflow: hidden;
   opacity: 0;
   visibility: hidden;
-  transform: translateX(28px) scale(0.985);
+  transform: translateX(22px);
   transition:
+    flex-basis 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    width 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    max-width 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
     opacity 180ms ease,
     transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
     visibility 0ms linear 220ms;
 }
 
 .canvas-agent-terminal-slot.is-visible {
+  flex-basis: min(48%, 700px);
+  width: min(48%, 700px);
+  max-width: min(48%, 700px);
   opacity: 1;
   visibility: visible;
-  transform: translateX(0) scale(1);
+  transform: translateX(0);
   transition:
+    flex-basis 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    width 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    max-width 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
     opacity 180ms ease,
     transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
     visibility 0ms linear;
@@ -1567,8 +1587,13 @@
 
 @media (max-width: 1560px) {
   .canvas-agent-terminal-slot {
-    width: min(58%, 620px);
-    min-width: 340px;
+    transform: translateX(18px);
+  }
+
+  .canvas-agent-terminal-slot.is-visible {
+    flex-basis: min(50%, 620px);
+    width: min(50%, 620px);
+    max-width: min(50%, 620px);
   }
 
   .workflow-workspace-grid {
@@ -1582,10 +1607,14 @@
     grid-template-columns: minmax(0, 1fr) 320px;
   }
 
-  .canvas-agent-terminal-slot {
-    left: 14px;
-    width: auto;
-    min-width: 0;
+  .canvas-main-row {
+    flex-direction: column;
+  }
+
+  .canvas-agent-terminal-slot.is-visible {
+    flex-basis: min(42vh, 420px);
+    width: 100%;
+    max-width: none;
   }
 
   .workflow-workspace-grid {

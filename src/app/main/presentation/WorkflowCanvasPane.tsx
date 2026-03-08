@@ -261,201 +261,202 @@ export default function WorkflowCanvasPane({
 
   return (
     <section className="canvas-pane">
-      <div className="graph-canvas-shell">
-        <div
-          className={`graph-canvas ${panMode ? "pan-mode" : ""}`}
-          onKeyDown={onCanvasKeyDown}
-          onMouseDown={(event) => {
-            onActivateWorkspacePanels();
-            onCanvasMouseDown(event);
-          }}
-          onMouseMove={onCanvasMouseMove}
-          onMouseUp={onCanvasMouseUp}
-          onWheel={onCanvasWheel}
-          ref={graphCanvasRef}
-          tabIndex={-1}
-        >
+      <div className="canvas-main-row">
+        <div className="graph-canvas-shell">
           <div
-            className="graph-stage-shell"
-            style={{
-              width: Math.round(boundedStageWidth * canvasZoom + stageInsetX * 2),
-              height: Math.round(boundedStageHeight * canvasZoom + stageInsetY + stageInsetBottom),
+            className={`graph-canvas ${panMode ? "pan-mode" : ""}`}
+            onKeyDown={onCanvasKeyDown}
+            onMouseDown={(event) => {
+              onActivateWorkspacePanels();
+              onCanvasMouseDown(event);
             }}
+            onMouseMove={onCanvasMouseMove}
+            onMouseUp={onCanvasMouseUp}
+            onWheel={onCanvasWheel}
+            ref={graphCanvasRef}
+            tabIndex={-1}
           >
             <div
-              className="graph-stage"
+              className="graph-stage-shell"
               style={{
-                left: stageInsetX,
-                top: stageInsetY,
-                transform: `scale(${canvasZoom})`,
-                width: boundedStageWidth,
-                height: boundedStageHeight,
+                width: Math.round(boundedStageWidth * canvasZoom + stageInsetX * 2),
+                height: Math.round(boundedStageHeight * canvasZoom + stageInsetY + stageInsetBottom),
               }}
             >
-              <svg className="edge-layer" overflow="visible">
-                <defs>
-                  <marker id="edge-arrow" markerHeight="7" markerUnits="userSpaceOnUse" markerWidth="7" orient="auto" refX="6" refY="3.5">
-                    <path d="M0 0 L7 3.5 L0 7 Z" fill="#70848a" />
-                  </marker>
-                  <marker id="edge-arrow-readonly" markerHeight="7" markerUnits="userSpaceOnUse" markerWidth="7" orient="auto" refX="6" refY="3.5">
-                    <path d="M0 0 L7 3.5 L0 7 Z" fill="#c07a2f" />
-                  </marker>
-                </defs>
-                {edgeLines.map((line) => (
-                  <g key={line.key}>
-                    {!line.readOnly && (
+              <div
+                className="graph-stage"
+                style={{
+                  left: stageInsetX,
+                  top: stageInsetY,
+                  transform: `scale(${canvasZoom})`,
+                  width: boundedStageWidth,
+                  height: boundedStageHeight,
+                }}
+              >
+                <svg className="edge-layer" overflow="visible">
+                  <defs>
+                    <marker id="edge-arrow" markerHeight="7" markerUnits="userSpaceOnUse" markerWidth="7" orient="auto" refX="6" refY="3.5">
+                      <path d="M0 0 L7 3.5 L0 7 Z" fill="#70848a" />
+                    </marker>
+                    <marker id="edge-arrow-readonly" markerHeight="7" markerUnits="userSpaceOnUse" markerWidth="7" orient="auto" refX="6" refY="3.5">
+                      <path d="M0 0 L7 3.5 L0 7 Z" fill="#c07a2f" />
+                    </marker>
+                  </defs>
+                  {edgeLines.map((line) => (
+                    <g key={line.key}>
+                      {!line.readOnly && (
+                        <path
+                          className="edge-path-hit"
+                          d={line.path}
+                          fill="none"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setNodeSelection([]);
+                            setSelectedEdgeKey(line.edgeKey);
+                          }}
+                          onMouseDown={(e) => onEdgeDragStart(e, line.edgeKey, line.startPoint, line.endPoint)}
+                          pointerEvents="stroke"
+                          stroke="transparent"
+                          strokeWidth={18}
+                        />
+                      )}
                       <path
-                        className="edge-path-hit"
+                        className={`${selectedEdgeKey === line.edgeKey ? "edge-path selected" : "edge-path"} ${
+                          line.readOnly ? "readonly" : ""
+                        }`.trim()}
                         d={line.path}
                         fill="none"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setNodeSelection([]);
-                          setSelectedEdgeKey(line.edgeKey);
-                        }}
-                        onMouseDown={(e) => onEdgeDragStart(e, line.edgeKey, line.startPoint, line.endPoint)}
-                        pointerEvents="stroke"
-                        stroke="transparent"
-                        strokeWidth={18}
+                        markerEnd={line.readOnly ? "url(#edge-arrow-readonly)" : "url(#edge-arrow)"}
+                        pointerEvents="none"
+                        stroke={line.readOnly ? "#c07a2f" : selectedEdgeKey === line.edgeKey ? "#4f83ff" : "#4f6271"}
+                        strokeDasharray={line.readOnly ? "7 4" : undefined}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={selectedEdgeKey === line.edgeKey ? 3 : 2}
                       />
-                    )}
+                      {!line.readOnly && (
+                        <circle
+                          className="edge-arrow-handle"
+                          cx={line.endPoint.x}
+                          cy={line.endPoint.y}
+                          fill="transparent"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setNodeSelection([]);
+                            setSelectedEdgeKey(line.edgeKey);
+                          }}
+                          onMouseDown={(e) => onEdgeDragStart(e, line.edgeKey, line.startPoint, line.endPoint)}
+                          r={12}
+                        />
+                      )}
+                    </g>
+                  ))}
+                  {connectPreviewLine && (
                     <path
-                      className={`${selectedEdgeKey === line.edgeKey ? "edge-path selected" : "edge-path"} ${
-                        line.readOnly ? "readonly" : ""
-                      }`.trim()}
-                      d={line.path}
+                      d={connectPreviewLine}
                       fill="none"
-                      markerEnd={line.readOnly ? "url(#edge-arrow-readonly)" : "url(#edge-arrow)"}
                       pointerEvents="none"
-                      stroke={line.readOnly ? "#c07a2f" : selectedEdgeKey === line.edgeKey ? "#4f83ff" : "#4f6271"}
-                      strokeDasharray={line.readOnly ? "7 4" : undefined}
+                      stroke="#5b8cff"
+                      strokeDasharray="5 4"
                       strokeLinecap="round"
                       strokeLinejoin="round"
-                      strokeWidth={selectedEdgeKey === line.edgeKey ? 3 : 2}
+                      strokeWidth={2}
                     />
-                    {!line.readOnly && (
-                      <circle
-                        className="edge-arrow-handle"
-                        cx={line.endPoint.x}
-                        cy={line.endPoint.y}
-                        fill="transparent"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setNodeSelection([]);
-                          setSelectedEdgeKey(line.edgeKey);
-                        }}
-                        onMouseDown={(e) => onEdgeDragStart(e, line.edgeKey, line.startPoint, line.endPoint)}
-                        r={12}
-                      />
-                    )}
-                  </g>
-                ))}
-                {connectPreviewLine && (
-                  <path
-                    d={connectPreviewLine}
-                    fill="none"
-                    pointerEvents="none"
-                    stroke="#5b8cff"
-                    strokeDasharray="5 4"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                  />
-                )}
-              </svg>
+                  )}
+                </svg>
 
-              <WorkflowCanvasNodesLayer
-                canvasNodes={canvasNodes}
-                graphViewMode={graphViewMode}
-                draggingNodeIds={draggingNodeIds}
-                formatNodeElapsedTime={formatNodeElapsedTime}
-                isConnectingDrag={isConnectingDrag}
-                isNodeDragAllowedTarget={isNodeDragAllowedTarget}
-                marqueeSelection={marqueeSelection}
-                nodeAnchorSides={nodeAnchorSides}
-                nodeCardSummary={nodeCardSummary}
-                nodeStates={nodeStates}
-                nodeStatusLabel={nodeStatusLabel}
-                nodeTypeLabel={nodeTypeLabel}
-                onAssignSelectedEdgeAnchor={onAssignSelectedEdgeAnchor}
-                onNodeAnchorDragStart={onNodeAnchorDragStart}
-                onNodeAnchorDrop={onNodeAnchorDrop}
-                onNodeDragStart={onNodeDragStart}
-                onOpenFeedFromNode={onOpenFeedFromNode}
-                onOpenWebInputForNode={onOpenWebInputForNode}
-                questionDirectInputNodeIds={questionDirectInputNodeIds}
-                runtimeNowMs={runtimeNowMs}
-                selectedEdgeKey={selectedEdgeKey}
-                selectedEdgeNodeIdSet={selectedEdgeNodeIdSet}
-                selectedNodeIds={selectedNodeIds}
-                setNodeSelection={setNodeSelection}
-                setSelectedEdgeKey={setSelectedEdgeKey}
-                turnModelLabel={turnModelLabel}
-                turnRoleLabel={turnRoleLabel}
-                deleteNode={deleteNode}
-              />
+                <WorkflowCanvasNodesLayer
+                  canvasNodes={canvasNodes}
+                  graphViewMode={graphViewMode}
+                  draggingNodeIds={draggingNodeIds}
+                  formatNodeElapsedTime={formatNodeElapsedTime}
+                  isConnectingDrag={isConnectingDrag}
+                  isNodeDragAllowedTarget={isNodeDragAllowedTarget}
+                  marqueeSelection={marqueeSelection}
+                  nodeAnchorSides={nodeAnchorSides}
+                  nodeCardSummary={nodeCardSummary}
+                  nodeStates={nodeStates}
+                  nodeStatusLabel={nodeStatusLabel}
+                  nodeTypeLabel={nodeTypeLabel}
+                  onAssignSelectedEdgeAnchor={onAssignSelectedEdgeAnchor}
+                  onNodeAnchorDragStart={onNodeAnchorDragStart}
+                  onNodeAnchorDrop={onNodeAnchorDrop}
+                  onNodeDragStart={onNodeDragStart}
+                  onOpenFeedFromNode={onOpenFeedFromNode}
+                  onOpenWebInputForNode={onOpenWebInputForNode}
+                  questionDirectInputNodeIds={questionDirectInputNodeIds}
+                  runtimeNowMs={runtimeNowMs}
+                  selectedEdgeKey={selectedEdgeKey}
+                  selectedEdgeNodeIdSet={selectedEdgeNodeIdSet}
+                  selectedNodeIds={selectedNodeIds}
+                  setNodeSelection={setNodeSelection}
+                  setSelectedEdgeKey={setSelectedEdgeKey}
+                  turnModelLabel={turnModelLabel}
+                  turnRoleLabel={turnRoleLabel}
+                  deleteNode={deleteNode}
+                />
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="canvas-overlay">
-          <div className="canvas-zoom-controls">
-            <div className="canvas-zoom-group">
-              <button onClick={onCanvasZoomIn} title={t("workflow.canvas.zoomIn")} type="button"><img alt="" aria-hidden="true" className="canvas-control-icon" src="/plus.svg" /></button>
-              <button onClick={onCanvasZoomOut} title={t("workflow.canvas.zoomOut")} type="button"><img alt="" aria-hidden="true" className="canvas-control-icon" src="/minus.svg" /></button>
-            </div>
-            <button className="canvas-zoom-single" onClick={() => setCanvasFullscreen((prev) => !prev)} title={canvasFullscreen ? t("workflow.canvas.defaultView") : t("workflow.canvas.fullView")} type="button">
-              <img alt="" aria-hidden="true" className="canvas-control-icon" src="/canvas-fullscreen.svg" />
-            </button>
-            <button aria-label={t("workflow.canvas.move")} className={`canvas-zoom-single ${panMode ? "is-active" : ""}`} onClick={() => setPanMode((prev) => !prev)} title={t("workflow.canvas.moveCanvas")} type="button">
-              <img alt="" aria-hidden="true" className="canvas-control-icon" src="/scroll.svg" />
-            </button>
-          </div>
-
-          <div className="canvas-runbar">
-            <div className="canvas-runbar-mode-toggle" role="group" aria-label="DAG/RAG 모드 전환">
-              <button
-                aria-label="DAG 모드"
-                className={`canvas-icon-btn canvas-mode-chip mode-dag ${graphViewMode === "graph" ? "is-active" : ""}`}
-                onClick={() => onSetGraphViewMode("graph")}
-                title="DAG 모드"
-                type="button"
-              >
-                DAG
+          <div className="canvas-overlay">
+            <div className="canvas-zoom-controls">
+              <div className="canvas-zoom-group">
+                <button onClick={onCanvasZoomIn} title={t("workflow.canvas.zoomIn")} type="button"><img alt="" aria-hidden="true" className="canvas-control-icon" src="/plus.svg" /></button>
+                <button onClick={onCanvasZoomOut} title={t("workflow.canvas.zoomOut")} type="button"><img alt="" aria-hidden="true" className="canvas-control-icon" src="/minus.svg" /></button>
+              </div>
+              <button className="canvas-zoom-single" onClick={() => setCanvasFullscreen((prev) => !prev)} title={canvasFullscreen ? t("workflow.canvas.defaultView") : t("workflow.canvas.fullView")} type="button">
+                <img alt="" aria-hidden="true" className="canvas-control-icon" src="/canvas-fullscreen.svg" />
               </button>
-              <button
-                aria-label="RAG 모드"
-                className={`canvas-icon-btn canvas-mode-chip mode-rag ${graphViewMode === "rag" ? "is-active" : ""}`}
-                onClick={() => onSetGraphViewMode("rag")}
-                title="RAG 모드"
-                type="button"
-              >
-                RAG
+              <button aria-label={t("workflow.canvas.move")} className={`canvas-zoom-single ${panMode ? "is-active" : ""}`} onClick={() => setPanMode((prev) => !prev)} title={t("workflow.canvas.moveCanvas")} type="button">
+                <img alt="" aria-hidden="true" className="canvas-control-icon" src="/scroll.svg" />
               </button>
             </div>
-            <button aria-label={t("workflow.canvas.run")} className={`canvas-icon-btn play ${canRunGraphNow ? "is-ready" : "is-disabled"}`} disabled={!canRunGraphNow} onClick={() => void onRunGraph()} title={t("workflow.canvas.run")} type="button">
-              <img alt="" aria-hidden="true" className="canvas-icon-image" src="/canvas-play.svg" />
-            </button>
-            <button aria-label={t("workflow.canvas.stop")} className="canvas-icon-btn stop" disabled={!isGraphRunning} onClick={() => void onCancelGraphRun()} title={t("workflow.canvas.stop")} type="button">
-              <img alt="" aria-hidden="true" className="canvas-icon-image" src="/canvas-stop.svg" />
-            </button>
-            {suspendedWebTurn && !pendingWebTurn && isGraphRunning && (
-              <button aria-label={t("workflow.canvas.reopenWebInput")} className="canvas-web-turn-reopen" onClick={onReopenPendingWebTurn} title={t("workflow.canvas.reopenWebInputWindow")} type="button">WEB</button>
-            )}
-            <button aria-label={t("workflow.canvas.undo")} className="canvas-icon-btn" disabled={undoStackLength === 0} onClick={onUndoGraph} title={t("workflow.canvas.undo")} type="button">
-              <img alt="" aria-hidden="true" className="canvas-icon-image" src="/canvas-undo.svg" />
-            </button>
-            <button aria-label={t("workflow.canvas.redo")} className="canvas-icon-btn" disabled={redoStackLength === 0} onClick={onRedoGraph} title={t("workflow.canvas.redo")} type="button">
-              <img alt="" aria-hidden="true" className="canvas-icon-image" src="/canvas-replay.svg" />
-            </button>
-            <button aria-label={t("workflow.canvas.clear")} className="canvas-icon-btn" disabled={!canClearGraph} onClick={onClearGraph} title={t("workflow.canvas.clear")} type="button">
-              <img alt="" aria-hidden="true" className="canvas-icon-image canvas-icon-image-clear" src="/clear.svg" />
-            </button>
+
+            <div className="canvas-runbar">
+              <div className="canvas-runbar-mode-toggle" role="group" aria-label="DAG/RAG 모드 전환">
+                <button
+                  aria-label="DAG 모드"
+                  className={`canvas-icon-btn canvas-mode-chip mode-dag ${graphViewMode === "graph" ? "is-active" : ""}`}
+                  onClick={() => onSetGraphViewMode("graph")}
+                  title="DAG 모드"
+                  type="button"
+                >
+                  DAG
+                </button>
+                <button
+                  aria-label="RAG 모드"
+                  className={`canvas-icon-btn canvas-mode-chip mode-rag ${graphViewMode === "rag" ? "is-active" : ""}`}
+                  onClick={() => onSetGraphViewMode("rag")}
+                  title="RAG 모드"
+                  type="button"
+                >
+                  RAG
+                </button>
+              </div>
+              <button aria-label={t("workflow.canvas.run")} className={`canvas-icon-btn play ${canRunGraphNow ? "is-ready" : "is-disabled"}`} disabled={!canRunGraphNow} onClick={() => void onRunGraph()} title={t("workflow.canvas.run")} type="button">
+                <img alt="" aria-hidden="true" className="canvas-icon-image" src="/canvas-play.svg" />
+              </button>
+              <button aria-label={t("workflow.canvas.stop")} className="canvas-icon-btn stop" disabled={!isGraphRunning} onClick={() => void onCancelGraphRun()} title={t("workflow.canvas.stop")} type="button">
+                <img alt="" aria-hidden="true" className="canvas-icon-image" src="/canvas-stop.svg" />
+              </button>
+              {suspendedWebTurn && !pendingWebTurn && isGraphRunning && (
+                <button aria-label={t("workflow.canvas.reopenWebInput")} className="canvas-web-turn-reopen" onClick={onReopenPendingWebTurn} title={t("workflow.canvas.reopenWebInputWindow")} type="button">WEB</button>
+              )}
+              <button aria-label={t("workflow.canvas.undo")} className="canvas-icon-btn" disabled={undoStackLength === 0} onClick={onUndoGraph} title={t("workflow.canvas.undo")} type="button">
+                <img alt="" aria-hidden="true" className="canvas-icon-image" src="/canvas-undo.svg" />
+              </button>
+              <button aria-label={t("workflow.canvas.redo")} className="canvas-icon-btn" disabled={redoStackLength === 0} onClick={onRedoGraph} title={t("workflow.canvas.redo")} type="button">
+                <img alt="" aria-hidden="true" className="canvas-icon-image" src="/canvas-replay.svg" />
+              </button>
+              <button aria-label={t("workflow.canvas.clear")} className="canvas-icon-btn" disabled={!canClearGraph} onClick={onClearGraph} title={t("workflow.canvas.clear")} type="button">
+                <img alt="" aria-hidden="true" className="canvas-icon-image canvas-icon-image-clear" src="/clear.svg" />
+              </button>
+            </div>
           </div>
         </div>
 
         {agentTerminalIsland}
-
       </div>
 
       <div className="canvas-topbar">

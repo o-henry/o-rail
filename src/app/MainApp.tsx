@@ -66,6 +66,11 @@ import {
   type WebProvider,
 } from "../features/workflow/domain";
 import {
+  DEFAULT_TURN_REASONING_LEVEL,
+  TURN_REASONING_LEVEL_OPTIONS,
+  normalizeTurnReasoningLevel,
+} from "../features/workflow/reasoningLevels";
+import {
   buildGraphForViewMode,
   isViaFlowTurnNode,
   type WorkflowGraphViewMode,
@@ -2201,6 +2206,7 @@ function App() {
       turnExecutorLabel,
       turnExecutorOptions: [...TURN_EXECUTOR_OPTIONS],
       turnModelOptions: [...TURN_MODEL_OPTIONS],
+      turnReasoningLevelOptions: [...TURN_REASONING_LEVEL_OPTIONS],
       updateSelectedNodeConfig,
     },
     toolsProps: {
@@ -2604,6 +2610,7 @@ function App() {
     (selection: {
       executor: TurnExecutor;
       turnModel?: string;
+      reasoningLevel?: string;
       modelLabel: string;
       sourceLabel: string;
     }) => {
@@ -2622,6 +2629,11 @@ function App() {
         updateNodeConfigById(nodeId, "executor", selection.executor);
         if (selection.executor === "codex") {
           updateNodeConfigById(nodeId, "model", selection.turnModel ?? DEFAULT_TURN_MODEL);
+          updateNodeConfigById(
+            nodeId,
+            "reasoningLevel",
+            normalizeTurnReasoningLevel(selection.reasoningLevel ?? DEFAULT_TURN_REASONING_LEVEL),
+          );
         } else {
           updateNodeConfigById(nodeId, "webResultMode", "bridgeAssisted");
         }
@@ -2647,6 +2659,7 @@ function App() {
     applyTurnExecutionFromModelSelection({
       executor: request.executor,
       turnModel: request.turnModel,
+      reasoningLevel: DEFAULT_TURN_REASONING_LEVEL,
       modelLabel: request.modelLabel,
       sourceLabel: "에이전트",
     });
@@ -2924,6 +2937,7 @@ function App() {
                 applyTurnExecutionFromModelSelection({
                   executor: selection.executor,
                   turnModel: selection.turnModel,
+                  reasoningLevel: selection.reasoningLevel,
                   modelLabel: selection.modelLabel,
                   sourceLabel: "그래프 입력",
                 })

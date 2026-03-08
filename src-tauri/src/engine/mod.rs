@@ -1905,27 +1905,33 @@ pub async fn turn_start(
     state: State<'_, EngineManager>,
     thread_id: String,
     text: String,
+    reasoning_effort: Option<String>,
 ) -> Result<Value, String> {
     let runtime = current_runtime(&state).await?;
+    let mut payload = json!({
+      "threadId": thread_id,
+      "text": text,
+      "input": [
+        {
+          "type": "text",
+          "text": text
+        }
+      ],
+      "sandboxPolicy": {
+        "type": "readOnly"
+      }
+    });
 
-    runtime
-        .request(
-            "turn/start",
-            json!({
-              "threadId": thread_id,
-              "text": text,
-              "input": [
-                {
-                  "type": "text",
-                  "text": text
-                }
-              ],
-              "sandboxPolicy": {
-                "type": "readOnly"
-              }
-            }),
-        )
-        .await
+    if let Some(effort) = reasoning_effort
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+    {
+        if let Some(object) = payload.as_object_mut() {
+            object.insert("reasoning".to_string(), json!({ "effort": effort }));
+        }
+    }
+
+    runtime.request("turn/start", payload).await
 }
 
 #[tauri::command]
@@ -1933,27 +1939,34 @@ pub async fn turn_start_blocking(
     state: State<'_, EngineManager>,
     thread_id: String,
     text: String,
+    reasoning_effort: Option<String>,
 ) -> Result<Value, String> {
     let runtime = current_runtime(&state).await?;
-    runtime
-        .request(
-            "turn/start",
-            json!({
-              "threadId": thread_id,
-              "text": text,
-              "input": [
-                {
-                  "type": "text",
-                  "text": text
-                }
-              ],
-              "sandboxPolicy": {
-                "type": "readOnly"
-              },
-              "stream": false
-            }),
-        )
-        .await
+    let mut payload = json!({
+      "threadId": thread_id,
+      "text": text,
+      "input": [
+        {
+          "type": "text",
+          "text": text
+        }
+      ],
+      "sandboxPolicy": {
+        "type": "readOnly"
+      },
+      "stream": false
+    });
+
+    if let Some(effort) = reasoning_effort
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+    {
+        if let Some(object) = payload.as_object_mut() {
+            object.insert("reasoning".to_string(), json!({ "effort": effort }));
+        }
+    }
+
+    runtime.request("turn/start", payload).await
 }
 
 #[tauri::command]

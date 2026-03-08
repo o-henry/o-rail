@@ -1,6 +1,7 @@
 import { type ChangeEvent, type KeyboardEvent as ReactKeyboardEvent, type RefObject, useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "../../../i18n";
 import type { TurnExecutor } from "../../../features/workflow/domain";
+import { DEFAULT_TURN_REASONING_LEVEL, TURN_REASONING_LEVEL_OPTIONS } from "../../../features/workflow/reasoningLevels";
 import {
   DEFAULT_RUNTIME_MODEL_VALUE,
   RUNTIME_MODEL_OPTIONS,
@@ -21,6 +22,7 @@ type WorkflowQuestionComposerProps = {
     modelLabel: string;
     executor: TurnExecutor;
     turnModel?: string;
+    reasoningLevel?: string;
   }) => void;
   questionInputRef: RefObject<HTMLTextAreaElement | null>;
   setWorkflowQuestion: (value: string) => void;
@@ -43,14 +45,14 @@ export default function WorkflowQuestionComposer({
   const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
   const [isReasonMenuOpen, setIsReasonMenuOpen] = useState(false);
   const [selectedModel, setSelectedModel] = useState(DEFAULT_RUNTIME_MODEL_VALUE);
-  const [selectedReasonLevel, setSelectedReasonLevel] = useState("보통");
+  const [selectedReasonLevel, setSelectedReasonLevel] = useState(DEFAULT_TURN_REASONING_LEVEL);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const modelMenuRef = useRef<HTMLDivElement | null>(null);
   const reasonMenuRef = useRef<HTMLDivElement | null>(null);
   const modelOptions = useMemo(() => RUNTIME_MODEL_OPTIONS, []);
   const selectedModelOption = useMemo(() => findRuntimeModelOption(selectedModel), [selectedModel]);
   const isReasonLevelSelectable = selectedModelOption.allowsReasonLevel;
-  const reasonLevelOptions = useMemo(() => ["낮음", "보통", "높음"], []);
+  const reasonLevelOptions = useMemo(() => [...TURN_REASONING_LEVEL_OPTIONS], []);
 
   useEffect(() => {
     if (isReasonLevelSelectable) {
@@ -204,6 +206,7 @@ export default function WorkflowQuestionComposer({
                           modelLabel: option.label,
                           executor: option.executor,
                           turnModel: option.turnModel,
+                          reasoningLevel: selectedReasonLevel,
                         });
                         setIsModelMenuOpen(false);
                       }}
@@ -243,6 +246,13 @@ export default function WorkflowQuestionComposer({
                       className={level === selectedReasonLevel ? "is-selected" : ""}
                       onClick={() => {
                         setSelectedReasonLevel(level);
+                        onApplyModelSelection({
+                          modelValue: selectedModelOption.value,
+                          modelLabel: selectedModelOption.label,
+                          executor: selectedModelOption.executor,
+                          turnModel: selectedModelOption.turnModel,
+                          reasoningLevel: level,
+                        });
                         setIsReasonMenuOpen(false);
                       }}
                       role="option"

@@ -92,6 +92,7 @@ type WorkflowCanvasPaneProps = {
     modelLabel: string;
     executor: TurnExecutor;
     turnModel?: string;
+    reasoningLevel?: string;
   }) => void;
   agentTerminalIsland?: ReactNode;
   setWorkflowQuestion: (value: string) => void;

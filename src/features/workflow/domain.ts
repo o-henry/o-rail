@@ -44,6 +44,7 @@ export type ArtifactType =
 export type TurnConfig = {
   executor?: TurnExecutor;
   model?: string;
+  reasoningLevel?: string;
   role?: string;
   cwd?: string;
   promptTemplate?: string;
@@ -97,8 +98,8 @@ export const WEB_PROVIDER_OPTIONS: ReadonlyArray<WebProvider> = [
 ];
 
 export const TURN_MODEL_OPTIONS = [
-  "GPT-5.3-Codex",
   "GPT-5.4",
+  "GPT-5.3-Codex",
   "GPT-5.3-Codex-Spark",
   "GPT-5.2-Codex",
   "GPT-5.1-Codex-Max",

@@ -6,6 +6,7 @@ import {
   type TurnConfig,
 } from "../domain";
 import { t } from "../../../i18n";
+import { DEFAULT_TURN_REASONING_LEVEL } from "../reasoningLevels";
 import type {
   GateConfig,
   GraphNode,
@@ -45,6 +46,7 @@ export function defaultNodeConfig(type: NodeType): Record<string, unknown> {
     return {
       executor: "codex",
       model: DEFAULT_TURN_MODEL,
+      reasoningLevel: DEFAULT_TURN_REASONING_LEVEL,
       role: "",
       cwd: ".",
       promptTemplate: "{{input}}",

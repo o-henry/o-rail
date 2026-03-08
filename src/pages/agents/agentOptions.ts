@@ -21,4 +21,4 @@ export const BASE_AGENT_SET_OPTIONS: AgentSetOption[] = [
 
 export const AGENT_MODEL_OPTIONS: AgentModelOption[] = [...RUNTIME_MODEL_OPTIONS];
 
-export const AGENT_REASON_LEVEL_OPTIONS = ["낮음", "보통", "높음"];
+export const AGENT_REASON_LEVEL_OPTIONS = ["낮음", "중간", "높음", "매우 높음"];

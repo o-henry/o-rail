@@ -33,6 +33,7 @@ import {
   type TurnExecutor,
   type WebProvider,
 } from "../../../features/workflow/domain";
+import { DEFAULT_TURN_REASONING_LEVEL, toTurnReasoningEffort } from "../../../features/workflow/reasoningLevels";
 import { normalizeWebEvidenceOutput } from "../../mainAppRuntimeHelpers";
 import { runViaFlowTurn } from "./viaTurnRunHandler";
 import type {
@@ -114,6 +115,7 @@ export async function executeTurnNodeWithContext(
   const executor = getTurnExecutor(config);
   const nodeModel = toTurnModelDisplayName(String(config.model ?? ctx.model).trim() || ctx.model);
   const nodeModelEngine = toTurnModelEngineId(nodeModel);
+  const nodeReasoningEffort = toTurnReasoningEffort(config.reasoningLevel ?? DEFAULT_TURN_REASONING_LEVEL);
   const nodeCwd = resolveNodeCwd(config.cwd ?? ctx.cwd, ctx.cwd);
   const promptTemplate = injectOutputLanguageDirective(String(config.promptTemplate ?? "{{input}}"), ctx.locale);
   const nodeOllamaModel = String(config.ollamaModel ?? "llama3.1:8b").trim() || "llama3.1:8b";
@@ -430,7 +432,11 @@ export async function executeTurnNodeWithContext(
   });
   let turnStartResponse: unknown;
   try {
-    turnStartResponse = await ctx.invokeFn<unknown>("turn_start", { threadId: activeThreadId, text: textToSend });
+    turnStartResponse = await ctx.invokeFn<unknown>("turn_start", {
+      threadId: activeThreadId,
+      text: textToSend,
+      reasoningEffort: nodeReasoningEffort,
+    });
   } catch (error) {
     if (ctx.turnTerminalResolverRef.current) {
       ctx.turnTerminalResolverRef.current = null;

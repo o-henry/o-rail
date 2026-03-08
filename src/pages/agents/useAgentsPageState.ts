@@ -57,7 +57,7 @@ export function useAgentsPageState(params: UseAgentsPageStateParams) {
   const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
   const [isReasonMenuOpen, setIsReasonMenuOpen] = useState(false);
   const [selectedModel, setSelectedModel] = useState(DEFAULT_RUNTIME_MODEL_VALUE);
-  const [selectedReasonLevel, setSelectedReasonLevel] = useState("보통");
+  const [selectedReasonLevel, setSelectedReasonLevel] = useState("중간");
   const { pendingApprovals, requestApproval, resolveApproval } = useCodeChangeApproval();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const modelMenuRef = useRef<HTMLDivElement | null>(null);

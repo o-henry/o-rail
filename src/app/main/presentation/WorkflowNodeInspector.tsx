@@ -6,6 +6,7 @@ import {
   type TurnConfig,
 } from "../../../features/workflow/domain";
 import { turnRoleLabel } from "../../../features/workflow/labels";
+import { DEFAULT_TURN_REASONING_LEVEL } from "../../../features/workflow/reasoningLevels";
 import type { GateConfig, TransformConfig } from "../../../features/workflow/types";
 import { useI18n } from "../../../i18n";
 import { InspectorSectionTitle } from "../../mainAppGraphHelpers";
@@ -20,6 +21,7 @@ export default function WorkflowNodeInspector({
   turnExecutorOptions,
   turnExecutorLabel,
   turnModelOptions,
+  turnReasoningLevelOptions,
   model,
   selectedTurnConfig,
   selectedQualityProfile,
@@ -76,6 +78,18 @@ export default function WorkflowNodeInspector({
                 onChange={(next) => updateSelectedNodeConfig("model", next)}
                 options={turnModelOptions.map((option) => ({ value: option, label: option }))}
                 value={toTurnModelDisplayName(String(selectedConfig.model ?? model))}
+              />
+            </label>
+          )}
+          {selectedTurnExecutor === "codex" && (
+            <label>
+              이성 수준
+              <FancySelect
+                ariaLabel="이성 수준"
+                className="modern-select"
+                onChange={(next) => updateSelectedNodeConfig("reasoningLevel", next)}
+                options={turnReasoningLevelOptions.map((option) => ({ value: option, label: option }))}
+                value={String(selectedConfig.reasoningLevel ?? DEFAULT_TURN_REASONING_LEVEL)}
               />
             </label>
           )}
@@ -165,6 +179,18 @@ export default function WorkflowNodeInspector({
                 onChange={(next) => updateSelectedNodeConfig("model", next)}
                 options={turnModelOptions.map((option) => ({ value: option, label: option }))}
                 value={toTurnModelDisplayName(String((selectedNode.config as TurnConfig).model ?? model))}
+              />
+            </label>
+          )}
+          {selectedTurnExecutor === "codex" && (
+            <label>
+              이성 수준
+              <FancySelect
+                ariaLabel="이성 수준"
+                className="modern-select"
+                onChange={(next) => updateSelectedNodeConfig("reasoningLevel", next)}
+                options={turnReasoningLevelOptions.map((option) => ({ value: option, label: option }))}
+                value={String((selectedNode.config as TurnConfig).reasoningLevel ?? DEFAULT_TURN_REASONING_LEVEL)}
               />
             </label>
           )}

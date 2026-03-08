@@ -1,4 +1,5 @@
 import type { CostPreset, PresetKind, TurnConfig, TurnExecutor } from "../../features/workflow/domain";
+import type { TurnReasoningLevelLabel } from "../../features/workflow/reasoningLevels";
 import type { GateConfig, GraphData, GraphNode, KnowledgeConfig, NodeType, TransformConfig } from "../../features/workflow/types";
 import type { HandoffRecord, StudioRoleId } from "../../features/studio/handoffTypes";
 import type { WorkflowGraphViewMode } from "../../features/workflow/viaGraph";
@@ -71,6 +72,7 @@ export type WorkflowInspectorNodeProps = {
   turnExecutorOptions: TurnExecutor[];
   turnExecutorLabel: (value: TurnExecutor) => string;
   turnModelOptions: string[];
+  turnReasoningLevelOptions: TurnReasoningLevelLabel[];
   model: string;
   cwd: string;
   selectedTurnConfig: TurnConfig | null;

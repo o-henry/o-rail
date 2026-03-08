@@ -288,15 +288,6 @@ export async function handleRunGraphTurnNode(params: any): Promise<boolean> {
       });
       const lowQualityPost = applyViaArtifactPathsToFeedPost(lowQualityFeed.post, normalizedOutput);
       runRecord.feedPosts?.push(lowQualityPost);
-      if (graphRoleId) {
-        storeGraphRoleKnowledge({
-          roleId: graphRoleId,
-          runId: runRecord.runId,
-          taskId: String(config.taskId ?? config.handoffTaskId ?? ""),
-          output: normalizedOutput,
-          logs: runLogCollectorRef.current[nodeId] ?? [],
-        });
-      }
       rememberFeedSource(latestFeedSourceByNodeId, lowQualityPost);
       feedRawAttachmentRef.current[feedAttachmentRawKey(lowQualityPost.id, "markdown")] =
         lowQualityFeed.rawAttachments.markdown;

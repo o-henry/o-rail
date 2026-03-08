@@ -1,5 +1,5 @@
 import type { StudioRoleId } from "./handoffTypes";
-import { upsertRoleKnowledgeProfile } from "./roleKnowledgeStore";
+import { getRoleKnowledgeProfile, upsertRoleKnowledgeProfile } from "./roleKnowledgeStore";
 import { STUDIO_ROLE_TEMPLATES } from "./roleTemplates";
 
 function cleanLine(input: unknown): string {
@@ -51,6 +51,32 @@ function extractSourceUrls(text: string): string[] {
   return [...new Set(matches.map((value) => value.trim()))].slice(0, 6);
 }
 
+function mergeKeyPoints(existing: string[], next: string[]): string[] {
+  const merged = [...next, ...existing]
+    .map((line) => cleanLine(line))
+    .filter(Boolean);
+  return [...new Set(merged)].slice(0, 12);
+}
+
+function mergeSources(
+  existing: Array<{ url: string; status: "ok" | "error"; fetchedAt?: string }>,
+  next: Array<{ url: string; status: "ok" | "error"; fetchedAt?: string }>,
+) {
+  const merged = new Map<string, { url: string; status: "ok" | "error"; fetchedAt?: string }>();
+  for (const row of [...next, ...existing]) {
+    const url = cleanLine(row.url);
+    if (!url || merged.has(url)) {
+      continue;
+    }
+    merged.set(url, {
+      url,
+      status: row.status === "ok" ? "ok" : "error",
+      fetchedAt: cleanLine(row.fetchedAt) || undefined,
+    });
+  }
+  return [...merged.values()].slice(0, 8);
+}
+
 export function storeGraphRoleKnowledge(params: {
   roleId: StudioRoleId;
   runId: string;
@@ -66,19 +92,28 @@ export function storeGraphRoleKnowledge(params: {
     return;
   }
   const sourceUrls = extractSourceUrls(text);
+  const existing = getRoleKnowledgeProfile(params.roleId);
+  const mergedSummary = existing
+    ? `${summary}${existing.summary && existing.summary !== summary ? `\n이전 누적 요약: ${existing.summary}` : ""}`.trim()
+    : summary;
   upsertRoleKnowledgeProfile({
     roleId: params.roleId,
     roleLabel: role?.label ?? params.roleId,
     goal: role?.goal ?? "역할 누적 지식",
     taskId: cleanLine(params.taskId) || role?.defaultTaskId || "TASK-001",
     runId: cleanLine(params.runId) || `graph-${Date.now()}`,
-    summary,
-    keyPoints: extractKeyPoints(text, logs),
-    sources: sourceUrls.map((url) => ({
-      url,
-      status: "ok",
-      fetchedAt: new Date().toISOString(),
-    })),
+    summary: mergedSummary,
+    keyPoints: mergeKeyPoints(existing?.keyPoints ?? [], extractKeyPoints(text, logs)),
+    sources: mergeSources(
+      existing?.sources ?? [],
+      sourceUrls.map((url) => ({
+        url,
+        status: "ok" as const,
+        fetchedAt: new Date().toISOString(),
+      })),
+    ),
     updatedAt: new Date().toISOString(),
+    markdownPath: existing?.markdownPath,
+    jsonPath: existing?.jsonPath,
   });
 }

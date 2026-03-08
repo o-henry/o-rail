@@ -144,6 +144,7 @@ function createRoleResearchNode(params: {
   nodeId: string;
   x: number;
   y: number;
+  roleId: StudioRoleId;
   roleLabel: string;
   lane: ResearchLane;
   sites: string;
@@ -158,6 +159,7 @@ function createRoleResearchNode(params: {
       ...defaultNodeConfig("turn"),
       executor: "web_grok",
       role: `${params.roleLabel} 조사 · ${params.lane.label}`,
+      handoffRoleId: params.roleId,
       promptTemplate: `${params.lane.prompt}\n참고 우선순위 사이트: ${params.sites}\n대상 지역: ${params.countries}\n응답은 핵심 근거, 시사점, 후속 조사 포인트를 짧게 정리합니다.`,
       qualityProfile: "research_evidence",
       artifactType: "EvidenceArtifact",
@@ -213,6 +215,7 @@ export function buildRoleNodeScaffold(params: RoleNodeScaffoldParams): RoleNodeS
     researchNodeIds.push(nodeId);
     return createRoleResearchNode({
       nodeId,
+      roleId: params.roleId,
       roleLabel,
       lane,
       sites: research.sites,
@@ -231,6 +234,7 @@ export function buildRoleNodeScaffold(params: RoleNodeScaffoldParams): RoleNodeS
       ...defaultNodeConfig("turn"),
       executor: "codex",
       role: `${roleLabel} 조사 종합`,
+      handoffRoleId: params.roleId,
       promptTemplate: `${roleLabel} 역할을 위해 병렬 조사 결과를 종합합니다. 서로 겹치는 내용은 합치고, 믿을 만한 근거와 실제 적용 포인트만 짧게 정리합니다.`,
       qualityProfile: "research_evidence",
       artifactType: "EvidenceArtifact",

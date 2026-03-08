@@ -26,6 +26,7 @@ import { useWorkspaceNavigation } from "./hooks/useWorkspaceNavigation";
 import { useWorkspaceQuickPanel } from "./hooks/useWorkspaceQuickPanel";
 import { useDashboardAgentBridge } from "./hooks/useDashboardAgentBridge";
 import { useAgenticOrchestrationBridge } from "./hooks/useAgenticOrchestrationBridge";
+import { useGraphResearchKnowledgeSync } from "./hooks/useGraphResearchKnowledgeSync";
 import { useMissionControl } from "./hooks/useMissionControl";
 import { useWorkspaceEventPersistence } from "./hooks/useWorkspaceEventPersistence";
 import { useAgenticActionBus } from "./hooks/useAgenticActionBus";
@@ -2338,10 +2339,9 @@ function App() {
       onQueueNodeRequest={enqueueNodeRequest} selectedNode={selectedNode} workspaceEvents={workspaceEvents}
     />
   );
-  const selectedNodeSourceKind = String((selectedNode?.config as Record<string, unknown> | undefined)?.sourceKind ?? "")
-    .trim()
-    .toLowerCase();
-  const showInspectorFirst = selectedNode?.type === "turn" && selectedNodeSourceKind === "data_research";
+  const selectedNodeSourceKind = String((selectedNode?.config as Record<string, unknown> | undefined)?.sourceKind ?? "").trim().toLowerCase();
+  const showInspectorFirst = !selectedNode || (selectedNode?.type === "turn" && selectedNodeSourceKind === "data_research");
+  useGraphResearchKnowledgeSync({ cwd, feedPosts, graphNodes: graph.nodes, invokeFn: invoke });
   const feedPageVm = buildFeedPageVm({
     feedInspectorTurnNode,
     feedInspectorPost,

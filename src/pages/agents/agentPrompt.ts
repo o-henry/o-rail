@@ -1,9 +1,11 @@
 import { buildCodexMultiAgentDirective } from "../../features/workflow/promptUtils";
+import { buildStudioRolePromptEnvelope } from "../../features/studio/rolePromptGuidance";
 
 export type CodexMultiAgentMode = "off" | "balanced" | "max";
 
 type BuildAgentDispatchPayloadParams = {
   threadName?: string;
+  threadRoleId?: string;
   threadRole?: string;
   threadGuidance?: string[];
   threadStarterPrompt?: string;
@@ -40,30 +42,42 @@ export function buildAgentDispatchPayload(params: BuildAgentDispatchPayloadParam
   const attachedFileNames = params.attachedFileNames
     .map((name) => String(name ?? "").trim())
     .filter((name) => name.length > 0);
-  const filePrefix = attachedFileNames.length > 0 ? `files: ${attachedFileNames.join(", ")}\n` : "";
-  const content = [ragSourcesBlock, `${filePrefix}${trimmedText}`.trim()].filter((line) => line.length > 0).join("\n\n");
+  const fileBlock =
+    attachedFileNames.length > 0
+      ? [
+          "<attached_files>",
+          ...attachedFileNames.map((name) => `- ${name}`),
+          "</attached_files>",
+        ].join("\n")
+      : "";
   const reasonTag = params.isReasonLevelSelectable ? params.selectedReasonLevel : "N/A";
-  const corePrompt = `[model=${params.selectedModel}, reason=${reasonTag}] ${content}`.trim();
-
-  const roleBlock = params.threadRole
-    ? [
-        "[AGENT ROLE]",
-        params.threadRole,
-        params.threadGuidance && params.threadGuidance.length > 0
-          ? `- ${params.threadGuidance.join("\n- ")}`
-          : "",
-        params.threadStarterPrompt ? `Starter: ${params.threadStarterPrompt}` : "",
-      ]
-        .filter((line) => line.length > 0)
-        .join("\n")
-    : "";
+  const runtimeBlock = wrapContextBlock("runtime_preferences", [
+    `model: ${params.selectedModel}`,
+    `reason_level: ${reasonTag}`,
+    `thread_name: ${String(params.threadName ?? "").trim() || "N/A"}`,
+  ]);
   const multiAgentDirective = isCodexModel(params.selectedModel)
     ? buildCodexMultiAgentDirective(params.codexMultiAgentMode)
     : "";
-  const promptBody = [multiAgentDirective, roleBlock, corePrompt].filter((block) => block.length > 0).join("\n\n");
+  const promptBody = buildStudioRolePromptEnvelope({
+    roleId: params.threadRoleId,
+    roleLabel: params.threadRole,
+    request: trimmedText,
+    starterPrompt: params.threadStarterPrompt,
+    extraGuidance: params.threadGuidance,
+    contextBlocks: [runtimeBlock, fileBlock, ragSourcesBlock, multiAgentDirective].filter((block) => block.length > 0),
+  });
 
   if (!params.threadName) {
     return promptBody;
   }
   return `[${params.threadName}] ${promptBody}`;
+}
+
+function wrapContextBlock(tag: string, lines: string[]): string {
+  const cleaned = lines.map((line) => String(line ?? "").trim()).filter(Boolean);
+  if (cleaned.length === 0) {
+    return "";
+  }
+  return [`<${tag}>`, ...cleaned, `</${tag}>`].join("\n");
 }

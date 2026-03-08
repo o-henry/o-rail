@@ -81,7 +81,10 @@ describe("roleKnowledgePipeline", () => {
     expect(stored.profile.markdownPath).toBeUndefined();
     expect(bootstrapped.sourceSuccessCount).toBeGreaterThan(0);
     expect(injected.usedProfile).toBe(true);
+    expect(injected.prompt).toContain("Formatting re-enabled");
+    expect(injected.prompt).toContain("<role_profile>");
     expect(injected.prompt).toContain("[ROLE_KB_INJECT]");
+    expect(injected.prompt).toContain("<task_request>");
     expect(injected.prompt).toContain("이동 시스템을 구현해줘");
   });
 

@@ -331,8 +331,10 @@ export function useAgentsPageState(params: UseAgentsPageStateParams) {
       .filter((item) => enabledDataSourceIds.includes(item.id))
       .filter((item) => (activeDataTopicId ? item.topic === activeDataTopicId : true));
     const selectedAttachedFiles = attachedFiles.filter((file) => enabledAttachedFileNames.includes(file.name));
+    const resolvedRoleId = activeSetOption ? roleFromSetId(activeSetOption.id) : null;
     const payload = buildAgentDispatchPayload({
       threadName: activeThread?.name,
+      threadRoleId: resolvedRoleId ?? undefined,
       threadRole: activeThread?.role,
       threadGuidance: activeThread?.guidance ?? [],
       threadStarterPrompt: activeThread?.starterPrompt,
@@ -355,7 +357,6 @@ export function useAgentsPageState(params: UseAgentsPageStateParams) {
       selectedDataSourceDetails: selectedDataSources.map((item) => item.detail),
     });
     if (activeSetOption) {
-      const resolvedRoleId = roleFromSetId(activeSetOption.id);
       const nextTaskId = activeThread?.id ?? "TASK-UNKNOWN";
       const missionHandle = resolvedRoleId
         ? params.missionControl.launchMission({

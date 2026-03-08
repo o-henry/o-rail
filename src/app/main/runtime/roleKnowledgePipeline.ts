@@ -6,6 +6,7 @@ import {
   type RoleKnowledgeProfile,
   type RoleKnowledgeSource,
 } from "../../../features/studio/roleKnowledgeStore";
+import { buildStudioRolePromptEnvelope } from "../../../features/studio/rolePromptGuidance";
 import { STUDIO_ROLE_TEMPLATES } from "../../../features/studio/roleTemplates";
 
 type InvokeFn = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
@@ -435,13 +436,23 @@ export async function injectRoleKnowledgePrompt(input: RoleKnowledgeInjectInput)
   const profile = input.profile ?? getRoleKnowledgeProfile(input.roleId);
   if (!profile) {
     return {
-      prompt: basePrompt,
+      prompt: buildStudioRolePromptEnvelope({
+        roleId: input.roleId,
+        request: basePrompt,
+      }),
       usedProfile: false,
       message: "ROLE_KB_INJECT 생략 (프로필 없음)",
     };
   }
   const kbBlock = buildRoleKnowledgeBlock(profile);
-  const mergedPrompt = `${kbBlock}\n\n${basePrompt}`.trim();
+  const mergedPrompt = buildStudioRolePromptEnvelope({
+    roleId: profile.roleId,
+    roleLabel: profile.roleLabel,
+    goal: profile.goal,
+    taskId: profile.taskId,
+    request: basePrompt,
+    contextBlocks: [kbBlock],
+  });
   return {
     prompt: mergedPrompt,
     usedProfile: true,

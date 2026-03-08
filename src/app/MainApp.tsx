@@ -2332,7 +2332,10 @@ function App() {
       onQueueNodeRequest={enqueueNodeRequest} selectedNode={selectedNode} workspaceEvents={workspaceEvents}
     />
   );
-  const showRoleDockFirst = Boolean(selectedNode);
+  const selectedNodeSourceKind = String((selectedNode?.config as Record<string, unknown> | undefined)?.sourceKind ?? "")
+    .trim()
+    .toLowerCase();
+  const showInspectorFirst = selectedNode?.type === "turn" && selectedNodeSourceKind === "data_research";
   const feedPageVm = buildFeedPageVm({
     feedInspectorTurnNode,
     feedInspectorPost,
@@ -2959,8 +2962,8 @@ function App() {
                   />
                 ) : (
                   <>
-                    {showRoleDockFirst ? workflowRoleDockElement : workflowInspectorPaneElement}
-                    {showRoleDockFirst ? workflowInspectorPaneElement : workflowRoleDockElement}
+                    {showInspectorFirst ? workflowInspectorPaneElement : workflowRoleDockElement}
+                    {showInspectorFirst ? workflowRoleDockElement : workflowInspectorPaneElement}
                   </>
                 )}
               </div>

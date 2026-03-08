@@ -1258,6 +1258,7 @@
 }
 
 .node-head-main {
+  flex: 1 1 auto;
   min-width: 0;
   display: grid;
   gap: 2px;
@@ -1411,6 +1412,7 @@
 }
 
 .node-head-actions {
+  flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -1425,6 +1427,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  white-space: nowrap;
   cursor: pointer;
 }
 

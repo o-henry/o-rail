@@ -138,6 +138,20 @@ export default function WorkflowAgentTerminalIsland(props: WorkflowAgentTerminal
     setPaneInput(pane.id, "");
   };
 
+  const canStopGraph = Boolean(props.selectedNode && selectedNodeState?.threadId && props.isGraphRunning);
+  const canStopCli = Boolean(pane && (pane.status === "running" || pane.status === "starting"));
+
+  const stopAll = async () => {
+    const tasks: Promise<unknown>[] = [];
+    if (props.selectedNode && canStopGraph) {
+      tasks.push(props.onInterruptNode(props.selectedNode.id));
+    }
+    if (pane && canStopCli) {
+      tasks.push(stopPane(pane.id));
+    }
+    await Promise.allSettled(tasks);
+  };
+
   return (
     <div className={`canvas-agent-terminal-slot${visible ? " is-visible" : ""}`} aria-hidden={!visible}>
       <aside className="workflow-agent-terminal-island" aria-label="에이전트 실행 터미널">
@@ -167,19 +181,11 @@ export default function WorkflowAgentTerminalIsland(props: WorkflowAgentTerminal
           </button>
           <button
             className="mini-action-button"
-            disabled={!props.selectedNode || !selectedNodeState?.threadId || !props.isGraphRunning}
-            onClick={() => props.selectedNode && void props.onInterruptNode(props.selectedNode.id)}
+            disabled={!canStopGraph && !canStopCli}
+            onClick={() => void stopAll()}
             type="button"
           >
-            <span className="mini-action-button-label">그래프 중단</span>
-          </button>
-          <button
-            className="mini-action-button"
-            disabled={!pane || (pane.status !== "running" && pane.status !== "starting")}
-            onClick={() => pane && void stopPane(pane.id)}
-            type="button"
-          >
-            <span className="mini-action-button-label">CLI 중단</span>
+            <span className="mini-action-button-label">중단</span>
           </button>
           <button
             className="mini-action-button"

@@ -702,11 +702,17 @@
   min-height: 36px;
   height: 36px;
   border: 0;
-  border-radius: 8px;
+  border-radius: 4px;
   background: #eeeeee;
   color: var(--text-main);
   padding: 0 12px;
   font-size: 12px;
+}
+
+.workflow-agent-terminal-composer .mini-action-button {
+  min-height: 36px;
+  height: 36px;
+  align-self: stretch;
 }
 
 .workflow-agent-terminal-input::placeholder {

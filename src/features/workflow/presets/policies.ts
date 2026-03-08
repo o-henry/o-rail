@@ -140,6 +140,57 @@ export function resolvePresetTurnPolicy(kind: PresetKind, nodeId: string): Prese
     }
   }
 
+  if (kind === "unityCiDoctor") {
+    if (key.includes("intake")) {
+      return {
+        ...DEFAULT_PRESET_TURN_POLICY,
+        profile: "design_planning",
+        threshold: 74,
+        artifactType: "RequirementArtifact",
+      };
+    }
+    if (key.includes("system")) {
+      return {
+        ...DEFAULT_PRESET_TURN_POLICY,
+        profile: "research_evidence",
+        threshold: 88,
+        artifactType: "EvidenceArtifact",
+      };
+    }
+    if (key.includes("qa")) {
+      return {
+        ...DEFAULT_PRESET_TURN_POLICY,
+        profile: "synthesis_final",
+        threshold: 82,
+        artifactType: "TaskPlanArtifact",
+      };
+    }
+    if (key.includes("pm")) {
+      return {
+        ...DEFAULT_PRESET_TURN_POLICY,
+        profile: "design_planning",
+        threshold: 78,
+        artifactType: "RequirementArtifact",
+      };
+    }
+    if (key.includes("judge")) {
+      return {
+        ...DEFAULT_PRESET_TURN_POLICY,
+        profile: "research_evidence",
+        threshold: 90,
+        artifactType: "EvidenceArtifact",
+      };
+    }
+    if (key.includes("final")) {
+      return {
+        ...DEFAULT_PRESET_TURN_POLICY,
+        profile: "synthesis_final",
+        threshold: 84,
+        artifactType: "ChangePlanArtifact",
+      };
+    }
+  }
+
   if (kind === "unityGame") {
     if (key.includes("intake")) {
       return {

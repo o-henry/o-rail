@@ -377,6 +377,7 @@ export const JA_MESSAGES: Dictionary = {
     "preset.development": "開発実行テンプレート",
     "preset.research": "根拠リサーチテンプレート",
     "preset.expert": "専門家分析テンプレート",
+    "preset.unityCiDoctor": "Unity CI ドクターテンプレート",
     "preset.unityGame": "Unityゲーム開発テンプレート",
     "preset.fullstack": "フルスタック実装テンプレート",
     "preset.creative": "創造性テンプレート",

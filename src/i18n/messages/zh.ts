@@ -377,6 +377,7 @@ export const ZH_MESSAGES: Dictionary = {
     "preset.development": "开发执行模板",
     "preset.research": "证据研究模板",
     "preset.expert": "专家分析模板",
+    "preset.unityCiDoctor": "Unity CI 医生模板",
     "preset.unityGame": "Unity 游戏开发模板",
     "preset.fullstack": "全栈实现模板",
     "preset.creative": "创造力模板",

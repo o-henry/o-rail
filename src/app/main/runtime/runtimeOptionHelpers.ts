@@ -76,6 +76,7 @@ const PRESET_TEMPLATE_META_KEYS: ReadonlyArray<{
   { key: "development", labelKey: "preset.development", statusLabelKey: "preset.development" },
   { key: "research", labelKey: "preset.research", statusLabelKey: "preset.research" },
   { key: "expert", labelKey: "preset.expert", statusLabelKey: "preset.expert" },
+  { key: "unityCiDoctor", labelKey: "preset.unityCiDoctor", statusLabelKey: "preset.unityCiDoctor" },
   { key: "unityGame", labelKey: "preset.unityGame", statusLabelKey: "preset.unityGame" },
   { key: "fullstack", labelKey: "preset.fullstack", statusLabelKey: "preset.fullstack" },
   { key: "creative", labelKey: "preset.creative", statusLabelKey: "preset.creative" },

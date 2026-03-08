@@ -337,3 +337,160 @@ export function buildExpertPreset(): GraphData {
 
   return { version: GRAPH_SCHEMA_VERSION, nodes, edges, knowledge: defaultKnowledgeConfig() };
 }
+
+export function buildUnityCiDoctorPreset(): GraphData {
+  const nodes: GraphNode[] = [
+    makePresetNode("turn-unity-ci-intake", "turn", 120, 180, {
+      model: "GPT-5.4",
+      role: "UNITY CI INTAKE AGENT",
+      cwd: ".",
+      promptTemplate:
+        "당신은 Unity CI 닥터의 사고 접수 담당이다.\n" +
+        "사용자 입력, 에러 로그, 테스트/빌드 실패 맥락을 읽고 실행 가능한 진단 브리프로 정리하라.\n" +
+        "형식:\n" +
+        "- incidentSummary:\n" +
+        "- failureType:\n" +
+        "- likelySubsystems(1~4개):\n" +
+        "- knownSignals(로그/오류/스택트레이스):\n" +
+        "- missingInputs:\n" +
+        "- diagnosisGoal:\n" +
+        "입력: {{input}}",
+    }),
+    makePresetNode("turn-unity-ci-system", "turn", 460, 40, {
+      model: "GPT-5.4",
+      role: "UNITY SYSTEM DIAGNOSIS AGENT",
+      cwd: ".",
+      promptTemplate:
+        "Unity 기술 진단 관점에서 입력을 분석하라.\n" +
+        "필수:\n" +
+        "- probableRootCauses(확률 높은 순서 1~3개)\n" +
+        "- suspectedFilesOrModules\n" +
+        "- packageOrDependencyRisks\n" +
+        "- smallestSafeFix\n" +
+        "- evidenceByClaim\n" +
+        "추측과 확인된 사실을 분리하라.\n" +
+        "입력: {{input}}",
+    }),
+    makePresetNode("turn-unity-ci-qa", "turn", 460, 180, {
+      model: "GPT-5.4",
+      role: "UNITY QA TRIAGE AGENT",
+      cwd: ".",
+      promptTemplate:
+        "QA/재현 관점에서 입력을 분석하라.\n" +
+        "필수:\n" +
+        "- reproSteps\n" +
+        "- affectedSurface\n" +
+        "- regressionRisks\n" +
+        "- mustRerunChecks(EditMode/PlayMode/Build)\n" +
+        "- failFastVerification\n" +
+        "입력: {{input}}",
+    }),
+    makePresetNode("turn-unity-ci-pm", "turn", 460, 320, {
+      model: "GPT-5.4",
+      role: "UNITY PM IMPACT AGENT",
+      cwd: ".",
+      promptTemplate:
+        "기획/프로덕트 영향 관점에서 입력을 평가하라.\n" +
+        "필수:\n" +
+        "- playerImpact\n" +
+        "- productionPriority(P0~P2)\n" +
+        "- canShipOrBlock\n" +
+        "- communicationNotes\n" +
+        "- recommendedNextOwner\n" +
+        "입력: {{input}}",
+    }),
+    makePresetNode("turn-unity-ci-judge", "turn", 820, 180, {
+      model: "GPT-5.4",
+      role: "UNITY CI JUDGE AGENT",
+      cwd: ".",
+      promptTemplate:
+        "입력을 종합해 JSON만 출력하라.\n" +
+        "판정 기준: 원인 후보의 타당성, 로그/근거 연결, 재현 가능성, 다음 행동의 구체성.\n" +
+        '{ "DECISION":"PASS|REJECT", "finalDraft":"...", "why":["..."], "missingInputs":["..."], "nextAction":"...", "confidence":0.0 }\n' +
+        "근거가 약하거나 로그가 부족하면 REJECT.\n" +
+        "입력: {{input}}",
+    }),
+    makePresetNode("gate-unity-ci", "gate", 1120, 180, {
+      decisionPath: "DECISION",
+      passNodeId: "transform-unity-ci-brief",
+      rejectNodeId: "transform-unity-ci-reject",
+      schemaJson: "{\"type\":\"object\",\"required\":[\"DECISION\"]}",
+    }),
+    makePresetNode("transform-unity-ci-brief", "transform", 1300, 80, {
+      mode: "template",
+      template:
+        "Unity CI 닥터 브리프\n" +
+        "- 사건 요약: {{input}}\n" +
+        "- 반드시 고쳐야 하는 원인 후보와 검증 포인트만 남긴다\n" +
+        "- 다음 행동은 1개로 압축한다",
+    }),
+    makePresetNode("turn-unity-ci-final", "turn", 1580, 80, {
+      model: "GPT-5.4",
+      role: "UNITY CI SYNTHESIS AGENT",
+      cwd: ".",
+      promptTemplate:
+        "최종 Unity CI 진단 보고서를 한국어로 작성하라.\n" +
+        "구성:\n" +
+        "1) 한 줄 장애 요약\n" +
+        "2) 가장 가능성 높은 원인 1~3개\n" +
+        "3) 의심 파일/모듈\n" +
+        "4) 즉시 할 다음 행동 1개\n" +
+        "5) 수정 후 다시 확인할 체크리스트\n" +
+        "과장 금지, 모르면 모른다고 명시.\n" +
+        "입력: {{input}}",
+    }),
+    makePresetNode("transform-unity-ci-reject", "transform", 1420, 280, {
+      mode: "template",
+      template:
+        "진단 보류\n" +
+        "- 현재 입력만으로는 근거가 부족합니다\n" +
+        "- 추가로 필요한 로그/재현 정보/빌드 결과를 수집하세요\n" +
+        "원본: {{input}}",
+    }),
+  ];
+
+  const edges: GraphEdge[] = [
+    {
+      from: { nodeId: "turn-unity-ci-intake", port: "out" },
+      to: { nodeId: "turn-unity-ci-system", port: "in" },
+    },
+    {
+      from: { nodeId: "turn-unity-ci-intake", port: "out" },
+      to: { nodeId: "turn-unity-ci-qa", port: "in" },
+    },
+    {
+      from: { nodeId: "turn-unity-ci-intake", port: "out" },
+      to: { nodeId: "turn-unity-ci-pm", port: "in" },
+    },
+    {
+      from: { nodeId: "turn-unity-ci-system", port: "out" },
+      to: { nodeId: "turn-unity-ci-judge", port: "in" },
+    },
+    {
+      from: { nodeId: "turn-unity-ci-qa", port: "out" },
+      to: { nodeId: "turn-unity-ci-judge", port: "in" },
+    },
+    {
+      from: { nodeId: "turn-unity-ci-pm", port: "out" },
+      to: { nodeId: "turn-unity-ci-judge", port: "in" },
+    },
+    {
+      from: { nodeId: "turn-unity-ci-judge", port: "out" },
+      to: { nodeId: "gate-unity-ci", port: "in" },
+    },
+    {
+      from: { nodeId: "gate-unity-ci", port: "out" },
+      to: { nodeId: "transform-unity-ci-brief", port: "in" },
+    },
+    {
+      from: { nodeId: "transform-unity-ci-brief", port: "out" },
+      to: { nodeId: "turn-unity-ci-final", port: "in" },
+    },
+    {
+      from: { nodeId: "gate-unity-ci", port: "out" },
+      to: { nodeId: "transform-unity-ci-reject", port: "in" },
+    },
+  ];
+
+  return { version: GRAPH_SCHEMA_VERSION, nodes, edges, knowledge: defaultKnowledgeConfig() };
+}

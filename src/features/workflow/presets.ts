@@ -1,6 +1,12 @@
 import type { PresetKind } from "./domain";
 import type { GraphData } from "./types";
-import { buildDevelopmentPreset, buildExpertPreset, buildResearchPreset, buildValidationPreset } from "./presets/buildersCore";
+import {
+  buildDevelopmentPreset,
+  buildExpertPreset,
+  buildResearchPreset,
+  buildUnityCiDoctorPreset,
+  buildValidationPreset,
+} from "./presets/buildersCore";
 import {
   buildCreativePreset,
   buildFullstackPreset,
@@ -24,6 +30,8 @@ export function buildPresetGraphByKind(kind: PresetKind): GraphData {
     base = buildDevelopmentPreset();
   } else if (kind === "research") {
     base = buildResearchPreset();
+  } else if (kind === "unityCiDoctor") {
+    base = buildUnityCiDoctorPreset();
   } else if (kind === "unityGame") {
     base = buildUnityGamePreset();
   } else if (kind === "fullstack") {

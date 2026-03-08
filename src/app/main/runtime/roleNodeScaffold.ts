@@ -6,7 +6,6 @@ import type { StudioRoleId } from "../../../features/studio/handoffTypes";
 import type { ArtifactType, QualityProfileId } from "../../../features/workflow/domain";
 import { defaultNodeConfig, makeNodeId } from "../../../features/workflow/graph-utils/shared";
 import type { GraphEdge, GraphNode } from "../../../features/workflow/types";
-import { viaNodeLabel, type ViaNodeType } from "../../../features/workflow/viaCatalog";
 
 type RoleNodeScaffoldParams = {
   roleId: StudioRoleId;
@@ -21,8 +20,6 @@ type RoleNodeScaffoldResult = {
   roleNodeId: string;
   researchNodeIds: string[];
 };
-
-type RoleResearchSourceType = "source.community" | "source.dev" | "source.news";
 
 function edge(fromNodeId: string, toNodeId: string): GraphEdge {
   return {
@@ -70,87 +67,109 @@ function rolePromptTemplate(roleId: StudioRoleId): string {
   });
 }
 
-function createViaResearchNode(params: {
+type ResearchLane = {
+  label: string;
+  prompt: string;
+};
+
+function buildRoleResearchLanes(roleId: StudioRoleId, roleLabel: string, keywords: string, sites: string): ResearchLane[] {
+  if (roleId === "pm_planner") {
+    return [
+      {
+        label: "시장/레퍼런스 조사",
+        prompt: `${roleLabel} 관점에서 현재 게임 시장, 레퍼런스 작품, 플레이어 판타지를 조사합니다. 키워드: ${keywords}. 우선 참고: ${sites}.`,
+      },
+      {
+        label: "코어 루프/동기 분석",
+        prompt: `${roleLabel}가 설계 판단에 쓸 수 있게 코어 루프, 리텐션 동기, 진행 구조 사례를 조사합니다. 키워드: ${keywords}.`,
+      },
+      {
+        label: "리스크/차별화 조사",
+        prompt: `${roleLabel}가 피해야 할 기획 리스크와 차별화 포인트를 조사합니다. 키워드: ${keywords}.`,
+      },
+    ];
+  }
+
+  if (roleId === "system_programmer" || roleId === "tooling_engineer") {
+    return [
+      {
+        label: "공식 문서 조사",
+        prompt: `${roleLabel} 역할을 위해 공식 문서와 레퍼런스 구현을 조사합니다. 키워드: ${keywords}. 우선 참고: ${sites}.`,
+      },
+      {
+        label: "구조/패턴 조사",
+        prompt: `${roleLabel}가 참고할 아키텍처 패턴, 데이터 흐름, 유지보수 전략을 조사합니다. 키워드: ${keywords}.`,
+      },
+      {
+        label: "실패 사례/주의점 조사",
+        prompt: `${roleLabel} 관점에서 흔한 실패 사례, 병목, 회귀 포인트를 조사합니다. 키워드: ${keywords}.`,
+      },
+    ];
+  }
+
+  if (roleId === "qa_engineer" || roleId === "build_release") {
+    return [
+      {
+        label: "체크리스트 조사",
+        prompt: `${roleLabel}가 바로 활용할 체크리스트와 표준 절차를 조사합니다. 키워드: ${keywords}. 우선 참고: ${sites}.`,
+      },
+      {
+        label: "장애/회귀 사례 조사",
+        prompt: `${roleLabel} 관점에서 자주 발생하는 장애, 회귀 패턴, 실패 케이스를 조사합니다. 키워드: ${keywords}.`,
+      },
+      {
+        label: "검증 포인트 조사",
+        prompt: `${roleLabel}가 실행 전에 확인해야 할 검증 포인트와 신호를 조사합니다. 키워드: ${keywords}.`,
+      },
+    ];
+  }
+
+  return [
+    {
+      label: "역할 참고 조사",
+      prompt: `${roleLabel} 역할 수행에 필요한 기본 참고자료를 조사합니다. 키워드: ${keywords}. 우선 참고: ${sites}.`,
+    },
+    {
+      label: "실전 사례 조사",
+      prompt: `${roleLabel}가 바로 적용할 수 있는 사례, 구현 예시, 실전 팁을 조사합니다. 키워드: ${keywords}.`,
+    },
+    {
+      label: "리스크 조사",
+      prompt: `${roleLabel} 관점에서 자주 놓치는 문제, 품질 리스크, 후속 이슈를 조사합니다. 키워드: ${keywords}.`,
+    },
+  ];
+}
+
+function createRoleResearchNode(params: {
   nodeId: string;
-  viaNodeType: ViaNodeType;
   x: number;
   y: number;
-  roleId: StudioRoleId;
   roleLabel: string;
-  templateLabel: string;
+  lane: ResearchLane;
+  sites: string;
+  countries: string;
+  maxItems: number;
 }): GraphNode {
-  const research = getRoleResearchProfile(params.roleId);
-  const isSourceNode = params.viaNodeType.startsWith("source.");
-  const roleAwareLabel = (() => {
-    if (params.viaNodeType === "trigger.manual") {
-      return `${params.roleLabel} 조사 시작`;
-    }
-    if (params.viaNodeType === "transform.normalize") {
-      return `${params.roleLabel} 자료 정리`;
-    }
-    if (params.viaNodeType === "transform.verify") {
-      return `${params.roleLabel} 근거 검증`;
-    }
-    if (params.viaNodeType === "transform.rank") {
-      return `${params.roleLabel} 중요도 정렬`;
-    }
-    if (params.viaNodeType === "agent.codex") {
-      return `${params.roleLabel} 리서치 요약`;
-    }
-    if (params.viaNodeType === "export.rag") {
-      return `${params.roleLabel} 역할 컨텍스트 저장`;
-    }
-    return `${params.roleLabel} 자료 수집 · ${viaNodeLabel(params.viaNodeType)}`;
-  })();
-  const roleAwarePrompt = (() => {
-    if (params.viaNodeType.startsWith("source.")) {
-      return `${params.roleLabel} 역할 수행에 필요한 외부 자료를 수집합니다.`;
-    }
-    if (params.viaNodeType === "transform.normalize") {
-      return `${params.roleLabel}가 읽기 쉬운 공통 형식으로 조사 결과를 정리합니다.`;
-    }
-    if (params.viaNodeType === "transform.verify") {
-      return `${params.roleLabel} 관점에서 근거 신뢰도와 중복 여부를 검증합니다.`;
-    }
-    if (params.viaNodeType === "transform.rank") {
-      return `${params.roleLabel} 의사결정에 중요한 자료를 우선순위화합니다.`;
-    }
-    if (params.viaNodeType === "agent.codex") {
-      return `${params.roleLabel} 역할용 참고자료 브리프를 생성합니다.`;
-    }
-    if (params.viaNodeType === "export.rag") {
-      return `${params.roleLabel} 역할 노드가 바로 사용할 조사 결과를 내보냅니다.`;
-    }
-    return `${params.roleLabel} 역할용 자동 조사 단계를 실행합니다.`;
-  })();
   return {
     id: params.nodeId,
     type: "turn",
     position: { x: params.x, y: params.y },
     config: {
       ...defaultNodeConfig("turn"),
-      executor: "via_flow",
-      role: roleAwareLabel,
-      promptTemplate: roleAwarePrompt,
+      executor: "web_grok",
+      role: `${params.roleLabel} 조사 · ${params.lane.label}`,
+      promptTemplate: `${params.lane.prompt}\n참고 우선순위 사이트: ${params.sites}\n대상 지역: ${params.countries}\n응답은 핵심 근거, 시사점, 후속 조사 포인트를 짧게 정리합니다.`,
       qualityProfile: "research_evidence",
       artifactType: "EvidenceArtifact",
-      sourceKind: isSourceNode ? "data_research" : "data_pipeline",
-      viaFlowId: "1",
-      viaNodeType: params.viaNodeType,
-      viaNodeLabel: viaNodeLabel(params.viaNodeType),
-      viaSourceTypeHint: isSourceNode ? params.viaNodeType : research.sourceType,
-      viaTemplateLabel: params.templateLabel,
-      viaCustomKeywords: isSourceNode ? research.keywords : "",
-      viaCustomCountries: isSourceNode ? research.countries : "",
-      viaCustomSites: isSourceNode ? research.sites : "",
-      viaCustomMaxItems: isSourceNode ? research.maxItems : 24,
+      sourceKind: "data_research",
+      webResultMode: "bridgeAssisted",
+      webTimeoutMs: 180_000,
+      viaTemplateLabel: params.lane.label,
+      viaCustomCountries: params.countries,
+      viaCustomSites: params.sites,
+      viaCustomMaxItems: params.maxItems,
     },
   };
-}
-
-function orderedResearchSources(primary: RoleResearchSourceType): RoleResearchSourceType[] {
-  const sourceTypes: RoleResearchSourceType[] = ["source.community", "source.dev", "source.news"];
-  return [primary, ...sourceTypes.filter((value) => value !== primary)];
 }
 
 export function buildRoleNodeScaffold(params: RoleNodeScaffoldParams): RoleNodeScaffoldResult {
@@ -186,114 +205,47 @@ export function buildRoleNodeScaffold(params: RoleNodeScaffoldParams): RoleNodeS
     };
   }
 
-  const sourceTypes = orderedResearchSources(research.sourceType as RoleResearchSourceType);
+  const researchLanes = buildRoleResearchLanes(params.roleId, roleLabel, research.keywords, research.sites);
   const researchNodeIds: string[] = [];
-  const triggerNodeId = makeNodeId("turn");
-  const normalizeNodeId = makeNodeId("turn");
-  const verifyNodeId = makeNodeId("turn");
-  const rankNodeId = makeNodeId("turn");
-  const agentNodeId = makeNodeId("turn");
-  const exportNodeId = makeNodeId("turn");
-
-  const triggerNode = createViaResearchNode({
-    nodeId: triggerNodeId,
-    viaNodeType: "trigger.manual",
-    roleId: params.roleId,
-    roleLabel,
-    templateLabel: research.focusLabel,
-    x: Math.max(40, params.anchorX - 990),
-    y: params.anchorY,
-  });
-  researchNodeIds.push(triggerNodeId);
-
-  const sourceNodes = sourceTypes.map((sourceType, index) => {
+  const synthesisNodeId = makeNodeId("turn");
+  const sourceNodes = researchLanes.map((lane, index) => {
     const nodeId = makeNodeId("turn");
     researchNodeIds.push(nodeId);
-    return createViaResearchNode({
+    return createRoleResearchNode({
       nodeId,
-      viaNodeType: sourceType,
-      roleId: params.roleId,
       roleLabel,
-      templateLabel: research.focusLabel,
-      x: Math.max(40, params.anchorX - 780),
+      lane,
+      sites: research.sites,
+      countries: research.countries,
+      maxItems: research.maxItems,
+      x: Math.max(40, params.anchorX - 620),
       y: params.anchorY + (index - 1) * 150,
     });
   });
 
-  const normalizeNode = createViaResearchNode({
-    nodeId: normalizeNodeId,
-    viaNodeType: "transform.normalize",
-    roleId: params.roleId,
-    roleLabel,
-    templateLabel: research.focusLabel,
-    x: Math.max(40, params.anchorX - 530),
-    y: params.anchorY,
-  });
-  researchNodeIds.push(normalizeNodeId);
-
-  const verifyNode = createViaResearchNode({
-    nodeId: verifyNodeId,
-    viaNodeType: "transform.verify",
-    roleId: params.roleId,
-    roleLabel,
-    templateLabel: research.focusLabel,
-    x: Math.max(40, params.anchorX - 345),
-    y: params.anchorY,
-  });
-  researchNodeIds.push(verifyNodeId);
-
-  const rankNode = createViaResearchNode({
-    nodeId: rankNodeId,
-    viaNodeType: "transform.rank",
-    roleId: params.roleId,
-    roleLabel,
-    templateLabel: research.focusLabel,
-    x: Math.max(40, params.anchorX - 180),
-    y: params.anchorY,
-  });
-  researchNodeIds.push(rankNodeId);
-
-  const agentNode = createViaResearchNode({
-    nodeId: agentNodeId,
-    viaNodeType: "agent.codex",
-    roleId: params.roleId,
-    roleLabel,
-    templateLabel: research.focusLabel,
-    x: Math.max(40, params.anchorX - 15),
-    y: params.anchorY,
-  });
-  researchNodeIds.push(agentNodeId);
-
-  const exportNode = createViaResearchNode({
-    nodeId: exportNodeId,
-    viaNodeType: "export.rag",
-    roleId: params.roleId,
-    roleLabel,
-    templateLabel: research.focusLabel,
-    x: Math.max(40, params.anchorX + 150),
-    y: params.anchorY,
-  });
-  researchNodeIds.push(exportNodeId);
+  const synthesisNode: GraphNode = {
+    id: synthesisNodeId,
+    type: "turn",
+    position: { x: Math.max(40, params.anchorX - 210), y: params.anchorY },
+    config: {
+      ...defaultNodeConfig("turn"),
+      executor: "codex",
+      role: `${roleLabel} 조사 종합`,
+      promptTemplate: `${roleLabel} 역할을 위해 병렬 조사 결과를 종합합니다. 서로 겹치는 내용은 합치고, 믿을 만한 근거와 실제 적용 포인트만 짧게 정리합니다.`,
+      qualityProfile: "research_evidence",
+      artifactType: "EvidenceArtifact",
+      sourceKind: "data_pipeline",
+    },
+  };
+  researchNodeIds.push(synthesisNodeId);
 
   const researchNodes = [
-    triggerNode,
     ...sourceNodes,
-    normalizeNode,
-    verifyNode,
-    rankNode,
-    agentNode,
-    exportNode,
+    synthesisNode,
   ];
 
-  const researchEdges = sourceNodes.flatMap((sourceNode) => [
-    edge(triggerNodeId, sourceNode.id),
-    edge(sourceNode.id, normalizeNodeId),
-  ]);
-  researchEdges.push(edge(normalizeNodeId, verifyNodeId));
-  researchEdges.push(edge(verifyNodeId, rankNodeId));
-  researchEdges.push(edge(rankNodeId, agentNodeId));
-  researchEdges.push(edge(agentNodeId, exportNodeId));
-  researchEdges.push(edge(exportNodeId, roleNodeId));
+  const researchEdges = sourceNodes.map((sourceNode) => edge(sourceNode.id, synthesisNodeId));
+  researchEdges.push(edge(synthesisNodeId, roleNodeId));
 
   return {
     nodes: [...researchNodes, roleNode],

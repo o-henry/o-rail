@@ -2105,7 +2105,7 @@ function App() {
     (roleId: StudioRoleId, includeResearch: boolean) => {
       const maxX = graph.nodes.reduce((max, node) => Math.max(max, Number(node.position?.x ?? 0)), 40);
       const maxY = graph.nodes.reduce((max, node) => Math.max(max, Number(node.position?.y ?? 0)), 40);
-      const roleX = maxX + (includeResearch ? 1240 : 320);
+      const roleX = maxX + (includeResearch ? 820 : 320);
       const roleY = Math.max(60, maxY);
       const scaffold = buildRoleNodeScaffold({
         roleId,

@@ -28,22 +28,25 @@ describe("roleNodeScaffold", () => {
       includeResearch: true,
     });
 
-    expect(result.nodes).toHaveLength(10);
-    expect(result.edges).toHaveLength(11);
-    expect(result.researchNodeIds).toHaveLength(9);
-    const sourceTypes = result.nodes
-      .map((node) => String((node.config as Record<string, unknown>).viaNodeType ?? ""))
-      .filter((value) => value.startsWith("source."));
-    expect(sourceTypes).toEqual(expect.arrayContaining(["source.community", "source.dev", "source.news"]));
-    const sourceNode = result.nodes.find((node) => String((node.config as Record<string, unknown>).viaNodeType) === "source.dev");
+    expect(result.nodes).toHaveLength(5);
+    expect(result.edges).toHaveLength(4);
+    expect(result.researchNodeIds).toHaveLength(4);
+    const researchNodes = result.nodes.filter((node) => String((node.config as Record<string, unknown>).sourceKind ?? "") === "data_research");
+    expect(researchNodes).toHaveLength(3);
+    const sourceNode = result.nodes.find((node) => String((node.config as Record<string, unknown>).role ?? "").includes("공식 문서 조사"));
     expect(sourceNode?.config).toMatchObject({
       sourceKind: "data_research",
       role: expect.stringContaining("시스템"),
-      viaCustomKeywords: expect.stringContaining("unity architecture"),
+      executor: "web_grok",
+      promptTemplate: expect.stringContaining("unity architecture"),
       viaCustomSites: expect.stringContaining("docs.unity3d.com"),
     });
-    const triggerNode = result.nodes.find((node) => String((node.config as Record<string, unknown>).viaNodeType) === "trigger.manual");
-    expect(result.edges.filter((edge) => edge.from.nodeId === triggerNode?.id)).toHaveLength(3);
+    const synthesisNode = result.nodes.find((node) => String((node.config as Record<string, unknown>).role ?? "").includes("조사 종합"));
+    expect(synthesisNode?.config).toMatchObject({
+      executor: "codex",
+      sourceKind: "data_pipeline",
+    });
+    expect(result.edges.filter((edge) => edge.to.nodeId === synthesisNode?.id)).toHaveLength(3);
     expect(result.edges[result.edges.length - 1]).toEqual({
       from: { nodeId: result.researchNodeIds[result.researchNodeIds.length - 1], port: "out" },
       to: { nodeId: result.roleNodeId, port: "in" },

@@ -3,6 +3,7 @@ import type { GraphNode } from "../../features/workflow/types";
 import { useWorkflowWorkspaceTerminalGrid } from "./useWorkflowWorkspaceTerminalGrid";
 import type { WorkflowWorkspaceNodeState, WorkflowWorkspaceEvent } from "./workflowWorkspaceRuntimeTypes";
 import { buildWorkspacePaneViewport } from "./workspaceDockState";
+import { buildWorkspaceTabModel } from "./workspaceDockTabs";
 
 type WorkflowWorkspaceDockProps = {
   activeRoleId: string;
@@ -22,6 +23,8 @@ export default function WorkflowWorkspaceDock(props: WorkflowWorkspaceDockProps)
     workspaceEvents: props.workspaceEvents,
   });
   const { selectPaneByRoleId } = runtime;
+  const tabModel = buildWorkspaceTabModel(runtime.panes, runtime.selectedPaneId);
+  const visiblePaneIds = new Set(tabModel.visiblePaneIds);
 
   useEffect(() => {
     selectPaneByRoleId(props.activeRoleId);
@@ -29,8 +32,26 @@ export default function WorkflowWorkspaceDock(props: WorkflowWorkspaceDockProps)
 
   return (
     <section className="workflow-workspace-dock" aria-label="워크스페이스">
-      <div className="workflow-workspace-grid">
+      <div className="workflow-workspace-tabs" role="tablist" aria-label="워크스페이스 역할">
         {runtime.panes.map((pane) => {
+          const isActive = pane.id === tabModel.activePaneId;
+          return (
+            <button
+              key={pane.id}
+              className={`workflow-workspace-tab-button${isActive ? " is-active" : ""}`}
+              onClick={() => runtime.setSelectedPaneId(pane.id)}
+              role="tab"
+              aria-selected={isActive}
+              type="button"
+            >
+              <span className="workflow-workspace-tab-label">{pane.title}</span>
+              <span className="workflow-workspace-tab-status">{runtime.statusMessage(pane.status, pane.exitCode)}</span>
+            </button>
+          );
+        })}
+      </div>
+      <div className="workflow-workspace-grid">
+        {runtime.panes.filter((pane) => visiblePaneIds.has(pane.id)).map((pane) => {
           const viewportText = buildWorkspacePaneViewport({
             pane,
             activityEntries: runtime.activityEntries,

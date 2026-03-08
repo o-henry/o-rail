@@ -48,6 +48,7 @@ import type {
   RunRecord,
 } from "./main/types";
 import { KNOWLEDGE_DEFAULT_MAX_CHARS, KNOWLEDGE_DEFAULT_TOP_K } from "./mainAppGraphHelpers";
+import { applyContentQualityChecks } from "./main/runtime/qualityContentValidation";
 import { t, tp } from "../i18n";
 export * from "./main/runtime/runtimeOptionHelpers";
 
@@ -1024,6 +1025,12 @@ export async function buildQualityReport(params: {
   let score = 100;
 
   const fullText = extractFinalAnswer(output) || (typeof output === "string" ? output : "");
+  const evidenceEnvelope = normalizeEvidenceEnvelope({
+    nodeId: node.id,
+    roleLabel: turnRoleLabel(node),
+    output,
+  });
+  const evidenceConflicts = buildConflictLedger([evidenceEnvelope]);
 
   const addCheck = (input: {
     id: string;
@@ -1207,6 +1214,15 @@ export async function buildQualityReport(params: {
       }
     }
   }
+
+  applyContentQualityChecks({
+    profile,
+    fullText,
+    evidenceEnvelope,
+    evidenceConflicts,
+    addCheck,
+    warnings,
+  });
 
   const normalizedScore = normalizeQualityScore(score);
   const decision: "PASS" | "REJECT" = normalizedScore >= threshold ? "PASS" : "REJECT";

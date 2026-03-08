@@ -5,6 +5,7 @@ import AppNav from "../components/AppNav";
 import { type DashboardDetailTopic } from "../pages/dashboard/DashboardDetailPage";
 import type { AgentQuickActionRequest, AgentWorkspaceLaunchRequest } from "../pages/agents/agentTypes";
 import WorkflowPage from "../pages/workflow/WorkflowPage";
+import WorkflowAgentTerminalIsland from "../pages/workflow/WorkflowAgentTerminalIsland";
 import WorkflowRoleDock from "../pages/workflow/WorkflowRoleDock";
 import WorkflowRagModeDock from "../pages/workflow/WorkflowRagModeDock";
 import { buildRoleDockStatusByRole, type RoleDockRuntimeState } from "../pages/workflow/roleDockState";
@@ -26,7 +27,6 @@ import { useWorkspaceQuickPanel } from "./hooks/useWorkspaceQuickPanel";
 import { useDashboardAgentBridge } from "./hooks/useDashboardAgentBridge";
 import { useAgenticOrchestrationBridge } from "./hooks/useAgenticOrchestrationBridge";
 import { useMissionControl } from "./hooks/useMissionControl";
-import { useWorkbenchSessions } from "./hooks/useWorkbenchSessions";
 import { useWorkspaceEventPersistence } from "./hooks/useWorkspaceEventPersistence";
 import { useAgenticActionBus } from "./hooks/useAgenticActionBus";
 import { useWorkflowHandoffPanel } from "./hooks/useWorkflowHandoffPanel";
@@ -90,6 +90,7 @@ import {
   simplifyPresetForSimpleWorkflow,
 } from "../features/workflow/presets";
 import { localizePresetPromptTemplate } from "../features/workflow/presets/promptLocale";
+import { buildRoleNodeScaffold } from "./main/runtime/roleNodeScaffold";
 import {
   approvalDecisionLabel,
   approvalSourceLabel,
@@ -239,7 +240,7 @@ import {
 } from "./main";
 import WorkflowCanvasPane from "./main/presentation/WorkflowCanvasPane";
 import WorkflowInspectorPane from "./main/presentation/WorkflowInspectorPane";
-import { buildFeedPageVm, buildWorkbenchProps, buildWorkflowInspectorPaneProps } from "./main/presentation/mainAppPropsBuilders";
+import { buildFeedPageVm, buildWorkflowInspectorPaneProps } from "./main/presentation/mainAppPropsBuilders";
 import {
   cancelFeedReplyFeedbackClearTimer,
   scheduleFeedReplyFeedbackAutoClear,
@@ -321,8 +322,8 @@ import {
 } from "./main/runtime/turnExecutionUtils";
 import { executeTurnNodeWithContext } from "./main/runtime/executeTurnNode";
 import type { FeedCategory, InternalMemorySnippet, WebProviderRunResult, RunRecord } from "./main";
-const HIDDEN_WORKSPACE_TABS = new Set<WorkspaceTab>(["dashboard", "intelligence", "feed", "handoff", "agents"]);
-const WORKSPACE_TOPBAR_TABS: Array<{ tab: WorkspaceTab; label: string }> = [{ tab: "workbench", label: "워크스페이스" }, { tab: "workflow", label: "그래프" }, { tab: "knowledge", label: "데이터베이스" }, { tab: "settings", label: "설정" }];
+const HIDDEN_WORKSPACE_TABS = new Set<WorkspaceTab>(["workbench", "dashboard", "intelligence", "feed", "handoff", "agents"]);
+const WORKSPACE_TOPBAR_TABS: Array<{ tab: WorkspaceTab; label: string }> = [{ tab: "workflow", label: "그래프" }, { tab: "knowledge", label: "데이터베이스" }, { tab: "settings", label: "설정" }];
 
 function App() {
   const USER_BG_IMAGE_STORAGE_KEY = "rail.settings.user_bg_image";
@@ -785,7 +786,6 @@ function App() {
     invokeFn: invoke,
     appendWorkspaceEvent,
   });
-  const workbench = useWorkbenchSessions({ cwd, hasTauriRuntime, invokeFn: invoke, appendWorkspaceEvent, subscribeAction });
 
   const setStatus = useCallback((message: string) => {
     setStatusCore(message);
@@ -2101,80 +2101,67 @@ function App() {
     );
   }, [appendWorkspaceEvent, setStatus, workflowGraphViewMode]);
 
-  const onAddHandoffNodes = useCallback(
-    (fromRole: StudioRoleId, toRole: StudioRoleId) => {
+  const onAddRoleNode = useCallback(
+    (roleId: StudioRoleId, includeResearch: boolean) => {
       const maxX = graph.nodes.reduce((max, node) => Math.max(max, Number(node.position?.x ?? 0)), 40);
       const maxY = graph.nodes.reduce((max, node) => Math.max(max, Number(node.position?.y ?? 0)), 40);
-      const baseX = maxX + 320;
-      const baseY = Math.max(40, maxY);
-      const fromTemplate = STUDIO_ROLE_TEMPLATES.find((row) => row.id === fromRole);
-      const toTemplate = STUDIO_ROLE_TEMPLATES.find((row) => row.id === toRole);
-      const fromLabel = fromTemplate?.label ?? fromRole;
-      const toLabel = toTemplate?.label ?? toRole;
-      const fromNodeId = makeNodeId("turn");
-      const toNodeId = fromRole === toRole ? "" : makeNodeId("turn");
-      const fromNode: GraphNode = {
-        id: fromNodeId,
-        type: "turn",
-        position: { x: baseX, y: baseY },
-        config: {
-          ...defaultNodeConfig("turn"),
-          role: `${fromLabel} AGENT`,
-          promptTemplate: STUDIO_ROLE_PROMPTS[fromRole],
-          qualityProfile: "design_planning",
-          artifactType: "TaskPlanArtifact",
-          sourceKind: "handoff",
-          handoffRoleId: fromRole,
-          handoffToRoleId: toRole,
-        },
-      };
-      const toNode: GraphNode | null = toNodeId
-        ? {
-            id: toNodeId,
-            type: "turn",
-            position: { x: baseX + 320, y: baseY },
-            config: {
-              ...defaultNodeConfig("turn"),
-              role: `${toLabel} AGENT`,
-              promptTemplate: STUDIO_ROLE_PROMPTS[toRole],
-              qualityProfile: "code_implementation",
-              artifactType: "ChangePlanArtifact",
-              sourceKind: "handoff",
-              handoffRoleId: toRole,
-              handoffToRoleId: toRole,
-            },
-          }
-        : null;
-      const previousNodeId = selectedNodeIds[0] ?? "";
+      const roleX = maxX + (includeResearch ? 1240 : 320);
+      const roleY = Math.max(60, maxY);
+      const scaffold = buildRoleNodeScaffold({
+        roleId,
+        anchorX: roleX,
+        anchorY: roleY,
+        includeResearch,
+      });
+      const roleLabel = STUDIO_ROLE_TEMPLATES.find((row) => row.id === roleId)?.label ?? roleId;
+
       applyGraphChange(
         (prev) => ({
           ...prev,
-          nodes: toNode ? [...prev.nodes, fromNode, toNode] : [...prev.nodes, fromNode],
-          edges: [
-            ...prev.edges,
-            ...(previousNodeId
-              ? [{ from: { nodeId: previousNodeId, port: "out" as const }, to: { nodeId: fromNodeId, port: "in" as const } }]
-              : []),
-            ...(toNodeId
-              ? [{ from: { nodeId: fromNodeId, port: "out" as const }, to: { nodeId: toNodeId, port: "in" as const } }]
-              : []),
-          ],
+          nodes: [...prev.nodes, ...scaffold.nodes],
+          edges: [...prev.edges, ...scaffold.edges],
         }),
-        { autoLayout: true },
+        { autoLayout: false },
       );
-      const nextSelection = toNodeId ? [fromNodeId, toNodeId] : [fromNodeId];
-      setNodeSelection(nextSelection, toNodeId || fromNodeId);
+      setNodeSelection([scaffold.roleNodeId], scaffold.roleNodeId);
       appendWorkspaceEvent({
         source: "workflow",
-        message: toNodeId
-          ? `핸드오프 노드 추가: ${fromLabel} → ${toLabel}`
-          : `핸드오프 노드 추가: ${fromLabel}`,
+        message: includeResearch
+          ? `역할 노드 추가: ${roleLabel} + 자동 리서치`
+          : `역할 노드 추가: ${roleLabel}`,
         actor: "user",
         level: "info",
       });
-      setStatus(toNodeId ? `핸드오프 노드 추가 완료 (${fromLabel} → ${toLabel})` : `핸드오프 노드 추가 완료 (${fromLabel})`);
+      setStatus(includeResearch ? `${roleLabel} 역할 노드와 자동 리서치 그래프를 추가했습니다.` : `${roleLabel} 역할 노드를 추가했습니다.`);
     },
-    [appendWorkspaceEvent, applyGraphChange, graph.nodes, selectedNodeIds, setNodeSelection, setStatus],
+    [appendWorkspaceEvent, applyGraphChange, graph.nodes, setNodeSelection, setStatus],
+  );
+
+  const onInterruptWorkflowNode = useCallback(
+    async (nodeId: string) => {
+      const normalizedNodeId = String(nodeId ?? "").trim();
+      if (!normalizedNodeId) {
+        return;
+      }
+      const threadId = String(nodeStates[normalizedNodeId]?.threadId ?? "").trim();
+      if (!threadId) {
+        setStatus("중단할 실행 스레드가 없습니다.");
+        return;
+      }
+      try {
+        await invoke("turn_interrupt", { threadId });
+        addNodeLog(normalizedNodeId, "turn_interrupt 요청 전송");
+        setNodeStatus(normalizedNodeId, "queued", "중단 요청 전송");
+        setNodeRuntimeFields(normalizedNodeId, { status: "queued", finishedAt: undefined, durationMs: undefined });
+        appendWorkspaceEvent({ source: "workflow", actor: "user", level: "info", message: `${normalizedNodeId} 중단 요청 전송` });
+        setStatus(`${normalizedNodeId} 실행 중단 요청을 보냈습니다.`);
+      } catch (error) {
+        const message = String(error ?? "turn interrupt failed");
+        setError(message);
+        appendWorkspaceEvent({ source: "workflow", actor: "system", level: "error", message: `${normalizedNodeId} 중단 실패: ${message}` });
+      }
+    },
+    [addNodeLog, appendWorkspaceEvent, invoke, nodeStates, setError, setNodeRuntimeFields, setNodeStatus, setStatus],
   );
 
   const viewportWidth = Math.ceil(canvasLogicalViewport.width);
@@ -2218,7 +2205,7 @@ function App() {
     },
     toolsProps: {
       addNode,
-      addHandoffNodes: onAddHandoffNodes,
+      addRoleNode: onAddRoleNode,
       addCrawlerNode: onAddCrawlerNode,
       graphViewMode: workflowGraphViewMode,
       onSetGraphViewMode,
@@ -2259,12 +2246,10 @@ function App() {
       selectedHandoffId: workflowHandoffPanel.selectedHandoffId,
       handoffRoleOptions: workflowHandoffPanel.handoffRoleOptions,
       handoffFromRole: workflowHandoffPanel.handoffFromRole,
-      handoffToRole: workflowHandoffPanel.handoffToRole,
       handoffTaskId: workflowHandoffPanel.handoffTaskId,
       handoffRequestText: workflowHandoffPanel.handoffRequestText,
       setSelectedHandoffId: workflowHandoffPanel.setSelectedHandoffId,
       setHandoffFromRole: workflowHandoffPanel.setHandoffFromRole,
-      setHandoffToRole: workflowHandoffPanel.setHandoffToRole,
       setHandoffTaskId: workflowHandoffPanel.setHandoffTaskId,
       setHandoffRequestText: workflowHandoffPanel.setHandoffRequestText,
       createHandoff: workflowHandoffPanel.createHandoff,
@@ -2338,6 +2323,13 @@ function App() {
         setWorkspaceTab("knowledge");
         setStatus("데이터베이스 탭으로 이동");
       }}
+    />
+  );
+  const workflowAgentTerminalIslandElement = (
+    <WorkflowAgentTerminalIsland
+      activeRoleId={selectedNodeRoleLockId} cwd={cwd} graphFileName={graphFileName} graphNodes={graph.nodes}
+      isGraphRunning={isGraphRunning} nodeStates={nodeStates} onInterruptNode={onInterruptWorkflowNode}
+      onQueueNodeRequest={enqueueNodeRequest} selectedNode={selectedNode} workspaceEvents={workspaceEvents}
     />
   );
   const showRoleDockFirst = Boolean(selectedNode);
@@ -2418,14 +2410,6 @@ function App() {
     graphNodes: graph.nodes,
     setFeedInspectorPostId,
     setNodeSelection,
-  });
-  const workbenchPageProps = buildWorkbenchProps({
-    sessions: workbench.sessions, selectedSession: workbench.selectedSession, selectedSessionId: workbench.selectedSessionId,
-    createRoleSession: workbench.createRoleSession, publishAction, setStatus, createManualSession: workbench.createManualSession,
-    openSession: workbench.openSession, archiveSession: workbench.archiveSession, attachSessionNote: workbench.attachSessionNote,
-    attachArtifactPath: workbench.attachArtifactPath, setManualSessionStatus: workbench.setManualSessionStatus,
-    setSessionReviewState: workbench.setSessionReviewState, recordCompanionEvent: workbench.recordCompanionEvent,
-    recordUnityVerification: workbench.recordUnityVerification, executeSessionCommand: workbench.executeSessionCommand,
   });
   const { onSelectWorkspaceTab } = useWorkspaceNavigation({
     workspaceTab,
@@ -2690,7 +2674,6 @@ function App() {
     applyPreset,
     onRoleRunCompleted: (payload) => {
       missionControl.onRoleRunCompleted(payload);
-      workbench.onRoleRunCompleted(payload);
       const roleId = toStudioRoleId(payload.roleId);
       if (roleId) {
         setWorkflowRoleRuntimeStateByRole((prev) => ({
@@ -2942,6 +2925,7 @@ function App() {
                   sourceLabel: "그래프 입력",
                 })
               }
+              agentTerminalIsland={workflowAgentTerminalIslandElement}
               setWorkflowQuestion={setWorkflowQuestion}
               stageInsetX={GRAPH_STAGE_INSET_X}
               stageInsetY={GRAPH_STAGE_INSET_Y}
@@ -3056,7 +3040,6 @@ function App() {
           webBridgeStatus={webBridgeStatus}
           webWorkerBusy={webWorkerBusy}
           workflowRoleId={workflowRoleId}
-          workbench={workbenchPageProps}
           workspaceEvents={workspaceEvents}
           workspaceTab={workspaceTab}
         />

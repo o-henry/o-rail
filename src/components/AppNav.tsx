@@ -27,7 +27,6 @@ type AppNavProps = {
 };
 
 const NAV_ITEMS: NavItem[] = [
-  { tab: "workbench", label: "nav.workbench", ariaLabel: "nav.workbench", title: "nav.workbench" },
   { tab: "workflow", label: "nav.workflow.short", ariaLabel: "nav.workflow.title", title: "nav.workflow.title" },
   { tab: "knowledge", label: "nav.knowledge", ariaLabel: "nav.knowledge", title: "nav.knowledge" },
   { tab: "settings", label: "nav.settings", ariaLabel: "nav.settings", title: "nav.settings" },

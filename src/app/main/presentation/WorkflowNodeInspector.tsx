@@ -51,8 +51,8 @@ export default function WorkflowNodeInspector({
         <section className="inspector-block form-grid">
           <InspectorSectionTitle
             className="workflow-handoff-section-title"
-            help="핸드오프 노드는 역할 간 인수인계 전용입니다. 실행기/모델/역할/요청사항만 유지해 협업 흐름을 단순화합니다."
-            title="핸드오프 노드 설정"
+            help="역할 노드는 특정 담당자의 관점으로 답변하는 작업 노드입니다. 필요하면 앞단에 자동 조사 체인을 연결해 전문가용 자료를 먼저 수집합니다."
+            title="역할 노드 설정"
           />
           <label>
             에이전트
@@ -97,9 +97,9 @@ export default function WorkflowNodeInspector({
             />
           </label>
           <label>
-            인수인계 대상
+            다음 역할 힌트
             <FancySelect
-              ariaLabel="인수인계 대상"
+              ariaLabel="다음 역할 힌트"
               className="modern-select"
               onChange={(next) => updateSelectedNodeConfig("handoffToRoleId", next)}
               options={studioRoleOptions}
@@ -123,7 +123,7 @@ export default function WorkflowNodeInspector({
             />
           </label>
           <label>
-            완료 산출물 체크
+            완료 기준
             <textarea
               className="prompt-template-textarea"
               onChange={(e) => updateSelectedNodeConfig("handoffChecklist", e.currentTarget.value)}
@@ -132,7 +132,7 @@ export default function WorkflowNodeInspector({
             />
           </label>
           <div className="inspector-empty">
-            핸드오프 노드는 역할 간 전달을 위한 전용 노드입니다. 일반 노드 설정(품질 프로필/출력 스키마)은 최소화되어 표시됩니다.
+            역할 노드는 역할별 관점과 요구사항에 집중합니다. 연결과 후속 흐름은 캔버스에서 직접 조정하세요.
           </div>
         </section>
       )}

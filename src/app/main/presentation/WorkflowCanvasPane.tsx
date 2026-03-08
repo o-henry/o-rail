@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type RefObject, type SetStateAction, type WheelEvent as ReactWheelEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode, type RefObject, type SetStateAction, type WheelEvent as ReactWheelEvent } from "react";
 import { useI18n } from "../../../i18n";
 import type { MarqueeSelection, NodeRunState, PendingWebTurn } from "../types";
 import type { GraphNode, NodeAnchorSide, NodeExecutionStatus } from "../../../features/workflow/types";
@@ -93,6 +93,7 @@ type WorkflowCanvasPaneProps = {
     executor: TurnExecutor;
     turnModel?: string;
   }) => void;
+  agentTerminalIsland?: ReactNode;
   setWorkflowQuestion: (value: string) => void;
   workflowQuestion: string;
   questionInputRef: RefObject<HTMLTextAreaElement | null>;
@@ -171,6 +172,7 @@ export default function WorkflowCanvasPane({
   canClearGraph,
   isWorkflowBusy,
   onApplyModelSelection,
+  agentTerminalIsland,
   setWorkflowQuestion,
   workflowQuestion,
   questionInputRef,
@@ -451,6 +453,8 @@ export default function WorkflowCanvasPane({
             </button>
           </div>
         </div>
+
+        {agentTerminalIsland}
 
       </div>
 

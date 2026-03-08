@@ -11,7 +11,7 @@ export type SelectOption = {
 export type WorkflowInspectorToolsProps = {
   simpleWorkflowUI: boolean;
   addNode: (type: NodeType) => void;
-  addHandoffNodes: (fromRole: StudioRoleId, toRole: StudioRoleId) => void;
+  addRoleNode: (roleId: StudioRoleId, includeResearch: boolean) => void;
   addCrawlerNode: () => void;
   graphViewMode: WorkflowGraphViewMode;
   onSetGraphViewMode: (mode: WorkflowGraphViewMode) => void;
@@ -51,12 +51,10 @@ export type WorkflowInspectorToolsProps = {
   selectedHandoffId: string;
   handoffRoleOptions: SelectOption[];
   handoffFromRole: StudioRoleId;
-  handoffToRole: StudioRoleId;
   handoffTaskId: string;
   handoffRequestText: string;
   setSelectedHandoffId: (id: string) => void;
   setHandoffFromRole: (value: StudioRoleId) => void;
-  setHandoffToRole: (value: StudioRoleId) => void;
   setHandoffTaskId: (value: string) => void;
   setHandoffRequestText: (value: string) => void;
   createHandoff: () => void;

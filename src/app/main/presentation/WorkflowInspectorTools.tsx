@@ -1,3 +1,4 @@
+import { useState } from "react";
 import FancySelect from "../../../components/FancySelect";
 import { knowledgeStatusMeta } from "../../../features/workflow/labels";
 import { useI18n } from "../../../i18n";
@@ -7,34 +8,38 @@ export default function WorkflowInspectorTools({
   ...props
 }: WorkflowInspectorToolsProps) {
   const { t, tp } = useI18n();
+  const [autoResearchEnabled, setAutoResearchEnabled] = useState(true);
 
   return (
     <section className="inspector-block">
       <div className="tool-dropdown-group">
-        <h4>{tp("핸드오프")}</h4>
-        <div className="workflow-handoff-create-row">
+        <h4>{tp("역할 노드")}</h4>
+        <div className="workflow-handoff-create workflow-role-node-create">
           <FancySelect
-            ariaLabel={tp("핸드오프 보내는 역할")}
+            ariaLabel={tp("역할 노드")}
             className="modern-select workflow-handoff-select"
             onChange={(next) => props.setHandoffFromRole(next as typeof props.handoffFromRole)}
             options={props.handoffRoleOptions}
             value={props.handoffFromRole}
           />
-          <FancySelect
-            ariaLabel={tp("핸드오프 받는 역할")}
-            className="modern-select workflow-handoff-select"
-            onChange={(next) => props.setHandoffToRole(next as typeof props.handoffToRole)}
-            options={props.handoffRoleOptions}
-            value={props.handoffToRole}
-          />
+          <button
+            aria-pressed={autoResearchEnabled}
+            className={`mini-action-button workflow-handoff-create-button${autoResearchEnabled ? " is-enabled" : ""}`}
+            onClick={() => setAutoResearchEnabled((prev) => !prev)}
+            type="button"
+          >
+            <span className="mini-action-button-label">
+              {autoResearchEnabled ? tp("자동 리서치 연결 켜짐") : tp("자동 리서치 연결 꺼짐")}
+            </span>
+          </button>
         </div>
         <div className="workflow-handoff-actions">
           <button
             className="mini-action-button workflow-handoff-create-button"
-            onClick={() => props.addHandoffNodes(props.handoffFromRole, props.handoffToRole)}
+            onClick={() => props.addRoleNode(props.handoffFromRole, autoResearchEnabled)}
             type="button"
           >
-            <span className="mini-action-button-label">{tp("핸드오프 노드 추가")}</span>
+            <span className="mini-action-button-label">{tp("역할 노드 추가")}</span>
           </button>
           <button
             className="mini-action-button workflow-handoff-create-button workflow-research-node-create-button"
@@ -43,6 +48,11 @@ export default function WorkflowInspectorTools({
           >
             <span className="mini-action-button-label">{tp("데이터 노드 추가")}</span>
           </button>
+        </div>
+        <div className="inspector-empty">
+          {autoResearchEnabled
+            ? tp("역할 노드를 추가하면 앞단에 조사용 RAG 체인을 함께 생성합니다. 연결은 자동으로 구성되지만 이후 편집은 직접 할 수 있습니다.")
+            : tp("역할 노드만 단독으로 추가합니다. 연결은 캔버스에서 직접 이어주세요.")}
         </div>
       </div>
 

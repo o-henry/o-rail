@@ -2,6 +2,11 @@ import type { StudioRoleId } from "./handoffTypes";
 
 const ROLE_KNOWLEDGE_STORAGE_KEY = "rail.studio.role_knowledge.v1";
 
+function getStorage(): Storage | null {
+  const candidate = typeof globalThis !== "undefined" ? (globalThis as { localStorage?: Storage }).localStorage : undefined;
+  return candidate ?? null;
+}
+
 export type RoleKnowledgeSource = {
   url: string;
   status: "ok" | "error";
@@ -100,10 +105,11 @@ function normalizeProfile(raw: unknown): RoleKnowledgeProfile | null {
 }
 
 export function readRoleKnowledgeProfiles(): RoleKnowledgeProfile[] {
-  if (typeof window === "undefined") {
+  const storage = getStorage();
+  if (!storage) {
     return [];
   }
-  const raw = window.localStorage.getItem(ROLE_KNOWLEDGE_STORAGE_KEY);
+  const raw = storage.getItem(ROLE_KNOWLEDGE_STORAGE_KEY);
   if (!raw) {
     return [];
   }
@@ -119,10 +125,11 @@ export function readRoleKnowledgeProfiles(): RoleKnowledgeProfile[] {
 }
 
 export function writeRoleKnowledgeProfiles(rows: RoleKnowledgeProfile[]): void {
-  if (typeof window === "undefined") {
+  const storage = getStorage();
+  if (!storage) {
     return;
   }
-  window.localStorage.setItem(ROLE_KNOWLEDGE_STORAGE_KEY, JSON.stringify(rows));
+  storage.setItem(ROLE_KNOWLEDGE_STORAGE_KEY, JSON.stringify(rows));
 }
 
 export function getRoleKnowledgeProfile(roleId: StudioRoleId): RoleKnowledgeProfile | null {

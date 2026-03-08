@@ -2336,7 +2336,8 @@ function App() {
     <WorkflowAgentTerminalIsland
       activeRoleId={selectedNodeRoleLockId} cwd={cwd} graphFileName={graphFileName} graphNodes={graph.nodes}
       isGraphRunning={isGraphRunning} nodeStates={nodeStates} onInterruptNode={onInterruptWorkflowNode}
-      onQueueNodeRequest={enqueueNodeRequest} selectedNode={selectedNode} workspaceEvents={workspaceEvents}
+      onQueueNodeRequest={enqueueNodeRequest} pendingNodeRequests={pendingNodeRequests}
+      selectedNode={selectedNode} workspaceEvents={workspaceEvents}
     />
   );
   const selectedNodeSourceKind = String((selectedNode?.config as Record<string, unknown> | undefined)?.sourceKind ?? "").trim().toLowerCase();

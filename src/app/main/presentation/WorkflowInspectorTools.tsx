@@ -1,4 +1,3 @@
-import { useState } from "react";
 import FancySelect from "../../../components/FancySelect";
 import { knowledgeStatusMeta } from "../../../features/workflow/labels";
 import { useI18n } from "../../../i18n";
@@ -8,7 +7,6 @@ export default function WorkflowInspectorTools({
   ...props
 }: WorkflowInspectorToolsProps) {
   const { t, tp } = useI18n();
-  const [autoResearchEnabled, setAutoResearchEnabled] = useState(true);
 
   return (
     <section className="inspector-block">
@@ -22,21 +20,11 @@ export default function WorkflowInspectorTools({
             options={props.handoffRoleOptions}
             value={props.handoffFromRole}
           />
-          <button
-            aria-pressed={autoResearchEnabled}
-            className={`mini-action-button workflow-handoff-create-button${autoResearchEnabled ? " is-enabled" : ""}`}
-            onClick={() => setAutoResearchEnabled((prev) => !prev)}
-            type="button"
-          >
-            <span className="mini-action-button-label">
-              {autoResearchEnabled ? tp("자동 리서치 연결 켜짐") : tp("자동 리서치 연결 꺼짐")}
-            </span>
-          </button>
         </div>
         <div className="workflow-handoff-actions">
           <button
             className="mini-action-button workflow-handoff-create-button"
-            onClick={() => props.addRoleNode(props.handoffFromRole, autoResearchEnabled)}
+            onClick={() => props.addRoleNode(props.handoffFromRole, true)}
             type="button"
           >
             <span className="mini-action-button-label">{tp("역할 노드 추가")}</span>
@@ -50,9 +38,7 @@ export default function WorkflowInspectorTools({
           </button>
         </div>
         <div className="inspector-empty">
-          {autoResearchEnabled
-            ? tp("역할 노드를 추가하면 앞단에 조사용 RAG 체인을 함께 생성합니다. 연결은 자동으로 구성되지만 이후 편집은 직접 할 수 있습니다.")
-            : tp("역할 노드만 단독으로 추가합니다. 연결은 캔버스에서 직접 이어주세요.")}
+          {tp("역할 노드를 추가하면 앞단에 조사용 RAG 체인을 함께 생성합니다. 연결은 자동으로 구성되지만 이후 편집은 직접 할 수 있습니다.")}
         </div>
       </div>
 

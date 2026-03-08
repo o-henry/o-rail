@@ -13,6 +13,7 @@ type WorkflowAgentTerminalIslandProps = {
   nodeStates: Record<string, WorkflowWorkspaceNodeState & { threadId?: string }>;
   onInterruptNode: (nodeId: string) => Promise<void>;
   onQueueNodeRequest: (nodeId: string, text: string) => void;
+  pendingNodeRequests: Record<string, string[]>;
   selectedNode: GraphNode | null;
   workspaceEvents: WorkflowWorkspaceEvent[];
 };
@@ -29,23 +30,59 @@ function nodeHeading(node: GraphNode | null): string {
   return cleanLine(config.role) || cleanLine(config.label) || node.id;
 }
 
-function buildViewportText(input: {
+function promptPreview(node: GraphNode | null): string {
+  if (!node) {
+    return "";
+  }
+  const config = node.config as Record<string, unknown>;
+  const raw = cleanLine(config.promptTemplate);
+  if (!raw) {
+    return "";
+  }
+  return raw.length > 520 ? `${raw.slice(0, 520)}...` : raw;
+}
+
+export function buildViewportText(input: {
   graphFileName: string;
   paneBuffer: string;
   paneTitle: string;
   selectedNode: GraphNode | null;
   selectedNodeState?: WorkflowWorkspaceNodeState;
-  workspaceEvents: WorkflowWorkspaceEvent[];
+  pendingRequests: string[];
 }) {
+  const config = (input.selectedNode?.config ?? {}) as Record<string, unknown>;
   const lines = [
     `[graph] ${cleanLine(input.graphFileName) || "default"}`,
     `[agent] ${input.paneTitle}`,
     `[node] ${nodeHeading(input.selectedNode)}`,
   ];
+  const taskId = cleanLine(config.taskId) || cleanLine(config.handoffTaskId);
+  const sourceKind = cleanLine(config.sourceKind);
+  if (taskId) {
+    lines.push(`[task] ${taskId}`);
+  }
+  if (sourceKind) {
+    lines.push(`[mode] ${sourceKind}`);
+  }
   if (input.selectedNodeState?.status) {
     lines.push(`[status] ${cleanLine(input.selectedNodeState.status)}`);
   }
   lines.push("");
+
+  const requestPreview = promptPreview(input.selectedNode);
+  if (requestPreview) {
+    lines.push("[current request]");
+    lines.push(requestPreview);
+    lines.push("");
+  }
+
+  if (input.pendingRequests.length > 0) {
+    lines.push("[queued follow-ups]");
+    input.pendingRequests.slice(-4).forEach((request, index) => {
+      lines.push(`${index + 1}. ${cleanLine(request)}`);
+    });
+    lines.push("");
+  }
 
   const paneBuffer = cleanLine(input.paneBuffer);
   if (paneBuffer) {
@@ -57,19 +94,10 @@ function buildViewportText(input: {
   if (nodeLogs.length > 0) {
     lines.push("[graph trace]");
     nodeLogs.slice(-16).forEach((log) => lines.push(String(log ?? "")));
+    return lines.join("\n");
   }
-
-  const recentEvents = input.workspaceEvents.slice(-8);
-  if (recentEvents.length > 0) {
-    lines.push("");
-    lines.push("[workspace events]");
-    recentEvents.forEach((event) => lines.push(`[${event.source}/${event.level ?? "info"}] ${event.message}`));
-  }
-
-  if (nodeLogs.length === 0 && recentEvents.length === 0) {
-    lines.push("아직 실행 로그가 없습니다.");
-    lines.push("그래프에서 역할 노드를 실행하거나 Codex 세션을 시작하면 이 창에 출력이 쌓입니다.");
-  }
+  lines.push("이 역할의 실행 로그가 아직 없습니다.");
+  lines.push("Codex 시작을 누르면 선택한 역할 전용 CLI 세션이 이 창에 연결됩니다.");
 
   return lines.join("\n");
 }
@@ -109,6 +137,7 @@ export default function WorkflowAgentTerminalIsland(props: WorkflowAgentTerminal
 
   const visible = Boolean(props.selectedNode && props.activeRoleId && pane);
   const selectedNodeState = props.selectedNode ? props.nodeStates[props.selectedNode.id] : undefined;
+  const pendingRequests = props.selectedNode ? props.pendingNodeRequests[props.selectedNode.id] ?? [] : [];
   const viewportText = useMemo(
     () =>
       buildViewportText({
@@ -117,9 +146,9 @@ export default function WorkflowAgentTerminalIsland(props: WorkflowAgentTerminal
         paneTitle: pane?.title ?? "Codex",
         selectedNode: props.selectedNode,
         selectedNodeState,
-        workspaceEvents: props.workspaceEvents,
+        pendingRequests,
       }),
-    [pane?.buffer, pane?.title, props.graphFileName, props.selectedNode, props.workspaceEvents, selectedNodeState],
+    [pane?.buffer, pane?.title, props.graphFileName, props.selectedNode, selectedNodeState, pendingRequests],
   );
 
   const submitQueuedRequest = async () => {

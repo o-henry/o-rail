@@ -1283,11 +1283,6 @@
   background: var(--node-turn-head-bg);
 }
 
-.graph-node.node-turn.is-data-pipeline-node {
-  background: color-mix(in srgb, #159a69 10%, var(--canvas-node-bg));
-  box-shadow: 0 2px 12px rgba(18, 94, 66, 0.12);
-}
-
 .graph-node.node-turn.is-rag-mode-node.is-data-pipeline-node {
   border-radius: 999px;
 }
@@ -1298,11 +1293,6 @@
 
 .graph-node.node-turn.is-data-pipeline-node .node-head-subtitle {
   color: #1f6f4d;
-}
-
-.graph-node.node-turn.is-data-research-node {
-  background: color-mix(in srgb, #7d56d8 10%, var(--canvas-node-bg));
-  box-shadow: 0 2px 12px rgba(88, 58, 160, 0.14);
 }
 
 .graph-node.node-turn.is-data-research-node .node-head {

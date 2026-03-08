@@ -76,10 +76,53 @@ function createViaResearchNode(params: {
   x: number;
   y: number;
   roleId: StudioRoleId;
+  roleLabel: string;
   templateLabel: string;
 }): GraphNode {
   const research = getRoleResearchProfile(params.roleId);
   const isSourceNode = params.viaNodeType.startsWith("source.");
+  const roleAwareLabel = (() => {
+    if (params.viaNodeType === "trigger.manual") {
+      return `${params.roleLabel} 조사 시작`;
+    }
+    if (params.viaNodeType === "transform.normalize") {
+      return `${params.roleLabel} 자료 정리`;
+    }
+    if (params.viaNodeType === "transform.verify") {
+      return `${params.roleLabel} 근거 검증`;
+    }
+    if (params.viaNodeType === "transform.rank") {
+      return `${params.roleLabel} 중요도 정렬`;
+    }
+    if (params.viaNodeType === "agent.codex") {
+      return `${params.roleLabel} 리서치 요약`;
+    }
+    if (params.viaNodeType === "export.rag") {
+      return `${params.roleLabel} 역할 컨텍스트 저장`;
+    }
+    return `${params.roleLabel} 자료 수집 · ${viaNodeLabel(params.viaNodeType)}`;
+  })();
+  const roleAwarePrompt = (() => {
+    if (params.viaNodeType.startsWith("source.")) {
+      return `${params.roleLabel} 역할 수행에 필요한 외부 자료를 수집합니다.`;
+    }
+    if (params.viaNodeType === "transform.normalize") {
+      return `${params.roleLabel}가 읽기 쉬운 공통 형식으로 조사 결과를 정리합니다.`;
+    }
+    if (params.viaNodeType === "transform.verify") {
+      return `${params.roleLabel} 관점에서 근거 신뢰도와 중복 여부를 검증합니다.`;
+    }
+    if (params.viaNodeType === "transform.rank") {
+      return `${params.roleLabel} 의사결정에 중요한 자료를 우선순위화합니다.`;
+    }
+    if (params.viaNodeType === "agent.codex") {
+      return `${params.roleLabel} 역할용 참고자료 브리프를 생성합니다.`;
+    }
+    if (params.viaNodeType === "export.rag") {
+      return `${params.roleLabel} 역할 노드가 바로 사용할 조사 결과를 내보냅니다.`;
+    }
+    return `${params.roleLabel} 역할용 자동 조사 단계를 실행합니다.`;
+  })();
   return {
     id: params.nodeId,
     type: "turn",
@@ -87,11 +130,11 @@ function createViaResearchNode(params: {
     config: {
       ...defaultNodeConfig("turn"),
       executor: "via_flow",
-      role: `${viaNodeLabel(params.viaNodeType)} NODE`,
-      promptTemplate: `VIA ${params.viaNodeType} 단계 실행`,
+      role: roleAwareLabel,
+      promptTemplate: roleAwarePrompt,
       qualityProfile: "research_evidence",
       artifactType: "EvidenceArtifact",
-      sourceKind: "data_pipeline",
+      sourceKind: isSourceNode ? "data_research" : "data_pipeline",
       viaFlowId: "1",
       viaNodeType: params.viaNodeType,
       viaNodeLabel: viaNodeLabel(params.viaNodeType),
@@ -156,6 +199,7 @@ export function buildRoleNodeScaffold(params: RoleNodeScaffoldParams): RoleNodeS
     nodeId: triggerNodeId,
     viaNodeType: "trigger.manual",
     roleId: params.roleId,
+    roleLabel,
     templateLabel: research.focusLabel,
     x: Math.max(40, params.anchorX - 990),
     y: params.anchorY,
@@ -169,6 +213,7 @@ export function buildRoleNodeScaffold(params: RoleNodeScaffoldParams): RoleNodeS
       nodeId,
       viaNodeType: sourceType,
       roleId: params.roleId,
+      roleLabel,
       templateLabel: research.focusLabel,
       x: Math.max(40, params.anchorX - 780),
       y: params.anchorY + (index - 1) * 150,
@@ -179,6 +224,7 @@ export function buildRoleNodeScaffold(params: RoleNodeScaffoldParams): RoleNodeS
     nodeId: normalizeNodeId,
     viaNodeType: "transform.normalize",
     roleId: params.roleId,
+    roleLabel,
     templateLabel: research.focusLabel,
     x: Math.max(40, params.anchorX - 530),
     y: params.anchorY,
@@ -189,6 +235,7 @@ export function buildRoleNodeScaffold(params: RoleNodeScaffoldParams): RoleNodeS
     nodeId: verifyNodeId,
     viaNodeType: "transform.verify",
     roleId: params.roleId,
+    roleLabel,
     templateLabel: research.focusLabel,
     x: Math.max(40, params.anchorX - 345),
     y: params.anchorY,
@@ -199,6 +246,7 @@ export function buildRoleNodeScaffold(params: RoleNodeScaffoldParams): RoleNodeS
     nodeId: rankNodeId,
     viaNodeType: "transform.rank",
     roleId: params.roleId,
+    roleLabel,
     templateLabel: research.focusLabel,
     x: Math.max(40, params.anchorX - 180),
     y: params.anchorY,
@@ -209,6 +257,7 @@ export function buildRoleNodeScaffold(params: RoleNodeScaffoldParams): RoleNodeS
     nodeId: agentNodeId,
     viaNodeType: "agent.codex",
     roleId: params.roleId,
+    roleLabel,
     templateLabel: research.focusLabel,
     x: Math.max(40, params.anchorX - 15),
     y: params.anchorY,
@@ -219,6 +268,7 @@ export function buildRoleNodeScaffold(params: RoleNodeScaffoldParams): RoleNodeS
     nodeId: exportNodeId,
     viaNodeType: "export.rag",
     roleId: params.roleId,
+    roleLabel,
     templateLabel: research.focusLabel,
     x: Math.max(40, params.anchorX + 150),
     y: params.anchorY,

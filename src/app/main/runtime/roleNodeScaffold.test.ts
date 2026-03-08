@@ -37,6 +37,8 @@ describe("roleNodeScaffold", () => {
     expect(sourceTypes).toEqual(expect.arrayContaining(["source.community", "source.dev", "source.news"]));
     const sourceNode = result.nodes.find((node) => String((node.config as Record<string, unknown>).viaNodeType) === "source.dev");
     expect(sourceNode?.config).toMatchObject({
+      sourceKind: "data_research",
+      role: expect.stringContaining("시스템"),
       viaCustomKeywords: expect.stringContaining("unity architecture"),
       viaCustomSites: expect.stringContaining("docs.unity3d.com"),
     });

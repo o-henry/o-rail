@@ -138,6 +138,7 @@ export default function WorkflowNodeInspector({
           <label>
             역할 표시명
             <input
+              className="workflow-role-name-input"
               onChange={(e) => updateSelectedNodeConfig("role", e.currentTarget.value)}
               value={String(selectedConfig.role ?? "")}
             />

@@ -2162,7 +2162,11 @@ function App() {
       artifactTypeOptions: [...artifactTypeOptions],
       cwd,
       model,
-      nodeSettingsTitle: t("workflow.nodeSettings"),
+      nodeSettingsTitle:
+        selectedNode?.type === "turn" &&
+        String((selectedNode.config as Record<string, unknown> | undefined)?.sourceKind ?? "").trim().toLowerCase() === "handoff"
+          ? "역할노드설정"
+          : t("workflow.nodeSettings"),
       normalizeQualityThreshold,
       outgoingNodeOptions,
       qualityProfileOptions: [...qualityProfileOptions],

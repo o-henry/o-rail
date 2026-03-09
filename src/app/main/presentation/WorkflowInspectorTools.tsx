@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import FancySelect from "../../../components/FancySelect";
+import { filterUnityAutomationPresetOptions } from "../../../features/unityAutomation/presetOptions";
 import { knowledgeStatusMeta } from "../../../features/workflow/labels";
 import { useI18n } from "../../../i18n";
 import type { WorkflowInspectorToolsProps } from "../workflowInspectorTypes";
@@ -8,14 +9,14 @@ export default function WorkflowInspectorTools({
   ...props
 }: WorkflowInspectorToolsProps) {
   const { t, tp } = useI18n();
-  const unityCiDoctorOptions = props.presetTemplateOptions.filter((option) => option.value === "unityCiDoctor");
-  const [selectedPresetKind, setSelectedPresetKind] = useState(unityCiDoctorOptions[0]?.value ?? "");
+  const unityAutomationOptions = filterUnityAutomationPresetOptions(props.presetTemplateOptions);
+  const [selectedPresetKind, setSelectedPresetKind] = useState(unityAutomationOptions[0]?.value ?? "");
 
   useEffect(() => {
-    if (!unityCiDoctorOptions.some((option) => option.value === selectedPresetKind)) {
-      setSelectedPresetKind(unityCiDoctorOptions[0]?.value ?? "");
+    if (!unityAutomationOptions.some((option) => option.value === selectedPresetKind)) {
+      setSelectedPresetKind(unityAutomationOptions[0]?.value ?? "");
     }
-  }, [unityCiDoctorOptions, selectedPresetKind]);
+  }, [unityAutomationOptions, selectedPresetKind]);
 
   return (
     <section className="inspector-block">
@@ -27,7 +28,7 @@ export default function WorkflowInspectorTools({
             className="modern-select"
             emptyMessage={tp("선택 가능한 템플릿이 없습니다.")}
             onChange={(next) => setSelectedPresetKind(next)}
-            options={unityCiDoctorOptions}
+            options={unityAutomationOptions}
             value={selectedPresetKind}
           />
           <button

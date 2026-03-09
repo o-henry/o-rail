@@ -10,12 +10,20 @@ export function isViaFlowTurnNode(node: GraphNode): boolean {
   return getTurnExecutor(node.config) === "via_flow";
 }
 
+export function isVisibleRagWorkspaceNode(node: GraphNode): boolean {
+  if (!isViaFlowTurnNode(node)) {
+    return false;
+  }
+  const internalParentNodeId = String((node.config as Record<string, unknown>)?.internalParentNodeId ?? "").trim();
+  return internalParentNodeId.length === 0;
+}
+
 export function buildGraphForViewMode(graph: GraphData, mode: WorkflowGraphViewMode): GraphData {
   if (mode !== "rag") {
     return graph;
   }
 
-  const ragNodes = graph.nodes.filter((node) => isViaFlowTurnNode(node));
+  const ragNodes = graph.nodes.filter((node) => isVisibleRagWorkspaceNode(node));
   const ragNodeIds = new Set(ragNodes.map((node) => node.id));
   const ragEdges = graph.edges.filter(
     (edge) => ragNodeIds.has(edge.from.nodeId) && ragNodeIds.has(edge.to.nodeId),

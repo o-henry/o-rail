@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { GraphData } from "./types";
-import { buildGraphForViewMode, isViaFlowTurnNode } from "./viaGraph";
+import type { GraphData, GraphNode } from "./types";
+import { buildGraphForViewMode, isViaFlowTurnNode, isVisibleRagWorkspaceNode } from "./viaGraph";
 
 const baseGraph: GraphData = {
   version: 1,
@@ -41,5 +41,44 @@ describe("viaGraph helpers", () => {
       { from: { nodeId: "turn-via-1", port: "out" }, to: { nodeId: "turn-via-2", port: "in" } },
     ]);
     expect(next.knowledge).toBe(baseGraph.knowledge);
+  });
+
+  it("hides internal role research via nodes from rag mode", () => {
+    const visibleViaNode: GraphNode = {
+      id: "turn-via-visible",
+      type: "turn",
+      position: { x: 20, y: 20 },
+      config: { executor: "via_flow", viaFlowId: "1", viaNodeType: "source.news" },
+    };
+    const internalViaNode: GraphNode = {
+      id: "turn-via-internal",
+      type: "turn",
+      position: { x: 40, y: 40 },
+      config: {
+        executor: "via_flow",
+        viaFlowId: "1",
+        viaNodeType: "source.community",
+        internalParentNodeId: "role-node-1",
+        internalNodeKind: "research",
+      },
+    };
+
+    expect(isVisibleRagWorkspaceNode(visibleViaNode)).toBe(true);
+    expect(isVisibleRagWorkspaceNode(internalViaNode)).toBe(false);
+
+    const graph = buildGraphForViewMode(
+      {
+        version: 1,
+        knowledge: baseGraph.knowledge,
+        nodes: [visibleViaNode, internalViaNode],
+        edges: [
+          { from: { nodeId: visibleViaNode.id, port: "out" }, to: { nodeId: internalViaNode.id, port: "in" } },
+        ],
+      },
+      "rag",
+    );
+
+    expect(graph.nodes.map((node) => node.id)).toEqual([visibleViaNode.id]);
+    expect(graph.edges).toHaveLength(0);
   });
 });

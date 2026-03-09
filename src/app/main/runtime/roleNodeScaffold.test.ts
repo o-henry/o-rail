@@ -28,17 +28,22 @@ describe("roleNodeScaffold", () => {
       includeResearch: true,
     });
 
-    expect(result.nodes).toHaveLength(5);
-    expect(result.edges).toHaveLength(4);
-    expect(result.researchNodeIds).toHaveLength(4);
+    expect(result.nodes).toHaveLength(6);
+    expect(result.edges).toHaveLength(5);
+    expect(result.researchNodeIds).toHaveLength(5);
     const researchNodes = result.nodes.filter((node) => String((node.config as Record<string, unknown>).sourceKind ?? "") === "data_research");
     expect(researchNodes).toHaveLength(3);
-    const sourceNode = result.nodes.find((node) => String((node.config as Record<string, unknown>).role ?? "").includes("공식 문서 조사"));
-    expect(sourceNode?.config).toMatchObject({
+    const repoContextNode = result.nodes.find((node) => String((node.config as Record<string, unknown>).role ?? "").includes("레포 구조 조사"));
+    expect(repoContextNode?.config).toMatchObject({
       sourceKind: "data_research",
       role: expect.stringContaining("시스템"),
-      executor: "web_grok",
-      promptTemplate: expect.stringContaining("unity architecture"),
+      executor: "codex",
+      promptTemplate: expect.stringContaining("현재 레포의 시스템 경계"),
+      knowledgeEnabled: true,
+    });
+    const officialNode = result.nodes.find((node) => String((node.config as Record<string, unknown>).role ?? "").includes("공식 문서·패턴 조사"));
+    expect(officialNode?.config).toMatchObject({
+      executor: "web_perplexity",
       viaCustomSites: expect.stringContaining("docs.unity3d.com"),
     });
     const synthesisNode = result.nodes.find((node) => String((node.config as Record<string, unknown>).role ?? "").includes("조사 종합"));
@@ -46,9 +51,16 @@ describe("roleNodeScaffold", () => {
       executor: "codex",
       sourceKind: "data_pipeline",
     });
+    const verificationNode = result.nodes.find((node) => String((node.config as Record<string, unknown>).role ?? "").includes("조사 검증"));
+    expect(verificationNode?.config).toMatchObject({
+      executor: "codex",
+      sourceKind: "data_pipeline",
+      promptTemplate: expect.stringContaining("장기 유지보수 리스크"),
+    });
     expect(result.edges.filter((edge) => edge.to.nodeId === synthesisNode?.id)).toHaveLength(3);
+    expect(result.edges.find((edge) => edge.from.nodeId === synthesisNode?.id && edge.to.nodeId === verificationNode?.id)).toBeTruthy();
     expect(result.edges[result.edges.length - 1]).toEqual({
-      from: { nodeId: result.researchNodeIds[result.researchNodeIds.length - 1], port: "out" },
+      from: { nodeId: verificationNode?.id ?? "", port: "out" },
       to: { nodeId: result.roleNodeId, port: "in" },
     });
   });

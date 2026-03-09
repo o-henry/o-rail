@@ -64,6 +64,13 @@ export type WorkflowInspectorToolsProps = {
   consumeHandoff: () => void;
 };
 
+export type WorkflowUnityAutomationProps = {
+  cwd: string;
+  applyPreset: (preset: PresetKind) => void;
+  isPresetKind: (value: string) => value is PresetKind;
+  presetTemplateOptions: SelectOption[];
+};
+
 export type WorkflowInspectorNodeProps = {
   nodeSettingsTitle: string;
   simpleWorkflowUI: boolean;

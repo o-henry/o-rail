@@ -8,6 +8,7 @@ import WorkflowPage from "../pages/workflow/WorkflowPage";
 import WorkflowAgentTerminalIsland from "../pages/workflow/WorkflowAgentTerminalIsland";
 import WorkflowRoleDock from "../pages/workflow/WorkflowRoleDock";
 import WorkflowRagModeDock from "../pages/workflow/WorkflowRagModeDock";
+import WorkflowUnityAutomationIsland from "./main/presentation/WorkflowUnityAutomationIsland";
 import { buildRoleDockStatusByRole, type RoleDockRuntimeState } from "../pages/workflow/roleDockState";
 import { useFloatingPanel } from "../features/ui/useFloatingPanel";
 import { useExecutionState } from "./hooks/useExecutionState";
@@ -2316,6 +2317,14 @@ function App() {
       }}
     />
   );
+  const workflowUnityAutomationIslandElement = (
+    <WorkflowUnityAutomationIsland
+      applyPreset={applyPreset}
+      cwd={cwd}
+      isPresetKind={isPresetKind}
+      presetTemplateOptions={[...presetTemplateOptions]}
+    />
+  );
   const workflowAgentTerminalIslandElement = (
     <WorkflowAgentTerminalIsland
       activeRoleId={selectedNodeRoleLockId} cwd={cwd} graphFileName={graphFileName} graphNodes={graph.nodes}
@@ -2962,6 +2971,7 @@ function App() {
                 ) : (
                   <>
                     {showInspectorFirst ? workflowInspectorPaneElement : workflowRoleDockElement}
+                    {workflowUnityAutomationIslandElement}
                     {showInspectorFirst ? workflowRoleDockElement : workflowInspectorPaneElement}
                   </>
                 )}

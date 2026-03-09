@@ -1,8 +1,15 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import FancySelect from "../../../components/FancySelect";
+import { batchActionsForUnityPreset } from "../../../features/unityAutomation/presetCommands";
 import { filterUnityAutomationPresetOptions } from "../../../features/unityAutomation/presetOptions";
+import type {
+  UnityBatchCommandPreview,
+  UnityGuardInspection,
+  UnityGuardPrepareResult,
+} from "../../../features/unityAutomation/types";
 import { knowledgeStatusMeta } from "../../../features/workflow/labels";
 import { useI18n } from "../../../i18n";
+import { invoke } from "../../../shared/tauri";
 import type { WorkflowInspectorToolsProps } from "../workflowInspectorTypes";
 
 export default function WorkflowInspectorTools({
@@ -11,12 +18,86 @@ export default function WorkflowInspectorTools({
   const { t, tp } = useI18n();
   const unityAutomationOptions = filterUnityAutomationPresetOptions(props.presetTemplateOptions);
   const [selectedPresetKind, setSelectedPresetKind] = useState(unityAutomationOptions[0]?.value ?? "");
+  const [unityPathDraft, setUnityPathDraft] = useState("");
+  const [guardInspection, setGuardInspection] = useState<UnityGuardInspection | null>(null);
+  const [guardPrepared, setGuardPrepared] = useState<UnityGuardPrepareResult | null>(null);
+  const [batchPreview, setBatchPreview] = useState<UnityBatchCommandPreview | null>(null);
+  const [unityLoading, setUnityLoading] = useState<"inspect" | "prepare" | "preview" | null>(null);
+  const [unityError, setUnityError] = useState("");
 
   useEffect(() => {
     if (!unityAutomationOptions.some((option) => option.value === selectedPresetKind)) {
       setSelectedPresetKind(unityAutomationOptions[0]?.value ?? "");
     }
   }, [unityAutomationOptions, selectedPresetKind]);
+
+  useEffect(() => {
+    setBatchPreview(null);
+    setUnityError("");
+  }, [selectedPresetKind]);
+
+  const unityBatchActions = useMemo(
+    () => batchActionsForUnityPreset(selectedPresetKind),
+    [selectedPresetKind],
+  );
+
+  const canPreviewUnityBatch = Boolean(guardPrepared?.sandboxPath && unityPathDraft.trim());
+
+  const handleInspectUnityGuard = async () => {
+    setUnityLoading("inspect");
+    setUnityError("");
+    try {
+      const result = await invoke<UnityGuardInspection>("unity_guard_inspect", {
+        projectPath: props.cwd,
+      });
+      setGuardInspection(result);
+      setGuardPrepared(null);
+      setBatchPreview(null);
+    } catch (error) {
+      setUnityError(String(error ?? "unity guard inspect failed"));
+    } finally {
+      setUnityLoading(null);
+    }
+  };
+
+  const handlePrepareUnityGuard = async () => {
+    setUnityLoading("prepare");
+    setUnityError("");
+    try {
+      const result = await invoke<UnityGuardPrepareResult>("unity_guard_prepare", {
+        projectPath: props.cwd,
+      });
+      setGuardPrepared(result);
+      setBatchPreview(null);
+    } catch (error) {
+      setUnityError(String(error ?? "unity guard prepare failed"));
+    } finally {
+      setUnityLoading(null);
+    }
+  };
+
+  const handlePreviewBatchCommand = async (action: "build" | "tests_edit" | "tests_play") => {
+    if (!guardPrepared?.sandboxPath || !unityPathDraft.trim()) {
+      return;
+    }
+    setUnityLoading("preview");
+    setUnityError("");
+    try {
+      const result = await invoke<UnityBatchCommandPreview>("unity_batch_command_preview", {
+        request: {
+          projectPath: props.cwd,
+          sandboxPath: guardPrepared.sandboxPath,
+          unityPath: unityPathDraft.trim(),
+          action,
+        },
+      });
+      setBatchPreview(result);
+    } catch (error) {
+      setUnityError(String(error ?? "unity batch preview failed"));
+    } finally {
+      setUnityLoading(null);
+    }
+  };
 
   return (
     <section className="inspector-block">
@@ -44,6 +125,107 @@ export default function WorkflowInspectorTools({
             <span className="mini-action-button-label">{tp("추가")}</span>
           </button>
         </div>
+      </div>
+
+      <div className="tool-dropdown-group">
+        <h4>{tp("Unity 자동화 보호")}</h4>
+        <div className="workflow-template-create-row">
+          <button
+            className="mini-action-button workflow-handoff-create-button"
+            disabled={unityLoading !== null}
+            onClick={handleInspectUnityGuard}
+            type="button"
+          >
+            <span className="mini-action-button-label">
+              {unityLoading === "inspect" ? tp("확인 중...") : tp("보호 확인")}
+            </span>
+          </button>
+          <button
+            className="mini-action-button workflow-handoff-create-button"
+            disabled={unityLoading !== null}
+            onClick={handlePrepareUnityGuard}
+            type="button"
+          >
+            <span className="mini-action-button-label">
+              {unityLoading === "prepare" ? tp("준비 중...") : tp("샌드박스 준비")}
+            </span>
+          </button>
+        </div>
+        <input
+          className="workflow-unity-path-input"
+          onChange={(event) => setUnityPathDraft(event.target.value)}
+          placeholder={tp("Unity 실행 파일 경로를 입력하세요. 예: /Applications/Unity/Hub/Editor/.../Unity")}
+          type="text"
+          value={unityPathDraft}
+        />
+        {guardInspection && (
+          <div className="workflow-unity-guard-summary">
+            <div className="workflow-unity-guard-row">
+              <strong>{tp("추천 모드")}</strong>
+              <span>{guardInspection.recommendedMode}</span>
+            </div>
+            <div className="workflow-unity-guard-row">
+              <strong>{tp("브랜치")}</strong>
+              <span>{guardInspection.currentBranch || tp("없음")}</span>
+            </div>
+            <div className="workflow-unity-guard-row">
+              <strong>{tp("작업 트리")}</strong>
+              <span>
+                {guardInspection.dirty == null ? tp("확인 불가") : guardInspection.dirty ? tp("변경 있음") : tp("깨끗함")}
+              </span>
+            </div>
+            <div className="workflow-unity-guard-row">
+              <strong>{tp("보호 경로")}</strong>
+              <span>{guardInspection.protectedPaths.length}{tp("개")}</span>
+            </div>
+            {guardInspection.warnings.length > 0 && (
+              <div className="workflow-unity-guard-notice">
+                {guardInspection.warnings.join(" / ")}
+              </div>
+            )}
+          </div>
+        )}
+        {guardPrepared && (
+          <div className="workflow-unity-guard-summary">
+            <div className="workflow-unity-guard-row">
+              <strong>{tp("준비 방식")}</strong>
+              <span>{guardPrepared.strategy}</span>
+            </div>
+            <div className="workflow-unity-guard-row">
+              <strong>{tp("샌드박스")}</strong>
+              <span>{guardPrepared.sandboxPath || tp("읽기 전용")}</span>
+            </div>
+          </div>
+        )}
+        <div className="workflow-unity-preview-actions">
+          {unityBatchActions.map((action) => (
+            <button
+              className="mini-action-button"
+              disabled={!canPreviewUnityBatch || unityLoading !== null}
+              key={action.action}
+              onClick={() => handlePreviewBatchCommand(action.action)}
+              type="button"
+            >
+              <span className="mini-action-button-label">{action.label}</span>
+            </button>
+          ))}
+        </div>
+        {batchPreview && (
+          <div className="workflow-unity-preview-panel">
+            <div className="workflow-unity-guard-row">
+              <strong>{tp("로그 파일")}</strong>
+              <span>{batchPreview.logPath}</span>
+            </div>
+            {batchPreview.testResultsPath && (
+              <div className="workflow-unity-guard-row">
+                <strong>{tp("테스트 결과")}</strong>
+                <span>{batchPreview.testResultsPath}</span>
+              </div>
+            )}
+            <pre className="workflow-unity-preview-command">{batchPreview.command}</pre>
+          </div>
+        )}
+        {unityError && <div className="workflow-unity-guard-error">{unityError}</div>}
       </div>
 
       <div className="tool-dropdown-group">

@@ -2194,6 +2194,7 @@ function App() {
       updateSelectedNodeConfig,
     },
     toolsProps: {
+      cwd,
       addNode,
       addRoleNode: onAddRoleNode,
       addCrawlerNode: onAddCrawlerNode,

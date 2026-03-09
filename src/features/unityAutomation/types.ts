@@ -5,6 +5,8 @@ export type UnityAutomationPresetKind =
   | "unityLocalizationQa"
   | "unityAddressablesDiet";
 
+export type UnityBatchAction = "build" | "tests_edit" | "tests_play";
+
 export type UnityGuardInspection = {
   projectPath: string;
   unityProject: boolean;
@@ -38,4 +40,24 @@ export type UnityDiagnosticsBundle = {
   files: UnityDiagnosticFileSummary[];
   savedJsonPath: string;
   savedMarkdownPath: string;
+};
+
+export type UnityGuardPrepareResult = {
+  strategy: string;
+  sandboxPath?: string | null;
+  branchName?: string | null;
+  metadataPath: string;
+  sourceProjectPath: string;
+  readOnlyDefault: boolean;
+  protectedPaths: string[];
+  warnings: string[];
+};
+
+export type UnityBatchCommandPreview = {
+  action: UnityBatchAction;
+  sandboxPath: string;
+  unityPath: string;
+  command: string;
+  logPath: string;
+  testResultsPath?: string | null;
 };

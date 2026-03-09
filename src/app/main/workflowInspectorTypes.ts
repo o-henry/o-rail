@@ -10,6 +10,7 @@ export type SelectOption = {
 };
 
 export type WorkflowInspectorToolsProps = {
+  cwd: string;
   simpleWorkflowUI: boolean;
   addNode: (type: NodeType) => void;
   addRoleNode: (roleId: StudioRoleId, includeResearch: boolean) => void;

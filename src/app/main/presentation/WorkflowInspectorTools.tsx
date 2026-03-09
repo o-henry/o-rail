@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import FancySelect from "../../../components/FancySelect";
 import { knowledgeStatusMeta } from "../../../features/workflow/labels";
 import { useI18n } from "../../../i18n";
@@ -7,9 +8,43 @@ export default function WorkflowInspectorTools({
   ...props
 }: WorkflowInspectorToolsProps) {
   const { t, tp } = useI18n();
+  const unityCiDoctorOptions = props.presetTemplateOptions.filter((option) => option.value === "unityCiDoctor");
+  const [selectedPresetKind, setSelectedPresetKind] = useState(unityCiDoctorOptions[0]?.value ?? "");
+
+  useEffect(() => {
+    if (!unityCiDoctorOptions.some((option) => option.value === selectedPresetKind)) {
+      setSelectedPresetKind(unityCiDoctorOptions[0]?.value ?? "");
+    }
+  }, [unityCiDoctorOptions, selectedPresetKind]);
 
   return (
     <section className="inspector-block">
+      <div className="tool-dropdown-group">
+        <h4>{tp("그래프 템플릿")}</h4>
+        <div className="workflow-template-create-row">
+          <FancySelect
+            ariaLabel={tp("그래프 템플릿")}
+            className="modern-select"
+            emptyMessage={tp("선택 가능한 템플릿이 없습니다.")}
+            onChange={(next) => setSelectedPresetKind(next)}
+            options={unityCiDoctorOptions}
+            value={selectedPresetKind}
+          />
+          <button
+            className="mini-action-button workflow-handoff-create-button"
+            disabled={!props.isPresetKind(selectedPresetKind)}
+            onClick={() => {
+              if (props.isPresetKind(selectedPresetKind)) {
+                props.applyPreset(selectedPresetKind);
+              }
+            }}
+            type="button"
+          >
+            <span className="mini-action-button-label">{tp("추가")}</span>
+          </button>
+        </div>
+      </div>
+
       <div className="tool-dropdown-group">
         <h4>{tp("역할 노드")}</h4>
         <div className="workflow-handoff-create workflow-role-node-create">

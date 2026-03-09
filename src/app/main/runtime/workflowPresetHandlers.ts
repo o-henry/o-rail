@@ -90,6 +90,9 @@ export function createWorkflowPresetHandlers(params: any) {
     params.setConnectPreviewPoint(null);
     params.setIsConnectingDrag(false);
     params.setMarqueeSelection(null);
+    if (typeof params.setCanvasZoom === "function" && typeof params.clampCanvasZoom === "function") {
+      params.setCanvasZoom((prev: number) => params.clampCanvasZoom(Math.min(prev, 0.86)));
+    }
     params.lastAppliedPresetRef.current = { kind, graph: params.cloneGraph(nextPreset) };
     const templateMeta = params.presetTemplateMeta.find((row: any) => row.key === kind);
     params.setStatus(`${templateMeta?.statusLabel ?? "템플릿"} 로드됨`);

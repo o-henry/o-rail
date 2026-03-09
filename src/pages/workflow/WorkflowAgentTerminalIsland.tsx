@@ -102,6 +102,10 @@ export function buildViewportText(input: {
   return lines.join("\n");
 }
 
+export function canSubmitNodeFollowup(paneInput: string | null | undefined, hasPane: boolean): boolean {
+  return hasPane && cleanLine(paneInput).length > 0;
+}
+
 export default function WorkflowAgentTerminalIsland(props: WorkflowAgentTerminalIslandProps) {
   const runtime = useWorkflowWorkspaceTerminalGrid({
     cwd: props.cwd,
@@ -111,7 +115,6 @@ export default function WorkflowAgentTerminalIsland(props: WorkflowAgentTerminal
     workspaceEvents: props.workspaceEvents,
   });
   const {
-    clearPane,
     panes,
     selectPaneByRoleId,
     sendPaneInput,
@@ -169,6 +172,7 @@ export default function WorkflowAgentTerminalIsland(props: WorkflowAgentTerminal
 
   const canStopGraph = Boolean(props.selectedNode && selectedNodeState?.threadId && props.isGraphRunning);
   const canStopCli = Boolean(pane && (pane.status === "running" || pane.status === "starting"));
+  const canSubmitFollowup = canSubmitNodeFollowup(pane?.input, Boolean(pane));
 
   const stopAll = async () => {
     const tasks: Promise<unknown>[] = [];
@@ -197,37 +201,13 @@ export default function WorkflowAgentTerminalIsland(props: WorkflowAgentTerminal
 
         <div className="workflow-agent-terminal-path">~/{props.cwd ? props.cwd.split("/").slice(-2).join("/") : "workspace"}</div>
 
-        <pre className="workflow-agent-terminal-body">{viewportText}</pre>
-
-        <div className="workflow-agent-terminal-actions">
-          <button
-            className="mini-action-button"
-            disabled={!pane}
-            onClick={() => pane && void startPane(pane.id)}
-            type="button"
-          >
-            <span className="mini-action-button-label">Codex 시작</span>
-          </button>
-          <button
-            className="mini-action-button"
-            disabled={!canStopGraph && !canStopCli}
-            onClick={() => void stopAll()}
-            type="button"
-          >
-            <span className="mini-action-button-label">중단</span>
-          </button>
-          <button
-            className="mini-action-button"
-            disabled={!pane}
-            onClick={() => pane && clearPane(pane.id)}
-            type="button"
-          >
-            <span className="mini-action-button-label">비우기</span>
-          </button>
+        <div className="workflow-agent-terminal-panel workflow-agent-terminal-log-panel">
+          <pre className="workflow-agent-terminal-body">{viewportText}</pre>
         </div>
 
-        <div className="workflow-agent-terminal-composer">
-          <input
+        <div className="workflow-agent-terminal-panel workflow-agent-terminal-composer-panel">
+          <div className="question-input agents-composer workflow-question-input workflow-agent-terminal-composer">
+          <textarea
             className="workflow-agent-terminal-input"
             onChange={(event) => pane && setPaneInput(pane.id, event.currentTarget.value)}
             onKeyDown={(event) => {
@@ -237,11 +217,38 @@ export default function WorkflowAgentTerminalIsland(props: WorkflowAgentTerminal
               }
             }}
             placeholder="추가 요구사항 또는 수정 지시"
+            rows={1}
             value={pane?.input ?? ""}
           />
-          <button className="mini-action-button" disabled={!pane} onClick={() => void submitQueuedRequest()} type="button">
-            <span className="mini-action-button-label">요구 반영</span>
-          </button>
+          <div className="question-input-footer workflow-agent-terminal-composer-footer">
+            <div className="agents-composer-left workflow-agent-terminal-left-actions">
+              <button
+                className="mini-action-button"
+                disabled={!pane}
+                onClick={() => pane && void startPane(pane.id)}
+                type="button"
+              >
+                <span className="mini-action-button-label">시작</span>
+              </button>
+              <button
+                className="mini-action-button"
+                disabled={!canStopGraph && !canStopCli}
+                onClick={() => void stopAll()}
+                type="button"
+              >
+                <span className="mini-action-button-label">중단</span>
+              </button>
+            </div>
+            <button
+              className="primary-action question-create-button agents-send-button"
+              disabled={!canSubmitFollowup}
+              onClick={() => void submitQueuedRequest()}
+              type="button"
+            >
+              <img alt="" aria-hidden="true" className="question-create-icon" src="/up.svg" />
+            </button>
+          </div>
+        </div>
         </div>
       </aside>
     </div>

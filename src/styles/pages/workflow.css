@@ -560,6 +560,15 @@
   font-size: 12px;
 }
 
+.workflow-handoff-task-input:focus,
+.workflow-handoff-task-input:focus-visible,
+.workflow-handoff-request-input:focus,
+.workflow-handoff-request-input:focus-visible {
+  outline: none;
+  border-color: transparent;
+  box-shadow: none;
+}
+
 .workflow-handoff-task-input {
   min-height: 36px;
   height: 36px;
@@ -579,7 +588,7 @@
 .canvas-main-row {
   min-height: 0;
   display: flex;
-  gap: 12px;
+  gap: 0;
   overflow: hidden;
 }
 
@@ -609,9 +618,9 @@
 }
 
 .canvas-agent-terminal-slot.is-visible {
-  flex-basis: min(48%, 700px);
-  width: min(48%, 700px);
-  max-width: min(48%, 700px);
+  flex-basis: min(38%, 560px);
+  width: min(38%, 560px);
+  max-width: min(38%, 560px);
   opacity: 1;
   visibility: visible;
   transform: translateX(0);
@@ -627,11 +636,11 @@
 .workflow-agent-terminal-island {
   height: 100%;
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) auto auto;
-  gap: 10px;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  gap: 12px;
   padding: 12px;
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--surface) 94%, #edf3ff);
+  border-radius: 8px;
+  background: var(--surface);
   pointer-events: auto;
   overflow: hidden;
 }
@@ -669,11 +678,21 @@
   padding: 0 2px;
 }
 
+.workflow-agent-terminal-panel {
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface-soft) 82%, var(--surface));
+  overflow: hidden;
+}
+
+.workflow-agent-terminal-log-panel {
+  min-height: 0;
+}
+
 .workflow-agent-terminal-body {
   margin: 0;
   min-height: 0;
+  height: 100%;
   padding: 14px;
-  border-radius: 10px;
   background: #eeeeee;
   color: #223043;
   overflow: auto;
@@ -684,35 +703,41 @@
   font-family: "SFMono-Regular", "SF Mono", Consolas, "Liberation Mono", Menlo, monospace;
 }
 
-.workflow-agent-terminal-actions {
-  display: flex;
-  flex-wrap: wrap;
+.workflow-agent-terminal-composer {
+  padding: 10px 12px 10px;
   gap: 8px;
+  box-shadow: none;
 }
 
-.workflow-agent-terminal-composer {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px;
-  align-items: center;
+.workflow-agent-terminal-composer-panel {
+  padding: 0;
+  align-self: stretch;
+  min-height: 0;
 }
 
 .workflow-agent-terminal-input {
+  width: 100%;
   min-width: 0;
-  min-height: 36px;
-  height: 36px;
+  min-height: 56px;
+  height: 56px;
   border: 0;
   border-radius: 4px;
   background: #eeeeee;
   color: var(--text-main);
-  padding: 0 12px;
+  padding: 8px 10px;
   font-size: 12px;
+  line-height: 1.4;
+  resize: none;
 }
 
-.workflow-agent-terminal-composer .mini-action-button {
-  min-height: 36px;
-  height: 36px;
-  align-self: stretch;
+.workflow-agent-terminal-composer-footer {
+  justify-content: space-between;
+}
+
+.workflow-agent-terminal-left-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .workflow-agent-terminal-input::placeholder {
@@ -723,6 +748,18 @@
 .workflow-agent-terminal-input:focus-visible {
   outline: 0;
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--focus-ring) 42%, transparent);
+}
+
+.workflow-template-create-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.workflow-template-create-row .workflow-handoff-create-button {
+  min-height: 36px;
+  height: 36px;
 }
 
 .workflow-mode-toggle {

@@ -1248,6 +1248,9 @@ function App() {
     setConnectPreviewPoint,
     setIsConnectingDrag,
     setMarqueeSelection,
+    setCanvasZoom,
+    clampCanvasZoom: (nextZoom: number) =>
+      Math.max(MIN_CANVAS_ZOOM, Math.min(MAX_CANVAS_ZOOM, nextZoom)),
     lastAppliedPresetRef,
     presetTemplateMeta: getPresetTemplateMeta(locale),
     setCostPreset,
@@ -1926,7 +1929,8 @@ function App() {
       level: "info",
     });
     setStatus("그래프에 데이터 노드를 추가했습니다.");
-  }, [appendWorkspaceEvent, applyGraphChange, graph.nodes, setNodeSelection, setStatus]);
+    setCanvasZoom((prev) => clampCanvasZoom(Math.min(prev, 0.88)));
+  }, [appendWorkspaceEvent, applyGraphChange, clampCanvasZoom, graph.nodes, setCanvasZoom, setNodeSelection, setStatus]);
 
   const buildViaFlowNode = useCallback((
     nodeId: string,
@@ -2139,8 +2143,9 @@ function App() {
         level: "info",
       });
       setStatus(includeResearch ? `${roleLabel} 역할 노드와 자동 리서치 그래프를 추가했습니다.` : `${roleLabel} 역할 노드를 추가했습니다.`);
+      setCanvasZoom((prev) => clampCanvasZoom(Math.min(prev, 0.88)));
     },
-    [appendWorkspaceEvent, applyGraphChange, graph.nodes, setNodeSelection, setStatus],
+    [appendWorkspaceEvent, applyGraphChange, clampCanvasZoom, graph.nodes, setCanvasZoom, setNodeSelection, setStatus],
   );
 
   const onInterruptWorkflowNode = useCallback(

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildViewportText } from "./WorkflowAgentTerminalIsland";
+import { buildViewportText, canSubmitNodeFollowup } from "./WorkflowAgentTerminalIsland";
 
 describe("buildViewportText", () => {
   it("shows selected node request and queued follow-ups before logs", () => {
@@ -31,5 +31,12 @@ describe("buildViewportText", () => {
     expect(text).toContain("툴링 엔지니어 관점에서 빌드 도구와 자동화 전략을 정리합니다.");
     expect(text).toContain("[queued follow-ups]");
     expect(text).toContain("1. 빌드 스크립트까지 포함해줘");
+  });
+
+  it("disables follow-up submit when the input is empty", () => {
+    expect(canSubmitNodeFollowup("", true)).toBe(false);
+    expect(canSubmitNodeFollowup("   ", true)).toBe(false);
+    expect(canSubmitNodeFollowup("수정해줘", true)).toBe(true);
+    expect(canSubmitNodeFollowup("수정해줘", false)).toBe(false);
   });
 });

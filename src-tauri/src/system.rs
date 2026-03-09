@@ -240,10 +240,20 @@ pub async fn workspace_terminal_start(
         return Err("workspace terminal session id is empty".to_string());
     }
 
-    if let Some(existing) = remove_terminal_session(manager.inner(), &normalized_session_id).await {
-        let mut child = existing.child.lock().await;
-        let _ = child.kill().await;
-        let _ = child.wait().await;
+    let existing_session = {
+        let sessions = manager.sessions.lock().await;
+        sessions.get(&normalized_session_id).map(|session| session.stdin.clone())
+    };
+    if let Some(stdin) = existing_session {
+        emit_workspace_terminal_state(
+            &app,
+            &normalized_session_id,
+            "running",
+            None,
+            Some("reconnected to existing shell session".to_string()),
+        );
+        let _ = stdin;
+        return Ok(());
     }
 
     emit_workspace_terminal_state(
@@ -366,18 +376,27 @@ pub async fn workspace_terminal_stop(
     session_id: String,
 ) -> Result<(), String> {
     let normalized_session_id = session_id.trim().to_string();
-    let Some(session) = remove_terminal_session(manager.inner(), &normalized_session_id).await else {
+    let session = {
+        let sessions = manager.sessions.lock().await;
+        sessions
+            .get(&normalized_session_id)
+            .map(|session| session.stdin.clone())
+    };
+    let Some(stdin) = session else {
         return Ok(());
     };
-    let mut child = session.child.lock().await;
-    let _ = child.kill().await;
-    let _ = child.wait().await;
+    let mut writer = stdin.lock().await;
+    writer
+        .write_all(&[3])
+        .await
+        .map_err(|error| format!("failed to interrupt workspace terminal: {error}"))?;
+    let _ = writer.flush().await;
     emit_workspace_terminal_state(
         &app,
         &normalized_session_id,
         "stopped",
         None,
-        Some("shell session stopped".to_string()),
+        Some("interrupt sent; shell session preserved".to_string()),
     );
     Ok(())
 }

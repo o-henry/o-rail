@@ -2165,7 +2165,7 @@ function App() {
       nodeSettingsTitle:
         selectedNode?.type === "turn" &&
         String((selectedNode.config as Record<string, unknown> | undefined)?.sourceKind ?? "").trim().toLowerCase() === "handoff"
-          ? "역할노드설정"
+          ? "역할 노드 설정"
           : t("workflow.nodeSettings"),
       normalizeQualityThreshold,
       outgoingNodeOptions,

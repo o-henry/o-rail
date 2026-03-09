@@ -55,11 +55,6 @@ export default function WorkflowNodeInspector({
     <>
       {isHandoffTurnNode && (
         <section className="inspector-block form-grid">
-          <InspectorSectionTitle
-            className="workflow-handoff-section-title"
-            help="역할 노드는 특정 담당자의 관점으로 답변하는 작업 노드입니다. 필요하면 앞단에 자동 조사 체인을 연결해 전문가용 자료를 먼저 수집합니다."
-            title="역할 노드 설정"
-          />
           <div className="workflow-role-node-actions">
             <button className="mini-action-button" onClick={toggleRoleInternalExpanded} type="button">
               <span className="mini-action-button-label">{roleInternalExpanded ? "내부작업 접기" : "내부작업 보기"}</span>

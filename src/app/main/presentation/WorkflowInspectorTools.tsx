@@ -22,7 +22,7 @@ export default function WorkflowInspectorTools({
   const [guardInspection, setGuardInspection] = useState<UnityGuardInspection | null>(null);
   const [guardPrepared, setGuardPrepared] = useState<UnityGuardPrepareResult | null>(null);
   const [batchPreview, setBatchPreview] = useState<UnityBatchCommandPreview | null>(null);
-  const [unityLoading, setUnityLoading] = useState<"inspect" | "prepare" | "preview" | null>(null);
+  const [unityLoading, setUnityLoading] = useState<"auto" | "preview" | null>(null);
   const [unityError, setUnityError] = useState("");
 
   useEffect(() => {
@@ -36,45 +36,55 @@ export default function WorkflowInspectorTools({
     setUnityError("");
   }, [selectedPresetKind]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const prepareGuard = async () => {
+      if (!props.isPresetKind(selectedPresetKind)) {
+        return;
+      }
+      setUnityLoading("auto");
+      setUnityError("");
+      setBatchPreview(null);
+      try {
+        const inspection = await invoke<UnityGuardInspection>("unity_guard_inspect", {
+          projectPath: props.cwd,
+        });
+        if (cancelled) {
+          return;
+        }
+        setGuardInspection(inspection);
+        const prepared = await invoke<UnityGuardPrepareResult>("unity_guard_prepare", {
+          projectPath: props.cwd,
+        });
+        if (cancelled) {
+          return;
+        }
+        setGuardPrepared(prepared);
+      } catch (error) {
+        if (!cancelled) {
+          setGuardPrepared(null);
+          setUnityError(String(error ?? "unity guard auto prepare failed"));
+        }
+      } finally {
+        if (!cancelled) {
+          setUnityLoading(null);
+        }
+      }
+    };
+
+    void prepareGuard();
+    return () => {
+      cancelled = true;
+    };
+  }, [props.cwd, props.isPresetKind, selectedPresetKind]);
+
   const unityBatchActions = useMemo(
     () => batchActionsForUnityPreset(selectedPresetKind),
     [selectedPresetKind],
   );
 
   const canPreviewUnityBatch = Boolean(guardPrepared?.sandboxPath && unityPathDraft.trim());
-
-  const handleInspectUnityGuard = async () => {
-    setUnityLoading("inspect");
-    setUnityError("");
-    try {
-      const result = await invoke<UnityGuardInspection>("unity_guard_inspect", {
-        projectPath: props.cwd,
-      });
-      setGuardInspection(result);
-      setGuardPrepared(null);
-      setBatchPreview(null);
-    } catch (error) {
-      setUnityError(String(error ?? "unity guard inspect failed"));
-    } finally {
-      setUnityLoading(null);
-    }
-  };
-
-  const handlePrepareUnityGuard = async () => {
-    setUnityLoading("prepare");
-    setUnityError("");
-    try {
-      const result = await invoke<UnityGuardPrepareResult>("unity_guard_prepare", {
-        projectPath: props.cwd,
-      });
-      setGuardPrepared(result);
-      setBatchPreview(null);
-    } catch (error) {
-      setUnityError(String(error ?? "unity guard prepare failed"));
-    } finally {
-      setUnityLoading(null);
-    }
-  };
 
   const handlePreviewBatchCommand = async (action: "build" | "tests_edit" | "tests_play") => {
     if (!guardPrepared?.sandboxPath || !unityPathDraft.trim()) {
@@ -102,10 +112,10 @@ export default function WorkflowInspectorTools({
   return (
     <section className="inspector-block">
       <div className="tool-dropdown-group">
-        <h4>{tp("그래프 템플릿")}</h4>
+        <h4>{tp("Unity 자동화")}</h4>
         <div className="workflow-template-create-row">
           <FancySelect
-            ariaLabel={tp("그래프 템플릿")}
+            ariaLabel={tp("Unity 자동화")}
             className="modern-select"
             emptyMessage={tp("선택 가능한 템플릿이 없습니다.")}
             onChange={(next) => setSelectedPresetKind(next)}
@@ -129,28 +139,9 @@ export default function WorkflowInspectorTools({
 
       <div className="tool-dropdown-group">
         <h4>{tp("Unity 자동화 보호")}</h4>
-        <div className="workflow-template-create-row">
-          <button
-            className="mini-action-button workflow-handoff-create-button"
-            disabled={unityLoading !== null}
-            onClick={handleInspectUnityGuard}
-            type="button"
-          >
-            <span className="mini-action-button-label">
-              {unityLoading === "inspect" ? tp("확인 중...") : tp("보호 확인")}
-            </span>
-          </button>
-          <button
-            className="mini-action-button workflow-handoff-create-button"
-            disabled={unityLoading !== null}
-            onClick={handlePrepareUnityGuard}
-            type="button"
-          >
-            <span className="mini-action-button-label">
-              {unityLoading === "prepare" ? tp("준비 중...") : tp("샌드박스 준비")}
-            </span>
-          </button>
-        </div>
+        {unityLoading === "auto" && (
+          <div className="workflow-unity-guard-notice">{tp("보호 확인과 샌드박스 준비를 자동으로 진행 중입니다.")}</div>
+        )}
         <input
           className="workflow-unity-path-input"
           onChange={(event) => setUnityPathDraft(event.target.value)}

@@ -9,8 +9,8 @@ import {
 } from "../../../features/workflow/domain";
 import { nodeTypeLabel, turnRoleLabel } from "../../../features/workflow/labels";
 import { extractSchemaValidationTarget, resolveProviderByExecutor } from "../../mainAppRuntimeHelpers";
-import { getRoleKnowledgeProfile } from "../../../features/studio/roleKnowledgeStore";
-import { buildStoredRoleKnowledgePrompt } from "../../../features/studio/roleKnowledgePrompt";
+import { getRoleInstanceKnowledgeProfile, getRoleKnowledgeProfile } from "../../../features/studio/roleKnowledgeStore";
+import { buildMergedRoleKnowledgePrompt } from "../../../features/studio/roleKnowledgePrompt";
 import { toStudioRoleId } from "../../../features/studio/roleUtils";
 import type {
   AgentRuleDoc,
@@ -93,11 +93,20 @@ export async function injectKnowledgeContext(params: {
     params.node.type === "turn" && String(nodeConfig.sourceKind ?? "").trim().toLowerCase() === "handoff"
       ? toStudioRoleId(String(nodeConfig.handoffRoleId ?? ""))
       : null;
+  const roleInstanceId = String(nodeConfig.roleInstanceId ?? "").trim();
   const storedRoleKnowledge = roleId ? getRoleKnowledgeProfile(roleId) : null;
+  const storedInstanceKnowledge =
+    roleId && roleInstanceId ? getRoleInstanceKnowledgeProfile(roleId, roleInstanceId) : null;
 
-  if (storedRoleKnowledge) {
-    mergedPrompt = `${buildStoredRoleKnowledgePrompt(storedRoleKnowledge)}\n\n[요청]\n${mergedPrompt}`.trim();
-    params.addNodeLog(params.node.id, `[역할 지식] ${storedRoleKnowledge.roleLabel} 누적 지식 반영`);
+  if (storedRoleKnowledge || storedInstanceKnowledge) {
+    mergedPrompt = `${buildMergedRoleKnowledgePrompt({
+      sharedProfile: storedRoleKnowledge,
+      instanceProfile: storedInstanceKnowledge,
+    })}\n\n[요청]\n${mergedPrompt}`.trim();
+    params.addNodeLog(
+      params.node.id,
+      `[역할 지식] ${storedRoleKnowledge?.roleLabel ?? roleId ?? "role"} 누적 지식${storedInstanceKnowledge ? " + 관점 지식" : ""} 반영`,
+    );
   }
 
   const rankedMemory = rankInternalMemorySnippets({

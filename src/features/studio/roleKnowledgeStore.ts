@@ -20,6 +20,8 @@ export type RoleKnowledgeSource = {
 
 export type RoleKnowledgeProfile = {
   roleId: StudioRoleId;
+  scope?: "shared" | "instance";
+  instanceId?: string;
   roleLabel: string;
   goal: string;
   taskId: string;
@@ -87,6 +89,8 @@ function normalizeProfile(raw: unknown): RoleKnowledgeProfile | null {
   }
   return {
     roleId,
+    scope: String(row.scope ?? "").trim().toLowerCase() === "instance" ? "instance" : "shared",
+    instanceId: String(row.instanceId ?? "").trim() || undefined,
     roleLabel: String(row.roleLabel ?? "").trim() || roleId,
     goal: String(row.goal ?? "").trim(),
     taskId: String(row.taskId ?? "").trim() || "TASK-001",
@@ -133,16 +137,40 @@ export function writeRoleKnowledgeProfiles(rows: RoleKnowledgeProfile[]): void {
 }
 
 export function getRoleKnowledgeProfile(roleId: StudioRoleId): RoleKnowledgeProfile | null {
-  return readRoleKnowledgeProfiles().find((row) => row.roleId === roleId) ?? null;
+  return readRoleKnowledgeProfiles().find((row) => row.roleId === roleId && (row.scope ?? "shared") === "shared") ?? null;
 }
 
 export function upsertRoleKnowledgeProfile(profile: RoleKnowledgeProfile): RoleKnowledgeProfile[] {
   const current = readRoleKnowledgeProfiles();
-  const next = current.some((row) => row.roleId === profile.roleId)
-    ? current.map((row) => (row.roleId === profile.roleId ? profile : row))
-    : [...current, profile];
+  const normalizedScope = profile.scope ?? "shared";
+  const normalizedInstanceId = String(profile.instanceId ?? "").trim() || undefined;
+  const matchesProfile = (row: RoleKnowledgeProfile) =>
+    row.roleId === profile.roleId &&
+    (row.scope ?? "shared") === normalizedScope &&
+    (String(row.instanceId ?? "").trim() || undefined) === normalizedInstanceId;
+  const next = current.some(matchesProfile)
+    ? current.map((row) => (matchesProfile(row) ? { ...profile, scope: normalizedScope, instanceId: normalizedInstanceId } : row))
+    : [...current, { ...profile, scope: normalizedScope, instanceId: normalizedInstanceId }];
   writeRoleKnowledgeProfiles(next);
   return next;
+}
+
+export function getRoleInstanceKnowledgeProfile(
+  roleId: StudioRoleId,
+  instanceId: string,
+): RoleKnowledgeProfile | null {
+  const normalizedInstanceId = String(instanceId ?? "").trim();
+  if (!normalizedInstanceId) {
+    return null;
+  }
+  return (
+    readRoleKnowledgeProfiles().find(
+      (row) =>
+        row.roleId === roleId &&
+        (row.scope ?? "shared") === "instance" &&
+        String(row.instanceId ?? "").trim() === normalizedInstanceId,
+    ) ?? null
+  );
 }
 
 export async function persistRoleKnowledgeProfilesToWorkspace(params: {

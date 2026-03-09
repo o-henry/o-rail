@@ -25,3 +25,27 @@ export function buildStoredRoleKnowledgePrompt(profile: RoleKnowledgeProfile): s
     "[/역할 누적 지식]",
   ].join("\n");
 }
+
+export function buildMergedRoleKnowledgePrompt(params: {
+  sharedProfile?: RoleKnowledgeProfile | null;
+  instanceProfile?: RoleKnowledgeProfile | null;
+}): string {
+  const blocks = [];
+  if (params.sharedProfile) {
+    blocks.push(buildStoredRoleKnowledgePrompt(params.sharedProfile));
+  }
+  if (params.instanceProfile) {
+    const instanceLabel = cleanLine(params.instanceProfile.instanceId || "추가 시각");
+    blocks.push(
+      [
+        "[관점별 누적 지식]",
+        `- 관점: ${instanceLabel}`,
+        `- 요약: ${cleanLine(params.instanceProfile.summary)}`,
+        "- 핵심 포인트:",
+        ...params.instanceProfile.keyPoints.slice(0, 6).map((line) => `  - ${cleanLine(line)}`),
+        "[/관점별 누적 지식]",
+      ].join("\n"),
+    );
+  }
+  return blocks.filter(Boolean).join("\n\n");
+}

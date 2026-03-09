@@ -1,9 +1,30 @@
-import type { TurnExecutor } from "../workflow/domain";
 import type { StudioRoleId } from "./handoffTypes";
+
+type RoleResearchExecutor =
+  | "codex"
+  | "via_flow"
+  | "web_gemini"
+  | "web_gpt"
+  | "web_grok"
+  | "web_perplexity"
+  | "web_claude"
+  | "ollama";
+
+type RoleResearchViaNodeType =
+  | "source.news"
+  | "source.sns"
+  | "source.community"
+  | "source.dev"
+  | "source.market"
+  | "source.x"
+  | "source.threads"
+  | "source.reddit"
+  | "source.hn";
 
 export type RoleResearchLaneBlueprint = {
   label: string;
-  executor: TurnExecutor;
+  executor: RoleResearchExecutor;
+  viaNodeType?: RoleResearchViaNodeType;
   prompt: string;
   keywords?: string;
   countries?: string;
@@ -45,7 +66,8 @@ const FALLBACK_PROFILE: RoleResearchProfile = {
     },
     {
       label: "실전 사례 조사",
-      executor: "web_claude",
+      executor: "via_flow",
+      viaNodeType: "source.dev",
       prompt:
         "실전 사례, 실패 패턴, 현업 팁을 조사해 바로 적용 가능한 체크포인트를 정리합니다.",
       keywords: "unity, indie game development, gameplay system, production workflow",
@@ -82,7 +104,8 @@ export const ROLE_RESEARCH_PROFILES: Record<StudioRoleId, RoleResearchProfile> =
       },
       {
         label: "플레이어 동기·리스크 조사",
-        executor: "web_gpt",
+        executor: "via_flow",
+        viaNodeType: "source.community",
         prompt:
           "플레이어 동기, 코어 루프 몰입 포인트, 자주 실패하는 기획 패턴을 조사해 차별화와 리스크를 동시에 정리합니다.",
         keywords: "player motivation, core loop, progression design, indie retention, game design pitfalls",
@@ -117,7 +140,8 @@ export const ROLE_RESEARCH_PROFILES: Record<StudioRoleId, RoleResearchProfile> =
       },
       {
         label: "실전 패턴·함정 조사",
-        executor: "web_claude",
+        executor: "via_flow",
+        viaNodeType: "source.dev",
         prompt:
           "실전 구현 예시와 자주 발생하는 상태 전이/입력 꼬임/애니메이션 함정을 조사합니다.",
         keywords: "unity gameplay pitfalls, animation state machine bug, input system issue, controller architecture",
@@ -152,7 +176,8 @@ export const ROLE_RESEARCH_PROFILES: Record<StudioRoleId, RoleResearchProfile> =
       },
       {
         label: "병목·실패 사례 조사",
-        executor: "web_grok",
+        executor: "via_flow",
+        viaNodeType: "source.dev",
         prompt:
           "데이터 흐름, 저장, 상태 동기화, 성능 병목에서 자주 발생하는 실패 사례와 회귀 포인트를 조사합니다.",
         keywords: "unity architecture pitfalls, save corruption, event bus issue, performance bottleneck",
@@ -187,7 +212,8 @@ export const ROLE_RESEARCH_PROFILES: Record<StudioRoleId, RoleResearchProfile> =
       },
       {
         label: "실전 자동화 사례 조사",
-        executor: "web_gpt",
+        executor: "via_flow",
+        viaNodeType: "source.dev",
         prompt:
           "실제 Unity 자동화 사례와 실패 패턴을 조사해 안전한 워크플로와 금지사항을 정리합니다.",
         keywords: "unity automation workflow, editor tooling pitfalls, batchmode safety, ci examples",
@@ -222,7 +248,8 @@ export const ROLE_RESEARCH_PROFILES: Record<StudioRoleId, RoleResearchProfile> =
       },
       {
         label: "최적화 사례 조사",
-        executor: "web_claude",
+        executor: "via_flow",
+        viaNodeType: "source.community",
         prompt:
           "실전 프로젝트에서 자주 쓰는 에셋 최적화, 번들 관리, 임포트 트러블슈팅 사례를 조사합니다.",
         keywords: "unity asset optimization, addressables pitfalls, import settings, texture memory",
@@ -257,7 +284,8 @@ export const ROLE_RESEARCH_PROFILES: Record<StudioRoleId, RoleResearchProfile> =
       },
       {
         label: "장애·재현 사례 조사",
-        executor: "web_grok",
+        executor: "via_flow",
+        viaNodeType: "source.community",
         prompt:
           "현업에서 자주 발생하는 장애 유형, 재현 패턴, 누락되기 쉬운 회귀 포인트를 조사합니다.",
         keywords: "unity bug reproduction, playmode regression, qa pitfalls, null reference gameplay",
@@ -292,7 +320,8 @@ export const ROLE_RESEARCH_PROFILES: Record<StudioRoleId, RoleResearchProfile> =
       },
       {
         label: "실패·운영 사례 조사",
-        executor: "web_gpt",
+        executor: "via_flow",
+        viaNodeType: "source.dev",
         prompt:
           "빌드 실패, 패키지 충돌, 릴리즈 운영 사고 사례와 사전 예방책을 조사합니다.",
         keywords: "unity build failure, release pipeline issue, package conflict, ci rollback",
@@ -327,7 +356,8 @@ export const ROLE_RESEARCH_PROFILES: Record<StudioRoleId, RoleResearchProfile> =
       },
       {
         label: "실전 템플릿 조사",
-        executor: "web_claude",
+        executor: "via_flow",
+        viaNodeType: "source.dev",
         prompt:
           "게임 개발 문서 템플릿, 운영 문서 누락 사례, 좋은 전달 방식 사례를 조사합니다.",
         keywords: "game documentation template, release notes example, onboarding guide example",

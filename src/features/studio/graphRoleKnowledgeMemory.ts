@@ -1,5 +1,9 @@
 import type { StudioRoleId } from "./handoffTypes";
-import { getRoleKnowledgeProfile, upsertRoleKnowledgeProfile } from "./roleKnowledgeStore";
+import {
+  getRoleInstanceKnowledgeProfile,
+  getRoleKnowledgeProfile,
+  upsertRoleKnowledgeProfile,
+} from "./roleKnowledgeStore";
 import { STUDIO_ROLE_TEMPLATES } from "./roleTemplates";
 
 function cleanLine(input: unknown): string {
@@ -83,6 +87,7 @@ export function storeGraphRoleKnowledge(params: {
   taskId?: string;
   output: unknown;
   logs?: string[];
+  roleInstanceId?: string;
 }): void {
   const role = STUDIO_ROLE_TEMPLATES.find((row) => row.id === params.roleId);
   const text = toOutputText(params.output);
@@ -98,6 +103,7 @@ export function storeGraphRoleKnowledge(params: {
     : summary;
   upsertRoleKnowledgeProfile({
     roleId: params.roleId,
+    scope: "shared",
     roleLabel: role?.label ?? params.roleId,
     goal: role?.goal ?? "역할 누적 지식",
     taskId: cleanLine(params.taskId) || role?.defaultTaskId || "TASK-001",
@@ -115,5 +121,32 @@ export function storeGraphRoleKnowledge(params: {
     updatedAt: new Date().toISOString(),
     markdownPath: existing?.markdownPath,
     jsonPath: existing?.jsonPath,
+  });
+  const roleInstanceId = cleanLine(params.roleInstanceId);
+  if (!roleInstanceId) {
+    return;
+  }
+  const existingInstance = getRoleInstanceKnowledgeProfile(params.roleId, roleInstanceId);
+  upsertRoleKnowledgeProfile({
+    roleId: params.roleId,
+    scope: "instance",
+    instanceId: roleInstanceId,
+    roleLabel: role?.label ?? params.roleId,
+    goal: role?.goal ?? "역할 누적 지식",
+    taskId: cleanLine(params.taskId) || role?.defaultTaskId || "TASK-001",
+    runId: cleanLine(params.runId) || `graph-${Date.now()}`,
+    summary,
+    keyPoints: mergeKeyPoints(existingInstance?.keyPoints ?? [], extractKeyPoints(text, logs)),
+    sources: mergeSources(
+      existingInstance?.sources ?? [],
+      sourceUrls.map((url) => ({
+        url,
+        status: "ok" as const,
+        fetchedAt: new Date().toISOString(),
+      })),
+    ),
+    updatedAt: new Date().toISOString(),
+    markdownPath: existingInstance?.markdownPath,
+    jsonPath: existingInstance?.jsonPath,
   });
 }

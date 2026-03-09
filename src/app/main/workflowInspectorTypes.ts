@@ -92,6 +92,10 @@ export type WorkflowInspectorNodeProps = {
   artifactTypeOptions: SelectOption[];
   selectedArtifactType: string;
   outgoingNodeOptions: SelectOption[];
+  roleInternalExpanded: boolean;
+  toggleRoleInternalExpanded: () => void;
+  addRolePerspectivePass: () => void;
+  addRoleReviewPass: () => void;
 };
 
 export type NodeConfigCasts = {

@@ -13,12 +13,17 @@ import type {
 } from "../../../features/workflow/domain";
 import { defaultNodeConfig, makeNodeId } from "../../../features/workflow/graph-utils/shared";
 import type { GraphEdge, GraphNode } from "../../../features/workflow/types";
+import { viaNodeLabel } from "../../../features/workflow/viaCatalog";
 
 type RoleNodeScaffoldParams = {
   roleId: StudioRoleId;
   anchorX: number;
   anchorY: number;
   includeResearch: boolean;
+  roleInstanceId?: string;
+  roleInstanceLabel?: string;
+  roleMode?: "primary" | "perspective" | "review";
+  reviewPrompt?: string;
 };
 
 type RoleNodeScaffoldResult = {
@@ -93,6 +98,7 @@ function createRoleResearchNode(params: {
     sourceKind: "data_research" as const,
   };
   const isWebLane = params.lane.executor.startsWith("web_");
+  const isViaLane = params.lane.executor === "via_flow";
   return {
     id: params.nodeId,
     type: "turn",
@@ -107,6 +113,19 @@ function createRoleResearchNode(params: {
       ]
         .filter(Boolean)
         .join("\n"),
+      ...(isViaLane
+        ? {
+            viaFlowId: "1",
+            viaNodeType: params.lane.viaNodeType ?? "source.dev",
+            viaNodeLabel: viaNodeLabel(params.lane.viaNodeType ?? "source.dev"),
+            viaSourceTypeHint: params.lane.viaNodeType ?? "source.dev",
+            viaTemplateLabel: params.lane.label,
+            viaCustomKeywords: params.lane.keywords,
+            viaCustomCountries: params.lane.countries,
+            viaCustomSites: params.lane.sites,
+            viaCustomMaxItems: params.lane.maxItems,
+          }
+        : {}),
       ...(isWebLane
         ? {
             webResultMode: "bridgeAssisted" as const,
@@ -156,14 +175,20 @@ export function buildRoleNodeScaffold(params: RoleNodeScaffoldParams): RoleNodeS
   const roleLabel = template?.label ?? params.roleId;
   const research = getRoleResearchProfile(params.roleId);
   const roleNodeId = makeNodeId("turn");
+  const roleInstanceId = String(params.roleInstanceId ?? `${params.roleId}:primary`).trim();
+  const roleInstanceLabel = String(params.roleInstanceLabel ?? roleLabel).trim() || roleLabel;
+  const roleMode = params.roleMode ?? "primary";
+  const rolePrompt = params.reviewPrompt
+    ? `${rolePromptTemplate(params.roleId)}\n\n[추가 관점]\n${params.reviewPrompt}`.trim()
+    : rolePromptTemplate(params.roleId);
   const roleNode: GraphNode = {
     id: roleNodeId,
     type: "turn",
     position: { x: params.anchorX, y: params.anchorY },
     config: {
       ...defaultNodeConfig("turn"),
-      role: `${roleLabel} AGENT`,
-      promptTemplate: rolePromptTemplate(params.roleId),
+      role: `${roleInstanceLabel} AGENT`,
+      promptTemplate: rolePrompt,
       qualityProfile: roleQualityProfile(params.roleId),
       artifactType: roleArtifactType(params.roleId),
       taskId: template?.defaultTaskId ?? "TASK-001",
@@ -172,6 +197,9 @@ export function buildRoleNodeScaffold(params: RoleNodeScaffoldParams): RoleNodeS
       handoffToRoleId: params.roleId,
       handoffChecklist: "근거, 결정 이유, 후속 작업을 함께 남깁니다.",
       roleResearchEnabled: params.includeResearch,
+      roleInstanceId,
+      roleInstanceLabel,
+      roleMode,
     },
   };
 
@@ -200,6 +228,11 @@ export function buildRoleNodeScaffold(params: RoleNodeScaffoldParams): RoleNodeS
       y: params.anchorY + (index - 1) * 150,
     });
   });
+  sourceNodes.forEach((node) => {
+    (node.config as Record<string, unknown>).internalParentNodeId = roleNodeId;
+    (node.config as Record<string, unknown>).internalNodeKind = "research";
+    (node.config as Record<string, unknown>).roleInstanceId = roleInstanceId;
+  });
 
   const synthesisNode = createResearchPipelineNode({
     nodeId: synthesisNodeId,
@@ -209,6 +242,9 @@ export function buildRoleNodeScaffold(params: RoleNodeScaffoldParams): RoleNodeS
     role: `${roleLabel} 조사 종합`,
     promptTemplate: research.synthesisPrompt,
   });
+  (synthesisNode.config as Record<string, unknown>).internalParentNodeId = roleNodeId;
+  (synthesisNode.config as Record<string, unknown>).internalNodeKind = "synthesis";
+  (synthesisNode.config as Record<string, unknown>).roleInstanceId = roleInstanceId;
   researchNodeIds.push(synthesisNodeId);
   const verificationNode = createResearchPipelineNode({
     nodeId: verificationNodeId,
@@ -218,6 +254,9 @@ export function buildRoleNodeScaffold(params: RoleNodeScaffoldParams): RoleNodeS
     role: `${roleLabel} 조사 검증`,
     promptTemplate: research.verificationPrompt,
   });
+  (verificationNode.config as Record<string, unknown>).internalParentNodeId = roleNodeId;
+  (verificationNode.config as Record<string, unknown>).internalNodeKind = "verification";
+  (verificationNode.config as Record<string, unknown>).roleInstanceId = roleInstanceId;
   researchNodeIds.push(verificationNodeId);
 
   const researchNodes = [

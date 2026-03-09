@@ -71,4 +71,65 @@ describe("injectKnowledgeContext role knowledge", () => {
     expect(result.prompt).toContain("핵심 루프를 먼저 고정");
     expect(result.prompt).toContain("현재 요청");
   });
+
+  it("merges shared and instance role knowledge for perspective passes", async () => {
+    writeRoleKnowledgeProfiles([
+      {
+        roleId: "pm_planner",
+        scope: "shared",
+        roleLabel: "기획(PM)",
+        goal: "요구사항 정의",
+        taskId: "PLAN-001",
+        runId: "run-shared",
+        summary: "공통 PM 지식",
+        keyPoints: ["공통 기준선 유지"],
+        sources: [],
+        updatedAt: new Date().toISOString(),
+      },
+      {
+        roleId: "pm_planner",
+        scope: "instance",
+        instanceId: "pm_planner:alt-1",
+        roleLabel: "기획(PM) · 추가 시각 1",
+        goal: "대안 시각",
+        taskId: "PLAN-ALT-001",
+        runId: "run-instance",
+        summary: "대안 PM 시각",
+        keyPoints: ["실험적 시각에서 리스크 감수"],
+        sources: [],
+        updatedAt: new Date().toISOString(),
+      },
+    ]);
+
+    const node: GraphNode = {
+      id: "turn-role-alt",
+      type: "turn",
+      position: { x: 0, y: 0 },
+      config: {
+        sourceKind: "handoff",
+        handoffRoleId: "pm_planner",
+        roleInstanceId: "pm_planner:alt-1",
+        knowledgeEnabled: true,
+      },
+    };
+
+    const result = await injectKnowledgeContext({
+      node,
+      prompt: "대안 시각으로 평가",
+      config: node.config,
+      workflowQuestion: "새 게임 기획",
+      activeRunPresetKind: undefined,
+      internalMemoryCorpus: [],
+      enabledKnowledgeFiles: [],
+      graphKnowledge: { topK: 0, maxChars: 0 },
+      addNodeLog: vi.fn(),
+      invokeFn: vi.fn(),
+    });
+
+    expect(result.prompt).toContain("[역할 누적 지식]");
+    expect(result.prompt).toContain("공통 PM 지식");
+    expect(result.prompt).toContain("[관점별 누적 지식]");
+    expect(result.prompt).toContain("대안 PM 시각");
+    expect(result.prompt).toContain("실험적 시각");
+  });
 });

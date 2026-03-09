@@ -372,6 +372,7 @@ export async function handleRunGraphTurnNode(params: any): Promise<boolean> {
       taskId: String(config.taskId ?? config.handoffTaskId ?? ""),
       output: normalizedOutput,
       logs: runLogCollectorRef.current[nodeId] ?? [],
+      roleInstanceId: String(config.roleInstanceId ?? ""),
     });
   }
   rememberFeedSource(latestFeedSourceByNodeId, donePost);

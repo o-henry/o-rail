@@ -93,11 +93,22 @@ export default function WorkflowCanvasNodesLayer({
         const isDataPipelineNode =
           node.type === "turn" && sourceKind === "data_pipeline";
         const isDataResearchNode = node.type === "turn" && sourceKind === "data_research";
+        const internalParentNodeId = String((node.config as Record<string, unknown>)?.internalParentNodeId ?? "").trim();
+        const internalNodeKind = String((node.config as Record<string, unknown>)?.internalNodeKind ?? "").trim();
+        const internalKindLabel =
+          internalNodeKind === "research"
+            ? "조사"
+            : internalNodeKind === "synthesis"
+              ? "종합"
+              : internalNodeKind === "verification"
+                ? "검증"
+                : "내부";
+        const isInternalRoleNode = Boolean(internalParentNodeId);
         const isRagModeNode = graphViewMode === "rag";
         const isRagNodeRunning = isRagModeNode && nodeStatus === "running";
         return (
           <div
-            className={`graph-node node-${node.type} ${isRagModeNode ? "is-rag-mode-node" : ""} ${isRagNodeRunning ? "is-rag-running" : ""} ${isDataPipelineNode ? "is-data-pipeline-node" : ""} ${isDataResearchNode ? "is-data-research-node" : ""} ${handoffRoleClass} ${isNodeSelected ? "selected" : ""} ${isNodeDragging ? "is-dragging" : ""}`.trim()}
+            className={`graph-node node-${node.type} ${isRagModeNode ? "is-rag-mode-node" : ""} ${isRagNodeRunning ? "is-rag-running" : ""} ${isDataPipelineNode ? "is-data-pipeline-node" : ""} ${isDataResearchNode ? "is-data-research-node" : ""} ${isInternalRoleNode ? "is-internal-role-node" : ""} ${handoffRoleClass} ${isNodeSelected ? "selected" : ""} ${isNodeDragging ? "is-dragging" : ""}`.trim()}
             data-node-id={node.id}
             key={node.id}
             onClick={(event) => {
@@ -155,6 +166,11 @@ export default function WorkflowCanvasNodesLayer({
                     )}
                   </div>
                   <div className="node-head-actions">
+                    {isInternalRoleNode ? (
+                      <span className="node-type-badge internal node-head-action-badge">
+                        {`내부 ${internalKindLabel}`}
+                      </span>
+                    ) : null}
                     {isDataPipelineNode ? <span className="node-type-badge data node-head-action-badge">DATA</span> : null}
                     {isDataResearchNode ? <span className="node-type-badge research node-head-action-badge">RAG</span> : null}
                     <button className="node-head-delete-button" onClick={() => deleteNode(node.id)} type="button">

@@ -450,6 +450,20 @@
   margin-bottom: 2px;
 }
 
+.workflow-role-node-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.workflow-role-node-actions .mini-action-button {
+  min-height: 30px;
+  height: 30px;
+  padding: 4px 10px;
+  border-radius: 4px;
+}
+
 .tool-dropdown-group {
   display: grid;
   gap: 10px;

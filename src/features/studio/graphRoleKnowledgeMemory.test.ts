@@ -93,4 +93,29 @@ describe("graphRoleKnowledgeMemory", () => {
       expect.arrayContaining(["https://example.com/old", "https://example.com/new"]),
     );
   });
+
+  it("stores instance knowledge separately when a role instance id is present", () => {
+    writeRoleKnowledgeProfiles([]);
+
+    storeGraphRoleKnowledge({
+      roleId: "pm_planner",
+      roleInstanceId: "pm_planner:alt-1",
+      runId: "run-alt",
+      taskId: "PLAN-ALT-001",
+      output: {
+        summary: "실험형 PM 관점",
+        notes: ["리스크를 감수하고 차별화를 우선"],
+        source: "https://example.com/alt-perspective",
+      },
+      logs: [],
+    });
+
+    const rows = readRoleKnowledgeProfiles().filter((row) => row.roleId === "pm_planner");
+    const shared = rows.find((row) => (row.scope ?? "shared") === "shared");
+    const instance = rows.find((row) => row.scope === "instance" && row.instanceId === "pm_planner:alt-1");
+
+    expect(shared?.summary).toContain("실험형 PM 관점");
+    expect(instance?.summary).toContain("실험형 PM 관점");
+    expect(instance?.instanceId).toBe("pm_planner:alt-1");
+  });
 });

@@ -19,6 +19,7 @@ import { useGraphFileActions } from "./hooks/useGraphFileActions";
 import { useGraphState } from "./hooks/useGraphState";
 import { useWebConnectState } from "./hooks/useWebConnectState";
 import { useWorkflowGraphActions } from "./hooks/useWorkflowGraphActions";
+import { useWorkflowRoleCollaboration } from "./hooks/useWorkflowRoleCollaboration";
 import { useWorkflowShortcuts } from "./hooks/useWorkflowShortcuts";
 import { useDashboardIntelligenceConfig } from "./hooks/useDashboardIntelligenceConfig";
 import { useDashboardIntelligenceRunner } from "./hooks/useDashboardIntelligenceRunner";
@@ -75,7 +76,6 @@ import {
   simplifyPresetForSimpleWorkflow,
 } from "../features/workflow/presets";
 import { localizePresetPromptTemplate } from "../features/workflow/presets/promptLocale";
-import { buildRoleNodeScaffold } from "./main/runtime/roleNodeScaffold";
 import {
   approvalDecisionLabel,
   approvalSourceLabel,
@@ -324,6 +324,7 @@ function App() {
   const [workflowRoleId, setWorkflowRoleId] = useState<StudioRoleId>("pm_planner");
   const [workflowRoleTaskId, setWorkflowRoleTaskId] = useState("TASK-001");
   const [workflowRolePrompt, setWorkflowRolePrompt] = useState("");
+  const [expandedRoleNodeIds, setExpandedRoleNodeIds] = useState<string[]>([]);
   const [workflowRoleRuntimeStateByRole, setWorkflowRoleRuntimeStateByRole] = useState<
     Partial<Record<StudioRoleId, RoleDockRuntimeState>>
   >({});
@@ -681,6 +682,7 @@ function App() {
     selectedKnowledgeMaxCharsOption,
   } = useCanvasGraphDerivedState({
     graph: graphForCanvas,
+    expandedRoleNodeIds: new Set(expandedRoleNodeIds),
     selectedNodeId,
     selectedEdgeKey,
     simpleWorkflowUi: SIMPLE_WORKFLOW_UI,
@@ -2090,42 +2092,23 @@ function App() {
     );
   }, [appendWorkspaceEvent, setStatus, workflowGraphViewMode]);
 
-  const onAddRoleNode = useCallback(
-    (roleId: StudioRoleId, includeResearch: boolean) => {
-      const maxX = graph.nodes.reduce((max, node) => Math.max(max, Number(node.position?.x ?? 0)), 40);
-      const maxY = graph.nodes.reduce((max, node) => Math.max(max, Number(node.position?.y ?? 0)), 40);
-      const roleX = maxX + (includeResearch ? 820 : 320);
-      const roleY = Math.max(60, maxY);
-      const scaffold = buildRoleNodeScaffold({
-        roleId,
-        anchorX: roleX,
-        anchorY: roleY,
-        includeResearch,
-      });
-      const roleLabel = STUDIO_ROLE_TEMPLATES.find((row) => row.id === roleId)?.label ?? roleId;
-
-      applyGraphChange(
-        (prev) => ({
-          ...prev,
-          nodes: [...prev.nodes, ...scaffold.nodes],
-          edges: [...prev.edges, ...scaffold.edges],
-        }),
-        { autoLayout: false },
-      );
-      setNodeSelection([scaffold.roleNodeId], scaffold.roleNodeId);
-      appendWorkspaceEvent({
-        source: "workflow",
-        message: includeResearch
-          ? `역할 노드 추가: ${roleLabel} + 자동 리서치`
-          : `역할 노드 추가: ${roleLabel}`,
-        actor: "user",
-        level: "info",
-      });
-      setStatus(includeResearch ? `${roleLabel} 역할 노드와 자동 리서치 그래프를 추가했습니다.` : `${roleLabel} 역할 노드를 추가했습니다.`);
-      setCanvasZoom((prev) => clampCanvasZoom(Math.min(prev, 0.88)));
-    },
-    [appendWorkspaceEvent, applyGraphChange, clampCanvasZoom, graph.nodes, setCanvasZoom, setNodeSelection, setStatus],
-  );
+  const {
+    onAddRoleNode,
+    toggleRoleInternalExpanded,
+    addRolePerspectivePass,
+    addRoleReviewPass,
+  } = useWorkflowRoleCollaboration({
+    graph,
+    selectedNode,
+    expandedRoleNodeIds,
+    setExpandedRoleNodeIds,
+    applyGraphChange,
+    setNodeSelection,
+    appendWorkspaceEvent,
+    setStatus,
+    setCanvasZoom,
+    clampCanvasZoom,
+  });
 
   const onInterruptWorkflowNode = useCallback(
     async (nodeId: string) => {
@@ -2188,6 +2171,15 @@ function App() {
       selectedTurnConfig,
       selectedTurnExecutor,
       simpleWorkflowUI: SIMPLE_WORKFLOW_UI,
+      roleInternalExpanded:
+        selectedNode != null && expandedRoleNodeIds.includes(selectedNode.id),
+      toggleRoleInternalExpanded: () => {
+        if (selectedNode) {
+          toggleRoleInternalExpanded(selectedNode.id);
+        }
+      },
+      addRolePerspectivePass,
+      addRoleReviewPass,
       turnExecutorLabel,
       turnExecutorOptions: [...TURN_EXECUTOR_OPTIONS],
       turnModelOptions: [...TURN_MODEL_OPTIONS],

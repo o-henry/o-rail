@@ -46,6 +46,12 @@ describe("roleNodeScaffold", () => {
       executor: "web_perplexity",
       viaCustomSites: expect.stringContaining("docs.unity3d.com"),
     });
+    const fieldFailureNode = result.nodes.find((node) => String((node.config as Record<string, unknown>).role ?? "").includes("병목·실패 사례 조사"));
+    expect(fieldFailureNode?.config).toMatchObject({
+      executor: "via_flow",
+      viaNodeType: "source.dev",
+      viaTemplateLabel: "병목·실패 사례 조사",
+    });
     const synthesisNode = result.nodes.find((node) => String((node.config as Record<string, unknown>).role ?? "").includes("조사 종합"));
     expect(synthesisNode?.config).toMatchObject({
       executor: "codex",

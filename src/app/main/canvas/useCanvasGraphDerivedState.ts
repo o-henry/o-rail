@@ -5,12 +5,23 @@ import { closestNumericOptionValue } from "../../mainAppUtils";
 import type { CanvasDisplayEdge } from "../index";
 
 export function useCanvasGraphDerivedState(params: any) {
+  const expandedRoleNodeIds = params.expandedRoleNodeIds as Set<string> | undefined;
   const canvasNodes = useMemo<GraphNode[]>(() => {
-    if (!params.simpleWorkflowUi) {
-      return (params.graph as GraphData).nodes;
-    }
-    return (params.graph as GraphData).nodes.filter((node) => node.type === "turn");
-  }, [params.graph.nodes, params.simpleWorkflowUi]);
+    const baseNodes = !params.simpleWorkflowUi
+      ? (params.graph as GraphData).nodes
+      : (params.graph as GraphData).nodes.filter((node) => node.type === "turn");
+    return baseNodes.filter((node) => {
+      const config = (node.config ?? {}) as Record<string, unknown>;
+      const internalParentNodeId = String(config.internalParentNodeId ?? "").trim();
+      if (!internalParentNodeId) {
+        return true;
+      }
+      if (String(params.selectedNodeId ?? "").trim() === node.id) {
+        return true;
+      }
+      return Boolean(expandedRoleNodeIds?.has(internalParentNodeId));
+    });
+  }, [expandedRoleNodeIds, params.graph.nodes, params.selectedNodeId, params.simpleWorkflowUi]);
 
   const canvasNodeIdSet = useMemo<Set<string>>(
     () => new Set(canvasNodes.map((node) => node.id)),
@@ -22,13 +33,10 @@ export function useCanvasGraphDerivedState(params: any) {
   );
 
   const canvasEdges = useMemo<GraphEdge[]>(() => {
-    if (!params.simpleWorkflowUi) {
-      return (params.graph as GraphData).edges;
-    }
     return (params.graph as GraphData).edges.filter(
       (edge) => canvasNodeIdSet.has(edge.from.nodeId) && canvasNodeIdSet.has(edge.to.nodeId),
     );
-  }, [params.graph.edges, params.simpleWorkflowUi, canvasNodeIdSet]);
+  }, [params.graph.edges, canvasNodeIdSet]);
 
   const canvasDisplayEdges = useMemo<CanvasDisplayEdge[]>(() => {
     const editableEdges: CanvasDisplayEdge[] = canvasEdges.map((edge) => ({
@@ -66,7 +74,7 @@ export function useCanvasGraphDerivedState(params: any) {
     return new Set([selected.edge.from.nodeId, selected.edge.to.nodeId]);
   }, [canvasDisplayEdges, params.selectedEdgeKey]);
 
-  const selectedNode = canvasNodes.find((node) => node.id === params.selectedNodeId) ?? null;
+  const selectedNode = (params.graph as GraphData).nodes.find((node) => node.id === params.selectedNodeId) ?? null;
 
   const questionDirectInputNodeIds = useMemo<Set<string>>(() => {
     const incomingNodeIds = new Set((params.graph as GraphData).edges.map((edge) => edge.to.nodeId));

@@ -1343,6 +1343,16 @@
   background: #e8defd;
 }
 
+.node-type-badge.internal {
+  color: #4e5f7a;
+  background: #e8edf5;
+}
+
+.graph-node.is-internal-role-node {
+  outline: 1px dashed rgba(108, 126, 152, 0.36);
+  outline-offset: 2px;
+}
+
 .graph-node.node-turn.handoff-role-pm-planner .node-head {
   background: color-mix(in srgb, #2c7be5 16%, var(--node-turn-head-bg));
 }

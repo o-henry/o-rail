@@ -32,6 +32,10 @@ export default function WorkflowNodeInspector({
   artifactTypeOptions,
   selectedArtifactType,
   outgoingNodeOptions,
+  roleInternalExpanded,
+  toggleRoleInternalExpanded,
+  addRolePerspectivePass,
+  addRoleReviewPass,
 }: WorkflowInspectorNodeProps) {
   const { t } = useI18n();
 
@@ -147,6 +151,17 @@ export default function WorkflowNodeInspector({
           </label>
           <div className="inspector-empty">
             역할 노드는 역할별 관점과 요구사항에 집중합니다. 연결과 후속 흐름은 캔버스에서 직접 조정하세요.
+          </div>
+          <div className="workflow-role-node-actions">
+            <button className="mini-action-button" onClick={toggleRoleInternalExpanded} type="button">
+              <span className="mini-action-button-label">{roleInternalExpanded ? "내부 작업 접기" : "내부 작업 보기"}</span>
+            </button>
+            <button className="mini-action-button" onClick={addRolePerspectivePass} type="button">
+              <span className="mini-action-button-label">추가 시각</span>
+            </button>
+            <button className="mini-action-button" onClick={addRoleReviewPass} type="button">
+              <span className="mini-action-button-label">재검토</span>
+            </button>
           </div>
         </section>
       )}

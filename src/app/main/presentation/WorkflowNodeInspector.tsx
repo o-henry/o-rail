@@ -60,6 +60,17 @@ export default function WorkflowNodeInspector({
             help="역할 노드는 특정 담당자의 관점으로 답변하는 작업 노드입니다. 필요하면 앞단에 자동 조사 체인을 연결해 전문가용 자료를 먼저 수집합니다."
             title="역할 노드 설정"
           />
+          <div className="workflow-role-node-actions">
+            <button className="mini-action-button" onClick={toggleRoleInternalExpanded} type="button">
+              <span className="mini-action-button-label">{roleInternalExpanded ? "내부작업 접기" : "내부작업 보기"}</span>
+            </button>
+            <button className="mini-action-button" onClick={addRolePerspectivePass} type="button">
+              <span className="mini-action-button-label">추가 시각</span>
+            </button>
+            <button className="mini-action-button" onClick={addRoleReviewPass} type="button">
+              <span className="mini-action-button-label">재검토</span>
+            </button>
+          </div>
           <label>
             에이전트
             <FancySelect
@@ -151,17 +162,6 @@ export default function WorkflowNodeInspector({
           </label>
           <div className="inspector-empty">
             역할 노드는 역할별 관점과 요구사항에 집중합니다. 연결과 후속 흐름은 캔버스에서 직접 조정하세요.
-          </div>
-          <div className="workflow-role-node-actions">
-            <button className="mini-action-button" onClick={toggleRoleInternalExpanded} type="button">
-              <span className="mini-action-button-label">{roleInternalExpanded ? "내부 작업 접기" : "내부 작업 보기"}</span>
-            </button>
-            <button className="mini-action-button" onClick={addRolePerspectivePass} type="button">
-              <span className="mini-action-button-label">추가 시각</span>
-            </button>
-            <button className="mini-action-button" onClick={addRoleReviewPass} type="button">
-              <span className="mini-action-button-label">재검토</span>
-            </button>
           </div>
         </section>
       )}

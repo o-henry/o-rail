@@ -367,6 +367,9 @@ function App() {
   const [workflowQuestion, setWorkflowQuestion] = useState("");
   const [workflowGraphViewMode, setWorkflowGraphViewMode] = useState<WorkflowGraphViewMode>("graph");
   const [workflowSidePanelsVisible, setWorkflowSidePanelsVisible] = useState(true);
+  const [workflowRoleDockCollapsed, setWorkflowRoleDockCollapsed] = useState(false);
+  const [workflowInspectorCollapsed, setWorkflowInspectorCollapsed] = useState(false);
+  const [workflowUnityAutomationCollapsed, setWorkflowUnityAutomationCollapsed] = useState(false);
 
   const {
     engineStarted,
@@ -2244,12 +2247,15 @@ function App() {
   const workflowInspectorPaneElement = (
     <WorkflowInspectorPane
       canvasFullscreen={canvasFullscreen}
+      collapsed={workflowInspectorCollapsed}
       nodeProps={workflowInspectorPaneProps.nodeProps}
+      onToggleCollapsed={() => setWorkflowInspectorCollapsed((prev) => !prev)}
       toolsProps={workflowInspectorPaneProps.toolsProps}
     />
   );
   const workflowRoleDockElement = (
     <WorkflowRoleDock
+      collapsed={workflowRoleDockCollapsed}
       onChangePrompt={setWorkflowRolePrompt}
       onChangeTaskId={setWorkflowRoleTaskId}
       onRunRole={() => {
@@ -2298,6 +2304,7 @@ function App() {
       roleStatusById={workflowRoleStatusByRole}
       selectedRoleBlockers={workflowSelectedRoleBlockers}
       selectedRoleHandoffs={workflowSelectedRoleHandoffs}
+      onToggleCollapsed={() => setWorkflowRoleDockCollapsed((prev) => !prev)}
       prompt={workflowRolePrompt}
       roleId={workflowRoleId}
       runDisabled={isWorkflowBusy}
@@ -2312,8 +2319,10 @@ function App() {
   const workflowUnityAutomationIslandElement = (
     <WorkflowUnityAutomationIsland
       applyPreset={applyPreset}
+      collapsed={workflowUnityAutomationCollapsed}
       cwd={cwd}
       isPresetKind={isPresetKind}
+      onToggleCollapsed={() => setWorkflowUnityAutomationCollapsed((prev) => !prev)}
       presetTemplateOptions={[...presetTemplateOptions]}
     />
   );

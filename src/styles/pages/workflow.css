@@ -451,13 +451,14 @@
 }
 
 .workflow-role-node-actions {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
-  margin-top: 4px;
+  margin-top: -2px;
 }
 
 .workflow-role-node-actions .mini-action-button {
+  width: 100%;
   min-height: 30px;
   height: 30px;
   padding: 4px 10px;
@@ -1015,11 +1016,22 @@
 }
 
 .workflow-role-dock-head {
-  display: grid;
-  gap: 2px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
 }
 
 .workflow-unity-automation-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.workflow-role-dock-head-text,
+.workflow-unity-automation-head-text {
+  min-width: 0;
   display: grid;
   gap: 2px;
 }
@@ -1340,7 +1352,7 @@
 }
 
 .workflow-handoff-section-title h3 {
-  font-size: 13px;
+  font-size: 15px;
   line-height: 1.3;
 }
 
@@ -1348,6 +1360,37 @@
 .workflow-unity-automation-head span {
   font-size: 11px;
   color: var(--text-muted);
+}
+
+.workflow-island-collapse-button {
+  flex: 0 0 auto;
+  min-height: 28px;
+  height: 28px;
+  width: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--surface-panel) 84%, var(--surface));
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.workflow-island-collapse-button:hover {
+  background: color-mix(in srgb, var(--surface-strong) 22%, var(--surface-panel));
+}
+
+.workflow-island-collapse-button:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--focus-ring) 48%, transparent);
+}
+
+.workflow-island-collapse-icon {
+  width: 12px;
+  height: 12px;
+  display: block;
+  opacity: 0.72;
 }
 
 .workflow-role-cards {

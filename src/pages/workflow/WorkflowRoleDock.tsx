@@ -4,6 +4,8 @@ import { STUDIO_ROLE_TEMPLATES } from "../../features/studio/roleTemplates";
 type RoleDockStatus = "IDLE" | "RUNNING" | "VERIFY" | "DONE";
 
 type WorkflowRoleDockProps = {
+  collapsed?: boolean;
+  onToggleCollapsed?: () => void;
   roleId: StudioRoleId;
   onSelectRoleId: (roleId: StudioRoleId) => void;
   roleSelectionLockedTo?: StudioRoleId | null;
@@ -32,11 +34,28 @@ export default function WorkflowRoleDock(props: WorkflowRoleDockProps) {
   const lockedRoleId = props.roleSelectionLockedTo ?? null;
 
   return (
-    <aside className="panel-card workflow-role-dock" aria-label="역할 워크스페이스">
+    <aside className={`panel-card workflow-role-dock${props.collapsed ? " is-collapsed" : ""}`.trim()} aria-label="역할 워크스페이스">
       <header className="workflow-role-dock-head">
-        <strong>역할 워크스페이스</strong>
-        <span>그래프 단일 실행 보드</span>
+        <div className="workflow-role-dock-head-text">
+          <strong>역할 워크스페이스</strong>
+          <span>그래프 단일 실행 보드</span>
+        </div>
+        <button
+          aria-label={props.collapsed ? "역할 워크스페이스 펼치기" : "역할 워크스페이스 축소"}
+          className="workflow-island-collapse-button"
+          onClick={props.onToggleCollapsed}
+          type="button"
+        >
+          <img
+            alt=""
+            className="workflow-island-collapse-icon"
+            src={props.collapsed ? "/down-arrow.svg" : "/up-arrow.svg"}
+          />
+        </button>
       </header>
+
+      {!props.collapsed && (
+        <>
 
       <section className="workflow-role-cards" aria-label="역할 카드">
         {STUDIO_ROLE_TEMPLATES.map((role) => {
@@ -140,6 +159,8 @@ export default function WorkflowRoleDock(props: WorkflowRoleDockProps) {
           </ul>
         )}
       </section>
+        </>
+      )}
     </aside>
   );
 }

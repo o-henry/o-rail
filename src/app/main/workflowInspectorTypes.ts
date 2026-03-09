@@ -69,6 +69,8 @@ export type WorkflowUnityAutomationProps = {
   applyPreset: (preset: PresetKind) => void;
   isPresetKind: (value: string) => value is PresetKind;
   presetTemplateOptions: SelectOption[];
+  collapsed?: boolean;
+  onToggleCollapsed?: () => void;
 };
 
 export type WorkflowInspectorNodeProps = {

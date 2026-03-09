@@ -188,18 +188,20 @@ export default function WorkflowAgentTerminalIsland(props: WorkflowAgentTerminal
   return (
     <div className={`canvas-agent-terminal-slot${visible ? " is-visible" : ""}`} aria-hidden={!visible}>
       <aside className="workflow-agent-terminal-island" aria-label="에이전트 실행 터미널">
-        <header className="workflow-agent-terminal-head">
-          <div>
-            <strong>{pane?.title ?? "에이전트 터미널"}</strong>
-            <span>{nodeHeading(props.selectedNode)}</span>
-          </div>
-          <div className="workflow-agent-terminal-meta">
-            <code>{props.selectedNode?.id ?? "no-node"}</code>
-            <span>{statusMessage(pane?.status ?? "idle", pane?.exitCode)}</span>
-          </div>
-        </header>
+        <div className="workflow-agent-terminal-panel workflow-agent-terminal-summary-panel">
+          <header className="workflow-agent-terminal-head">
+            <div>
+              <strong>{pane?.title ?? "에이전트 터미널"}</strong>
+              <span>{nodeHeading(props.selectedNode)}</span>
+            </div>
+            <div className="workflow-agent-terminal-meta">
+              <code>{props.selectedNode?.id ?? "no-node"}</code>
+              <span>{statusMessage(pane?.status ?? "idle", pane?.exitCode)}</span>
+            </div>
+          </header>
 
-        <div className="workflow-agent-terminal-path">~/{props.cwd ? props.cwd.split("/").slice(-2).join("/") : "workspace"}</div>
+          <div className="workflow-agent-terminal-path">~/{props.cwd ? props.cwd.split("/").slice(-2).join("/") : "workspace"}</div>
+        </div>
 
         <div className="workflow-agent-terminal-panel workflow-agent-terminal-log-panel">
           <pre className="workflow-agent-terminal-body">{viewportText}</pre>

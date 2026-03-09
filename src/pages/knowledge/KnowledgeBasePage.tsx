@@ -22,24 +22,6 @@ export default function KnowledgeBasePage({
         <h2>데이터베이스</h2>
         <p>역할 실행으로 생성된 산출물(Markdown/JSON)을 탐색하고 에이전트 컨텍스트로 재주입합니다.</p>
       </header>
-      <section className="knowledge-overview">
-        <article className="knowledge-overview-card panel-card">
-          <strong>전체 문서</strong>
-          <span>{state.entryStats.total}</span>
-        </article>
-        <article className="knowledge-overview-card panel-card">
-          <strong>산출물</strong>
-          <span>{state.entryStats.artifact}</span>
-        </article>
-        <article className="knowledge-overview-card panel-card">
-          <strong>WEB 자료</strong>
-          <span>{state.entryStats.web}</span>
-        </article>
-        <article className="knowledge-overview-card panel-card">
-          <strong>AI 자료</strong>
-          <span>{state.entryStats.ai}</span>
-        </article>
-      </section>
       <section className="knowledge-layout">
         <KnowledgeBaseListPanel
           collapsedByGroup={state.collapsedByGroup}

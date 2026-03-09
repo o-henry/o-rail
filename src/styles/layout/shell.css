@@ -1136,9 +1136,9 @@
   height: 80px;
   border: 1px solid color-mix(in srgb, var(--canvas-control-border) 72%, transparent);
   border-radius: 20px;
-  background: #171c25;
-  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.28);
-  color: #eaf1ff;
+  background: var(--canvas-node-bg);
+  box-shadow: var(--canvas-node-shadow);
+  color: var(--text-main);
   cursor: pointer;
 }
 

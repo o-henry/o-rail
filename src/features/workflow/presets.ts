@@ -8,6 +8,12 @@ import {
   buildValidationPreset,
 } from "./presets/buildersCore";
 import {
+  buildUnityAddressablesDietPreset,
+  buildUnityBuildWatcherPreset,
+  buildUnityLocalizationQaPreset,
+  buildUnityTestsmithPreset,
+} from "./presets/buildersUnityAutomation";
+import {
   buildCreativePreset,
   buildFullstackPreset,
   buildNewsTrendPreset,
@@ -32,6 +38,14 @@ export function buildPresetGraphByKind(kind: PresetKind): GraphData {
     base = buildResearchPreset();
   } else if (kind === "unityCiDoctor") {
     base = buildUnityCiDoctorPreset();
+  } else if (kind === "unityTestsmith") {
+    base = buildUnityTestsmithPreset();
+  } else if (kind === "unityBuildWatcher") {
+    base = buildUnityBuildWatcherPreset();
+  } else if (kind === "unityLocalizationQa") {
+    base = buildUnityLocalizationQaPreset();
+  } else if (kind === "unityAddressablesDiet") {
+    base = buildUnityAddressablesDietPreset();
   } else if (kind === "unityGame") {
     base = buildUnityGamePreset();
   } else if (kind === "fullstack") {

@@ -6,6 +6,7 @@ import {
   type PresetTurnPolicy,
 } from "./shared";
 import { PREPROCESS_BRIEF_SCHEMA } from "./schemas";
+import { resolveUnityAutomationTurnPolicy } from "./unityPolicies";
 
 const PRESET_OUTPUT_SCHEMA_BY_NODE_ID: Readonly<Record<string, string>> = {};
 
@@ -140,55 +141,9 @@ export function resolvePresetTurnPolicy(kind: PresetKind, nodeId: string): Prese
     }
   }
 
-  if (kind === "unityCiDoctor") {
-    if (key.includes("intake")) {
-      return {
-        ...DEFAULT_PRESET_TURN_POLICY,
-        profile: "design_planning",
-        threshold: 74,
-        artifactType: "RequirementArtifact",
-      };
-    }
-    if (key.includes("system")) {
-      return {
-        ...DEFAULT_PRESET_TURN_POLICY,
-        profile: "research_evidence",
-        threshold: 88,
-        artifactType: "EvidenceArtifact",
-      };
-    }
-    if (key.includes("qa")) {
-      return {
-        ...DEFAULT_PRESET_TURN_POLICY,
-        profile: "synthesis_final",
-        threshold: 82,
-        artifactType: "TaskPlanArtifact",
-      };
-    }
-    if (key.includes("pm")) {
-      return {
-        ...DEFAULT_PRESET_TURN_POLICY,
-        profile: "design_planning",
-        threshold: 78,
-        artifactType: "RequirementArtifact",
-      };
-    }
-    if (key.includes("judge")) {
-      return {
-        ...DEFAULT_PRESET_TURN_POLICY,
-        profile: "research_evidence",
-        threshold: 90,
-        artifactType: "EvidenceArtifact",
-      };
-    }
-    if (key.includes("final")) {
-      return {
-        ...DEFAULT_PRESET_TURN_POLICY,
-        profile: "synthesis_final",
-        threshold: 84,
-        artifactType: "ChangePlanArtifact",
-      };
-    }
+  const unityAutomationPolicy = resolveUnityAutomationTurnPolicy(kind, key);
+  if (unityAutomationPolicy) {
+    return unityAutomationPolicy;
   }
 
   if (kind === "unityGame") {

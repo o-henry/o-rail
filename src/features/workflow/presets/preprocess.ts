@@ -8,6 +8,10 @@ export function presetIntentByKind(kind: PresetKind): string {
   if (kind === "research") return "근거 중심 조사/분석";
   if (kind === "expert") return "전문가 수준 의사결정";
   if (kind === "unityCiDoctor") return "유니티 CI 장애 진단 및 수정 우선순위화";
+  if (kind === "unityTestsmith") return "유니티 테스트 설계, 생성, 실행 우선순위화";
+  if (kind === "unityBuildWatcher") return "유니티 빌드 시간/용량 회귀 분석";
+  if (kind === "unityLocalizationQa") return "유니티 로컬라이제이션 QA 검증";
+  if (kind === "unityAddressablesDiet") return "유니티 Addressables 및 에셋 다이어트 분석";
   if (kind === "unityGame") return "유니티 게임 개발 실행";
   if (kind === "fullstack") return "풀스택 제품 구현";
   if (kind === "creative") return "창의 아이디어를 실행 가능한 제안으로 전환";

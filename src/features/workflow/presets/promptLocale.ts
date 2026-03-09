@@ -12,6 +12,10 @@ function localizedPresetIntent(kind: PresetKind, locale: AppLocale): string {
     if (kind === "research") return "perform evidence-driven research and analysis";
     if (kind === "expert") return "support expert-level decision making";
     if (kind === "unityCiDoctor") return "diagnose Unity CI failures and prioritize the next fix";
+    if (kind === "unityTestsmith") return "design Unity tests and prioritize the next verification";
+    if (kind === "unityBuildWatcher") return "analyze Unity build and size regressions";
+    if (kind === "unityLocalizationQa") return "audit Unity localization quality and release risk";
+    if (kind === "unityAddressablesDiet") return "analyze Unity Addressables and asset bloat safely";
     if (kind === "unityGame") return "deliver a Unity game development plan";
     if (kind === "fullstack") return "deliver a full-stack product implementation";
     if (kind === "creative") return "convert creative ideas into executable proposals";
@@ -23,6 +27,10 @@ function localizedPresetIntent(kind: PresetKind, locale: AppLocale): string {
     if (kind === "research") return "根拠中心の調査・分析を行う";
     if (kind === "expert") return "専門家レベルの意思決定を支援する";
     if (kind === "unityCiDoctor") return "Unity CI 障害を診断し次の修正を優先順位付けする";
+    if (kind === "unityTestsmith") return "Unityテストを設計し次の検証を優先順位付けする";
+    if (kind === "unityBuildWatcher") return "Unityビルド時間/サイズ回帰を分析する";
+    if (kind === "unityLocalizationQa") return "Unityローカライズ品質とリリースリスクを監査する";
+    if (kind === "unityAddressablesDiet") return "Unity Addressables と資産肥大化を安全に分析する";
     if (kind === "unityGame") return "Unityゲーム開発計画を作成する";
     if (kind === "fullstack") return "フルスタック製品の実装計画を作る";
     if (kind === "creative") return "創造的アイデアを実行可能な提案に変換する";
@@ -33,6 +41,10 @@ function localizedPresetIntent(kind: PresetKind, locale: AppLocale): string {
   if (kind === "research") return "进行证据驱动的研究分析";
   if (kind === "expert") return "支持专家级决策";
   if (kind === "unityCiDoctor") return "诊断 Unity CI 故障并确定下一步修复优先级";
+  if (kind === "unityTestsmith") return "设计 Unity 测试并确定下一步验证优先级";
+  if (kind === "unityBuildWatcher") return "分析 Unity 构建与体积回归";
+  if (kind === "unityLocalizationQa") return "审计 Unity 本地化质量与发布风险";
+  if (kind === "unityAddressablesDiet") return "安全分析 Unity Addressables 与资产膨胀";
   if (kind === "unityGame") return "制定 Unity 游戏开发方案";
   if (kind === "fullstack") return "制定全栈产品实现方案";
   if (kind === "creative") return "将创意转化为可执行提案";

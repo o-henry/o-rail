@@ -17,6 +17,10 @@ export type PresetKind =
   | "research"
   | "expert"
   | "unityCiDoctor"
+  | "unityTestsmith"
+  | "unityBuildWatcher"
+  | "unityLocalizationQa"
+  | "unityAddressablesDiet"
   | "unityGame"
   | "fullstack"
   | "creative"
@@ -159,6 +163,10 @@ export function isPresetKind(value: string): value is PresetKind {
     value === "research" ||
     value === "expert" ||
     value === "unityCiDoctor" ||
+    value === "unityTestsmith" ||
+    value === "unityBuildWatcher" ||
+    value === "unityLocalizationQa" ||
+    value === "unityAddressablesDiet" ||
     value === "unityGame" ||
     value === "fullstack" ||
     value === "creative" ||

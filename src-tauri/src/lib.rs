@@ -4,6 +4,8 @@ mod knowledge;
 mod quality;
 mod storage;
 mod system;
+mod unity_automation;
+mod unity_automation_batch;
 mod via_bridge;
 use tauri::Manager;
 
@@ -80,6 +82,11 @@ pub fn run() {
             system::workspace_terminal_start,
             system::workspace_terminal_input,
             system::workspace_terminal_stop,
+            unity_automation::unity_guard_inspect,
+            unity_automation::unity_guard_prepare,
+            unity_automation::unity_collect_diagnostics,
+            unity_automation_batch::unity_batch_command_preview,
+            unity_automation_batch::unity_batch_run,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");

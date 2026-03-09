@@ -14,12 +14,7 @@ import {
   replaceInputPlaceholder,
   stringifyInput,
 } from "../../../features/workflow/promptUtils";
-import {
-  codexMultiAgentModeLabel,
-  extractDeltaText,
-  extractUsageStats,
-  resolveNodeCwd,
-} from "../../mainAppUtils";
+import { codexMultiAgentModeLabel, extractDeltaText, extractUsageStats, resolveNodeCwd } from "../../mainAppUtils";
 import {
   getTurnExecutor,
   getWebProviderFromExecutor,
@@ -36,13 +31,8 @@ import {
 import { DEFAULT_TURN_REASONING_LEVEL, toTurnReasoningEffort } from "../../../features/workflow/reasoningLevels";
 import { normalizeWebEvidenceOutput } from "../../mainAppRuntimeHelpers";
 import { runViaFlowTurn } from "./viaTurnRunHandler";
-import type {
-  InternalMemoryTraceEntry,
-  KnowledgeTraceEntry,
-  ThreadStartResult,
-  UsageStats,
-  WebProviderRunResult,
-} from "../types";
+import { applyUnityAutomationPromptContext } from "./unityAutomationPromptApply";
+import type { InternalMemoryTraceEntry, KnowledgeTraceEntry, ThreadStartResult, UsageStats, WebProviderRunResult } from "../types";
 import type { GraphNode } from "../../../features/workflow/types";
 import type { TurnTerminal } from "../../mainAppGraphHelpers";
 export type ExecuteTurnNodeResult = {
@@ -58,11 +48,9 @@ export type ExecuteTurnNodeResult = {
   memoryTrace?: InternalMemoryTraceEntry[];
 };
 type LoadAgentRuleDocsFn = (nodeCwd: string) => Promise<Array<{ path: string; content: string }>>;
-type InjectKnowledgeContextFn = (params: {
-  node: GraphNode;
-  prompt: string;
-  config: TurnConfig;
-}) => Promise<{ prompt: string; trace: KnowledgeTraceEntry[]; memoryTrace: InternalMemoryTraceEntry[] }>;
+type InjectKnowledgeContextFn = (params: { node: GraphNode; prompt: string; config: TurnConfig }) => Promise<{
+  prompt: string; trace: KnowledgeTraceEntry[]; memoryTrace: InternalMemoryTraceEntry[];
+}>;
 type InvokeFn = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
 type RequestWebTurnResponseFn = (
   nodeId: string,
@@ -169,6 +157,13 @@ export async function executeTurnNodeWithContext(
     textToSend = `${textToSend}\n\n${outputSchemaDirective}`.trim();
     ctx.addNodeLog(node.id, "[스키마] 출력 스키마 지시를 프롬프트에 자동 주입했습니다.");
   }
+  textToSend = await applyUnityAutomationPromptContext({
+    presetKind: ctx.activeRunPresetKindRef.current,
+    cwd: nodeCwd,
+    text: textToSend,
+    invokeFn: ctx.invokeFn,
+    addNodeLog: (message) => ctx.addNodeLog(node.id, message),
+  });
   if (executor === "codex" && qualityProfile === "synthesis_final") {
     const multiAgentDirective = buildCodexMultiAgentDirective(ctx.codexMultiAgentMode);
     if (multiAgentDirective) {

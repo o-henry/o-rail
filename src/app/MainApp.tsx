@@ -34,11 +34,7 @@ import { useWorkflowHandoffPanel } from "./hooks/useWorkflowHandoffPanel";
 import { STUDIO_ROLE_TEMPLATES } from "../features/studio/roleTemplates";
 import type { StudioRoleId } from "../features/studio/handoffTypes";
 import { STUDIO_ROLE_PROMPTS, toStudioRoleId } from "../features/studio/roleUtils";
-import {
-  persistKnowledgeIndexToWorkspace,
-  readKnowledgeEntries,
-  upsertKnowledgeEntry,
-} from "../features/studio/knowledgeIndex";
+import { persistKnowledgeIndexToWorkspace, readKnowledgeEntries, upsertKnowledgeEntry } from "../features/studio/knowledgeIndex";
 import {
   COST_PRESET_DEFAULT_MODEL,
   DEFAULT_TURN_MODEL,
@@ -66,29 +62,11 @@ import {
   type TurnExecutor,
   type WebProvider,
 } from "../features/workflow/domain";
-import {
-  DEFAULT_TURN_REASONING_LEVEL,
-  TURN_REASONING_LEVEL_OPTIONS,
-  normalizeTurnReasoningLevel,
-} from "../features/workflow/reasoningLevels";
-import {
-  buildGraphForViewMode,
-  isViaFlowTurnNode,
-  type WorkflowGraphViewMode,
-} from "../features/workflow/viaGraph";
-import {
-  connectViaDefaultEdges,
-  countViaNodesByType,
-  insertMissingViaTemplateNodes,
-  VIA_NODE_BASE_POSITION_BY_TYPE,
-} from "../features/workflow/viaGraphBuilder";
+import { DEFAULT_TURN_REASONING_LEVEL, TURN_REASONING_LEVEL_OPTIONS, normalizeTurnReasoningLevel } from "../features/workflow/reasoningLevels";
+import { buildGraphForViewMode, isViaFlowTurnNode, type WorkflowGraphViewMode } from "../features/workflow/viaGraph";
+import { connectViaDefaultEdges, countViaNodesByType, insertMissingViaTemplateNodes, VIA_NODE_BASE_POSITION_BY_TYPE } from "../features/workflow/viaGraphBuilder";
 import { RAG_TEMPLATE_NODE_TYPES, RAG_TEMPLATE_OPTIONS, type RagTemplateId } from "../features/workflow/ragTemplates";
-import {
-  isViaNodeType,
-  VIA_NODE_OPTIONS,
-  viaNodeLabel,
-  type ViaNodeType,
-} from "../features/workflow/viaCatalog";
+import { isViaNodeType, VIA_NODE_OPTIONS, viaNodeLabel, type ViaNodeType } from "../features/workflow/viaCatalog";
 import {
   applyPresetOutputSchemaPolicies,
   applyPresetTurnPolicies,

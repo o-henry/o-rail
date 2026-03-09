@@ -108,7 +108,10 @@ export default function WorkflowUnityAutomationIsland(props: WorkflowUnityAutoma
   };
 
   return (
-    <aside className="panel-card workflow-unity-automation-island" aria-label="유니티 자동화">
+    <aside
+      className={`panel-card workflow-unity-automation-island${props.collapsed ? " is-collapsed" : ""}`.trim()}
+      aria-label="유니티 자동화"
+    >
       <header className="workflow-unity-automation-head">
         <div className="workflow-unity-automation-head-text">
           <strong>{tp("유니티 자동화")}</strong>

@@ -937,6 +937,30 @@
   background: var(--surface);
 }
 
+.workflow-right-stack > .panel-card.inspector-pane.is-collapsed:last-child {
+  flex: 0 0 auto;
+  min-height: auto;
+}
+
+.workflow-right-stack .inspector-pane.is-collapsed,
+.workflow-role-dock.is-collapsed,
+.workflow-unity-automation-island.is-collapsed {
+  min-height: 48px;
+}
+
+.workflow-right-stack .inspector-pane.is-collapsed {
+  grid-template-rows: auto;
+}
+
+.workflow-role-dock.is-collapsed {
+  padding: 10px;
+}
+
+.workflow-unity-automation-island.is-collapsed {
+  gap: 0;
+  padding: 10px;
+}
+
 .workflow-right-stack > .panel-card.workflow-mission-island {
   flex: 0 0 auto;
   min-height: auto;

@@ -70,7 +70,6 @@ type WorkflowCanvasPaneProps = {
   marqueeSelection: MarqueeSelection | null;
   onCanvasZoomIn: () => void;
   onCanvasZoomOut: () => void;
-  onSetGraphViewMode: (mode: WorkflowGraphViewMode) => void;
   canvasFullscreen: boolean;
   setCanvasFullscreen: Dispatch<SetStateAction<boolean>>;
   setPanMode: Dispatch<SetStateAction<boolean>>;
@@ -157,7 +156,6 @@ export default function WorkflowCanvasPane({
   marqueeSelection,
   onCanvasZoomIn,
   onCanvasZoomOut,
-  onSetGraphViewMode,
   canvasFullscreen,
   setCanvasFullscreen,
   setPanMode,
@@ -421,26 +419,6 @@ export default function WorkflowCanvasPane({
             </div>
 
             <div className="canvas-runbar">
-              <div className="canvas-runbar-mode-toggle" role="group" aria-label="DAG/RAG 모드 전환">
-                <button
-                  aria-label="DAG 모드"
-                  className={`canvas-icon-btn canvas-mode-chip mode-dag ${graphViewMode === "graph" ? "is-active" : ""}`}
-                  onClick={() => onSetGraphViewMode("graph")}
-                  title="DAG 모드"
-                  type="button"
-                >
-                  DAG
-                </button>
-                <button
-                  aria-label="RAG 모드"
-                  className={`canvas-icon-btn canvas-mode-chip mode-rag ${graphViewMode === "rag" ? "is-active" : ""}`}
-                  onClick={() => onSetGraphViewMode("rag")}
-                  title="RAG 모드"
-                  type="button"
-                >
-                  RAG
-                </button>
-              </div>
               <button aria-label={t("workflow.canvas.run")} className={`canvas-icon-btn play ${canRunGraphNow ? "is-ready" : "is-disabled"}`} disabled={!canRunGraphNow} onClick={() => void onRunGraph()} title={t("workflow.canvas.run")} type="button">
                 <img alt="" aria-hidden="true" className="canvas-icon-image" src="/canvas-play.svg" />
               </button>

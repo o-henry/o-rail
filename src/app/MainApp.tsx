@@ -2919,7 +2919,6 @@ function App() {
               onCanvasWheel={onCanvasWheel}
               onCanvasZoomIn={onCanvasZoomIn}
               onCanvasZoomOut={onCanvasZoomOut}
-              onSetGraphViewMode={onSetGraphViewMode}
               onEdgeDragStart={onEdgeDragStart}
               onAssignSelectedEdgeAnchor={onAssignSelectedEdgeAnchor}
               onNodeAnchorDragStart={onNodeAnchorDragStart}

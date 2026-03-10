@@ -2012,7 +2012,7 @@
 
 .inspector-content {
   min-height: 0;
-  padding: 10px 10px calc(42px + var(--dropdown-open-gap, 0px));
+  padding: 0px 10px calc(42px + var(--dropdown-open-gap, 0px));
   overflow: auto;
   display: grid;
   align-content: start;

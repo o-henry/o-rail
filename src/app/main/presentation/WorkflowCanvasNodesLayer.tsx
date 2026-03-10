@@ -1,4 +1,4 @@
-import type { MouseEvent as ReactMouseEvent } from "react";
+import type { CSSProperties, MouseEvent as ReactMouseEvent } from "react";
 import { useI18n } from "../../../i18n";
 import { resolvePmPlanningMode, resolvePmPlanningModeLabel, type PmPlanningMode } from "../../../features/studio/pmPlanningMode";
 import { toStudioRoleId } from "../../../features/studio/roleUtils";
@@ -10,6 +10,7 @@ import { getRoleNodeInlineActionsMeta } from "./roleNodeInlineActions";
 
 type WorkflowCanvasNodesLayerProps = {
   canvasNodes: GraphNode[];
+  graphNodes: GraphNode[];
   graphViewMode: WorkflowGraphViewMode;
   nodeStates: Record<string, NodeRunState>;
   selectedNodeIds: string[];
@@ -35,7 +36,6 @@ type WorkflowCanvasNodesLayerProps = {
   formatNodeElapsedTime: (state: NodeRunState | undefined, nowMs: number) => string;
   runtimeNowMs: number;
   onOpenFeedFromNode: (nodeId: string) => void;
-  onOpenWebInputForNode: (nodeId: string) => void;
   openTerminalNodeId: string;
   onToggleNodeTerminal: (nodeId: string) => void;
   onSetPmPlanningMode: (nodeId: string, mode: PmPlanningMode) => void;
@@ -48,6 +48,7 @@ type WorkflowCanvasNodesLayerProps = {
 
 export default function WorkflowCanvasNodesLayer({
   canvasNodes,
+  graphNodes,
   graphViewMode,
   nodeStates,
   selectedNodeIds,
@@ -73,7 +74,6 @@ export default function WorkflowCanvasNodesLayer({
   formatNodeElapsedTime,
   runtimeNowMs,
   onOpenFeedFromNode,
-  onOpenWebInputForNode,
   openTerminalNodeId,
   onToggleNodeTerminal,
   onSetPmPlanningMode,
@@ -95,7 +95,6 @@ export default function WorkflowCanvasNodesLayer({
         const isNodeDragging = draggingNodeIds.includes(node.id);
         const showNodeAnchors = isNodeSelected || isConnectingDrag || selectedEdgeNodeIdSet.has(node.id);
         const receivesQuestionDirectly = questionDirectInputNodeIds.has(node.id);
-        const isWebTurnNode = node.type === "turn" && String(node.config?.executor ?? "").startsWith("web_");
         const sourceKind = String((node.config as Record<string, unknown>)?.sourceKind ?? "").trim().toLowerCase();
         const canToggleTerminal = node.type === "turn" && sourceKind === "handoff";
         const isTerminalOpen = canToggleTerminal && openTerminalNodeId === node.id;
@@ -109,7 +108,7 @@ export default function WorkflowCanvasNodesLayer({
           .toLowerCase();
         const parsedHandoffRoleId = toStudioRoleId(handoffRoleId);
         const pmPlanningMode = resolvePmPlanningMode(parsedHandoffRoleId, (node.config as Record<string, unknown>)?.pmPlanningMode);
-        const internalChildCount = canvasNodes.filter((candidate) => {
+        const internalChildCount = graphNodes.filter((candidate) => {
           const candidateConfig = candidate.config as Record<string, unknown>;
           return String(candidateConfig.internalParentNodeId ?? "").trim() === node.id;
         }).length;
@@ -117,6 +116,7 @@ export default function WorkflowCanvasNodesLayer({
           sourceKind,
           handoffRoleId: parsedHandoffRoleId ?? handoffRoleId,
           pmPlanningMode,
+          roleMode: (node.config as Record<string, unknown>)?.roleMode,
           internalChildCount,
         });
         const hasInlineRoleActions =
@@ -124,6 +124,11 @@ export default function WorkflowCanvasNodesLayer({
           inlineActionMeta.showPerspective ||
           inlineActionMeta.showReview ||
           inlineActionMeta.showModeButtons;
+        const inlineActionCount =
+          (inlineActionMeta.showInternalToggle ? 1 : 0) +
+          (inlineActionMeta.showPerspective ? 1 : 0) +
+          (inlineActionMeta.showReview ? 1 : 0) +
+          (inlineActionMeta.showModeButtons ? inlineActionMeta.modeOptions.length : 0);
         const isInternalExpanded = expandedRoleNodeIds.includes(node.id);
         const handoffRoleToken = handoffRoleId.replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
         const handoffRoleClass = handoffRoleToken ? `handoff-role-${handoffRoleToken}` : "";
@@ -263,23 +268,13 @@ export default function WorkflowCanvasNodesLayer({
                         <span className="node-input-chip-text">{t("workflow.node.inputDirect")}</span>
                       </span>
                     )}
-                    {isWebTurnNode && (
-                      <button
-                        className="node-inline-action-button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          onOpenWebInputForNode(node.id);
-                        }}
-                        title={t("workflow.node.manualWebInput")}
-                        type="button"
-                      >
-                        {t("workflow.node.manualWebInput")}
-                      </button>
-                    )}
                   </div>
                 </div>
                 {hasInlineRoleActions && (
-                  <div className="node-inline-action-row">
+                  <div
+                    className="node-inline-action-rail"
+                    style={{ "--node-inline-action-count": String(Math.max(1, inlineActionCount)) } as CSSProperties}
+                  >
                     {inlineActionMeta.showInternalToggle && (
                       <button
                         className={`node-inline-action-button${isInternalExpanded ? " is-active" : ""}`}

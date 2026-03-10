@@ -2,7 +2,6 @@ import { buildStudioRolePromptEnvelope } from "../../../features/studio/roleProm
 import {
   buildStudioRoleModeGuidance,
   getStudioRoleModeOptions,
-  isPmStudioRole,
   normalizeStudioRoleSelection,
   resolveEffectiveStudioRoleId,
   resolvePmPlanningMode,
@@ -223,7 +222,7 @@ export function buildRoleNodeScaffold(params: RoleNodeScaffoldParams): RoleNodeS
     config: {
       ...defaultNodeConfig("turn"),
       role:
-        isPmStudioRole(baseRoleId) && roleMode === "primary"
+        roleMode === "primary"
           ? resolveStudioRoleNodeDisplayName(baseRoleId, pmPlanningMode)
           : `${roleInstanceLabel} AGENT`,
       promptTemplate: rolePrompt,

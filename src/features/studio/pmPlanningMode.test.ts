@@ -5,6 +5,7 @@ import {
   resolveEffectiveStudioRoleId,
   resolvePmPlanningMode,
   resolveStudioRoleDisplayLabel,
+  resolveStudioRoleNodeDisplayName,
   resolveStudioRolePromptLabel,
 } from "./pmPlanningMode";
 
@@ -28,5 +29,11 @@ describe("pmPlanningMode", () => {
     expect(getStudioRoleModeOptions("system_programmer")).toEqual(["logical"]);
     expect(resolvePmPlanningMode("system_programmer", "creative")).toBe("logical");
     expect(getStudioRoleModeOptions("art_pipeline")).toEqual(["logical"]);
+  });
+
+  it("includes the active mode in the node role text", () => {
+    expect(resolveStudioRoleNodeDisplayName("pm_planner", "creative")).toBe("기획(PM) · 창의성 AGENT");
+    expect(resolveStudioRoleNodeDisplayName("pm_planner", "logical")).toBe("기획(PM) · 논리 AGENT");
+    expect(resolveStudioRoleNodeDisplayName("system_programmer", "logical")).toBe("시스템 · 논리 AGENT");
   });
 });

@@ -46,6 +46,7 @@ type WorkflowCanvasPaneProps = {
   ) => void;
   connectPreviewLine: string | null;
   canvasNodes: GraphNode[];
+  graphNodes: GraphNode[];
   nodeStates: Record<string, NodeRunState>;
   selectedNodeIds: string[];
   draggingNodeIds: string[];
@@ -86,7 +87,6 @@ type WorkflowCanvasPaneProps = {
   suspendedWebTurn: PendingWebTurn | null;
   pendingWebTurn: PendingWebTurn | null;
   onReopenPendingWebTurn: () => void;
-  onOpenWebInputForNode: (nodeId: string) => void;
   undoStackLength: number;
   redoStackLength: number;
   onUndoGraph: () => void;
@@ -137,6 +137,7 @@ export default function WorkflowCanvasPane({
   onEdgeDragStart,
   connectPreviewLine,
   canvasNodes,
+  graphNodes,
   nodeStates,
   selectedNodeIds,
   draggingNodeIds,
@@ -177,7 +178,6 @@ export default function WorkflowCanvasPane({
   suspendedWebTurn,
   pendingWebTurn,
   onReopenPendingWebTurn,
-  onOpenWebInputForNode,
   undoStackLength,
   redoStackLength,
   onUndoGraph,
@@ -379,9 +379,10 @@ export default function WorkflowCanvasPane({
                   )}
                 </svg>
 
-                <WorkflowCanvasNodesLayer
-                  canvasNodes={canvasNodes}
-                  graphViewMode={graphViewMode}
+        <WorkflowCanvasNodesLayer
+          canvasNodes={canvasNodes}
+          graphNodes={graphNodes}
+          graphViewMode={graphViewMode}
                   draggingNodeIds={draggingNodeIds}
                   formatNodeElapsedTime={formatNodeElapsedTime}
                   isConnectingDrag={isConnectingDrag}
@@ -397,7 +398,6 @@ export default function WorkflowCanvasPane({
                   onNodeAnchorDrop={onNodeAnchorDrop}
                   onNodeDragStart={onNodeDragStart}
                   onOpenFeedFromNode={onOpenFeedFromNode}
-                  onOpenWebInputForNode={onOpenWebInputForNode}
                   openTerminalNodeId={openTerminalNodeId}
                   onToggleNodeTerminal={onToggleNodeTerminal}
                   onSetPmPlanningMode={onSetPmPlanningMode}

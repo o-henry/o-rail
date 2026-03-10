@@ -187,6 +187,10 @@ export function resolveStudioRoleNodeDisplayName(
   rawMode?: unknown,
 ): string {
   const label = resolveStudioRoleDisplayLabel(roleId, rawMode);
+  const mode = resolvePmPlanningMode(roleId, rawMode);
+  if (label && mode) {
+    return `${label} · ${resolvePmPlanningModeLabel(mode)} AGENT`;
+  }
   return label ? `${label} AGENT` : "AGENT";
 }
 

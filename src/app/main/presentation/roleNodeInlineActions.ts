@@ -5,6 +5,7 @@ type RoleNodeInlineActionsInput = {
   sourceKind?: unknown;
   handoffRoleId?: unknown;
   pmPlanningMode?: unknown;
+  roleMode?: unknown;
   internalChildCount?: number;
 };
 
@@ -21,6 +22,8 @@ export function getRoleNodeInlineActionsMeta(input: RoleNodeInlineActionsInput):
   const sourceKind = String(input.sourceKind ?? "").trim().toLowerCase();
   const roleId = toStudioRoleId(String(input.handoffRoleId ?? "").trim().toLowerCase());
   const isHandoffRoleNode = sourceKind === "handoff" && roleId !== null;
+  const roleMode = String(input.roleMode ?? "primary").trim().toLowerCase();
+  const isPrimaryRoleNode = roleMode === "" || roleMode === "primary";
   const internalChildCount = Math.max(0, Number(input.internalChildCount ?? 0) || 0);
   const modeOptions = getStudioRoleModeOptions(roleId);
   const pmMode = resolvePmPlanningMode(roleId, input.pmPlanningMode);
@@ -29,7 +32,7 @@ export function getRoleNodeInlineActionsMeta(input: RoleNodeInlineActionsInput):
     showInternalToggle: isHandoffRoleNode && internalChildCount > 0,
     showPerspective: isHandoffRoleNode,
     showReview: isHandoffRoleNode,
-    showModeButtons: isHandoffRoleNode && modeOptions.length > 0 && pmMode !== null,
+    showModeButtons: isHandoffRoleNode && isPrimaryRoleNode && modeOptions.length > 0 && pmMode !== null,
     modeOptions,
     pmMode,
   };

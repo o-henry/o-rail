@@ -34,4 +34,17 @@ describe("roleNodeInlineActions", () => {
     expect(system.showModeButtons).toBe(true);
     expect(system.showInternalToggle).toBe(false);
   });
+
+  it("hides mode buttons for perspective nodes with predefined personality", () => {
+    const perspective = getRoleNodeInlineActionsMeta({
+      sourceKind: "handoff",
+      handoffRoleId: "pm_planner",
+      pmPlanningMode: "creative",
+      roleMode: "perspective",
+      internalChildCount: 3,
+    });
+
+    expect(perspective.modeOptions).toEqual(["creative", "logical"]);
+    expect(perspective.showModeButtons).toBe(false);
+  });
 });

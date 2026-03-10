@@ -99,11 +99,10 @@
   align-items: center;
   justify-content: flex-start;
   gap: 6px;
-  padding: 8px 8px 0;
+  padding: 8px 8px 8px;
 }
 
 .node-wait-slot .status-pill {
-  font-size: 0.74rem;
   flex: 0 0 auto;
 }
 
@@ -117,28 +116,48 @@
   max-width: 164px;
 }
 
-.node-inline-action-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  padding: 8px 8px 10px;
+.node-inline-action-rail {
+  position: absolute;
+  left: calc(100% + 5px);
+  top: 0;
+  bottom: 0;
+  width: 60px;
+  display: grid;
+  grid-template-rows: repeat(var(--node-inline-action-count, 4), minmax(0, 1fr));
+  gap: 2px;
+  z-index: 2;
+  box-shadow: 0 4px 10px rgba(30, 52, 66, 0.16);
 }
 
+.node-wait-slot .status-pill,
 .node-inline-action-button {
   min-height: 22px;
   height: 22px;
   padding: 2px 8px;
   border-radius: 2px;
-  border: 0;
-  background: var(--status-pill-bg);
-  color: var(--status-pill-color);
   font-size: 0.72rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   white-space: nowrap;
-  cursor: pointer;
   line-height: 1;
+}
+
+.node-inline-action-button {
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  height: auto;
+  padding: 2px 4px;
+  border: 1px solid gray;
+  background: var(--status-pill-bg);
+  color: var(--status-pill-color);
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: normal;
+  text-align: center;
+  word-break: keep-all;
 }
 
 .node-inline-action-button:hover {

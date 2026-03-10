@@ -91,6 +91,7 @@ describe("roleNodeScaffold", () => {
       handoffRoleId: "pm_planner",
       pmPlanningMode: "creative",
       qualityProfile: "design_planning",
+      role: "기획(PM) · 창의성 AGENT",
     });
     expect(String((creative.nodes[0]?.config as Record<string, unknown>)?.promptTemplate ?? "")).toContain("차별화");
     expect(String((creative.nodes[0]?.config as Record<string, unknown>)?.promptTemplate ?? "")).toContain("## 창의적 코어 제안");
@@ -99,6 +100,7 @@ describe("roleNodeScaffold", () => {
       handoffRoleId: "pm_planner",
       pmPlanningMode: "logical",
       qualityProfile: "research_evidence",
+      role: "기획(PM) · 논리 AGENT",
     });
     expect(String((critic.nodes[0]?.config as Record<string, unknown>)?.promptTemplate ?? "")).toContain("항목별 점수(0-10)");
     expect(String((critic.nodes[0]?.config as Record<string, unknown>)?.promptTemplate ?? "")).toContain("## 현실성 평가표");
@@ -122,7 +124,9 @@ describe("roleNodeScaffold", () => {
 
     expect(String((clientCreative.nodes[0]?.config as Record<string, unknown>)?.promptTemplate ?? "")).toContain("UX 감각과 상호작용의 차별화");
     expect((clientCreative.nodes[0]?.config as Record<string, unknown>)?.pmPlanningMode).toBe("creative");
+    expect((clientCreative.nodes[0]?.config as Record<string, unknown>)?.role).toBe("클라이언트 · 창의성 AGENT");
     expect(String((systemLogical.nodes[0]?.config as Record<string, unknown>)?.promptTemplate ?? "")).toContain("정확성, 실패 가능성, 검증 가능성");
     expect((systemLogical.nodes[0]?.config as Record<string, unknown>)?.pmPlanningMode).toBe("logical");
+    expect((systemLogical.nodes[0]?.config as Record<string, unknown>)?.role).toBe("시스템 · 논리 AGENT");
   });
 });

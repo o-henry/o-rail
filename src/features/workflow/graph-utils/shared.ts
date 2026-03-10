@@ -26,7 +26,7 @@ export type NodeVisualSize = {
 };
 
 export const NODE_WIDTH = 240;
-export const NODE_HEIGHT = 168;
+export const NODE_HEIGHT = 136;
 export const NODE_ANCHOR_OFFSET = 15;
 export const QUALITY_DEFAULT_THRESHOLD = 70;
 export const SIMPLE_WORKFLOW_UI = true;

@@ -89,7 +89,6 @@ export function MainAppShell(props: any) {
     onOpenQuickPanelAgents,
     onOpenQuickPanelFeed,
     onOpenRunsFolder,
-    onOpenWebInputForNode,
     onAddRolePerspectivePassForNode,
     onAddRoleReviewPassForNode,
     onRedoGraph,
@@ -255,6 +254,7 @@ export function MainAppShell(props: any) {
               canRunGraphNow={canRunGraphNow}
               canvasFullscreen={canvasFullscreen}
               canvasNodes={canvasNodes}
+              graphNodes={graph.nodes}
               canvasZoom={canvasZoom}
               graphViewMode={graphViewMode}
               connectPreviewLine={connectPreviewLine}
@@ -290,7 +290,6 @@ export function MainAppShell(props: any) {
               onNodeAnchorDrop={onNodeAnchorDrop}
               onNodeDragStart={onNodeDragStart}
               onOpenFeedFromNode={onOpenFeedFromNode}
-              onOpenWebInputForNode={onOpenWebInputForNode}
               onAddRolePerspectivePass={onAddRolePerspectivePassForNode}
               onAddRoleReviewPass={onAddRoleReviewPassForNode}
               onSetPmPlanningMode={onSetPmPlanningMode}

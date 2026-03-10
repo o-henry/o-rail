@@ -4,6 +4,27 @@ import type { GraphData, GraphEdge, GraphNode, KnowledgeConfig } from "../../../
 import { closestNumericOptionValue } from "../../mainAppUtils";
 import type { CanvasDisplayEdge } from "../index";
 
+export function resolveQuestionDirectInputNodeIds(graph: GraphData): Set<string> {
+  const nodeById = new Map(graph.nodes.map((node) => [node.id, node] as const));
+  const incomingNodeIds = new Set<string>();
+
+  graph.edges.forEach((edge) => {
+    const sourceNode = nodeById.get(edge.from.nodeId);
+    const sourceConfig = (sourceNode?.config ?? {}) as Record<string, unknown>;
+    const sourceInternalParentNodeId = String(sourceConfig.internalParentNodeId ?? "").trim();
+    if (sourceInternalParentNodeId) {
+      return;
+    }
+    incomingNodeIds.add(edge.to.nodeId);
+  });
+
+  return new Set(
+    graph.nodes
+      .filter((node) => !incomingNodeIds.has(node.id))
+      .map((node) => node.id),
+  );
+}
+
 export function useCanvasGraphDerivedState(params: any) {
   const expandedRoleNodeIds = params.expandedRoleNodeIds as Set<string> | undefined;
   const canvasNodes = useMemo<GraphNode[]>(() => {
@@ -77,12 +98,7 @@ export function useCanvasGraphDerivedState(params: any) {
   const selectedNode = (params.graph as GraphData).nodes.find((node) => node.id === params.selectedNodeId) ?? null;
 
   const questionDirectInputNodeIds = useMemo<Set<string>>(() => {
-    const incomingNodeIds = new Set((params.graph as GraphData).edges.map((edge) => edge.to.nodeId));
-    return new Set(
-      (params.graph as GraphData).nodes
-        .filter((node) => !incomingNodeIds.has(node.id))
-        .map((node) => node.id),
-    );
+    return resolveQuestionDirectInputNodeIds(params.graph as GraphData);
   }, [params.graph.edges, params.graph.nodes]);
 
   const graphKnowledge = params.normalizeKnowledgeConfig(params.graph.knowledge) as KnowledgeConfig;

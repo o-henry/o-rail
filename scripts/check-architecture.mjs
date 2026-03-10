@@ -62,14 +62,6 @@ const TEMP_LINE_ALLOWLIST = new Map([
     },
   ],
   [
-    "src/app/mainAppRuntimeHelpers.ts",
-    {
-      maxLines: 1900,
-      expiresOn: "2026-05-31",
-      reason: "Runtime helper migration to feature modules",
-    },
-  ],
-  [
     "src/pages/feed/FeedPage.tsx",
     {
       maxLines: 980,

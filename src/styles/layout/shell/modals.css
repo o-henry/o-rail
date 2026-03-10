@@ -1,0 +1,133 @@
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(28, 37, 45, 0.45);
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  z-index: 40;
+}
+
+.approval-modal {
+  width: min(760px, 100%);
+  border: 1px solid #d6dce3;
+  border-radius: 5px;
+  background: #ffffff;
+  padding: 14px;
+  display: grid;
+  gap: 10px;
+}
+
+.web-turn-modal {
+  width: min(860px, 100%);
+}
+
+.web-turn-floating {
+  position: fixed;
+  z-index: 120;
+  width: min(860px, calc(100vw - 24px));
+  max-height: calc(100vh - 24px);
+  overflow: auto;
+  box-shadow: 0 14px 36px rgba(8, 19, 38, 0.28);
+}
+
+.web-turn-floating.is-dragging {
+  cursor: grabbing;
+}
+
+.web-turn-drag-handle {
+  margin: -14px -14px 2px;
+  padding: 10px 14px;
+  border-bottom: 1px solid #d6dce3;
+  border-radius: 5px 5px 0 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  user-select: none;
+  cursor: grab;
+  background: #ffffff;
+}
+
+.web-turn-drag-handle h2 {
+  margin: 0;
+}
+
+.web-turn-drag-handle span {
+  font-size: 11px;
+  color: #6b7384;
+}
+
+.web-turn-prompt {
+  max-height: 180px;
+  overflow: auto;
+  padding: 10px;
+  border-radius: 4px;
+  background: #e0e3e8;
+  /* border: 1px solid #dbe2ee; */
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.web-turn-modal textarea {
+  width: 100%;
+  resize: vertical;
+  /* border: 1px solid #d7deea; */
+  border-radius: 4px;
+  background: #edecec;
+}
+
+.web-turn-modal .button-row button {
+  background: var(--surface);
+}
+
+.stock-disclaimer-modal {
+  gap: 10px;
+}
+
+.stock-disclaimer-modal ul {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+}
+
+.stock-disclaimer-modal li {
+  font-size: 12px;
+  color: #2e3d52;
+  line-height: 1.45;
+}
+
+.stock-disclaimer-agree {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #2b3a4f;
+}
+
+.web-turn-modal textarea:focus,
+.web-turn-modal textarea:focus-visible,
+.web-turn-modal input:focus,
+.web-turn-modal input:focus-visible {
+  outline: none;
+  box-shadow: none;
+  border-color: #d7deea;
+}
+
+.canvas-runbar .canvas-web-turn-reopen {
+  width: auto;
+  min-width: 56px;
+  padding: 0 9px;
+  border-radius: 999px;
+  border: 1px solid #3574f0;
+  background: #f4f8ff;
+  color: #1f4da8;
+  font-family: "BasicallyAMono", "DialogNanumBody1984", "Noto Sans KR", sans-serif;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+
+.canvas-runbar .canvas-web-turn-reopen:hover {
+  background: #eaf2ff;
+}

@@ -14,6 +14,8 @@ function normalizeRole(raw: unknown, fallback: StudioRoleId): StudioRoleId {
   const text = String(raw ?? "").trim();
   if (
     text === "pm_planner" ||
+    text === "pm_creative_director" ||
+    text === "pm_feasibility_critic" ||
     text === "client_programmer" ||
     text === "system_programmer" ||
     text === "tooling_engineer" ||

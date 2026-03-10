@@ -11,7 +11,13 @@ import type { GateConfig, TransformConfig } from "../../../features/workflow/typ
 import { useI18n } from "../../../i18n";
 import { InspectorSectionTitle } from "../../mainAppGraphHelpers";
 import type { WorkflowInspectorNodeProps } from "../workflowInspectorTypes";
+import {
+  isStudioRolePaletteVisible,
+  normalizeStudioRoleSelection,
+  resolveStudioRoleDisplayLabel,
+} from "../../../features/studio/pmPlanningMode";
 import { STUDIO_ROLE_TEMPLATES } from "../../../features/studio/roleTemplates";
+import { toStudioRoleId } from "../../../features/studio/roleUtils";
 
 export default function WorkflowNodeInspector({
   simpleWorkflowUI,
@@ -32,10 +38,6 @@ export default function WorkflowNodeInspector({
   artifactTypeOptions,
   selectedArtifactType,
   outgoingNodeOptions,
-  roleInternalExpanded,
-  toggleRoleInternalExpanded,
-  addRolePerspectivePass,
-  addRoleReviewPass,
 }: WorkflowInspectorNodeProps) {
   const { t } = useI18n();
 
@@ -46,26 +48,20 @@ export default function WorkflowNodeInspector({
   const selectedConfig = selectedNode.config as TurnConfig & Record<string, unknown>;
   const isHandoffTurnNode =
     selectedNode.type === "turn" && String(selectedConfig.sourceKind ?? "").trim().toLowerCase() === "handoff";
-  const studioRoleOptions = STUDIO_ROLE_TEMPLATES.map((row) => ({
-    value: row.id,
-    label: row.label,
-  }));
+  const studioRoleOptions = STUDIO_ROLE_TEMPLATES
+    .filter((row) => isStudioRolePaletteVisible(row.id))
+    .map((row) => ({
+      value: row.id,
+      label: row.label,
+    }));
+  const selectedRoleId = normalizeStudioRoleSelection(
+    toStudioRoleId(String(selectedConfig.handoffRoleId ?? "pm_planner")),
+  ) ?? "pm_planner";
 
   return (
     <>
       {isHandoffTurnNode && (
         <section className="inspector-block form-grid">
-          <div className="workflow-role-node-actions">
-            <button className="mini-action-button" onClick={toggleRoleInternalExpanded} type="button">
-              <span className="mini-action-button-label">{roleInternalExpanded ? "내부작업 접기" : "내부작업 보기"}</span>
-            </button>
-            <button className="mini-action-button" onClick={addRolePerspectivePass} type="button">
-              <span className="mini-action-button-label">추가 시각</span>
-            </button>
-            <button className="mini-action-button" onClick={addRoleReviewPass} type="button">
-              <span className="mini-action-button-label">재검토</span>
-            </button>
-          </div>
           <label>
             에이전트
             <FancySelect
@@ -109,15 +105,19 @@ export default function WorkflowNodeInspector({
               ariaLabel="담당 역할"
               className="modern-select"
               onChange={(next) => {
-                const role = String(next);
-                updateSelectedNodeConfig("handoffRoleId", role);
-                const matched = STUDIO_ROLE_TEMPLATES.find((row) => row.id === role);
-                if (matched) {
-                  updateSelectedNodeConfig("role", `${matched.label} AGENT`);
+                const nextRoleId = toStudioRoleId(String(next)) ?? "pm_planner";
+                const nextPmPlanningMode = nextRoleId === "pm_planner" ? "creative" : selectedConfig.pmPlanningMode;
+                updateSelectedNodeConfig("handoffRoleId", nextRoleId);
+                if (nextRoleId === "pm_planner") {
+                  updateSelectedNodeConfig("pmPlanningMode", nextPmPlanningMode);
                 }
+                updateSelectedNodeConfig(
+                  "role",
+                  `${resolveStudioRoleDisplayLabel(nextRoleId, nextPmPlanningMode) || nextRoleId} AGENT`,
+                );
               }}
               options={studioRoleOptions}
-              value={String(selectedConfig.handoffRoleId ?? "pm_planner")}
+              value={selectedRoleId}
             />
           </label>
           <label>

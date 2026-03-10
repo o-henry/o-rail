@@ -1,4 +1,5 @@
 import type { StudioRoleId } from "./handoffTypes";
+import { isLegacyPmStudioRole, resolveEffectiveStudioRoleId } from "./pmPlanningMode";
 import {
   getRoleInstanceKnowledgeProfile,
   getRoleKnowledgeProfile,
@@ -88,8 +89,15 @@ export function storeGraphRoleKnowledge(params: {
   output: unknown;
   logs?: string[];
   roleInstanceId?: string;
+  pmPlanningMode?: unknown;
 }): void {
-  const role = STUDIO_ROLE_TEMPLATES.find((row) => row.id === params.roleId);
+  const shouldResolvePmVariant =
+    isLegacyPmStudioRole(params.roleId)
+    || (params.roleId === "pm_planner" && String(params.pmPlanningMode ?? "").trim().length > 0);
+  const effectiveRoleId = shouldResolvePmVariant
+    ? (resolveEffectiveStudioRoleId(params.roleId, params.pmPlanningMode) ?? params.roleId)
+    : params.roleId;
+  const role = STUDIO_ROLE_TEMPLATES.find((row) => row.id === effectiveRoleId);
   const text = toOutputText(params.output);
   const logs = Array.isArray(params.logs) ? params.logs : [];
   const summary = toSummary(text);
@@ -97,14 +105,14 @@ export function storeGraphRoleKnowledge(params: {
     return;
   }
   const sourceUrls = extractSourceUrls(text);
-  const existing = getRoleKnowledgeProfile(params.roleId);
+  const existing = getRoleKnowledgeProfile(effectiveRoleId);
   const mergedSummary = existing
     ? `${summary}${existing.summary && existing.summary !== summary ? `\n이전 누적 요약: ${existing.summary}` : ""}`.trim()
     : summary;
   upsertRoleKnowledgeProfile({
-    roleId: params.roleId,
+    roleId: effectiveRoleId,
     scope: "shared",
-    roleLabel: role?.label ?? params.roleId,
+    roleLabel: role?.label ?? effectiveRoleId,
     goal: role?.goal ?? "역할 누적 지식",
     taskId: cleanLine(params.taskId) || role?.defaultTaskId || "TASK-001",
     runId: cleanLine(params.runId) || `graph-${Date.now()}`,
@@ -126,12 +134,12 @@ export function storeGraphRoleKnowledge(params: {
   if (!roleInstanceId) {
     return;
   }
-  const existingInstance = getRoleInstanceKnowledgeProfile(params.roleId, roleInstanceId);
+  const existingInstance = getRoleInstanceKnowledgeProfile(effectiveRoleId, roleInstanceId);
   upsertRoleKnowledgeProfile({
-    roleId: params.roleId,
+    roleId: effectiveRoleId,
     scope: "instance",
     instanceId: roleInstanceId,
-    roleLabel: role?.label ?? params.roleId,
+    roleLabel: role?.label ?? effectiveRoleId,
     goal: role?.goal ?? "역할 누적 지식",
     taskId: cleanLine(params.taskId) || role?.defaultTaskId || "TASK-001",
     runId: cleanLine(params.runId) || `graph-${Date.now()}`,

@@ -6,6 +6,7 @@ import {
   upsertHandoffRecord,
 } from "../../features/studio/handoffStore";
 import type { HandoffRecord, StudioRoleId } from "../../features/studio/handoffTypes";
+import { isStudioRolePaletteVisible } from "../../features/studio/pmPlanningMode";
 import { STUDIO_ROLE_TEMPLATES } from "../../features/studio/roleTemplates";
 import { invoke } from "../../shared/tauri";
 
@@ -41,7 +42,9 @@ export function useWorkflowHandoffPanel(params: UseWorkflowHandoffPanelParams) {
   );
 
   const handoffRoleOptions = useMemo(
-    () => STUDIO_ROLE_TEMPLATES.map((role) => ({ value: role.id, label: role.label })),
+    () => STUDIO_ROLE_TEMPLATES
+      .filter((role) => isStudioRolePaletteVisible(role.id))
+      .map((role) => ({ value: role.id, label: role.label })),
     [],
   );
 

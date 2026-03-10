@@ -11,6 +11,7 @@ import { nodeTypeLabel, turnRoleLabel } from "../../../features/workflow/labels"
 import { extractSchemaValidationTarget, resolveProviderByExecutor } from "../../mainAppRuntimeHelpers";
 import { getRoleInstanceKnowledgeProfile, getRoleKnowledgeProfile } from "../../../features/studio/roleKnowledgeStore";
 import { buildMergedRoleKnowledgePrompt } from "../../../features/studio/roleKnowledgePrompt";
+import { isLegacyPmStudioRole, resolveEffectiveStudioRoleId } from "../../../features/studio/pmPlanningMode";
 import { toStudioRoleId } from "../../../features/studio/roleUtils";
 import type {
   AgentRuleDoc,
@@ -89,10 +90,16 @@ export async function injectKnowledgeContext(params: {
   let mergedPrompt = params.prompt;
   const memoryTrace: InternalMemoryTraceEntry[] = [];
   const nodeConfig = params.node.config as Record<string, unknown>;
-  const roleId =
+  const baseRoleId =
     params.node.type === "turn" && String(nodeConfig.sourceKind ?? "").trim().toLowerCase() === "handoff"
       ? toStudioRoleId(String(nodeConfig.handoffRoleId ?? ""))
       : null;
+  const shouldResolvePmVariant =
+    isLegacyPmStudioRole(baseRoleId)
+    || (baseRoleId === "pm_planner" && String(nodeConfig.pmPlanningMode ?? "").trim().length > 0);
+  const roleId = shouldResolvePmVariant
+    ? resolveEffectiveStudioRoleId(baseRoleId, nodeConfig.pmPlanningMode)
+    : baseRoleId;
   const roleInstanceId = String(nodeConfig.roleInstanceId ?? "").trim();
   const storedRoleKnowledge = roleId ? getRoleKnowledgeProfile(roleId) : null;
   const storedInstanceKnowledge =

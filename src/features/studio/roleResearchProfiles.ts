@@ -115,6 +115,78 @@ export const ROLE_RESEARCH_PROFILES: Record<StudioRoleId, RoleResearchProfile> =
       },
     ],
   },
+  pm_creative_director: {
+    focusLabel: "창의 기획 리서치",
+    synthesisPrompt:
+      "창의 확장 PM 관점에서 레퍼런스를 단순 모방하지 말고, 낯선 조합과 차별화 가설을 현재 프로젝트 제약에 맞게 재구성합니다.",
+    verificationPrompt:
+      "아이디어가 실제로 새롭고 의미 있는지, 단순한 장르 클리셰 재조합에 그치지 않는지, 최소 구현 경로가 있는지 검증합니다.",
+    lanes: [
+      {
+        label: "프로젝트 제약·가능성 정리",
+        executor: "codex",
+        prompt:
+          "현재 프로젝트의 장르, 타깃 플레이 감각, 구현 제약, 이미 결정된 방향을 정리하고 어디서 창의적 변주가 가능한지 찾습니다.",
+      },
+      {
+        label: "장르 레퍼런스·신호 조사",
+        executor: "web_perplexity",
+        prompt:
+          "최근 게임 디자인 레퍼런스와 플레이어가 신선하다고 반응한 훅을 조사해 차별화의 재료를 수집합니다.",
+        keywords: "innovative game design, genre twist, player fantasy, surprising game loop, indie game hook",
+        countries: COMMON_REGION,
+        sites: "gamedeveloper.com, gdcvault.com, gameanalytics.com, steamcommunity.com",
+        maxItems: 22,
+      },
+      {
+        label: "커뮤니티 반응·신선도 조사",
+        executor: "via_flow",
+        viaNodeType: "source.community",
+        prompt:
+          "커뮤니티에서 식상하다고 느끼는 요소와 반대로 신선하다고 반응하는 포인트를 조사해 창의적 차별화에 바로 쓸 단서를 정리합니다.",
+        keywords: "fresh game ideas, overused mechanics, unique core loop, player surprise, design twist",
+        countries: COMMON_REGION,
+        sites: "reddit.com, youtube.com, steamcommunity.com, gamedeveloper.com",
+        maxItems: 20,
+      },
+    ],
+  },
+  pm_feasibility_critic: {
+    focusLabel: "현실성 비평 리서치",
+    synthesisPrompt:
+      "현실성 비평 PM 관점에서 아이디어를 일정, 구현 난이도, 시장 설득력, 운영 비용 기준으로 해체하고 점수화 가능한 판단 기준으로 정리합니다.",
+    verificationPrompt:
+      "근거 없는 낙관, 숫자 없는 기대 효과, 구현 리스크 누락을 제거하고 실제 진행 여부를 판단할 수 있는 평가표로 정리합니다.",
+    lanes: [
+      {
+        label: "프로젝트 현실 제약 조사",
+        executor: "codex",
+        prompt:
+          "현재 프로젝트 구조, 인력 가정, 구현 난이도, 이미 존재하는 기술 부채를 정리해 어떤 아이디어가 과한지 판별합니다.",
+      },
+      {
+        label: "시장·운영 리스크 조사",
+        executor: "web_perplexity",
+        prompt:
+          "유사 기획의 시장 반응, 운영 난이도, 밸런싱 비용, 라이브 대응 부담을 조사해 현실성 판단 근거를 만듭니다.",
+        keywords: "game design production risk, balancing cost, live ops burden, feature creep, indie scope risk",
+        countries: COMMON_REGION,
+        sites: "gamedeveloper.com, gameanalytics.com, gdcvault.com, howtomarketagame.com",
+        maxItems: 22,
+      },
+      {
+        label: "실패 사례·플레이어 역반응 조사",
+        executor: "via_flow",
+        viaNodeType: "source.community",
+        prompt:
+          "유사 기능이나 과한 기획이 실제로 왜 실패했는지, 플레이어가 어디서 이탈했는지 조사해 냉정한 반례를 모읍니다.",
+        keywords: "feature creep failure, player backlash, overdesigned system, game scope failure, retention drop",
+        countries: COMMON_REGION,
+        sites: "reddit.com, gamedeveloper.com, steamcommunity.com, youtube.com",
+        maxItems: 20,
+      },
+    ],
+  },
   client_programmer: {
     focusLabel: "클라이언트 리서치",
     synthesisPrompt:

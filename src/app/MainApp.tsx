@@ -1,14 +1,8 @@
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "../App.css";
 import { invoke, listen, openUrl } from "../shared/tauri";
-import AppNav from "../components/AppNav";
 import { type DashboardDetailTopic } from "../pages/dashboard/DashboardDetailPage";
-import type { AgentQuickActionRequest, AgentWorkspaceLaunchRequest } from "../pages/agents/agentTypes";
-import WorkflowPage from "../pages/workflow/WorkflowPage";
-import WorkflowAgentTerminalIsland from "../pages/workflow/WorkflowAgentTerminalIsland";
-import WorkflowRoleDock from "../pages/workflow/WorkflowRoleDock";
-import WorkflowRagModeDock from "../pages/workflow/WorkflowRagModeDock";
-import WorkflowUnityAutomationIsland from "./main/presentation/WorkflowUnityAutomationIsland";
+import type { AgentWorkspaceLaunchRequest } from "../pages/agents/agentTypes";
 import { buildRoleDockStatusByRole, type RoleDockRuntimeState } from "../pages/workflow/roleDockState";
 import { useFloatingPanel } from "../features/ui/useFloatingPanel";
 import { useExecutionState } from "./hooks/useExecutionState";
@@ -35,8 +29,8 @@ import { useAgenticActionBus } from "./hooks/useAgenticActionBus";
 import { useWorkflowHandoffPanel } from "./hooks/useWorkflowHandoffPanel";
 import { STUDIO_ROLE_TEMPLATES } from "../features/studio/roleTemplates";
 import type { StudioRoleId } from "../features/studio/handoffTypes";
-import { STUDIO_ROLE_PROMPTS, toStudioRoleId } from "../features/studio/roleUtils";
-import { persistKnowledgeIndexToWorkspace, readKnowledgeEntries, upsertKnowledgeEntry } from "../features/studio/knowledgeIndex";
+import { getStudioRoleModeOptions, normalizePmPlanningMode, normalizeStudioRoleSelection, resolveStudioRoleDisplayLabel } from "../features/studio/pmPlanningMode";
+import { toStudioRoleId } from "../features/studio/roleUtils";
 import {
   COST_PRESET_DEFAULT_MODEL,
   DEFAULT_TURN_MODEL,
@@ -64,11 +58,10 @@ import {
   type TurnExecutor,
   type WebProvider,
 } from "../features/workflow/domain";
-import { DEFAULT_TURN_REASONING_LEVEL, TURN_REASONING_LEVEL_OPTIONS, normalizeTurnReasoningLevel } from "../features/workflow/reasoningLevels";
+import { TURN_REASONING_LEVEL_OPTIONS } from "../features/workflow/reasoningLevels";
 import { buildGraphForViewMode, isViaFlowTurnNode, type WorkflowGraphViewMode } from "../features/workflow/viaGraph";
-import { connectViaDefaultEdges, countViaNodesByType, insertMissingViaTemplateNodes, VIA_NODE_BASE_POSITION_BY_TYPE } from "../features/workflow/viaGraphBuilder";
-import { RAG_TEMPLATE_NODE_TYPES, RAG_TEMPLATE_OPTIONS, type RagTemplateId } from "../features/workflow/ragTemplates";
-import { isViaNodeType, VIA_NODE_OPTIONS, viaNodeLabel, type ViaNodeType } from "../features/workflow/viaCatalog";
+import { RAG_TEMPLATE_OPTIONS } from "../features/workflow/ragTemplates";
+import { isViaNodeType, VIA_NODE_OPTIONS, viaNodeLabel } from "../features/workflow/viaCatalog";
 import {
   applyPresetOutputSchemaPolicies,
   applyPresetTurnPolicies,
@@ -106,12 +99,10 @@ import {
   buildCanvasEdgeLines,
   buildRoundedEdgePath,
   cloneGraph,
-  defaultNodeConfig,
   getAutoConnectionSides,
   getGraphEdgeKey,
   getNodeAnchorPoint,
   graphEquals,
-  makeNodeId,
   nodeCardSummary,
   snapToLayoutGrid,
   snapToNearbyNodeAxis,
@@ -148,7 +139,6 @@ import {
   GRAPH_SCHEMA_VERSION,
   KNOWLEDGE_DEFAULT_MAX_CHARS,
   KNOWLEDGE_DEFAULT_TOP_K,
-  NavIcon,
   type WorkspaceTab,
   isTurnTerminalEvent,
   normalizeKnowledgeConfig,
@@ -223,9 +213,6 @@ import {
   WEB_TURN_FLOATING_MIN_VISIBLE_HEIGHT,
   WEB_TURN_FLOATING_MIN_VISIBLE_WIDTH,
 } from "./main";
-import WorkflowCanvasPane from "./main/presentation/WorkflowCanvasPane";
-import WorkflowInspectorPane from "./main/presentation/WorkflowInspectorPane";
-import { buildFeedPageVm, buildWorkflowInspectorPaneProps } from "./main/presentation/mainAppPropsBuilders";
 import {
   cancelFeedReplyFeedbackClearTimer,
   scheduleFeedReplyFeedbackAutoClear,
@@ -255,9 +242,13 @@ import { createAgenticQueue } from "./main/runtime/agenticQueue";
 import { createWorkspaceEventEntry, type WorkspaceEventEntry } from "./main/runtime/workspaceEventLog";
 import { useBatchScheduler } from "./main/runtime/useBatchScheduler";
 import { useCanvasGraphDerivedState } from "./main/canvas/useCanvasGraphDerivedState";
-import { MainAppModals } from "./main/presentation/MainAppModals";
-import { MainAppWorkspaceContent } from "./main/presentation/MainAppWorkspaceContent";
-import { WorkspaceQuickPanel } from "./main/presentation/WorkspaceQuickPanel";
+import { MainAppShell } from "./main/presentation/MainAppShell";
+import { useMainAppWorkflowPresentation } from "./main/presentation/useMainAppWorkflowPresentation";
+import { useWorkflowRagActions } from "./main/canvas/useWorkflowRagActions";
+import { useTurnModelSelectionActions } from "./main/canvas/useTurnModelSelectionActions";
+import { useBriefingDocumentActions } from "./main/runtime/useBriefingDocumentActions";
+import { useRoleRunCompletionBridge } from "./main/runtime/useRoleRunCompletionBridge";
+import { buildRoleNodeScaffold } from "./main/runtime/roleNodeScaffold";
 import {
   buildRailCompatibleDagSnapshot,
   buildRunApprovalSnapshot,
@@ -1748,7 +1739,7 @@ function App() {
     if (sourceKind !== "handoff") {
       return null;
     }
-    return toStudioRoleId(String(config.handoffRoleId ?? ""));
+    return normalizeStudioRoleSelection(toStudioRoleId(String(config.handoffRoleId ?? "")));
   }, [selectedNode]);
   const selectedTerminalNode =
     selectedNode && selectedNode.id === openWorkflowAgentTerminalNodeId ? selectedNode : null;
@@ -1761,7 +1752,7 @@ function App() {
     if (sourceKind !== "handoff") {
       return null;
     }
-    return toStudioRoleId(String(config.handoffRoleId ?? ""));
+    return normalizeStudioRoleSelection(toStudioRoleId(String(config.handoffRoleId ?? "")));
   }, [selectedTerminalNode]);
   const selectedTurnExecutor: TurnExecutor =
     selectedTurnConfig ? getTurnExecutor(selectedTurnConfig) : "codex";
@@ -1792,6 +1783,138 @@ function App() {
       label: target ? nodeSelectionLabel(target) : t("workflow.node.connection"),
     };
   });
+  const onSetPmPlanningMode = useCallback((nodeId: string, nextMode: "creative" | "logical") => {
+    if (isGraphRunning) {
+      setStatus("워크플로우 실행 중에는 PM 모드를 변경할 수 없습니다.");
+      return;
+    }
+    const normalizedNodeId = String(nodeId ?? "").trim();
+    if (!normalizedNodeId) {
+      return;
+    }
+    const targetNode = graph.nodes.find((node) => node.id === normalizedNodeId && node.type === "turn");
+    if (!targetNode) {
+      return;
+    }
+    const targetConfig = targetNode.config as Record<string, unknown>;
+    const rawRoleId = toStudioRoleId(String(targetConfig.handoffRoleId ?? ""));
+    const baseRoleId = normalizeStudioRoleSelection(rawRoleId);
+    if (!baseRoleId) {
+      return;
+    }
+    const availableModes = getStudioRoleModeOptions(baseRoleId);
+    if (availableModes.length === 0) {
+      return;
+    }
+    const normalizedMode = normalizePmPlanningMode(nextMode);
+    if (!availableModes.includes(normalizedMode)) {
+      return;
+    }
+    const currentMode = normalizePmPlanningMode(targetConfig.pmPlanningMode);
+    if (currentMode === normalizedMode && rawRoleId === baseRoleId) {
+      return;
+    }
+
+    const roleMode = String(targetConfig.roleMode ?? "primary").trim();
+    const roleInstanceLabel = roleMode === "primary"
+      ? (resolveStudioRoleDisplayLabel(baseRoleId, normalizedMode) || "기획(PM)")
+      : (
+          String(targetConfig.roleInstanceLabel ?? "").trim()
+          || resolveStudioRoleDisplayLabel(baseRoleId, normalizedMode)
+          || "기획(PM)"
+        );
+    const scaffold = buildRoleNodeScaffold({
+      roleId: baseRoleId,
+      anchorX: Number(targetNode.position?.x ?? 0),
+      anchorY: Number(targetNode.position?.y ?? 0),
+      includeResearch: targetConfig.roleResearchEnabled !== false,
+      pmPlanningMode: normalizedMode,
+      roleInstanceId: String(targetConfig.roleInstanceId ?? `${baseRoleId}:primary`).trim(),
+      roleInstanceLabel,
+      roleMode:
+        roleMode === "perspective" || roleMode === "review" ? roleMode : "primary",
+    });
+    const blueprintRoleNode = scaffold.nodes.find((node) => node.id === scaffold.roleNodeId);
+    if (!blueprintRoleNode) {
+      return;
+    }
+    const blueprintRoleConfig = blueprintRoleNode.config as Record<string, unknown>;
+    const blueprintChildrenByKind = {
+      research: scaffold.nodes
+        .filter((node) => String((node.config as Record<string, unknown>).internalNodeKind ?? "") === "research")
+        .sort((a, b) => Number(a.position?.y ?? 0) - Number(b.position?.y ?? 0)),
+      synthesis: scaffold.nodes
+        .filter((node) => String((node.config as Record<string, unknown>).internalNodeKind ?? "") === "synthesis")
+        .sort((a, b) => Number(a.position?.y ?? 0) - Number(b.position?.y ?? 0)),
+      verification: scaffold.nodes
+        .filter((node) => String((node.config as Record<string, unknown>).internalNodeKind ?? "") === "verification")
+        .sort((a, b) => Number(a.position?.y ?? 0) - Number(b.position?.y ?? 0)),
+    };
+    const existingChildrenByKind = {
+      research: graph.nodes
+        .filter((node) => String((node.config as Record<string, unknown>).internalParentNodeId ?? "") === normalizedNodeId)
+        .filter((node) => String((node.config as Record<string, unknown>).internalNodeKind ?? "") === "research")
+        .sort((a, b) => Number(a.position?.y ?? 0) - Number(b.position?.y ?? 0)),
+      synthesis: graph.nodes
+        .filter((node) => String((node.config as Record<string, unknown>).internalParentNodeId ?? "") === normalizedNodeId)
+        .filter((node) => String((node.config as Record<string, unknown>).internalNodeKind ?? "") === "synthesis")
+        .sort((a, b) => Number(a.position?.y ?? 0) - Number(b.position?.y ?? 0)),
+      verification: graph.nodes
+        .filter((node) => String((node.config as Record<string, unknown>).internalParentNodeId ?? "") === normalizedNodeId)
+        .filter((node) => String((node.config as Record<string, unknown>).internalNodeKind ?? "") === "verification")
+        .sort((a, b) => Number(a.position?.y ?? 0) - Number(b.position?.y ?? 0)),
+    };
+
+    applyGraphChange((prev) => ({
+      ...prev,
+      nodes: prev.nodes.map((node) => {
+        if (node.id === normalizedNodeId) {
+          const currentConfig = node.config as Record<string, unknown>;
+          return {
+            ...node,
+            config: {
+              ...currentConfig,
+              handoffRoleId: "pm_planner",
+              pmPlanningMode: normalizedMode,
+              role:
+                roleMode === "primary"
+                  ? String(blueprintRoleConfig.role ?? currentConfig.role ?? "")
+                  : String(currentConfig.role ?? blueprintRoleConfig.role ?? ""),
+              promptTemplate: blueprintRoleConfig.promptTemplate,
+              qualityProfile: blueprintRoleConfig.qualityProfile,
+              artifactType: blueprintRoleConfig.artifactType,
+              roleInstanceLabel,
+            },
+          };
+        }
+
+        const internalParentNodeId = String((node.config as Record<string, unknown>).internalParentNodeId ?? "").trim();
+        if (internalParentNodeId !== normalizedNodeId) {
+          return node;
+        }
+        const kind = String((node.config as Record<string, unknown>).internalNodeKind ?? "").trim() as "research" | "synthesis" | "verification";
+        if (kind !== "research" && kind !== "synthesis" && kind !== "verification") {
+          return node;
+        }
+        const currentList = existingChildrenByKind[kind];
+        const index = currentList.findIndex((entry) => entry.id === node.id);
+        const blueprintNode = blueprintChildrenByKind[kind][index] ?? blueprintChildrenByKind[kind][0];
+        if (!blueprintNode) {
+          return node;
+        }
+        return {
+          ...node,
+          config: {
+            ...(blueprintNode.config as Record<string, unknown>),
+            internalParentNodeId: normalizedNodeId,
+            internalNodeKind: kind,
+            roleInstanceId: String((node.config as Record<string, unknown>).roleInstanceId ?? targetConfig.roleInstanceId ?? "").trim(),
+          },
+        };
+      }),
+    }), { autoLayout: false });
+    setStatus(`${resolveStudioRoleDisplayLabel(baseRoleId, normalizedMode) || baseRoleId} 노드를 ${normalizedMode === "logical" ? "논리" : "창의성"} 모드로 전환했습니다.`);
+  }, [applyGraphChange, graph.nodes, isGraphRunning, setStatus]);
   const canResumeGraph = isGraphRunning && isGraphPaused;
   const isWorkflowBusy = (isGraphRunning && !isGraphPaused) || isRunStarting;
 
@@ -1899,229 +2022,43 @@ function App() {
     loadAgentRuleDocsForCwd: loadFeedInspectorRuleDocs,
   });
 
-  const onAddCrawlerNode = useCallback(() => {
-    const nodeId = makeNodeId("turn");
-    const maxX = graph.nodes.reduce((max, node) => Math.max(max, Number(node.position?.x ?? 0)), 40);
-    const maxY = graph.nodes.reduce((max, node) => Math.max(max, Number(node.position?.y ?? 0)), 40);
-    const nextNode: GraphNode = {
-      id: nodeId,
-      type: "turn",
-      position: {
-        x: maxX + 300,
-        y: Math.max(40, maxY),
-      },
-      config: {
-        ...defaultNodeConfig("turn"),
-        executor: "web_grok",
-        role: "DATA NODE AGENT",
-        promptTemplate:
-          "최신/실시간 웹 자료를 조사해 핵심 근거를 구조화하고, 바로 개발 의사결정에 쓸 수 있게 요약해줘.",
-        qualityProfile: "research_evidence",
-        artifactType: "EvidenceArtifact",
-        sourceKind: "data_research",
-      },
-    };
-    applyGraphChange((prev) => ({
-      ...prev,
-      nodes: [...prev.nodes, nextNode],
-    }));
-    setNodeSelection([nodeId], nodeId);
-    appendWorkspaceEvent({
-      source: "workflow",
-      message: "데이터 노드 추가",
-      actor: "user",
-      level: "info",
-    });
-    setStatus("그래프에 데이터 노드를 추가했습니다.");
-    setCanvasZoom((prev) => clampCanvasZoom(Math.min(prev, 0.88)));
-  }, [appendWorkspaceEvent, applyGraphChange, clampCanvasZoom, graph.nodes, setCanvasZoom, setNodeSelection, setStatus]);
-
-  const buildViaFlowNode = useCallback((
-    nodeId: string,
-    viaNodeType: ViaNodeType,
-    sameTypeCount: number,
-    layoutMode: "default" | "compact" = "default",
-    sourceTypeHint = "",
-    templateLabel = "",
-  ): GraphNode => {
-    const basePosition = VIA_NODE_BASE_POSITION_BY_TYPE[viaNodeType] ?? { x: 300, y: 120 };
-    const position =
-      layoutMode === "compact"
-        ? {
-            x: Math.round(basePosition.x * 0.62 + 32 + sameTypeCount * 16),
-            y: Math.round(basePosition.y * 0.62 + 28 + sameTypeCount * 30),
-          }
-        : {
-            x: basePosition.x + sameTypeCount * 24,
-            y: basePosition.y + sameTypeCount * 48,
-          };
-    return {
-      id: nodeId,
-      type: "turn",
-      position,
-      config: {
-        ...defaultNodeConfig("turn"),
-        executor: "via_flow",
-        role: `${viaNodeLabel(viaNodeType)} NODE`,
-        promptTemplate: `VIA ${viaNodeType} 단계 실행`,
-        qualityProfile: "research_evidence",
-        artifactType: "EvidenceArtifact",
-        sourceKind: "data_pipeline",
-        viaFlowId: "1",
-        viaNodeType,
-        viaNodeLabel: viaNodeLabel(viaNodeType),
-        viaSourceTypeHint: sourceTypeHint,
-        viaTemplateLabel: templateLabel || undefined,
-        viaCustomKeywords: "",
-        viaCustomCountries: "",
-        viaCustomSites: "",
-        viaCustomMaxItems: 24,
-      },
-    };
-  }, []);
-
-  const onAddViaFlowNode = useCallback((viaNodeType: ViaNodeType) => {
-    const nodeId = makeNodeId("turn");
-    const sourceTypeHint = viaNodeType.startsWith("source.") ? viaNodeType : "";
-    applyGraphChange((prev) => {
-      const sameTypeCount = countViaNodesByType(prev.nodes, viaNodeType);
-      const nextNode = buildViaFlowNode(nodeId, viaNodeType, sameTypeCount, "default", sourceTypeHint);
-      const nextNodes = [...prev.nodes, nextNode];
-      const nextEdges = connectViaDefaultEdges({
-        nodes: nextNodes,
-        edges: prev.edges,
-        insertedNodeId: nodeId,
-        insertedNodeType: viaNodeType,
-      });
-      return {
-        ...prev,
-        nodes: nextNodes,
-        edges: nextEdges,
-      };
-    });
-    setNodeSelection([nodeId], nodeId);
-    appendWorkspaceEvent({
-      source: "workflow",
-      message: `${viaNodeLabel(viaNodeType)} 노드 추가`,
-      actor: "user",
-      level: "info",
-    });
-    setStatus(`RAG 그래프에 ${viaNodeLabel(viaNodeType)} 노드를 추가했습니다.`);
-  }, [appendWorkspaceEvent, applyGraphChange, buildViaFlowNode, setNodeSelection, setStatus]);
-
-  const onApplyRagTemplate = useCallback((templateIdRaw: string) => {
-    const templateId = String(templateIdRaw ?? "").trim() as RagTemplateId;
-    const templateNodeTypes = RAG_TEMPLATE_NODE_TYPES[templateId];
-    if (!templateNodeTypes) {
-      return;
-    }
-    const templateLabel =
-      RAG_TEMPLATE_OPTIONS.find((option) => option.value === templateId)?.label ?? templateId;
-    const templateSourceTypeHint = templateNodeTypes.find((type) => type.startsWith("source.")) ?? "";
-    const insertedNodeIds: string[] = [];
-    applyGraphChange((prev) => {
-      const inserted = insertMissingViaTemplateNodes({
-        nodes: prev.nodes,
-        edges: prev.edges,
-        templateNodeTypes,
-        createNode: (nodeType, sameTypeCount) =>
-          buildViaFlowNode(
-            makeNodeId("turn"),
-            nodeType,
-            sameTypeCount,
-            "compact",
-            templateSourceTypeHint,
-            templateLabel,
-          ),
-      });
-      insertedNodeIds.push(...inserted.insertedNodeIds);
-      return { ...prev, nodes: inserted.nodes, edges: inserted.edges };
-    });
-
-    if (insertedNodeIds.length > 0) {
-      const focusNodeId = insertedNodeIds[insertedNodeIds.length - 1];
-      setNodeSelection([focusNodeId], focusNodeId);
-      appendWorkspaceEvent({ source: "workflow", message: `RAG 템플릿 적용: ${templateId}`, actor: "user", level: "info" });
-      setStatus(`RAG 템플릿을 적용했습니다. 노드 ${insertedNodeIds.length}개를 추가했습니다.`);
-      return;
-    }
-
-    setStatus("선택한 템플릿의 노드는 이미 모두 추가되어 있습니다.");
-  }, [appendWorkspaceEvent, applyGraphChange, buildViaFlowNode, setNodeSelection, setStatus]);
-
-  const onSelectRagModeNode = useCallback((nodeId: string) => {
-    const normalizedNodeId = String(nodeId ?? "").trim();
-    if (!normalizedNodeId) {
-      return;
-    }
-    setNodeSelection([normalizedNodeId], normalizedNodeId);
-  }, [setNodeSelection]);
-
-  const onUpdateRagModeFlowId = useCallback((nodeId: string, nextFlowId: string) => {
-    const normalizedNodeId = String(nodeId ?? "").trim();
-    if (!normalizedNodeId) {
-      return;
-    }
-    const numericOnly = String(nextFlowId ?? "").replace(/[^\d]/g, "");
-    updateNodeConfigById(normalizedNodeId, "viaFlowId", numericOnly);
-  }, [updateNodeConfigById]);
-
-  const onUpdateRagSourceOptions = useCallback((
-    nodeId: string,
-    patch: {
-      viaCustomKeywords?: string;
-      viaCustomCountries?: string;
-      viaCustomSites?: string;
-      viaCustomMaxItems?: number;
-    },
-  ) => {
-    const normalizedNodeId = String(nodeId ?? "").trim();
-    if (!normalizedNodeId) {
-      return;
-    }
-    if (typeof patch.viaCustomKeywords === "string") {
-      updateNodeConfigById(normalizedNodeId, "viaCustomKeywords", patch.viaCustomKeywords);
-    }
-    if (typeof patch.viaCustomCountries === "string") {
-      updateNodeConfigById(normalizedNodeId, "viaCustomCountries", patch.viaCustomCountries);
-    }
-    if (typeof patch.viaCustomSites === "string") {
-      updateNodeConfigById(normalizedNodeId, "viaCustomSites", patch.viaCustomSites);
-    }
-    if (typeof patch.viaCustomMaxItems === "number" && Number.isFinite(patch.viaCustomMaxItems)) {
-      updateNodeConfigById(normalizedNodeId, "viaCustomMaxItems", Math.max(1, Math.floor(patch.viaCustomMaxItems)));
-    }
-  }, [updateNodeConfigById]);
-
   const onActivateWorkflowPanels = useCallback(() => {
     setWorkflowSidePanelsVisible((prev) => (prev ? prev : true));
   }, []);
-
-  const onSetGraphViewMode = useCallback((nextMode: WorkflowGraphViewMode) => {
-    if (nextMode === workflowGraphViewMode) {
-      return;
-    }
-    setWorkflowGraphViewMode(nextMode);
-    appendWorkspaceEvent({
-      source: "workflow",
-      message: nextMode === "rag" ? "RAG 모드 전환" : "DAG 모드 전환",
-      actor: "user",
-      level: "info",
-    });
-    setStatus(
-      nextMode === "rag"
-        ? "RAG 모드로 전환했습니다. RAG 전용 그래프와 메뉴를 표시합니다."
-        : "DAG 모드로 전환했습니다.",
-    );
-  }, [appendWorkspaceEvent, setStatus, workflowGraphViewMode]);
+  const {
+    onAddCrawlerNode,
+    onAddViaFlowNode,
+    onApplyRagTemplate,
+    onSelectRagModeNode,
+    onSetGraphViewMode,
+    onUpdateRagModeFlowId,
+    onUpdateRagSourceOptions,
+  } = useWorkflowRagActions({
+    appendWorkspaceEvent,
+    applyGraphChange,
+    clampCanvasZoom,
+    canvasZoom,
+    graphNodes: graph.nodes,
+    graphCanvasRef,
+    setCanvasZoom,
+    setNodeSelection,
+    setStatus,
+    setWorkflowGraphViewMode,
+    updateNodeConfigById,
+    workflowGraphViewMode,
+  });
 
   const {
     onAddRoleNode,
     toggleRoleInternalExpanded,
     addRolePerspectivePass,
+    addRolePerspectivePassForNode,
     addRoleReviewPass,
+    addRoleReviewPassForNode,
   } = useWorkflowRoleCollaboration({
+    canvasZoom,
     graph,
+    graphCanvasRef,
     selectedNode,
     expandedRoleNodeIds,
     setExpandedRoleNodeIds,
@@ -2177,7 +2114,153 @@ function App() {
   );
   const boundedStageWidth = Math.min(stageWidth, MAX_STAGE_WIDTH);
   const boundedStageHeight = Math.min(stageHeight, MAX_STAGE_HEIGHT);
-  const workflowInspectorPaneProps = buildWorkflowInspectorPaneProps({
+  const onRunRole = useCallback(() => {
+    const taskId = workflowRoleTaskId.trim();
+    if (!taskId) {
+      setStatus("TASK ID를 입력해 주세요.");
+      return;
+    }
+    const latestIncomingHandoff = workflowHandoffPanel.handoffRecords
+      .filter((row) => row.toRole === workflowRoleId && (row.status === "requested" || row.status === "accepted"))
+      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0];
+    const basePrompt = workflowRolePrompt.trim();
+    const handoffInjectedPrompt = latestIncomingHandoff
+      ? `[HANDOFF_CONTEXT ${latestIncomingHandoff.taskId}] ${latestIncomingHandoff.request}\n\n${basePrompt}`.trim()
+      : basePrompt;
+    setWorkflowRoleRuntimeStateByRole((prev) => ({
+      ...prev,
+      [workflowRoleId]: {
+        status: "RUNNING",
+        taskId,
+        message: "RUN_PENDING",
+      },
+    }));
+    const missionHandle = missionControl.launchMission({
+      sourceTab: "workflow",
+      roleId: workflowRoleId,
+      roleLabel: STUDIO_ROLE_TEMPLATES.find((role) => role.id === workflowRoleId)?.label ?? workflowRoleId,
+      taskId,
+      prompt: handoffInjectedPrompt || basePrompt || taskId,
+    });
+    publishAction({
+      type: "run_role",
+      payload: {
+        roleId: workflowRoleId,
+        taskId,
+        prompt: handoffInjectedPrompt || undefined,
+        runId: missionHandle.implementerRunId,
+        sourceTab: "workflow",
+        handoffToRole: workflowHandoffPanel.handoffToRole,
+        handoffRequest: basePrompt || undefined,
+      },
+    });
+  }, [
+    missionControl,
+    publishAction,
+    setStatus,
+    setWorkflowRoleRuntimeStateByRole,
+    workflowHandoffPanel.handoffRecords,
+    workflowHandoffPanel.handoffToRole,
+    workflowRoleId,
+    workflowRolePrompt,
+    workflowRoleTaskId,
+  ]);
+  useGraphResearchKnowledgeSync({ cwd, feedPosts, graphNodes: graph.nodes, invokeFn: invoke });
+  const {
+    feedPageVm,
+    showInspectorFirst,
+    workflowAgentTerminalIslandElement,
+    workflowInspectorPaneElement,
+    workflowRoleDockElement,
+    workflowUnityAutomationIslandElement,
+  } = useMainAppWorkflowPresentation({
+    applyPreset,
+    canvasFullscreen,
+    cwd,
+    enqueueNodeRequest,
+    feedPageVmInput: {
+      feedInspectorTurnNode,
+      feedInspectorPost,
+      feedInspectorEditable,
+      feedInspectorEditableNodeId,
+      feedInspectorTurnExecutor,
+      feedInspectorTurnConfig,
+      feedInspectorQualityProfile,
+      feedInspectorQualityThresholdOption,
+      feedInspectorPromptTemplate,
+      updateNodeConfigById,
+      turnModelLabel,
+      turnRoleLabel,
+      TURN_EXECUTOR_OPTIONS,
+      turnExecutorLabel,
+      TURN_MODEL_OPTIONS,
+      toTurnModelDisplayName,
+      DEFAULT_TURN_MODEL,
+      getWebProviderFromExecutor,
+      normalizeWebResultMode,
+      cwd,
+      QUALITY_PROFILE_OPTIONS: qualityProfileOptions,
+      normalizeQualityThreshold,
+      QUALITY_THRESHOLD_OPTIONS: qualityThresholdOptions,
+      ARTIFACT_TYPE_OPTIONS: artifactTypeOptions,
+      toArtifactType,
+      feedFilterOpen,
+      setFeedFilterOpen,
+      setFeedStatusFilter,
+      setFeedExecutorFilter,
+      setFeedPeriodFilter,
+      setFeedTopicFilter,
+      setFeedKeyword,
+      feedStatusFilter,
+      feedExecutorFilter,
+      feedPeriodFilter,
+      feedTopicFilter,
+      feedKeyword,
+      feedTopicOptions,
+      feedCategoryMeta,
+      feedCategory,
+      feedCategoryPosts,
+      setFeedCategory,
+      feedShareMenuPostId,
+      setFeedShareMenuPostId,
+      feedLoading,
+      currentFeedPosts,
+      groupedFeedRuns,
+      feedGroupExpandedByRunId,
+      setFeedGroupExpandedByRunId,
+      feedGroupRenameRunId,
+      setFeedGroupRenameRunId,
+      setFeedGroupRenameDraft,
+      feedGroupRenameDraft,
+      onSubmitFeedRunGroupRename,
+      toHumanReadableFeedText,
+      hashStringToHue,
+      buildFeedAvatarLabel,
+      pendingNodeRequests,
+      feedReplyDraftByPost,
+      feedReplySubmittingByPost,
+      feedReplyFeedbackByPost,
+      feedExpandedByPost,
+      onShareFeedPost,
+      onDeleteFeedRunGroup,
+      setFeedExpandedByPost,
+      formatFeedInputSourceLabel,
+      formatRunDateTime,
+      formatRelativeFeedTime,
+      formatDuration,
+      formatUsage,
+      setFeedReplyDraftByPost,
+      onSubmitFeedAgentRequest,
+      onOpenFeedMarkdownFile,
+      graphNodes: graph.nodes,
+      setFeedInspectorPostId,
+      setNodeSelection,
+    },
+    graph,
+    graphFileName,
+    isGraphRunning,
+    isPresetKind,
+    isWorkflowBusy,
     nodeProps: {
       artifactTypeOptions: [...artifactTypeOptions],
       cwd,
@@ -2213,6 +2296,21 @@ function App() {
       turnReasoningLevelOptions: [...TURN_REASONING_LEVEL_OPTIONS],
       updateSelectedNodeConfig,
     },
+    nodeStates,
+    onInterruptWorkflowNode,
+    onRunRole,
+    openWorkflowAgentTerminalNodeId,
+    pendingNodeRequests,
+    presetTemplateOptions,
+    selectedNode,
+    selectedNodeRoleLockId,
+    selectedTerminalNode,
+    selectedTerminalRoleLockId,
+    setStatus,
+    setWorkflowRoleId,
+    setWorkflowRolePrompt,
+    setWorkflowRoleTaskId,
+    setWorkspaceTab,
     toolsProps: {
       cwd,
       addNode,
@@ -2267,172 +2365,14 @@ function App() {
       updateHandoffStatus: workflowHandoffPanel.updateHandoffStatus,
       consumeHandoff: workflowHandoffPanel.consumeHandoff,
     },
-  });
-  const workflowInspectorPaneElement = (
-    <WorkflowInspectorPane
-      canvasFullscreen={canvasFullscreen}
-      nodeProps={workflowInspectorPaneProps.nodeProps}
-      toolsProps={workflowInspectorPaneProps.toolsProps}
-    />
-  );
-  const workflowRoleDockElement = (
-    <WorkflowRoleDock
-      onChangePrompt={setWorkflowRolePrompt}
-      onChangeTaskId={setWorkflowRoleTaskId}
-      onRunRole={() => {
-        const taskId = workflowRoleTaskId.trim();
-        if (!taskId) {
-          setStatus("TASK ID를 입력해 주세요.");
-          return;
-        }
-        const latestIncomingHandoff = workflowHandoffPanel.handoffRecords
-          .filter((row) => row.toRole === workflowRoleId && (row.status === "requested" || row.status === "accepted"))
-          .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0];
-        const basePrompt = workflowRolePrompt.trim();
-        const handoffInjectedPrompt = latestIncomingHandoff
-          ? `[HANDOFF_CONTEXT ${latestIncomingHandoff.taskId}] ${latestIncomingHandoff.request}\n\n${basePrompt}`.trim()
-          : basePrompt;
-        setWorkflowRoleRuntimeStateByRole((prev) => ({
-          ...prev,
-          [workflowRoleId]: {
-            status: "RUNNING",
-            taskId,
-            message: "RUN_PENDING",
-          },
-        }));
-        const missionHandle = missionControl.launchMission({
-          sourceTab: "workflow",
-          roleId: workflowRoleId,
-          roleLabel: STUDIO_ROLE_TEMPLATES.find((role) => role.id === workflowRoleId)?.label ?? workflowRoleId,
-          taskId,
-          prompt: handoffInjectedPrompt || basePrompt || taskId,
-        });
-        publishAction({
-          type: "run_role",
-          payload: {
-            roleId: workflowRoleId,
-            taskId,
-            prompt: handoffInjectedPrompt || undefined,
-            runId: missionHandle.implementerRunId,
-            sourceTab: "workflow",
-            handoffToRole: workflowHandoffPanel.handoffToRole,
-            handoffRequest: basePrompt || undefined,
-          },
-        });
-      }}
-      onSelectRoleId={setWorkflowRoleId}
-      roleSelectionLockedTo={selectedNodeRoleLockId}
-      roleStatusById={workflowRoleStatusByRole}
-      selectedRoleBlockers={workflowSelectedRoleBlockers}
-      selectedRoleHandoffs={workflowSelectedRoleHandoffs}
-      prompt={workflowRolePrompt}
-      roleId={workflowRoleId}
-      runDisabled={isWorkflowBusy}
-      taskId={workflowRoleTaskId}
-      onClearRecentHandoffs={() => workflowHandoffPanel.clearHandoffsByRole(workflowRoleId)}
-      onOpenKnowledge={() => {
-        setWorkspaceTab("knowledge");
-        setStatus("데이터베이스 탭으로 이동");
-      }}
-    />
-  );
-  const workflowUnityAutomationIslandElement = (
-    <WorkflowUnityAutomationIsland
-      applyPreset={applyPreset}
-      cwd={cwd}
-      isPresetKind={isPresetKind}
-      presetTemplateOptions={[...presetTemplateOptions]}
-    />
-  );
-  const workflowAgentTerminalIslandElement = (
-    <WorkflowAgentTerminalIsland
-      activeRoleId={selectedTerminalRoleLockId} cwd={cwd} graphFileName={graphFileName} graphNodes={graph.nodes}
-      isGraphRunning={isGraphRunning} nodeStates={nodeStates} onInterruptNode={onInterruptWorkflowNode}
-      openNodeId={openWorkflowAgentTerminalNodeId}
-      onQueueNodeRequest={enqueueNodeRequest} pendingNodeRequests={pendingNodeRequests}
-      selectedNode={selectedTerminalNode} workspaceEvents={workspaceEvents}
-    />
-  );
-  const selectedNodeSourceKind = String((selectedNode?.config as Record<string, unknown> | undefined)?.sourceKind ?? "").trim().toLowerCase();
-  const showInspectorFirst = !selectedNode || (selectedNode?.type === "turn" && selectedNodeSourceKind === "data_research");
-  useGraphResearchKnowledgeSync({ cwd, feedPosts, graphNodes: graph.nodes, invokeFn: invoke });
-  const feedPageVm = buildFeedPageVm({
-    feedInspectorTurnNode,
-    feedInspectorPost,
-    feedInspectorEditable,
-    feedInspectorEditableNodeId,
-    feedInspectorTurnExecutor,
-    feedInspectorTurnConfig,
-    feedInspectorQualityProfile,
-    feedInspectorQualityThresholdOption,
-    feedInspectorPromptTemplate,
-    updateNodeConfigById,
-    turnModelLabel,
-    turnRoleLabel,
-    TURN_EXECUTOR_OPTIONS,
-    turnExecutorLabel,
-    TURN_MODEL_OPTIONS,
-    toTurnModelDisplayName,
-    DEFAULT_TURN_MODEL,
-    getWebProviderFromExecutor,
-    normalizeWebResultMode,
-    cwd,
-    QUALITY_PROFILE_OPTIONS: qualityProfileOptions,
-    normalizeQualityThreshold,
-    QUALITY_THRESHOLD_OPTIONS: qualityThresholdOptions,
-    ARTIFACT_TYPE_OPTIONS: artifactTypeOptions,
-    toArtifactType,
-    feedFilterOpen,
-    setFeedFilterOpen,
-    setFeedStatusFilter,
-    setFeedExecutorFilter,
-    setFeedPeriodFilter,
-    setFeedTopicFilter,
-    setFeedKeyword,
-    feedStatusFilter,
-    feedExecutorFilter,
-    feedPeriodFilter,
-    feedTopicFilter,
-    feedKeyword,
-    feedTopicOptions,
-    feedCategoryMeta,
-    feedCategory,
-    feedCategoryPosts,
-    setFeedCategory,
-    feedShareMenuPostId,
-    setFeedShareMenuPostId,
-    feedLoading,
-    currentFeedPosts,
-    groupedFeedRuns,
-    feedGroupExpandedByRunId,
-    setFeedGroupExpandedByRunId,
-    feedGroupRenameRunId,
-    setFeedGroupRenameRunId,
-    setFeedGroupRenameDraft,
-    feedGroupRenameDraft,
-    onSubmitFeedRunGroupRename,
-    toHumanReadableFeedText,
-    hashStringToHue,
-    buildFeedAvatarLabel,
-    pendingNodeRequests,
-    feedReplyDraftByPost,
-    feedReplySubmittingByPost,
-    feedReplyFeedbackByPost,
-    feedExpandedByPost,
-    onShareFeedPost,
-    onDeleteFeedRunGroup,
-    setFeedExpandedByPost,
-    formatFeedInputSourceLabel,
-    formatRunDateTime,
-    formatRelativeFeedTime,
-    formatDuration,
-    formatUsage,
-    setFeedReplyDraftByPost,
-    onSubmitFeedAgentRequest,
-    onOpenFeedMarkdownFile,
-    graphNodes: graph.nodes,
-    setFeedInspectorPostId,
-    setNodeSelection,
+    workflowHandoffPanel,
+    workflowRoleId,
+    workflowRolePrompt,
+    workflowRoleStatusByRole,
+    workflowRoleTaskId,
+    workflowSelectedRoleBlockers,
+    workflowSelectedRoleHandoffs,
+    workspaceEvents,
   });
   const { onSelectWorkspaceTab } = useWorkspaceNavigation({
     workspaceTab,
@@ -2441,245 +2381,46 @@ function App() {
     setDashboardDetailTopic,
     appendWorkspaceEvent,
   });
-  const onOpenBriefingDocumentFromData = useCallback(
-    async (runId: string, postId?: string) => {
-      const resolvedRunId = String(runId ?? "").trim();
-      if (!resolvedRunId) {
-        setStatus("열 수 있는 브리핑 실행 기록이 없습니다.");
-        return;
-      }
-      const resolvedPostId = String(postId ?? "").trim();
-      const existingRunPosts = feedPosts.filter((post) => String(post.runId ?? "").trim() === resolvedRunId);
-      let fallbackPostId = resolvedPostId;
-      let hasOpenablePost = existingRunPosts.length > 0;
-      if (existingRunPosts.length === 0) {
-        const snapshot = Object.values(dashboardSnapshotsByTopic)
-          .filter((row): row is NonNullable<typeof row> => Boolean(row))
-          .find((row) => String(row.runId ?? "").trim() === resolvedRunId);
-        if (snapshot) {
-          const topicLabel = t(`dashboard.widget.${snapshot.topic}.title`);
-          const syntheticNodeId = `dashboard-${snapshot.topic}`;
-          const syntheticPostId = `${resolvedRunId}:${syntheticNodeId}:${snapshot.status === "degraded" ? "low_quality" : "done"}`;
-          const alreadyExists = feedPosts.some((post) => post.id === syntheticPostId);
-          if (!alreadyExists) {
-            const built = buildFeedPost({
-              runId: resolvedRunId,
-              node: {
-                id: syntheticNodeId,
-                type: "turn",
-                config: {
-                  executor: "codex",
-                  model: snapshot.model,
-                  role: "DASHBOARD BRIEFING",
-                },
-              },
-              isFinalDocument: true,
-              status: snapshot.status === "degraded" ? "low_quality" : "done",
-              createdAt: String(snapshot.generatedAt ?? new Date().toISOString()),
-              topic: snapshot.topic,
-              topicLabel,
-              groupName: topicLabel,
-              agentName: topicLabel,
-              roleLabel: `${String(snapshot.model ?? "").toUpperCase()} · DASHBOARD BRIEFING`,
-              summary: String(snapshot.summary ?? "").trim() || `${topicLabel} 브리핑 생성`,
-              logs: [
-                `${topicLabel} 브리핑 생성`,
-                ...(Array.isArray(snapshot.highlights) ? snapshot.highlights.slice(0, 8) : []),
-              ],
-              output: snapshot,
-            });
-            let markdownFilePath = "";
-            let jsonFilePath = "";
-            const normalizedCwd = String(cwd ?? "").trim();
-            if (hasTauriRuntime && normalizedCwd) {
-              try {
-                const runDir = `${normalizedCwd.replace(/[\\/]+$/, "")}/.rail/runs/${resolvedRunId}`;
-                const topicToken = String(snapshot.topic ?? "dashboard")
-                  .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
-                  .replace(/[^a-zA-Z0-9]+/g, "_")
-                  .replace(/_+/g, "_")
-                  .replace(/^_|_$/g, "")
-                  .toLowerCase();
-                const stamp = String(snapshot.generatedAt ?? new Date().toISOString())
-                  .replace(/[-:.TZ]/g, "")
-                  .slice(0, 14) || String(Date.now());
-                const fileBase = `dashboard_${topicToken}_${stamp}`;
-                markdownFilePath = await invoke<string>("workspace_write_text", {
-                  cwd: runDir,
-                  name: `${fileBase}.md`,
-                  content: built.rawAttachments.markdown,
-                });
-                jsonFilePath = await invoke<string>("workspace_write_text", {
-                  cwd: runDir,
-                  name: `${fileBase}.json`,
-                  content: built.rawAttachments.json,
-                });
-              } catch {
-                // Ignore file persistence failures here; feed can still render in-memory content.
-              }
-            }
-            built.post.inputSources = (snapshot.references ?? []).slice(0, 10).map((reference) => ({
-              kind: "node",
-              nodeId: syntheticNodeId,
-              agentName: String(reference.source ?? "").trim() || "REFERENCE",
-              roleLabel: "SOURCE",
-              summary: [reference.title, reference.url].filter((part) => String(part ?? "").trim().length > 0).join(" · "),
-            }));
-            built.post.steps = [
-              ...(Array.isArray(snapshot.highlights) ? snapshot.highlights.slice(0, 6) : []),
-              ...(Array.isArray(snapshot.risks) ? snapshot.risks.slice(0, 3).map((risk) => `리스크: ${risk}`) : []),
-            ].filter((line) => String(line ?? "").trim().length > 0);
-            const syntheticPost = {
-              ...built.post,
-              id: syntheticPostId,
-              topic: snapshot.topic,
-              topicLabel,
-              groupName: topicLabel,
-              sourceFile: jsonFilePath || `dashboard-${snapshot.topic}-${resolvedRunId}.json`,
-              question: `${topicLabel} 데이터 파이프라인 실행 결과`,
-              attachments: Array.isArray(built.post.attachments)
-                ? built.post.attachments.map((attachment: any) => {
-                    if (attachment?.kind === "markdown" && markdownFilePath) {
-                      return { ...attachment, filePath: markdownFilePath };
-                    }
-                    if (attachment?.kind === "json" && jsonFilePath) {
-                      return { ...attachment, filePath: jsonFilePath };
-                    }
-                    return attachment;
-                  })
-                : built.post.attachments,
-            };
-            feedRawAttachmentRef.current[feedAttachmentRawKey(syntheticPost.id, "markdown")] = built.rawAttachments.markdown;
-            feedRawAttachmentRef.current[feedAttachmentRawKey(syntheticPost.id, "json")] = built.rawAttachments.json;
-            setFeedPosts((prev) => {
-              if (prev.some((row) => row.id === syntheticPost.id)) {
-                return prev;
-              }
-              return [syntheticPost, ...prev];
-            });
-            fallbackPostId = syntheticPost.id;
-            hasOpenablePost = true;
-          }
-        }
-      }
-      if (!hasOpenablePost && !fallbackPostId) {
-        setError("해당 실행의 브리핑 문서를 찾지 못했습니다. 실행 완료 후 다시 시도해 주세요.");
-        setStatus("브리핑 문서 없음");
-        return;
-      }
-      setFeedCategory("all_posts");
-      setFeedStatusFilter("all");
-      setFeedExecutorFilter("all");
-      setFeedPeriodFilter("all");
-      setFeedTopicFilter("all");
-      setFeedKeyword(resolvedRunId);
-      setFeedFilterOpen(true);
-      setFeedGroupExpandedByRunId((prev) => ({
-        ...prev,
-        [resolvedRunId]: true,
-      }));
-      if (fallbackPostId) {
-        setFeedInspectorPostId(fallbackPostId);
-        setFeedExpandedByPost((prev) => ({
-          ...prev,
-          [fallbackPostId]: true,
-        }));
-      }
-      setWorkspaceTab("feed");
-      setStatus(`피드에서 브리핑 문서를 여는 중: ${resolvedRunId}`);
-      appendWorkspaceEvent({
-        source: "intelligence",
-        actor: "user",
-        level: "info",
-        runId: resolvedRunId,
-        message: resolvedPostId ? `브리핑 문서 열기: ${resolvedPostId}` : "브리핑 전체 문서 열기",
-      });
-    },
-    [
-      appendWorkspaceEvent,
-      cwd,
-      hasTauriRuntime,
-      setFeedCategory,
-      setFeedExecutorFilter,
-      setFeedExpandedByPost,
-      setFeedFilterOpen,
-      setFeedGroupExpandedByRunId,
-      setFeedInspectorPostId,
-      setFeedKeyword,
-      setFeedPeriodFilter,
-      setFeedStatusFilter,
-      setFeedTopicFilter,
-      setFeedPosts,
-      setError,
-      setStatus,
-      setWorkspaceTab,
-      dashboardSnapshotsByTopic,
-      feedPosts,
-      feedRawAttachmentRef,
-      invoke,
-      t,
-    ],
-  );
-  const applyTurnExecutionFromModelSelection = useCallback(
-    (selection: {
-      executor: TurnExecutor;
-      turnModel?: string;
-      reasoningLevel?: string;
-      modelLabel: string;
-      sourceLabel: string;
-    }) => {
-      const selectedTurnNodeIds = graph.nodes
-        .filter((node) => node.type === "turn" && selectedNodeIds.includes(node.id))
-        .map((node) => node.id);
-      const fallbackTurnNodeId = graph.nodes.find((node) => node.type === "turn")?.id;
-      const targetTurnNodeIds = selectedTurnNodeIds.length > 0 ? selectedTurnNodeIds : fallbackTurnNodeId ? [fallbackTurnNodeId] : [];
-
-      if (targetTurnNodeIds.length === 0) {
-        setStatus(`${selection.sourceLabel}: 적용할 턴 노드가 없습니다.`);
-        return;
-      }
-
-      for (const nodeId of targetTurnNodeIds) {
-        updateNodeConfigById(nodeId, "executor", selection.executor);
-        if (selection.executor === "codex") {
-          updateNodeConfigById(nodeId, "model", selection.turnModel ?? DEFAULT_TURN_MODEL);
-          updateNodeConfigById(
-            nodeId,
-            "reasoningLevel",
-            normalizeTurnReasoningLevel(selection.reasoningLevel ?? DEFAULT_TURN_REASONING_LEVEL),
-          );
-        } else {
-          updateNodeConfigById(nodeId, "webResultMode", "bridgeAssisted");
-        }
-      }
-
-      const targetLabel = targetTurnNodeIds.length > 1 ? `${targetTurnNodeIds.length}개 턴` : targetTurnNodeIds[0];
-      setStatus(`${selection.sourceLabel}: ${targetLabel} 실행 모델을 ${selection.modelLabel}로 설정했습니다.`);
-    },
-    [graph.nodes, selectedNodeIds, setStatus, updateNodeConfigById],
-  );
-
-  const onAgentQuickAction = (request: AgentQuickActionRequest) => {
-    const ragSourceCount = request.selectedDataSourceIds?.length ?? 0;
-    appendWorkspaceEvent({
-      source: "agents",
-      message:
-        ragSourceCount > 0
-          ? `에이전트 요청 전송: ${request.modelLabel} (RAG ${ragSourceCount}개)`
-          : `에이전트 요청 전송: ${request.modelLabel}`,
-      actor: "user",
-      level: "info",
-    });
-    applyTurnExecutionFromModelSelection({
-      executor: request.executor,
-      turnModel: request.turnModel,
-      reasoningLevel: DEFAULT_TURN_REASONING_LEVEL,
-      modelLabel: request.modelLabel,
-      sourceLabel: "에이전트",
-    });
-    setWorkflowQuestion(request.prompt);
-    setWorkspaceTab("workflow");
-  };
+  const onOpenBriefingDocumentFromData = useBriefingDocumentActions({
+    appendWorkspaceEvent,
+    cwd,
+    dashboardSnapshotsByTopic,
+    feedPosts,
+    feedRawAttachmentRef,
+    hasTauriRuntime,
+    invokeFn: invoke,
+    setError,
+    setFeedCategory,
+    setFeedExecutorFilter,
+    setFeedExpandedByPost,
+    setFeedFilterOpen,
+    setFeedGroupExpandedByRunId,
+    setFeedInspectorPostId,
+    setFeedKeyword,
+    setFeedPeriodFilter,
+    setFeedPosts,
+    setFeedStatusFilter,
+    setFeedTopicFilter,
+    setStatus,
+    setWorkspaceTab,
+    t,
+  });
+  const { applyTurnExecutionFromModelSelection, onAgentQuickAction } = useTurnModelSelectionActions({
+    appendWorkspaceEvent,
+    graphNodes: graph.nodes,
+    selectedNodeIds,
+    setStatus,
+    setWorkflowQuestion,
+    setWorkspaceTab: (tab) => setWorkspaceTab(tab),
+    updateNodeConfigById,
+  });
+  const onRoleRunCompleted = useRoleRunCompletionBridge({
+    cwd,
+    invokeFn: invoke,
+    missionControl,
+    setWorkflowRoleRuntimeStateByRole,
+    workflowHandoffPanel,
+  });
   const { onRunGraph, runDashboardTopicDirect } = useAgenticOrchestrationBridge({
     cwd,
     selectedGraphFileName,
@@ -2702,62 +2443,7 @@ function App() {
     setNodeSelection,
     setStatus,
     applyPreset,
-    onRoleRunCompleted: (payload) => {
-      missionControl.onRoleRunCompleted(payload);
-      const roleId = toStudioRoleId(payload.roleId);
-      if (roleId) {
-        setWorkflowRoleRuntimeStateByRole((prev) => ({
-          ...prev,
-          [roleId]: {
-            status: payload.runStatus === "done" ? "DONE" : "VERIFY",
-            taskId: payload.taskId,
-            runId: payload.runId,
-            message: payload.runStatus === "done" ? "RUN_DONE" : "RUN_ERROR",
-          },
-        }));
-      }
-      const normalizedTaskId = String(payload.taskId ?? "").trim() || "TASK-001";
-      const knowledgeRoleId: StudioRoleId = roleId ?? "technical_writer";
-      const roleLabel = roleId
-        ? STUDIO_ROLE_TEMPLATES.find((row) => row.id === roleId)?.label ?? payload.roleId
-        : payload.roleId;
-      const promptSummary = String(payload.prompt ?? payload.handoffRequest ?? "").trim();
-      const dedupedArtifactPaths = [...new Set(payload.artifactPaths.map((row) => String(row ?? "").trim()).filter(Boolean))];
-      for (const [index, artifactPath] of dedupedArtifactPaths.entries()) {
-        const fileName = artifactPath.split(/[\\/]/).filter(Boolean).pop() ?? artifactPath;
-        upsertKnowledgeEntry({
-          id: `${payload.runId}:${index}:${fileName}`,
-          runId: payload.runId,
-          taskId: normalizedTaskId,
-          roleId: knowledgeRoleId,
-          sourceKind: "artifact",
-          title: `${roleLabel} · ${normalizedTaskId} · ${fileName}`,
-          summary: promptSummary || `${roleLabel} 역할 실행 산출물`,
-          createdAt: new Date().toISOString(),
-          markdownPath: undefined,
-          jsonPath: /\.json$/i.test(artifactPath) ? artifactPath : undefined,
-        });
-      }
-      void persistKnowledgeIndexToWorkspace({
-        cwd,
-        invokeFn: invoke,
-        rows: readKnowledgeEntries(),
-      });
-      const targetRole = toStudioRoleId(payload.handoffToRole ?? "");
-      const requestText =
-        String(payload.handoffRequest ?? payload.prompt ?? "").trim() ||
-        (roleId ? STUDIO_ROLE_PROMPTS[roleId] : "");
-      if (payload.runStatus === "done" && payload.sourceTab === "workflow" && roleId && targetRole && requestText) {
-        workflowHandoffPanel.createAutoHandoff({
-          runId: payload.runId,
-          fromRole: roleId,
-          toRole: targetRole,
-          taskId: payload.taskId,
-          request: requestText,
-          artifactPaths: payload.artifactPaths,
-        });
-      }
-    },
+    onRoleRunCompleted,
   });
   const { onRunDashboardTopicFromAgents, onRunDashboardTopicFromData } = useDashboardAgentBridge({
     setAgentLaunchRequest,
@@ -2821,296 +2507,211 @@ function App() {
     invokeFn: invoke,
   });
   return (
-    <main className={`app-shell ${canvasFullscreen ? "canvas-fullscreen-mode" : ""}`} style={appShellStyle}>
-      <div aria-hidden="true" className="window-drag-region" data-tauri-drag-region />
-      <AppNav
-        activeTab={workspaceTab}
-        onSelectTab={onSelectWorkspaceTab}
-        renderIcon={(tab, active) => <NavIcon active={active} tab={tab} />}
-      />
-      <section
-        className={`workspace ${canvasFullscreen ? "canvas-fullscreen-active" : ""} ${error ? "workspace-has-error" : ""}`.trim()}
-      >
-        {!canvasFullscreen && <header className="workspace-header workspace-header-spacer" />}
-        {!canvasFullscreen && (
-          <div className="workspace-topbar">
-            <nav aria-label="Workspace top navigation" className="workspace-topbar-nav">
-              {workspaceTopbarTabs.map((item) => {
-                const active = workspaceTab === item.tab;
-                return (
-                  <button
-                    className={active ? "workspace-topbar-tab is-active" : "workspace-topbar-tab"}
-                    key={item.tab}
-                    onClick={() => onSelectWorkspaceTab(item.tab)}
-                    type="button"
-                  >
-                    <span aria-hidden="true" className="workspace-topbar-tab-icon">
-                      <NavIcon active={active} tab={item.tab} />
-                    </span>
-                    <span>{item.label}</span>
-                  </button>
-                );
-              })}
-            </nav>
-            <div className="workspace-topbar-actions">
-              <WorkspaceQuickPanel
-                isOpen={quickPanelOpen}
-                onChangeQuery={setQuickPanelQuery}
-                onClose={onCloseQuickPanel}
-                onOpenAgents={onOpenQuickPanelAgents}
-                onOpenFeed={onOpenQuickPanelFeed}
-                onSubmitQuery={onSubmitQuickPanelQuery}
-                onToggle={onToggleQuickPanel}
-                query={quickPanelQuery}
-                recentPosts={quickPanelRecentPosts}
-                workspaceLabel={quickPanelWorkspaceLabel}
-              />
-            </div>
-          </div>
-        )}
-
-        {error && (
-          <div className="error">
-            <span>{t("feed.status.failed")}: {error}</span>
-            <button
-              aria-label={t("common.close")}
-              className="error-close"
-              onClick={() => setError("")}
-              type="button"
-            >
-              ×
-            </button>
-          </div>
-        )}
-
-        {workspaceTab === "workflow" && (
-          <WorkflowPage canvasFullscreen={canvasFullscreen}>
-            <WorkflowCanvasPane
-              boundedStageHeight={boundedStageHeight}
-              boundedStageWidth={boundedStageWidth}
-              canRunGraphNow={canRunGraphNow}
-              canvasFullscreen={canvasFullscreen}
-              canvasNodes={canvasNodes}
-              canvasZoom={canvasZoom}
-              graphViewMode={workflowGraphViewMode}
-              connectPreviewLine={connectPreviewLine}
-              deleteNode={deleteNode}
-              draggingNodeIds={draggingNodeIds}
-              edgeLines={edgeLines}
-              formatNodeElapsedTime={formatNodeElapsedTime}
-              graphCanvasRef={graphCanvasRef}
-              onActivateWorkspacePanels={onActivateWorkflowPanels}
-              isConnectingDrag={isConnectingDrag}
-              isGraphRunning={isGraphRunning}
-              isNodeDragAllowedTarget={isNodeDragAllowedTarget}
-              isWorkflowBusy={isWorkflowBusy}
-              marqueeSelection={marqueeSelection}
-              nodeAnchorSides={NODE_ANCHOR_SIDES}
-              nodeCardSummary={nodeCardSummary}
-              nodeStates={nodeStates}
-              nodeStatusLabel={nodeStatusLabel}
-              nodeTypeLabel={nodeTypeLabel}
-              openTerminalNodeId={openWorkflowAgentTerminalNodeId}
-              onCancelGraphRun={onCancelGraphRun}
-              onCanvasKeyDown={onCanvasKeyDown}
-              onCanvasMouseDown={onCanvasMouseDown}
-              onCanvasMouseMove={onCanvasMouseMove}
-              onCanvasMouseUp={onCanvasMouseUp}
-              onCanvasWheel={onCanvasWheel}
-              onCanvasZoomIn={onCanvasZoomIn}
-              onCanvasZoomOut={onCanvasZoomOut}
-              onEdgeDragStart={onEdgeDragStart}
-              onAssignSelectedEdgeAnchor={onAssignSelectedEdgeAnchor}
-              onNodeAnchorDragStart={onNodeAnchorDragStart}
-              onNodeAnchorDrop={onNodeAnchorDrop}
-              onNodeDragStart={onNodeDragStart}
-              onOpenFeedFromNode={(nodeId) => {
-                setWorkspaceTab("knowledge");
-                setStatus(`데이터베이스에서 ${nodeId} 노드 결과를 확인하세요.`);
-              }}
-              onOpenWebInputForNode={onOpenWebInputForNode}
-              onToggleNodeTerminal={(nodeId) =>
-                setOpenWorkflowAgentTerminalNodeId((prev) => (prev === nodeId ? "" : nodeId))
-              }
-              onClearGraph={onClearGraphCanvas}
-              onRedoGraph={onRedoGraph}
-              onReopenPendingWebTurn={onReopenPendingWebTurn}
-              onRunGraph={onRunGraph}
-              onUndoGraph={onUndoGraph}
-              panMode={panMode}
-              pendingWebTurn={pendingWebTurn}
-              questionDirectInputNodeIds={questionDirectInputNodeIds}
-              questionInputRef={questionInputRef}
-              redoStackLength={redoStack.length}
-              runtimeNowMs={runtimeNowMs}
-              selectedEdgeKey={selectedEdgeKey}
-              selectedEdgeNodeIdSet={selectedEdgeNodeIdSet}
-              selectedNodeIds={selectedNodeIds}
-              setCanvasFullscreen={setCanvasFullscreen}
-              setNodeSelection={setNodeSelection}
-              setPanMode={setPanMode}
-              setSelectedEdgeKey={setSelectedEdgeKey}
-              onApplyModelSelection={(selection) =>
-                applyTurnExecutionFromModelSelection({
-                  executor: selection.executor,
-                  turnModel: selection.turnModel,
-                  reasoningLevel: selection.reasoningLevel,
-                  modelLabel: selection.modelLabel,
-                  sourceLabel: "그래프 입력",
-                })
-              }
-              agentTerminalIsland={workflowAgentTerminalIslandElement}
-              setWorkflowQuestion={setWorkflowQuestion}
-              stageInsetX={GRAPH_STAGE_INSET_X}
-              stageInsetY={GRAPH_STAGE_INSET_Y}
-              stageInsetBottom={GRAPH_STAGE_INSET_BOTTOM}
-              suspendedWebTurn={suspendedWebTurn}
-              turnModelLabel={turnModelLabel}
-              turnRoleLabel={turnRoleLabel}
-              canClearGraph={canClearGraph}
-              undoStackLength={undoStack.length}
-              workflowQuestion={workflowQuestion}
-            />
-
-            {!canvasFullscreen && workflowSidePanelsVisible && (
-              <div className="workflow-right-stack">
-                {workflowGraphViewMode === "rag" ? (
-                  <WorkflowRagModeDock
-                    isGraphRunning={isGraphRunning}
-                    onAddRagNode={onAddViaFlowNode}
-                    onApplyTemplate={onApplyRagTemplate}
-                    onSelectNode={onSelectRagModeNode}
-                    onUpdateFlowId={onUpdateRagModeFlowId}
-                    onUpdateSourceOptions={onUpdateRagSourceOptions}
-                    ragNodeProgress={ragNodeProgress}
-                    ragNodes={ragModeNodes}
-                    ragTemplateOptions={RAG_TEMPLATE_OPTIONS}
-                    selectedNodeId={selectedNodeId}
-                    viaNodeOptions={VIA_NODE_OPTIONS.map((row) => ({
-                      value: row.value,
-                      label: row.label,
-                    }))}
-                  />
-                ) : (
-                  <>
-                    {showInspectorFirst ? workflowInspectorPaneElement : workflowRoleDockElement}
-                    {workflowUnityAutomationIslandElement}
-                    {showInspectorFirst ? workflowRoleDockElement : workflowInspectorPaneElement}
-                  </>
-                )}
-              </div>
-            )}
-          </WorkflowPage>
-        )}
-        <MainAppWorkspaceContent
-          agentLaunchRequest={agentLaunchRequest}
-          agentLaunchRequestSeqRef={agentLaunchRequestSeqRef}
-          authModeText={authModeLabel(authMode)}
-          briefingDocuments={feedPosts
-            .filter((post) => post.status === "done" || post.status === "low_quality")
-            .map((post) => ({
-              id: post.id,
-              runId: post.runId,
-              summary: post.summary,
-              sourceFile: post.sourceFile,
-              agentName: post.agentName,
-              createdAt: post.createdAt,
-              isFinalDocument: post.isFinalDocument,
-              status: post.status,
-            }))}
-          codexAuthBusy={codexAuthBusy}
-          codexMultiAgentMode={codexMultiAgentMode}
-          codexMultiAgentModeOptions={codexMultiAgentModeOptions}
-          connectedProviderCount={webBridgeStatus.connectedProviders.length}
-          cwd={cwd}
-          dashboardDetailTopic={dashboardDetailTopic}
-          dashboardIntelligenceConfig={dashboardIntelligenceConfig}
-          dashboardIntelligenceRunStateByTopic={dashboardIntelligenceRunStateByTopic}
-          dashboardSnapshotsByTopic={dashboardSnapshotsByTopic}
-          enabledScheduleCount={batchScheduler.schedules.filter((item) => item.status === "enabled").length}
-          engineStarted={engineStarted}
-          feedPageVm={feedPageVm}
-          feedPosts={feedPosts}
-          graphFileName={graphFileName}
-          graphNodes={graph.nodes}
-          isGraphRunning={isGraphRunning}
-          launchRequest={agentLaunchRequest}
-          loginCompleted={loginCompleted}
-          missionControl={missionControl}
-          normalizeCodexMultiAgentMode={normalizeCodexMultiAgentMode}
-          onInjectKnowledgeToWorkflow={handleInjectKnowledgeToWorkflow}
-          onAgentQuickAction={onAgentQuickAction}
-          onCopyWebBridgeConnectCode={onCopyWebBridgeConnectCode}
-          onLoginCodex={onLoginCodex}
-          onOpenBriefingDocumentFromData={onOpenBriefingDocumentFromData}
-          onOpenRunsFolder={onOpenRunsFolder}
-          onRestartWebBridge={onRestartWebBridge}
-          onRunDashboardTopicFromAgents={onRunDashboardTopicFromAgents}
-          onRunDashboardTopicFromData={onRunDashboardTopicFromData}
-          onSelectCwdDirectory={onSelectCwdDirectory}
-          onSelectWorkspaceTab={onSelectWorkspaceTab}
-          pendingApprovalsCount={pendingApprovals.length}
-          publishAction={publishAction}
-          refreshWebBridgeStatus={refreshWebBridgeStatus}
-          running={running}
-          scheduleCount={batchScheduler.schedules.length}
-          setAgentLaunchRequest={setAgentLaunchRequest}
-          setCodexMultiAgentMode={setCodexMultiAgentMode}
-          setDashboardDetailTopic={setDashboardDetailTopic}
-          setThemeMode={setThemeMode}
-          setStatus={setStatus}
-          setUsageResultClosed={setUsageResultClosed}
-          setUserBackgroundImage={setUserBackgroundImage}
-          setUserBackgroundOpacity={setUserBackgroundOpacity}
-          status={status}
-          themeMode={themeMode}
-          themeModeOptions={themeModeOptions}
-          nodeStates={nodeStates}
-          usageInfoText={usageInfoText}
-          usageResultClosed={usageResultClosed}
-          userBackgroundImage={userBackgroundImage}
-          userBackgroundOpacity={userBackgroundOpacity}
-          webBridgeConnectCode={webBridgeConnectCode}
-          webBridgeRunning={webBridgeStatus.running}
-          webBridgeStatus={webBridgeStatus}
-          webWorkerBusy={webWorkerBusy}
-          workflowRoleId={workflowRoleId}
-          workspaceEvents={workspaceEvents}
-          workspaceTab={workspaceTab}
-        />
-
-      </section>
-      <MainAppModals
-        activeApproval={activeApproval}
-        approvalDecisionLabel={approvalDecisionLabel}
-        approvalDecisions={APPROVAL_DECISIONS}
-        approvalSourceLabel={approvalSourceLabel}
-        approvalSubmitting={approvalSubmitting}
-        formatUnknown={formatUnknown}
-        onCancelPendingWebTurn={onCancelPendingWebTurn}
-        onCopyPendingWebPrompt={onCopyPendingWebPrompt}
-        onDismissPendingWebTurn={onDismissPendingWebTurn}
-        onOpenPendingProviderWindow={onOpenPendingProviderWindow}
-        onOpenProviderSession={onOpenProviderSession}
-        onRespondApproval={onRespondApproval}
-        onRunGraph={onRunGraph}
-        onSubmitPendingWebTurn={onSubmitPendingWebTurn}
-        pendingWebConnectCheck={pendingWebConnectCheck}
-        pendingWebLogin={pendingWebLogin}
-        pendingWebTurn={pendingWebTurn}
-        refreshWebBridgeStatus={refreshWebBridgeStatus}
-        resolvePendingWebLogin={resolvePendingWebLogin}
-        setPendingWebConnectCheck={setPendingWebConnectCheck}
-        setStatus={setStatus}
-        setWebResponseDraft={setWebResponseDraft}
-        setWorkspaceTab={(next: WorkspaceTab) => setWorkspaceTab(next === "bridge" ? "settings" : next)}
-        t={t}
-        webProviderLabel={webProviderLabel}
-        webResponseDraft={webResponseDraft}
-        webTurnFloatingRef={webTurnFloatingRef}
-        webTurnPanel={webTurnPanel}
-      />
-    </main>
+    <MainAppShell
+      activeApproval={activeApproval}
+      agentLaunchRequest={agentLaunchRequest}
+      agentLaunchRequestSeqRef={agentLaunchRequestSeqRef}
+      approvalDecisionLabel={approvalDecisionLabel}
+      approvalDecisions={APPROVAL_DECISIONS}
+      approvalSourceLabel={approvalSourceLabel}
+      approvalSubmitting={approvalSubmitting}
+      appShellStyle={appShellStyle}
+      authMode={authMode}
+      authModeLabel={authModeLabel}
+      batchScheduler={batchScheduler}
+      boundedStageHeight={boundedStageHeight}
+      boundedStageWidth={boundedStageWidth}
+      canClearGraph={canClearGraph}
+      canRunGraphNow={canRunGraphNow}
+      canvasFullscreen={canvasFullscreen}
+      canvasNodes={canvasNodes}
+      canvasZoom={canvasZoom}
+      codexAuthBusy={codexAuthBusy}
+      codexMultiAgentMode={codexMultiAgentMode}
+      codexMultiAgentModeOptions={codexMultiAgentModeOptions}
+      connectPreviewLine={connectPreviewLine}
+      cwd={cwd}
+      dashboardDetailTopic={dashboardDetailTopic}
+      dashboardIntelligenceConfig={dashboardIntelligenceConfig}
+      dashboardIntelligenceRunStateByTopic={dashboardIntelligenceRunStateByTopic}
+      dashboardSnapshotsByTopic={dashboardSnapshotsByTopic}
+      deleteNode={deleteNode}
+      draggingNodeIds={draggingNodeIds}
+      edgeLines={edgeLines}
+      engineStarted={engineStarted}
+      error={error}
+      feedPageVm={feedPageVm}
+      feedPosts={feedPosts}
+      formatNodeElapsedTime={formatNodeElapsedTime}
+      formatUnknown={formatUnknown}
+      graph={graph}
+      graphCanvasRef={graphCanvasRef}
+      graphFileName={graphFileName}
+      graphViewMode={workflowGraphViewMode}
+      handleInjectKnowledgeToWorkflow={handleInjectKnowledgeToWorkflow}
+      isConnectingDrag={isConnectingDrag}
+      isGraphRunning={isGraphRunning}
+      isNodeDragAllowedTarget={isNodeDragAllowedTarget}
+      isWorkflowBusy={isWorkflowBusy}
+      loginCompleted={loginCompleted}
+      marqueeSelection={marqueeSelection}
+      missionControl={missionControl}
+      nodeAnchorSides={NODE_ANCHOR_SIDES}
+      nodeCardSummary={nodeCardSummary}
+      nodeStates={nodeStates}
+      nodeStatusLabel={nodeStatusLabel}
+      nodeTypeLabel={nodeTypeLabel}
+      normalizeCodexMultiAgentMode={normalizeCodexMultiAgentMode}
+      onActivateWorkflowPanels={onActivateWorkflowPanels}
+      onAgentQuickAction={onAgentQuickAction}
+      onApplyModelSelection={(selection: any) =>
+        applyTurnExecutionFromModelSelection({
+          executor: selection.executor,
+          turnModel: selection.turnModel,
+          reasoningLevel: selection.reasoningLevel,
+          modelLabel: selection.modelLabel,
+          sourceLabel: "그래프 입력",
+        })
+      }
+      onAddViaFlowNode={onAddViaFlowNode}
+      onApplyRagTemplate={onApplyRagTemplate}
+      onAssignSelectedEdgeAnchor={onAssignSelectedEdgeAnchor}
+      onCancelGraphRun={onCancelGraphRun}
+      onCancelPendingWebTurn={onCancelPendingWebTurn}
+      onCanvasKeyDown={onCanvasKeyDown}
+      onCanvasMouseDown={onCanvasMouseDown}
+      onCanvasMouseMove={onCanvasMouseMove}
+      onCanvasMouseUp={onCanvasMouseUp}
+      onCanvasWheel={onCanvasWheel}
+      onCanvasZoomIn={onCanvasZoomIn}
+      onCanvasZoomOut={onCanvasZoomOut}
+      onClearGraphCanvas={onClearGraphCanvas}
+      onCloseQuickPanel={onCloseQuickPanel}
+      onCopyPendingWebPrompt={onCopyPendingWebPrompt}
+      onCopyWebBridgeConnectCode={onCopyWebBridgeConnectCode}
+      onDismissPendingWebTurn={onDismissPendingWebTurn}
+      onEdgeDragStart={onEdgeDragStart}
+      onLoginCodex={onLoginCodex}
+      onNodeAnchorDragStart={onNodeAnchorDragStart}
+      onNodeAnchorDrop={onNodeAnchorDrop}
+      onNodeDragStart={onNodeDragStart}
+      onOpenBriefingDocumentFromData={onOpenBriefingDocumentFromData}
+      onOpenFeedFromNode={(nodeId: string) => {
+        setWorkspaceTab("knowledge");
+        setStatus(`데이터베이스에서 ${nodeId} 노드 결과를 확인하세요.`);
+      }}
+      onOpenPendingProviderWindow={onOpenPendingProviderWindow}
+      onOpenProviderSession={onOpenProviderSession}
+      onOpenQuickPanelAgents={onOpenQuickPanelAgents}
+      onOpenQuickPanelFeed={onOpenQuickPanelFeed}
+      onOpenRunsFolder={onOpenRunsFolder}
+      onOpenWebInputForNode={onOpenWebInputForNode}
+      onRedoGraph={onRedoGraph}
+      onReopenPendingWebTurn={onReopenPendingWebTurn}
+      onRespondApproval={onRespondApproval}
+      onRestartWebBridge={onRestartWebBridge}
+      onRunDashboardTopicFromAgents={onRunDashboardTopicFromAgents}
+      onRunDashboardTopicFromData={onRunDashboardTopicFromData}
+      onRunGraph={onRunGraph}
+      onSelectCwdDirectory={onSelectCwdDirectory}
+      onAddRolePerspectivePassForNode={addRolePerspectivePassForNode}
+      onAddRoleReviewPassForNode={addRoleReviewPassForNode}
+      onSetPmPlanningMode={onSetPmPlanningMode}
+      onSelectRagModeNode={onSelectRagModeNode}
+      onSelectWorkspaceTab={onSelectWorkspaceTab}
+      onSubmitPendingWebTurn={onSubmitPendingWebTurn}
+      onSubmitQuickPanelQuery={onSubmitQuickPanelQuery}
+      onToggleNodeTerminal={(nodeId: string) =>
+        setOpenWorkflowAgentTerminalNodeId((prev) => (prev === nodeId ? "" : nodeId))
+      }
+      onToggleRoleInternalExpanded={toggleRoleInternalExpanded}
+      onToggleQuickPanel={onToggleQuickPanel}
+      onUndoGraph={onUndoGraph}
+      onUpdateRagModeFlowId={onUpdateRagModeFlowId}
+      onUpdateRagSourceOptions={onUpdateRagSourceOptions}
+      openTerminalNodeId={openWorkflowAgentTerminalNodeId}
+      panMode={panMode}
+      pendingApprovals={pendingApprovals}
+      pendingWebConnectCheck={pendingWebConnectCheck}
+      pendingWebLogin={pendingWebLogin}
+      pendingWebTurn={pendingWebTurn}
+      publishAction={publishAction}
+      questionDirectInputNodeIds={questionDirectInputNodeIds}
+      questionInputRef={questionInputRef}
+      quickPanelOpen={quickPanelOpen}
+      quickPanelQuery={quickPanelQuery}
+      quickPanelRecentPosts={quickPanelRecentPosts}
+      quickPanelWorkspaceLabel={quickPanelWorkspaceLabel}
+      ragNodeProgress={ragNodeProgress}
+      ragNodes={ragModeNodes}
+      ragTemplateOptions={RAG_TEMPLATE_OPTIONS}
+      expandedRoleNodeIds={expandedRoleNodeIds}
+      redoStack={redoStack}
+      refreshWebBridgeStatus={refreshWebBridgeStatus}
+      resolvePendingWebLogin={resolvePendingWebLogin}
+      runtimeNowMs={runtimeNowMs}
+      running={running}
+      selectedEdgeKey={selectedEdgeKey}
+      selectedEdgeNodeIdSet={selectedEdgeNodeIdSet}
+      selectedNodeId={selectedNodeId}
+      selectedNodeIds={selectedNodeIds}
+      setAgentLaunchRequest={setAgentLaunchRequest}
+      setCanvasFullscreen={setCanvasFullscreen}
+      setCodexMultiAgentMode={setCodexMultiAgentMode}
+      setDashboardDetailTopic={setDashboardDetailTopic}
+      setError={setError}
+      setFeedInspectorPostId={setFeedInspectorPostId}
+      setNodeSelection={setNodeSelection}
+      setPanMode={setPanMode}
+      setPendingWebConnectCheck={setPendingWebConnectCheck}
+      setQuickPanelQuery={setQuickPanelQuery}
+      setSelectedEdgeKey={setSelectedEdgeKey}
+      setStatus={setStatus}
+      setThemeMode={setThemeMode}
+      setUsageResultClosed={setUsageResultClosed}
+      setUserBackgroundImage={setUserBackgroundImage}
+      setUserBackgroundOpacity={setUserBackgroundOpacity}
+      setWebResponseDraft={setWebResponseDraft}
+      setWorkflowQuestion={setWorkflowQuestion}
+      setWorkspaceTab={setWorkspaceTab}
+      showInspectorFirst={showInspectorFirst}
+      stageInsetBottom={GRAPH_STAGE_INSET_BOTTOM}
+      stageInsetX={GRAPH_STAGE_INSET_X}
+      stageInsetY={GRAPH_STAGE_INSET_Y}
+      status={status}
+      suspendedWebTurn={suspendedWebTurn}
+      t={t}
+      themeMode={themeMode}
+      themeModeOptions={themeModeOptions}
+      turnModelLabel={turnModelLabel}
+      turnRoleLabel={turnRoleLabel}
+      undoStack={undoStack}
+      usageInfoText={usageInfoText}
+      usageResultClosed={usageResultClosed}
+      userBackgroundImage={userBackgroundImage}
+      userBackgroundOpacity={userBackgroundOpacity}
+      viaNodeOptions={VIA_NODE_OPTIONS.map((row) => ({
+        value: row.value,
+        label: row.label,
+      }))}
+      webBridgeConnectCode={webBridgeConnectCode}
+      webBridgeStatus={webBridgeStatus}
+      webProviderLabel={webProviderLabel}
+      webResponseDraft={webResponseDraft}
+      webTurnFloatingRef={webTurnFloatingRef}
+      webTurnPanel={webTurnPanel}
+      webWorkerBusy={webWorkerBusy}
+      workflowAgentTerminalIslandElement={workflowAgentTerminalIslandElement}
+      workflowInspectorPaneElement={workflowInspectorPaneElement}
+      workflowQuestion={workflowQuestion}
+      workflowRoleDockElement={workflowRoleDockElement}
+      workflowRoleId={workflowRoleId}
+      workflowSidePanelsVisible={workflowSidePanelsVisible}
+      workflowUnityAutomationIslandElement={workflowUnityAutomationIslandElement}
+      workspaceEvents={workspaceEvents}
+      workspaceTab={workspaceTab}
+      workspaceTopbarTabs={workspaceTopbarTabs}
+    />
   );
 }
 export default App;

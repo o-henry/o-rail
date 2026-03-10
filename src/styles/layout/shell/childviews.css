@@ -1,0 +1,118 @@
+.childview-view {
+  margin: 0 10px 10px;
+  height: 100%;
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  overflow: auto;
+  padding-bottom: calc(10px + var(--dropdown-open-gap, 0px));
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.childview-view::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+.childview-view .panel-card {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.childview-view .panel-card::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+.childview-controls-card {
+  overflow: visible;
+  position: relative;
+  z-index: 2;
+}
+
+.web-automation-panel {
+  margin-top: 24px;
+  gap: 12px;
+}
+
+.web-automation-panel pre {
+  max-height: 140px;
+}
+
+.dev-layout {
+  margin: 0 10px 10px;
+  height: 100%;
+}
+
+.history-layout > .panel-card,
+.childview-view > .panel-card,
+.dev-layout > .panel-card {
+  border-radius: 12px;
+}
+
+.workflow-layout.workspace-tab-panel,
+.history-layout.workspace-tab-panel,
+.feed-layout.workspace-tab-panel,
+.handoff-view.workspace-tab-panel,
+.knowledge-view.workspace-tab-panel,
+.settings-view.workspace-tab-panel,
+.dashboard-layout.workspace-tab-panel,
+.agents-layout.workspace-tab-panel,
+.bridge-view.workspace-tab-panel,
+.childview-view.workspace-tab-panel,
+.dev-layout.workspace-tab-panel {
+  margin: 0 10px 10px;
+  min-height: 0;
+  height: 100%;
+  box-sizing: border-box;
+  padding-bottom: 0;
+}
+
+.settings-view.workspace-tab-panel {
+  padding-bottom: 20px;
+}
+
+.dashboard-layout.workspace-tab-panel {
+  padding-bottom: 4px;
+}
+
+.settings-view.data-intelligence-view.workspace-tab-panel {
+  padding-bottom: 0;
+}
+
+.history-layout,
+.history-layout h2,
+.history-layout h3,
+.history-layout div,
+.history-layout span,
+.history-layout button {
+  font-family: "BasicallyAMono", "DialogNanumBody1984", "Noto Sans KR", sans-serif;
+}
+
+.history-layout pre {
+  font-family: "BasicallyAMono", "DialogNanumBody1984", "Noto Sans KR", monospace;
+}
+
+.history-list button.is-active {
+  background: #eaf2ff;
+  border-color: #b9cefa;
+}
+
+pre {
+  margin: 0;
+  /* max-height: 250px; */
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  /* border: 1px solid #dbe0e6; */
+  border-radius: 5px;
+  background: #fbfcfe;
+  color: #1f2730;
+  padding: 10px;
+  font-family: Basically A Mono;
+  font-size: 0.8rem;
+  line-height: 1.45;
+}

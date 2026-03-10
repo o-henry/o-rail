@@ -1,0 +1,57 @@
+.settings-view {
+  margin: 0 10px 10px;
+  width: auto;
+  max-width: none;
+  height: 100%;
+  min-height: 100%;
+  align-self: stretch;
+  display: grid;
+  grid-template-rows: auto auto;
+  justify-items: stretch;
+  align-content: start;
+  gap: 12px;
+  padding: 18px 20px 20px;
+  overflow: auto;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.settings-view > .controls {
+  width: 100%;
+  max-width: 720px;
+  margin-inline: auto;
+  margin-top: 2rem;
+}
+
+.settings-view > .bridge-embedded {
+  width: 100%;
+  max-width: 720px;
+  margin-inline: auto;
+  margin-top: 4.5rem;
+}
+
+.panel-card.settings-view {
+  background: #ffffff;
+}
+
+.panel-card.settings-view.data-intelligence-view {
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
+  border-radius: 0;
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.settings-view::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+.workflow-add-agent-button {
+  width: 100%;
+  min-height: 36px;
+  justify-content: center;
+}

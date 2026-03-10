@@ -1,5 +1,18 @@
 import { buildStudioRolePromptEnvelope } from "../../../features/studio/rolePromptGuidance";
 import {
+  buildStudioRoleModeGuidance,
+  getStudioRoleModeOptions,
+  isPmStudioRole,
+  normalizeStudioRoleSelection,
+  resolveEffectiveStudioRoleId,
+  resolvePmPlanningMode,
+  resolveStudioRoleDisplayLabel,
+  resolveStudioRoleGoal,
+  resolveStudioRoleNodeDisplayName,
+  resolveStudioRolePromptLabel,
+  type PmPlanningMode,
+} from "../../../features/studio/pmPlanningMode";
+import {
   getRoleResearchProfile,
   type RoleResearchLaneBlueprint,
 } from "../../../features/studio/roleResearchProfiles";
@@ -20,6 +33,7 @@ type RoleNodeScaffoldParams = {
   anchorX: number;
   anchorY: number;
   includeResearch: boolean;
+  pmPlanningMode?: PmPlanningMode;
   roleInstanceId?: string;
   roleInstanceLabel?: string;
   roleMode?: "primary" | "perspective" | "review";
@@ -41,6 +55,9 @@ function edge(fromNodeId: string, toNodeId: string): GraphEdge {
 }
 
 function roleQualityProfile(roleId: StudioRoleId): QualityProfileId {
+  if (roleId === "pm_feasibility_critic") {
+    return "research_evidence";
+  }
   if (roleId === "client_programmer" || roleId === "system_programmer" || roleId === "tooling_engineer") {
     return "code_implementation";
   }
@@ -51,7 +68,7 @@ function roleQualityProfile(roleId: StudioRoleId): QualityProfileId {
 }
 
 function roleArtifactType(roleId: StudioRoleId): ArtifactType {
-  if (roleId === "pm_planner") {
+  if (roleId === "pm_planner" || roleId === "pm_creative_director" || roleId === "pm_feasibility_critic") {
     return "TaskPlanArtifact";
   }
   if (roleId === "technical_writer") {
@@ -63,18 +80,24 @@ function roleArtifactType(roleId: StudioRoleId): ArtifactType {
   return "ChangePlanArtifact";
 }
 
-function rolePromptTemplate(roleId: StudioRoleId): string {
-  const template = STUDIO_ROLE_TEMPLATES.find((row) => row.id === roleId);
+function buildRolePromptTemplate(params: {
+  roleId: StudioRoleId;
+  roleLabel: string;
+  goal: string;
+  taskId?: string;
+  modeGuidance?: string[];
+}): string {
   return buildStudioRolePromptEnvelope({
-    roleId,
-    roleLabel: template?.label,
-    goal: template?.goal,
-    taskId: template?.defaultTaskId,
-    request: STUDIO_ROLE_PROMPTS[roleId],
+    roleId: params.roleId,
+    roleLabel: params.roleLabel,
+    goal: params.goal,
+    taskId: params.taskId,
+    request: STUDIO_ROLE_PROMPTS[params.roleId],
     extraGuidance: [
       "연결된 조사 결과와 이전 노드 출력을 먼저 근거로 정리합니다.",
       "외부 근거가 부족하면 필요한 추가 조사 키워드/사이트를 마지막에 짧게 제안합니다.",
       "자료를 읽지 않은 상태로 전문가처럼 추측하지 않습니다.",
+      ...(params.modeGuidance ?? []),
     ],
   });
 }
@@ -171,35 +194,52 @@ function createResearchPipelineNode(params: {
 }
 
 export function buildRoleNodeScaffold(params: RoleNodeScaffoldParams): RoleNodeScaffoldResult {
-  const template = STUDIO_ROLE_TEMPLATES.find((row) => row.id === params.roleId);
-  const roleLabel = template?.label ?? params.roleId;
-  const research = getRoleResearchProfile(params.roleId);
+  const baseRoleId = normalizeStudioRoleSelection(params.roleId) ?? params.roleId;
+  const pmPlanningMode = resolvePmPlanningMode(baseRoleId, params.pmPlanningMode);
+  const promptRoleId = resolveEffectiveStudioRoleId(baseRoleId, pmPlanningMode) ?? baseRoleId;
+  const template = STUDIO_ROLE_TEMPLATES.find((row) => row.id === baseRoleId);
+  const roleLabel = resolveStudioRoleDisplayLabel(baseRoleId, pmPlanningMode) || template?.label || baseRoleId;
+  const promptRoleLabel = resolveStudioRolePromptLabel(baseRoleId, pmPlanningMode) || roleLabel;
+  const research = getRoleResearchProfile(promptRoleId);
   const roleNodeId = makeNodeId("turn");
-  const roleInstanceId = String(params.roleInstanceId ?? `${params.roleId}:primary`).trim();
+  const roleInstanceId = String(params.roleInstanceId ?? `${baseRoleId}:primary`).trim();
   const roleInstanceLabel = String(params.roleInstanceLabel ?? roleLabel).trim() || roleLabel;
   const roleMode = params.roleMode ?? "primary";
+  const modeGuidance = buildStudioRoleModeGuidance(baseRoleId, pmPlanningMode);
+  const basePrompt = buildRolePromptTemplate({
+    roleId: promptRoleId,
+    roleLabel: promptRoleLabel,
+    goal: resolveStudioRoleGoal(baseRoleId, pmPlanningMode),
+    taskId: template?.defaultTaskId,
+    modeGuidance,
+  });
   const rolePrompt = params.reviewPrompt
-    ? `${rolePromptTemplate(params.roleId)}\n\n[추가 관점]\n${params.reviewPrompt}`.trim()
-    : rolePromptTemplate(params.roleId);
+    ? `${basePrompt}\n\n[추가 관점]\n${params.reviewPrompt}`.trim()
+    : basePrompt;
   const roleNode: GraphNode = {
     id: roleNodeId,
     type: "turn",
     position: { x: params.anchorX, y: params.anchorY },
     config: {
       ...defaultNodeConfig("turn"),
-      role: `${roleInstanceLabel} AGENT`,
+      role:
+        isPmStudioRole(baseRoleId) && roleMode === "primary"
+          ? resolveStudioRoleNodeDisplayName(baseRoleId, pmPlanningMode)
+          : `${roleInstanceLabel} AGENT`,
       promptTemplate: rolePrompt,
-      qualityProfile: roleQualityProfile(params.roleId),
-      artifactType: roleArtifactType(params.roleId),
+      qualityProfile: roleQualityProfile(promptRoleId),
+      artifactType: roleArtifactType(baseRoleId),
       taskId: template?.defaultTaskId ?? "TASK-001",
       sourceKind: "handoff",
-      handoffRoleId: params.roleId,
-      handoffToRoleId: params.roleId,
+      handoffRoleId: baseRoleId,
+      handoffToRoleId: baseRoleId,
       handoffChecklist: "근거, 결정 이유, 후속 작업을 함께 남깁니다.",
       roleResearchEnabled: params.includeResearch,
       roleInstanceId,
       roleInstanceLabel,
       roleMode,
+      ...(pmPlanningMode ? { pmPlanningMode } : {}),
+      ...(getStudioRoleModeOptions(baseRoleId).length > 0 ? { roleModeOptions: getStudioRoleModeOptions(baseRoleId) } : {}),
     },
   };
 
@@ -221,7 +261,7 @@ export function buildRoleNodeScaffold(params: RoleNodeScaffoldParams): RoleNodeS
     researchNodeIds.push(nodeId);
     return createRoleResearchNode({
       nodeId,
-      roleId: params.roleId,
+      roleId: promptRoleId,
       roleLabel,
       lane,
       x: Math.max(40, params.anchorX - 620),
@@ -238,7 +278,7 @@ export function buildRoleNodeScaffold(params: RoleNodeScaffoldParams): RoleNodeS
     nodeId: synthesisNodeId,
     x: Math.max(40, params.anchorX - 210),
     y: params.anchorY - 72,
-    roleId: params.roleId,
+    roleId: promptRoleId,
     role: `${roleLabel} 조사 종합`,
     promptTemplate: research.synthesisPrompt,
   });
@@ -250,7 +290,7 @@ export function buildRoleNodeScaffold(params: RoleNodeScaffoldParams): RoleNodeS
     nodeId: verificationNodeId,
     x: Math.max(40, params.anchorX - 210),
     y: params.anchorY + 76,
-    roleId: params.roleId,
+    roleId: promptRoleId,
     role: `${roleLabel} 조사 검증`,
     promptTemplate: research.verificationPrompt,
   });

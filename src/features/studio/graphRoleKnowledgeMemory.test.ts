@@ -118,4 +118,24 @@ describe("graphRoleKnowledgeMemory", () => {
     expect(instance?.summary).toContain("실험형 PM 관점");
     expect(instance?.instanceId).toBe("pm_planner:alt-1");
   });
+
+  it("stores logical PM output under the logical PM knowledge profile", () => {
+    writeRoleKnowledgeProfiles([]);
+
+    storeGraphRoleKnowledge({
+      roleId: "pm_planner",
+      pmPlanningMode: "logical",
+      runId: "run-logic",
+      taskId: "PLAN-CRITIC-001",
+      output: {
+        summary: "현실성 점수표를 정리합니다.",
+        notes: ["운영 비용과 범위 리스크를 먼저 본다"],
+      },
+      logs: [],
+    });
+
+    const stored = readRoleKnowledgeProfiles().find((row) => row.roleId === "pm_feasibility_critic");
+    expect(stored?.runId).toBe("run-logic");
+    expect(stored?.summary).toContain("현실성 점수표");
+  });
 });

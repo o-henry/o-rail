@@ -1,9 +1,12 @@
 import type { MouseEvent as ReactMouseEvent } from "react";
 import { useI18n } from "../../../i18n";
+import { resolvePmPlanningMode, resolvePmPlanningModeLabel, type PmPlanningMode } from "../../../features/studio/pmPlanningMode";
+import { toStudioRoleId } from "../../../features/studio/roleUtils";
 import type { GraphNode, NodeAnchorSide, NodeExecutionStatus } from "../../../features/workflow/types";
 import type { MarqueeSelection, NodeRunState } from "../types";
 import type { WorkflowGraphViewMode } from "../../../features/workflow/viaGraph";
 import { viaNodeIconSrc, viaNodeIconText, viaNodeLabel } from "../../../features/workflow/viaCatalog";
+import { getRoleNodeInlineActionsMeta } from "./roleNodeInlineActions";
 
 type WorkflowCanvasNodesLayerProps = {
   canvasNodes: GraphNode[];
@@ -35,6 +38,11 @@ type WorkflowCanvasNodesLayerProps = {
   onOpenWebInputForNode: (nodeId: string) => void;
   openTerminalNodeId: string;
   onToggleNodeTerminal: (nodeId: string) => void;
+  onSetPmPlanningMode: (nodeId: string, mode: PmPlanningMode) => void;
+  expandedRoleNodeIds: string[];
+  onToggleRoleInternalExpanded: (nodeId: string) => void;
+  onAddRolePerspectivePass: (nodeId: string) => void;
+  onAddRoleReviewPass: (nodeId: string) => void;
   marqueeSelection: MarqueeSelection | null;
 };
 
@@ -68,6 +76,11 @@ export default function WorkflowCanvasNodesLayer({
   onOpenWebInputForNode,
   openTerminalNodeId,
   onToggleNodeTerminal,
+  onSetPmPlanningMode,
+  expandedRoleNodeIds,
+  onToggleRoleInternalExpanded,
+  onAddRolePerspectivePass,
+  onAddRoleReviewPass,
   marqueeSelection,
 }: WorkflowCanvasNodesLayerProps) {
   const { t } = useI18n();
@@ -94,6 +107,24 @@ export default function WorkflowCanvasNodesLayer({
         const handoffRoleId = String((node.config as Record<string, unknown>)?.handoffRoleId ?? "")
           .trim()
           .toLowerCase();
+        const parsedHandoffRoleId = toStudioRoleId(handoffRoleId);
+        const pmPlanningMode = resolvePmPlanningMode(parsedHandoffRoleId, (node.config as Record<string, unknown>)?.pmPlanningMode);
+        const internalChildCount = canvasNodes.filter((candidate) => {
+          const candidateConfig = candidate.config as Record<string, unknown>;
+          return String(candidateConfig.internalParentNodeId ?? "").trim() === node.id;
+        }).length;
+        const inlineActionMeta = getRoleNodeInlineActionsMeta({
+          sourceKind,
+          handoffRoleId: parsedHandoffRoleId ?? handoffRoleId,
+          pmPlanningMode,
+          internalChildCount,
+        });
+        const hasInlineRoleActions =
+          inlineActionMeta.showInternalToggle ||
+          inlineActionMeta.showPerspective ||
+          inlineActionMeta.showReview ||
+          inlineActionMeta.showModeButtons;
+        const isInternalExpanded = expandedRoleNodeIds.includes(node.id);
         const handoffRoleToken = handoffRoleId.replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
         const handoffRoleClass = handoffRoleToken ? `handoff-role-${handoffRoleToken}` : "";
         const isDataPipelineNode =
@@ -234,7 +265,7 @@ export default function WorkflowCanvasNodesLayer({
                     )}
                     {isWebTurnNode && (
                       <button
-                        className="node-manual-web-input-button"
+                        className="node-inline-action-button"
                         onClick={(event) => {
                           event.stopPropagation();
                           onOpenWebInputForNode(node.id);
@@ -247,6 +278,59 @@ export default function WorkflowCanvasNodesLayer({
                     )}
                   </div>
                 </div>
+                {hasInlineRoleActions && (
+                  <div className="node-inline-action-row">
+                    {inlineActionMeta.showInternalToggle && (
+                      <button
+                        className={`node-inline-action-button${isInternalExpanded ? " is-active" : ""}`}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onToggleRoleInternalExpanded(node.id);
+                        }}
+                        type="button"
+                      >
+                        내부작업
+                      </button>
+                    )}
+                    {inlineActionMeta.showPerspective && (
+                      <button
+                        className="node-inline-action-button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onAddRolePerspectivePass(node.id);
+                        }}
+                        type="button"
+                      >
+                        추가시각
+                      </button>
+                    )}
+                    {inlineActionMeta.showReview && (
+                      <button
+                        className="node-inline-action-button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onAddRoleReviewPass(node.id);
+                        }}
+                        type="button"
+                      >
+                        재검토
+                      </button>
+                    )}
+                    {inlineActionMeta.showModeButtons && inlineActionMeta.pmMode && inlineActionMeta.modeOptions.map((mode) => (
+                      <button
+                        className={`node-inline-action-button${inlineActionMeta.pmMode === mode ? " is-active" : ""}`}
+                        key={`${node.id}-${mode}`}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onSetPmPlanningMode(node.id, mode);
+                        }}
+                        type="button"
+                      >
+                        {resolvePmPlanningModeLabel(mode)}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </>
             )}
             {showNodeAnchors && (

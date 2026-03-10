@@ -1,5 +1,7 @@
 export type StudioRoleId =
   | "pm_planner"
+  | "pm_creative_director"
+  | "pm_feasibility_critic"
   | "client_programmer"
   | "system_programmer"
   | "tooling_engineer"
@@ -25,4 +27,3 @@ export type HandoffRecord = {
   createdAt: string;
   updatedAt: string;
 };
-

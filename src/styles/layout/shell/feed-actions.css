@@ -1,0 +1,184 @@
+.feed-delete-confirm-modal {
+  width: min(520px, 100%);
+}
+
+.feed-delete-confirm-modal h2 {
+  margin: 0;
+}
+
+.feed-delete-confirm-modal .button-row {
+  justify-content: flex-end;
+}
+
+.feed-delete-confirm-danger {
+  background: #e45a5a;
+  color: #ffffff;
+}
+
+.feed-share-menu-wrap-head .feed-share-menu {
+  top: calc(100% + 6px);
+  bottom: auto;
+}
+
+.feed-share-menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 6px);
+  min-width: 130px;
+  display: grid;
+  gap: 4px;
+  padding: 5px;
+  border-radius: 6px;
+  background: #ffffff;
+  box-shadow: 0 12px 22px rgba(15, 24, 34, 0.18);
+  z-index: 30;
+}
+
+.feed-share-menu button {
+  width: 100%;
+  min-height: 30px;
+  height: 30px;
+  justify-content: flex-start;
+  padding: 0 10px;
+  background: #f1f3f6;
+  color: #2f3b4b;
+  border-radius: 6px;
+  box-shadow: none;
+}
+
+.feed-share-menu button:hover {
+  background: #e5e8ed;
+}
+
+.feed-reply-row {
+  display: none;
+}
+
+.feed-reply-row input {
+  min-height: 36px;
+  height: 36px;
+  border-radius: 6px;
+  padding: 0 12px;
+  font-size: 13px;
+  background: var(--surface);
+  border: 0;
+}
+
+.feed-reply-row input:focus,
+.feed-reply-row input:focus-visible {
+  outline: none;
+  box-shadow: none;
+  border-color: transparent;
+}
+
+.feed-reply-row button:not(.question-create-button) {
+  min-height: 36px;
+  height: 36px;
+  border-radius: 6px;
+  padding: 0 14px;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.feed-reply-send-button {
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
+  min-height: 36px;
+  justify-self: end;
+}
+
+.feed-reply-row .feed-reply-send-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.feed-reply-feedback {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.feed-reply-feedback.is-ok {
+  color: #2f5bb7;
+  background: rgb(255, 226, 226);
+  padding: 1rem;
+  border-radius: 6px;
+}
+
+.feed-reply-feedback.is-error {
+  color: #b24a4a;
+}
+
+.history-list,
+.history-detail {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-height: 0;
+  overflow: auto;
+}
+
+.history-detail {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.history-detail::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+.history-list-actions {
+  flex-wrap: nowrap;
+  gap: 8px;
+}
+
+.history-list-actions button {
+  width: 31px;
+  min-width: 31px;
+  height: 31px;
+  min-height: 31px;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+}
+
+.history-list-action-icon {
+  width: 14px;
+  height: 14px;
+  display: block;
+  object-fit: contain;
+}
+
+.history-detail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.history-delete-button {
+  width: 22px;
+  min-width: 22px;
+  height: 22px;
+  min-height: 22px;
+  padding: 0;
+  background: transparent;
+  color: #7f2323;
+  font-size: 14px;
+  line-height: 1;
+  display: inline-grid;
+  place-items: center;
+}
+
+.history-detail-content {
+  display: grid;
+  gap: 13px;
+}
+
+.history-detail-group {
+  display: grid;
+  gap: 8px;
+}

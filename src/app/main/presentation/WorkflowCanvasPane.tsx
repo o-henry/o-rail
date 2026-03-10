@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode, type RefObject, type SetStateAction, type WheelEvent as ReactWheelEvent } from "react";
 import { useI18n } from "../../../i18n";
+import type { PmPlanningMode } from "../../../features/studio/pmPlanningMode";
 import type { MarqueeSelection, NodeRunState, PendingWebTurn } from "../types";
 import type { GraphNode, NodeAnchorSide, NodeExecutionStatus } from "../../../features/workflow/types";
 import type { TurnExecutor } from "../../../features/workflow/domain";
@@ -67,6 +68,11 @@ type WorkflowCanvasPaneProps = {
   formatNodeElapsedTime: (state: NodeRunState | undefined, nowMs: number) => string;
   openTerminalNodeId: string;
   onToggleNodeTerminal: (nodeId: string) => void;
+  onSetPmPlanningMode: (nodeId: string, mode: PmPlanningMode) => void;
+  expandedRoleNodeIds: string[];
+  onToggleRoleInternalExpanded: (nodeId: string) => void;
+  onAddRolePerspectivePass: (nodeId: string) => void;
+  onAddRoleReviewPass: (nodeId: string) => void;
   marqueeSelection: MarqueeSelection | null;
   onCanvasZoomIn: () => void;
   onCanvasZoomOut: () => void;
@@ -153,6 +159,11 @@ export default function WorkflowCanvasPane({
   formatNodeElapsedTime,
   openTerminalNodeId,
   onToggleNodeTerminal,
+  onSetPmPlanningMode,
+  expandedRoleNodeIds,
+  onToggleRoleInternalExpanded,
+  onAddRolePerspectivePass,
+  onAddRoleReviewPass,
   marqueeSelection,
   onCanvasZoomIn,
   onCanvasZoomOut,
@@ -389,6 +400,11 @@ export default function WorkflowCanvasPane({
                   onOpenWebInputForNode={onOpenWebInputForNode}
                   openTerminalNodeId={openTerminalNodeId}
                   onToggleNodeTerminal={onToggleNodeTerminal}
+                  onSetPmPlanningMode={onSetPmPlanningMode}
+                  expandedRoleNodeIds={expandedRoleNodeIds}
+                  onToggleRoleInternalExpanded={onToggleRoleInternalExpanded}
+                  onAddRolePerspectivePass={onAddRolePerspectivePass}
+                  onAddRoleReviewPass={onAddRoleReviewPass}
                   questionDirectInputNodeIds={questionDirectInputNodeIds}
                   runtimeNowMs={runtimeNowMs}
                   selectedEdgeKey={selectedEdgeKey}

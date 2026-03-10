@@ -1,0 +1,349 @@
+:root[data-theme="dark"] .workspace {
+  background: transparent;
+  border-color: var(--workspace-border);
+  box-shadow: var(--workspace-shadow);
+}
+
+:root[data-theme="dark"] .workspace-header,
+:root[data-theme="dark"] .workspace-topbar {
+  background: transparent;
+}
+
+:root[data-theme="dark"] .workspace-topbar {
+  background: var(--workspace-chrome-surface);
+}
+
+:root[data-theme="dark"] .workspace-topbar-tab {
+  color: var(--text-muted);
+}
+
+:root[data-theme="dark"] .workspace-topbar-tab:hover {
+  color: var(--text-main);
+  background: color-mix(in srgb, var(--workspace-chrome-surface) 94%, transparent);
+}
+
+:root[data-theme="dark"] .workspace-topbar-tab.is-active::after {
+  background: #9fc2ff;
+}
+
+:root[data-theme="dark"] .panel-card {
+  background: var(--panel-surface);
+  border-color: var(--panel-border);
+  box-shadow: var(--panel-shadow);
+}
+
+:root[data-theme="dark"] .panel-card.settings-view.data-intelligence-view {
+  background: transparent;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+:root[data-theme="dark"] .dashboard-hero-reset,
+:root[data-theme="dark"] .dashboard-actions button {
+  background: color-mix(in srgb, var(--surface-soft) 78%, var(--surface-elevated));
+  border-color: var(--panel-border);
+  color: var(--text-main);
+}
+
+:root[data-theme="dark"] .feed-agent-panel,
+:root[data-theme="dark"] .feed-main,
+:root[data-theme="dark"] .feed-stream,
+:root[data-theme="dark"] .feed-card,
+:root[data-theme="dark"] .feed-card-question,
+:root[data-theme="dark"] .feed-card-input-sources,
+:root[data-theme="dark"] .feed-sns-content,
+:root[data-theme="dark"] .feed-document-table,
+:root[data-theme="dark"] .feed-document-image img,
+:root[data-theme="dark"] .feed-share-menu,
+:root[data-theme="dark"] .feed-agent-rule-doc,
+:root[data-theme="dark"] .feed-card-input-sources-head {
+  background: var(--feed-surface);
+  color: var(--text-main);
+  border-color: var(--feed-border);
+}
+
+:root[data-theme="dark"] .feed-agent-list button,
+:root[data-theme="dark"] .feed-filter-inline,
+:root[data-theme="dark"] .feed-filter-toggle,
+:root[data-theme="dark"] .feed-run-group-actions button,
+:root[data-theme="dark"] .feed-share-icon-button,
+:root[data-theme="dark"] .feed-doc-link-block,
+:root[data-theme="dark"] .feed-doc-link-path,
+:root[data-theme="dark"] .feed-document-code,
+:root[data-theme="dark"] .feed-chart-card,
+:root[data-theme="dark"] .feed-document-table thead th {
+  background: color-mix(in srgb, var(--feed-surface) 78%, var(--surface-elevated));
+  color: var(--text-main);
+  border-color: var(--feed-border);
+}
+
+:root[data-theme="dark"] .feed-main,
+:root[data-theme="dark"] .feed-agent-panel {
+  border: 1px solid var(--feed-border);
+}
+
+:root[data-theme="dark"] .feed-run-group,
+:root[data-theme="dark"] .feed-card,
+:root[data-theme="dark"] .feed-card-details.is-expanded,
+:root[data-theme="dark"] .feed-document-rule,
+:root[data-theme="dark"] .feed-document-table th,
+:root[data-theme="dark"] .feed-document-table td {
+  border-color: var(--feed-border);
+}
+
+:root[data-theme="dark"] .feed-topbar h2,
+:root[data-theme="dark"] .feed-card-title-wrap h3,
+:root[data-theme="dark"] .feed-run-group-meta strong,
+:root[data-theme="dark"] .feed-agent-panel-head h3,
+:root[data-theme="dark"] .feed-agent-settings-header strong,
+:root[data-theme="dark"] .feed-agent-rules-head h4,
+:root[data-theme="dark"] .feed-document-h1,
+:root[data-theme="dark"] .feed-document-h2,
+:root[data-theme="dark"] .feed-document-h3 {
+  color: var(--feed-title);
+}
+
+:root[data-theme="dark"] .feed-card-sub,
+:root[data-theme="dark"] .feed-card-question,
+:root[data-theme="dark"] .feed-topic-tabs button,
+:root[data-theme="dark"] .feed-agent-list-sub,
+:root[data-theme="dark"] .feed-agent-rules-head span,
+:root[data-theme="dark"] .feed-document-image figcaption,
+:root[data-theme="dark"] .feed-evidence-row,
+:root[data-theme="dark"] .feed-run-group-meta span,
+:root[data-theme="dark"] .feed-input-bundle-label,
+:root[data-theme="dark"] .feed-doc-link-title,
+:root[data-theme="dark"] .feed-doc-link-missing,
+:root[data-theme="dark"] .feed-document-table tbody td,
+:root[data-theme="dark"] .feed-agent-settings-grid label {
+  color: var(--feed-muted);
+}
+
+:root[data-theme="dark"] .feed-card-summary,
+:root[data-theme="dark"] .feed-document-paragraph,
+:root[data-theme="dark"] .feed-document-list li,
+:root[data-theme="dark"] .feed-doc-link-open,
+:root[data-theme="dark"] .feed-doc-link-path,
+:root[data-theme="dark"] .feed-agent-static-field,
+:root[data-theme="dark"] .feed-card-input-sources li,
+:root[data-theme="dark"] .feed-agent-rule-doc pre,
+:root[data-theme="dark"] .feed-agent-rule-doc header {
+  color: var(--text-main);
+}
+
+:root[data-theme="dark"] .feed-content-search-wrap.is-open {
+  border-bottom-color: var(--feed-search-open-border);
+}
+
+:root[data-theme="dark"] .feed-topic-tabs button.is-active {
+  border-bottom-color: #9fc2ff;
+}
+
+:root[data-theme="dark"] .feed-document code,
+:root[data-theme="dark"] .feed-agent-readonly-badge,
+:root[data-theme="dark"] .feed-reply-row input {
+  background: color-mix(in srgb, var(--feed-surface) 72%, var(--surface-elevated));
+  color: var(--text-main);
+  border-color: var(--feed-border);
+}
+
+:root[data-theme="dark"] .feed-reply-feedback.is-ok {
+  color: #b9d6ff;
+  background: #1d2b3e;
+}
+
+:root[data-theme="dark"] .feed-reply-feedback.is-error,
+:root[data-theme="dark"] .feed-card-render-error {
+  color: #ffadad;
+  background: #46262a;
+}
+
+:root[data-theme="dark"] .feed-delete-icon-button {
+  background: var(--feed-surface);
+  border-color: #dd7878;
+}
+
+:root[data-theme="dark"] .graph-canvas-shell,
+:root[data-theme="dark"] .inspector-pane,
+:root[data-theme="dark"] .approval-modal,
+:root[data-theme="dark"] .web-turn-drag-handle {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--surface-elevated) 90%, var(--surface-panel)) 0%,
+    var(--surface-panel) 100%
+  );
+  border-color: var(--panel-border);
+  color: var(--text-main);
+}
+
+:root[data-theme="dark"] .inspector-section input,
+:root[data-theme="dark"] .inspector-section textarea,
+:root[data-theme="dark"] .inspector-section select,
+:root[data-theme="dark"] .inspector-section .fancy-select-trigger,
+:root[data-theme="dark"] .web-turn-modal textarea,
+:root[data-theme="dark"] .web-turn-prompt,
+:root[data-theme="dark"] .bridge-code-textarea,
+:root[data-theme="dark"] .bridge-code-card,
+:root[data-theme="dark"] .bridge-log-list,
+:root[data-theme="dark"] .bridge-log-line {
+  background: color-mix(in srgb, var(--surface-soft) 70%, var(--surface-elevated));
+  border-color: var(--panel-border);
+  color: var(--text-main);
+}
+
+:root[data-theme="dark"] .inspector-pane h2,
+:root[data-theme="dark"] .inspector-pane h3,
+:root[data-theme="dark"] .inspector-section-title h3 {
+  color: var(--text-main);
+}
+
+:root[data-theme="dark"] .inspector-section label,
+:root[data-theme="dark"] .bridge-provider-meta,
+:root[data-theme="dark"] .bridge-code-head,
+:root[data-theme="dark"] .web-turn-drag-handle span,
+:root[data-theme="dark"] .inspector-summary-row {
+  color: var(--text-muted);
+}
+
+@media (max-width: 1400px) {
+  .header-actions {
+    justify-content: flex-end;
+  }
+}
+
+@media (max-width: 1180px) {
+  .canvas-pane {
+    border-right: 0;
+    border-bottom: 0;
+  }
+
+  .history-layout {
+    grid-template-columns: 1fr;
+    height: 100%;
+  }
+
+  .feed-layout {
+    grid-template-columns: minmax(0, 1fr);
+    justify-content: stretch;
+    height: 100%;
+  }
+
+  .feed-agent-panel,
+  .feed-main {
+    width: 100%;
+  }
+
+  .dashboard-mosaic {
+    container-type: normal;
+    height: auto;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-rows: repeat(4, minmax(120px, auto));
+    grid-template-areas:
+      "marketSummary marketSummary marketSummary marketSummary marketSummary marketSummary"
+      "marketSummary marketSummary marketSummary marketSummary marketSummary marketSummary"
+      "workflow workflow approvals approvals webConnect webConnect"
+      "schedules schedules schedules schedules schedules schedules";
+  }
+
+  .dashboard-hero-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .agents-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .agents-set-index-head,
+  .agents-set-index-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .agents-set-picker-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+}
+
+@media (max-width: 900px) {
+  .app-shell {
+    grid-template-columns: 1fr;
+    padding: 10px;
+    /* column-gap: 6px; */
+    column-gap: 0px;
+  }
+
+  .left-nav {
+    width: 52px;
+    padding: 4px 4px;
+    border-radius: 18px;
+    min-height: 0;
+  }
+
+  .nav-list {
+    gap: 6px;
+  }
+
+  .history-layout,
+  .feed-layout,
+  .childview-view,
+  .settings-view,
+  .agents-layout,
+  .bridge-view,
+  .dev-layout {
+    margin: 0 10px 10px;
+    width: auto;
+  }
+
+  .dashboard-mosaic {
+    grid-template-columns: 1fr;
+    grid-template-rows: unset;
+    grid-template-areas:
+      "marketSummary"
+      "workflow"
+      "approvals"
+      "webConnect"
+      "schedules";
+  }
+
+  .agents-topbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .agents-workspace-shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .agents-workspace-shell.is-sidebar-collapsed {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .agents-workspace-sidebar {
+    order: 3;
+  }
+
+  .agents-set-picker-sidebar {
+    order: 3;
+  }
+
+  .agents-add-thread-button {
+    width: 100%;
+  }
+
+  .agents-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .agents-set-group-head {
+    margin-top: 1.1rem;
+  }
+
+  .agents-set-index-head {
+    display: none;
+  }
+
+  .agents-set-index-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+}

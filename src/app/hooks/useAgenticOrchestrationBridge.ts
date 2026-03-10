@@ -68,6 +68,12 @@ function toRoleShortToken(rawRoleId: string): string {
   if (roleId === "pm_planner") {
     return "pm";
   }
+  if (roleId === "pm_creative_director") {
+    return "pm_idea";
+  }
+  if (roleId === "pm_feasibility_critic") {
+    return "pm_critic";
+  }
   if (roleId === "client_programmer") {
     return "client";
   }

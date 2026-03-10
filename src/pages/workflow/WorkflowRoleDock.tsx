@@ -1,4 +1,5 @@
 import type { HandoffRecord, StudioRoleId } from "../../features/studio/handoffTypes";
+import { isStudioRolePaletteVisible, normalizeStudioRoleSelection } from "../../features/studio/pmPlanningMode";
 import { STUDIO_ROLE_TEMPLATES } from "../../features/studio/roleTemplates";
 
 type RoleDockStatus = "IDLE" | "RUNNING" | "VERIFY" | "DONE";
@@ -29,7 +30,8 @@ export default function WorkflowRoleDock(props: WorkflowRoleDockProps) {
   const latestArtifactName = latestArtifactPath
     ? latestArtifactPath.split(/[\\/]/).filter(Boolean).pop() ?? latestArtifactPath
     : "";
-  const lockedRoleId = props.roleSelectionLockedTo ?? null;
+  const lockedRoleId = normalizeStudioRoleSelection(props.roleSelectionLockedTo ?? null);
+  const selectedRoleId = normalizeStudioRoleSelection(props.roleId) ?? props.roleId;
 
   return (
     <aside className="panel-card workflow-role-dock" aria-label="역할 워크스페이스">
@@ -43,8 +45,8 @@ export default function WorkflowRoleDock(props: WorkflowRoleDockProps) {
       <>
 
       <section className="workflow-role-cards" aria-label="역할 카드">
-        {STUDIO_ROLE_TEMPLATES.map((role) => {
-          const selected = role.id === props.roleId;
+        {STUDIO_ROLE_TEMPLATES.filter((role) => isStudioRolePaletteVisible(role.id)).map((role) => {
+          const selected = role.id === selectedRoleId;
           const lockedOut = Boolean(lockedRoleId) && role.id !== lockedRoleId;
           const roleState = props.roleStatusById[role.id]?.status ?? "IDLE";
           const roleTaskId = props.roleStatusById[role.id]?.taskId ?? "";

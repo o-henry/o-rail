@@ -1,0 +1,349 @@
+.feed-layout {
+  margin: 0 10px 10px;
+  height: 100%;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  align-content: start;
+  align-items: stretch;
+  justify-content: stretch;
+  gap: 12px;
+  overflow: hidden;
+  padding-bottom: 0;
+}
+
+.feed-layout.no-feed-inspector {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.feed-layout::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+.feed-agent-panel {
+  min-height: 100%;
+  height: auto;
+  overflow: visible;
+  display: none;
+  align-content: start;
+  gap: 12px;
+  width: 100%;
+  border-radius: 12px;
+  background: #ffffff;
+  /* padding: 16px; */
+  padding: 26px 16px 18px 16px;
+  scrollbar-width: none;
+}
+
+.feed-agent-panel::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+.feed-agent-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.feed-agent-panel-head h3 {
+  margin: 0;
+  font-size: 16px;
+  font-family: "BasicallyAMono", "DialogNanumBody1984", "Noto Sans KR", sans-serif;
+  color: #14181f;
+}
+
+.feed-agent-panel-head span {
+  color: #627083;
+  font-size: 12px;
+}
+
+.feed-agent-list {
+  display: grid;
+  gap: 6px;
+  /* max-height: 180px; */
+  overflow: visible;
+  /* padding-left: 2px; */
+  padding-right: 2px;
+  scrollbar-width: none;
+}
+
+.feed-agent-list::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+.feed-agent-list button {
+  min-height: 46px;
+  height: 46px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: #f6f6f6;
+  box-shadow: none;
+  display: grid;
+  justify-items: start;
+  align-content: center;
+  gap: 2px;
+}
+
+.feed-agent-list button.is-active {
+  background: #eceff4;
+  color: #253246;
+}
+
+.feed-agent-list button:focus,
+.feed-agent-list button:focus-visible {
+  outline: none;
+  box-shadow: none;
+  border-color: transparent;
+}
+
+.feed-agent-list-name {
+  font-size: 13px;
+  line-height: 1.2;
+  font-family: "BasicallyAMono", "Noto Sans KR", sans-serif;
+  color: inherit;
+}
+
+.feed-agent-list-sub {
+  font-size: 11px;
+  line-height: 1.2;
+  color: #607083;
+}
+
+.feed-agent-settings {
+  display: grid;
+  gap: 10px;
+  max-height: none;
+  overflow: visible;
+  scrollbar-width: none;
+}
+
+.feed-agent-settings::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+.feed-agent-settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.feed-agent-settings-header strong {
+  font-size: 13px;
+  color: #0f1419;
+  font-family: "BasicallyAMono", "Noto Sans KR", sans-serif;
+  line-height: 1.2;
+}
+
+.feed-agent-readonly-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 20px;
+  min-height: 20px;
+  padding: 0 8px;
+  border-radius: 3px;
+  background: #f0f4fa;
+  color: #4f5d72;
+  font-size: 11px;
+  line-height: 1;
+}
+
+.feed-agent-settings-grid {
+  display: grid;
+  gap: 16px;
+}
+
+.feed-agent-settings-grid label {
+  display: grid;
+  gap: 8px;
+  min-height: 0;
+  font-size: 12px;
+  color: #556173;
+}
+
+.feed-agent-settings-grid .fancy-select.modern-select,
+.feed-agent-settings-grid input,
+.feed-agent-settings-grid textarea {
+  width: 100%;
+}
+
+.feed-agent-settings-grid textarea {
+  min-height: 36px;
+  height: 36px;
+  max-height: 36px;
+  resize: none;
+  overflow: hidden;
+}
+
+.feed-agent-settings-grid textarea.feed-agent-prompt-textarea {
+  min-height: 132px;
+  height: auto;
+  max-height: none;
+  overflow: visible;
+}
+
+.feed-agent-settings-grid .fancy-select,
+.feed-agent-settings-grid .fancy-select *,
+.feed-agent-settings-grid input,
+.feed-agent-settings-grid textarea {
+  pointer-events: none;
+  cursor: default;
+}
+
+.feed-agent-settings-grid .fancy-select-menu {
+  display: none;
+}
+
+.feed-agent-settings-grid .fancy-select-trigger,
+.feed-agent-settings-grid input,
+.feed-agent-settings-grid textarea {
+  border: 0;
+  box-shadow: none;
+  outline: none;
+  background: #f6f6f6;
+  color: #2a3340;
+}
+
+.feed-agent-settings-grid .fancy-select-trigger,
+.feed-agent-settings-grid input {
+  height: 36px;
+  min-height: 36px;
+  max-height: 36px;
+  padding: 0 12px;
+}
+
+.feed-agent-settings-grid .fancy-select-chevron,
+.feed-agent-settings-grid .fancy-select-chevron-icon {
+  display: none;
+}
+
+.feed-agent-settings-grid .fancy-select-trigger {
+  justify-content: flex-start;
+}
+
+.feed-agent-static-field {
+  margin: 0;
+  width: 100%;
+  border-radius: 5px;
+  background: #f6f6f6;
+  color: #2a3340;
+  padding: 9px 10px;
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.feed-agent-static-field-compact {
+  min-height: 36px;
+}
+
+.feed-agent-static-field-prompt {
+  min-height: 144px;
+  font-family: "BasicallyAMono", "DialogNanumBody1984", "Noto Sans KR", monospace;
+}
+
+.feed-agent-settings-grid input:focus,
+.feed-agent-settings-grid input:focus-visible,
+.feed-agent-settings-grid textarea:focus,
+.feed-agent-settings-grid textarea:focus-visible,
+.feed-agent-settings-grid .fancy-select-trigger:focus,
+.feed-agent-settings-grid .fancy-select-trigger:focus-visible {
+  outline: none;
+  box-shadow: none;
+  border-color: transparent;
+}
+
+.feed-agent-settings-grid input[type="number"] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.feed-agent-settings-grid input[type="number"]::-webkit-outer-spin-button,
+.feed-agent-settings-grid input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.feed-agent-rules {
+  display: grid;
+  gap: 8px;
+  max-height: 420px;
+  overflow: auto;
+  scrollbar-width: none;
+  /* margin-top: 2rem; */
+}
+
+.feed-agent-rules::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+.feed-agent-rules-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.feed-agent-rules-head h4 {
+  margin: 0;
+  font-size: 13px;
+  font-family: "BasicallyAMono", "DialogNanumBody1984", "Noto Sans KR", sans-serif;
+  color: #1c2431;
+}
+
+.feed-agent-rules-head span {
+  font-size: 12px;
+  color: #627083;
+}
+
+.feed-agent-rule-list {
+  display: grid;
+  gap: 8px;
+}
+
+.feed-agent-rule-doc {
+  display: grid;
+  gap: 6px;
+  border-radius: 12px;
+  background: #f6f6f6;
+  padding: 10px;
+}
+
+.feed-agent-rule-doc header {
+  font-size: 12px;
+  color: #243044;
+  font-family: "BasicallyAMono", "Noto Sans KR", sans-serif;
+  word-break: break-all;
+}
+
+.feed-agent-rule-doc pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #1f2a3a;
+  max-height: 300px;
+  overflow: auto;
+  scrollbar-width: none;
+}
+
+.feed-agent-rule-doc pre::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}

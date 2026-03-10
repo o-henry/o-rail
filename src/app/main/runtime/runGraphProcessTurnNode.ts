@@ -373,6 +373,7 @@ export async function handleRunGraphTurnNode(params: any): Promise<boolean> {
       output: normalizedOutput,
       logs: runLogCollectorRef.current[nodeId] ?? [],
       roleInstanceId: String(config.roleInstanceId ?? ""),
+      pmPlanningMode: config.pmPlanningMode,
     });
   }
   rememberFeedSource(latestFeedSourceByNodeId, donePost);

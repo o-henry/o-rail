@@ -38,6 +38,8 @@ function normalizeRoleId(raw: unknown): StudioRoleId | null {
   const value = String(raw ?? "").trim();
   if (
     value === "pm_planner" ||
+    value === "pm_creative_director" ||
+    value === "pm_feasibility_critic" ||
     value === "client_programmer" ||
     value === "system_programmer" ||
     value === "tooling_engineer" ||

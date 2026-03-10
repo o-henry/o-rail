@@ -1,0 +1,365 @@
+.canvas-pane {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 12px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  overflow: hidden;
+}
+
+.graph-canvas-shell {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: var(--panel-shadow);
+  overflow: hidden;
+}
+
+.canvas-only-layout .canvas-pane {
+  padding: 0;
+  border-radius: 0;
+}
+
+.canvas-topbar {
+  position: relative;
+  z-index: 20;
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.question-input {
+  display: grid;
+  grid-template-rows: auto auto;
+  border-radius: 10px;
+  background: var(--surface);
+  overflow: hidden;
+  box-shadow: var(--panel-shadow);
+  padding: 10px 12px 8px;
+}
+
+.question-input textarea {
+  width: 100%;
+  min-height: 42px;
+  max-height: 110px;
+  padding: 4px 2px;
+  border-radius: 0;
+  border: 0;
+  background: transparent;
+  resize: none;
+  overflow-y: auto;
+  line-height: 1.5;
+  scrollbar-width: none;
+}
+.question-input textarea:disabled {
+  /* background: #f1f3f6; */
+  background: var(--surface);
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+.question-input textarea::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+.question-input textarea:focus,
+.question-input textarea:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+.question-input-footer {
+  min-height: 40px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.question-create-button {
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  min-height: 30px;
+  border-radius: 999px;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+}
+
+.question-create-icon {
+  width: 12px;
+  height: 12px;
+  display: block;
+  object-fit: contain;
+  filter: brightness(0) invert(1);
+}
+
+.question-create-button:disabled .question-create-icon {
+  filter: grayscale(1);
+  opacity: 0.72;
+}
+
+.button-row,
+.save-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.save-row input,
+.save-row .fancy-select {
+  min-width: 160px;
+}
+
+.graph-rename-input:focus,
+.graph-rename-input:focus-visible {
+  outline: none;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.fancy-select {
+  position: relative;
+  width: 100%;
+}
+
+.fancy-select-trigger {
+  width: 100%;
+  min-height: 36px;
+  border-radius: 4px;
+  border: 0;
+  background: color-mix(in srgb, var(--surface-soft) 74%, var(--surface-elevated));
+  color: var(--text-main);
+  padding: 9px 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  line-height: 1.2;
+  box-shadow: none;
+  transition: background 140ms ease, box-shadow 140ms ease, border-color 140ms ease;
+}
+
+.fancy-select.is-open .fancy-select-trigger {
+  background: color-mix(in srgb, var(--focus-ring) 18%, var(--surface-soft));
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.fancy-select-trigger:focus,
+.fancy-select-trigger:focus-visible {
+  outline: none;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.fancy-select-value {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  text-align: left;
+}
+
+.fancy-select-value.is-placeholder {
+  color: var(--text-muted);
+}
+
+.fancy-select-chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.fancy-select-chevron-icon {
+  width: 12px;
+  height: 12px;
+  display: block;
+  opacity: 0.7;
+}
+
+.fancy-select-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  z-index: 45;
+  border-radius: 4px;
+  border: 1px solid var(--surface-strong);
+  background: var(--surface-panel);
+  box-shadow: 0 12px 30px rgba(12, 18, 28, 0.18);
+  padding: 7px;
+  max-height: 250px;
+  overflow-y: auto;
+}
+
+.fancy-select-menu::-webkit-scrollbar {
+  width: 6px;
+}
+
+.fancy-select-menu::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--surface-strong) 78%, transparent);
+  border-radius: 999px;
+}
+
+.fancy-select-option {
+  width: 100%;
+  border-radius: 4px;
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 10px;
+  color: var(--text-main);
+  border: 0;
+}
+
+.fancy-select-option:hover {
+  background: color-mix(in srgb, var(--focus-ring) 40%, var(--surface-soft));
+  color: var(--text-main);
+}
+
+.fancy-select-option.is-selected {
+  background: color-mix(in srgb, var(--focus-ring) 40%, var(--surface-soft));
+  color: var(--text-main);
+}
+
+.fancy-select-option:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.fancy-select-empty {
+  padding: 6px 11px;
+  color: var(--text-muted);
+}
+
+.fancy-select.graph-file-select .fancy-select-trigger {
+  height: 36px;
+  min-height: 36px;
+  max-height: 36px;
+  border-radius: 4px;
+  margin-bottom: 2px;
+  border: 0;
+  padding: 0 12px;
+}
+
+.fancy-select.graph-file-select .fancy-select-value {
+  line-height: 1.35;
+  display: inline-flex;
+  align-items: center;
+  min-height: 0;
+}
+
+.fancy-select.graph-file-select .fancy-select-menu {
+  border-radius: 4px;
+  padding: 7px;
+}
+
+.fancy-select.template-select .fancy-select-menu {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.fancy-select.template-select .fancy-select-menu::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+.graph-canvas {
+  position: relative;
+  min-height: 0;
+  height: 100%;
+  /* border: 0; */
+  /* border: 4px solid white; */
+  border-radius: 12px;
+  background-color: var(--surface);
+  background-image: radial-gradient(var(--canvas-dot-color) 1px, transparent 1px);
+  background-size: 16px 16px;
+  overflow: auto;
+  padding: 0;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.graph-canvas:focus,
+.graph-canvas:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+.graph-canvas.pan-mode {
+  cursor: grab;
+}
+
+.graph-canvas.pan-mode:active {
+  cursor: grabbing;
+}
+
+.graph-canvas::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+.graph-stage-shell {
+  position: relative;
+  min-width: 100%;
+  min-height: 100%;
+}
+
+.graph-stage {
+  position: absolute;
+  transform-origin: top left;
+  will-change: transform;
+}
+
+.edge-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: auto;
+}
+
+.edge-path {
+  pointer-events: none;
+}
+
+.edge-path.readonly {
+  opacity: 0.95;
+}
+
+.edge-path-hit {
+  pointer-events: stroke;
+  cursor: pointer;
+}
+
+.edge-control-point {
+  pointer-events: none;
+}
+
+.edge-arrow-handle {
+  pointer-events: all;
+  cursor: grab;
+}
+
+.edge-arrow-handle:active {
+  cursor: grabbing;
+}

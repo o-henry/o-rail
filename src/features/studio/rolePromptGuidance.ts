@@ -34,6 +34,20 @@ const ROLE_PROMPT_SPECS: Record<StudioRoleId, RolePromptSpec> = {
     focus: ["범위, 우선순위, 수용 기준을 먼저 고정합니다.", "역할 간 handoff가 가능한 작업 순서와 완료 조건을 만듭니다."],
     deliverables: ["## 요구사항 요약", "## 우선순위와 완료 기준", "## 다음 handoff"],
   },
+  pm_creative_director: {
+    focus: [
+      "익숙한 패턴 재진술 대신 새로운 조합, 반전, 장르 혼합, 감정적 훅을 우선 탐색합니다.",
+      "창의적인 아이디어라도 왜 이 프로젝트 제약 안에서 성립 가능한지 최소 구현 가설까지 같이 제시합니다.",
+    ],
+    deliverables: ["## 창의적 코어 제안", "## 차별화 포인트", "## 빠른 검증 실험", "## 다음 handoff"],
+  },
+  pm_feasibility_critic: {
+    focus: [
+      "좋아 보이는 설명보다 실패 가능성, 숨겨진 비용, 일정 지연 요인을 먼저 적발합니다.",
+      "평가는 정성 문구로 흐리지 말고 0-10 점수와 근거를 함께 제시합니다.",
+    ],
+    deliverables: ["## 총평", "## 현실성 평가표", "## 치명 리스크", "## 조건부 진행안"],
+  },
   client_programmer: {
     focus: ["게임플레이와 UX 동작을 코드/입력/상태 기준으로 쪼갭니다.", "기존 네이밍과 구조를 유지하면서 최소 수정으로 제안합니다."],
     deliverables: ["## 구현 방향", "## 수정 대상", "## 확인해야 할 플레이 포인트"],
@@ -124,6 +138,9 @@ export function buildStudioRolePromptEnvelope(input: RolePromptShape): string {
     "- 정보가 부족하면 추측하지 말고 필요한 가정 또는 확인 포인트를 분리합니다.",
     "- 예시는 요청에 포함된 경우만 사용하고, 불필요한 few-shot 패턴을 임의로 만들지 않습니다.",
     "- 섹션 경계를 유지하고 각 블록의 목적을 섞지 않습니다.",
+    ...(input.roleId === "pm_feasibility_critic"
+      ? ["- 현실성 평가는 항목별 점수(0-10), 총점, 한 줄 근거를 함께 남깁니다."]
+      : []),
   ]);
 
   const roleFocusBlock = wrapSection("role_focus", [

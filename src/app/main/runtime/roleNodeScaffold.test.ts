@@ -70,4 +70,59 @@ describe("roleNodeScaffold", () => {
       to: { nodeId: result.roleNodeId, port: "in" },
     });
   });
+
+  it("injects differentiated prompts for PM modes while keeping a single PM role id", () => {
+    const creative = buildRoleNodeScaffold({
+      roleId: "pm_planner",
+      anchorX: 640,
+      anchorY: 180,
+      includeResearch: false,
+      pmPlanningMode: "creative",
+    });
+    const critic = buildRoleNodeScaffold({
+      roleId: "pm_planner",
+      anchorX: 720,
+      anchorY: 220,
+      includeResearch: false,
+      pmPlanningMode: "logical",
+    });
+
+    expect(creative.nodes[0]?.config).toMatchObject({
+      handoffRoleId: "pm_planner",
+      pmPlanningMode: "creative",
+      qualityProfile: "design_planning",
+    });
+    expect(String((creative.nodes[0]?.config as Record<string, unknown>)?.promptTemplate ?? "")).toContain("차별화");
+    expect(String((creative.nodes[0]?.config as Record<string, unknown>)?.promptTemplate ?? "")).toContain("## 창의적 코어 제안");
+
+    expect(critic.nodes[0]?.config).toMatchObject({
+      handoffRoleId: "pm_planner",
+      pmPlanningMode: "logical",
+      qualityProfile: "research_evidence",
+    });
+    expect(String((critic.nodes[0]?.config as Record<string, unknown>)?.promptTemplate ?? "")).toContain("항목별 점수(0-10)");
+    expect(String((critic.nodes[0]?.config as Record<string, unknown>)?.promptTemplate ?? "")).toContain("## 현실성 평가표");
+  });
+
+  it("injects role-specific mode guidance for non-PM roles", () => {
+    const clientCreative = buildRoleNodeScaffold({
+      roleId: "client_programmer",
+      anchorX: 640,
+      anchorY: 180,
+      includeResearch: false,
+      pmPlanningMode: "creative",
+    });
+    const systemLogical = buildRoleNodeScaffold({
+      roleId: "system_programmer",
+      anchorX: 720,
+      anchorY: 220,
+      includeResearch: false,
+      pmPlanningMode: "creative",
+    });
+
+    expect(String((clientCreative.nodes[0]?.config as Record<string, unknown>)?.promptTemplate ?? "")).toContain("UX 감각과 상호작용의 차별화");
+    expect((clientCreative.nodes[0]?.config as Record<string, unknown>)?.pmPlanningMode).toBe("creative");
+    expect(String((systemLogical.nodes[0]?.config as Record<string, unknown>)?.promptTemplate ?? "")).toContain("정확성, 실패 가능성, 검증 가능성");
+    expect((systemLogical.nodes[0]?.config as Record<string, unknown>)?.pmPlanningMode).toBe("logical");
+  });
 });

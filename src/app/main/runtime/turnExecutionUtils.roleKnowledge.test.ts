@@ -132,4 +132,49 @@ describe("injectKnowledgeContext role knowledge", () => {
     expect(result.prompt).toContain("대안 PM 시각");
     expect(result.prompt).toContain("실험적 시각");
   });
+
+  it("uses logical PM knowledge when a PM node switches mode", async () => {
+    writeRoleKnowledgeProfiles([
+      {
+        roleId: "pm_feasibility_critic",
+        roleLabel: "기획(PM) · 논리 모드",
+        goal: "현실성 평가",
+        taskId: "PLAN-CRITIC-001",
+        runId: "run-critic",
+        summary: "현실성 점수 기준",
+        keyPoints: ["0-10 점수로 범위와 운영 비용을 본다"],
+        sources: [],
+        updatedAt: new Date().toISOString(),
+      },
+    ]);
+
+    const node: GraphNode = {
+      id: "turn-role-logic",
+      type: "turn",
+      position: { x: 0, y: 0 },
+      config: {
+        sourceKind: "handoff",
+        handoffRoleId: "pm_planner",
+        pmPlanningMode: "logical",
+        knowledgeEnabled: true,
+      },
+    };
+
+    const result = await injectKnowledgeContext({
+      node,
+      prompt: "냉정하게 검토",
+      config: node.config,
+      workflowQuestion: "새 게임 기획",
+      activeRunPresetKind: undefined,
+      internalMemoryCorpus: [],
+      enabledKnowledgeFiles: [],
+      graphKnowledge: { topK: 0, maxChars: 0 },
+      addNodeLog: vi.fn(),
+      invokeFn: vi.fn(),
+    });
+
+    expect(result.prompt).toContain("현실성 점수 기준");
+    expect(result.prompt).toContain("0-10 점수");
+    expect(result.prompt).toContain("냉정하게 검토");
+  });
 });

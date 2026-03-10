@@ -1,0 +1,213 @@
+:root[data-theme="dark"] .agents-composer {
+  background: color-mix(in srgb, var(--surface-elevated) 94%, var(--surface-panel));
+}
+
+.agents-composer.workflow-question-input {
+  margin-bottom: 0;
+}
+
+.agents-file-input {
+  display: none;
+}
+
+.agents-composer textarea {
+  width: 100%;
+  min-height: 42px;
+  height: 42px;
+  max-height: 110px;
+  resize: none;
+  border: 0;
+  background: transparent;
+  color: var(--text-main);
+  padding: 4px 2px;
+  line-height: 1.35;
+}
+
+.agents-composer textarea:focus,
+.agents-composer textarea:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+.agents-file-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: -1px 0 2px;
+}
+
+.agents-file-chip {
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-radius: 999px;
+  border: 1px solid var(--surface-strong);
+  background: var(--surface-soft);
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.1;
+  padding: 5px 8px;
+}
+
+.agents-composer-row {
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.agents-composer-left,
+.agents-composer-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.agents-icon-button {
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  min-height: 28px;
+  border-radius: 999px;
+  border: 1px solid var(--surface-strong);
+  background: transparent;
+  color: var(--text-muted);
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+}
+
+.agents-icon-button img {
+  width: 13px;
+  height: 13px;
+  opacity: 0.72;
+}
+
+.agents-icon-button svg {
+  width: 14px;
+  height: 14px;
+}
+
+.agents-model-button,
+.agents-reason-button {
+  min-height: 30px;
+  height: 30px;
+  width: 100%;
+  border-radius: 4px;
+  border: 0;
+  background: color-mix(in srgb, var(--surface-soft) 74%, var(--surface-elevated));
+  color: var(--text-main);
+  padding: 0 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.agents-model-button span,
+.agents-reason-button span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agents-model-dropdown,
+.agents-reason-dropdown {
+  position: relative;
+  width: 210px;
+}
+
+.agents-model-dropdown.is-open .agents-model-button img,
+.agents-reason-dropdown.is-open .agents-reason-button img {
+  transform: rotate(180deg);
+}
+
+.agents-model-button img,
+.agents-reason-button img {
+  width: 10px;
+  height: 10px;
+  opacity: 0.7;
+  transition: transform 120ms ease;
+}
+
+.agents-reason-button:disabled {
+  opacity: 0.56;
+  cursor: not-allowed;
+}
+
+.agents-model-menu,
+.agents-reason-menu {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 8px);
+  width: 100%;
+  min-width: 0;
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+  border-radius: 12px;
+  border: 1px solid var(--surface-strong);
+  background: var(--surface-panel);
+  box-shadow: 0 12px 30px rgba(12, 18, 28, 0.18);
+  z-index: 15;
+}
+
+.agents-model-menu li,
+.agents-reason-menu li {
+  margin: 0;
+  padding: 0;
+}
+
+.agents-model-menu button,
+.agents-reason-menu button {
+  width: 100%;
+  min-height: 30px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-main);
+  text-align: left;
+  padding: 6px 8px;
+  font-size: 12px;
+}
+
+.agents-model-menu button:hover,
+.agents-model-menu button.is-selected,
+.agents-reason-menu button:hover,
+.agents-reason-menu button.is-selected {
+  background: color-mix(in srgb, var(--focus-ring) 40%, var(--surface-soft));
+  color: var(--text-main);
+}
+
+:root[data-theme="dark"] .agents-model-button,
+:root[data-theme="dark"] .agents-reason-button {
+  background: color-mix(in srgb, var(--surface-soft) 74%, var(--surface-elevated));
+  color: var(--text-main);
+}
+
+.agents-send-button {
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  min-height: 30px;
+  border-radius: 999px;
+  padding: 0;
+  border: 0;
+  background: #8b8f95;
+  display: inline-grid;
+  place-items: center;
+}
+
+.agents-send-button img {
+  width: 12px;
+  height: 12px;
+  filter: brightness(0) invert(1);
+}
+
+.agents-send-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}

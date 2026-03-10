@@ -4,7 +4,7 @@ export type SelectOption = { value: string; label: string };
 
 export const APPROVAL_DECISIONS: ApprovalDecision[] = ["accept", "acceptForSession", "decline", "cancel"];
 export const NODE_WIDTH = 240;
-export const NODE_HEIGHT = 136;
+export const NODE_HEIGHT = 168;
 export const DEFAULT_STAGE_WIDTH = 1400;
 export const DEFAULT_STAGE_HEIGHT = 900;
 export const STAGE_GROW_MARGIN = 120;

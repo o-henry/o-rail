@@ -101,6 +101,12 @@ describe("roleKnowledgePipeline", () => {
         expect(urls.some((url) => url.includes("gamedeveloper.com/design"))).toBe(true);
         expect(urls.some((url) => url.includes("gdcvault.com/free"))).toBe(true);
       }
+      if (roleId === "pm_creative_director") {
+        expect(urls.some((url) => url.includes("howtomarketagame.com"))).toBe(true);
+      }
+      if (roleId === "pm_feasibility_critic") {
+        expect(urls.some((url) => url.includes("gameanalytics.com"))).toBe(true);
+      }
     }
   });
 });

@@ -78,6 +78,16 @@ export const ROLE_KB_ALLOWLIST: Record<StudioRoleId, string[]> = {
     "https://www.gdcvault.com/free",
     "https://www.gamedeveloper.com/business",
   ],
+  pm_creative_director: [
+    "https://www.gamedeveloper.com/design",
+    "https://www.gdcvault.com/free",
+    "https://howtomarketagame.com/",
+  ],
+  pm_feasibility_critic: [
+    "https://www.gamedeveloper.com/business",
+    "https://gameanalytics.com/blog/",
+    "https://howtomarketagame.com/",
+  ],
   client_programmer: [
     "https://docs.unity3d.com/Manual/index.html",
     "https://learn.unity.com/",
@@ -197,6 +207,12 @@ function sanitizeToken(raw: string): string {
 function toRoleShortToken(rawRoleId: string): string {
   if (rawRoleId === "pm_planner") {
     return "pm";
+  }
+  if (rawRoleId === "pm_creative_director") {
+    return "pm_idea";
+  }
+  if (rawRoleId === "pm_feasibility_critic") {
+    return "pm_critic";
   }
   if (rawRoleId === "client_programmer") {
     return "client";

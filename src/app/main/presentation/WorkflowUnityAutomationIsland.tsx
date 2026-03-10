@@ -109,7 +109,7 @@ export default function WorkflowUnityAutomationIsland(props: WorkflowUnityAutoma
 
   return (
     <aside
-      className={`panel-card workflow-unity-automation-island${props.collapsed ? " is-collapsed" : ""}`.trim()}
+      className="panel-card workflow-unity-automation-island"
       aria-label="유니티 자동화"
     >
       <header className="workflow-unity-automation-head">
@@ -117,21 +117,8 @@ export default function WorkflowUnityAutomationIsland(props: WorkflowUnityAutoma
           <strong>{tp("유니티 자동화")}</strong>
           <span>{tp("안전한 진단 · 빌드 · 테스트 보드")}</span>
         </div>
-        <button
-          aria-label={props.collapsed ? "유니티 자동화 펼치기" : "유니티 자동화 축소"}
-          className="workflow-island-collapse-button"
-          onClick={props.onToggleCollapsed}
-          type="button"
-        >
-          <img
-            alt=""
-            className="workflow-island-collapse-icon"
-            src={props.collapsed ? "/down-arrow.svg" : "/up-arrow.svg"}
-          />
-        </button>
       </header>
-      {!props.collapsed && (
-        <>
+      <>
           <div className="tool-dropdown-group">
             <h4>{tp("유니티 자동화")}</h4>
             <div className="workflow-template-create-row">
@@ -247,8 +234,7 @@ export default function WorkflowUnityAutomationIsland(props: WorkflowUnityAutoma
             )}
             {unityError && <div className="workflow-unity-guard-error">{unityError}</div>}
           </div>
-        </>
-      )}
+      </>
     </aside>
   );
 }

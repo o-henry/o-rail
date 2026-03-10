@@ -7,16 +7,12 @@ type WorkflowInspectorPaneProps = {
   canvasFullscreen: boolean;
   toolsProps: WorkflowInspectorToolsProps;
   nodeProps: WorkflowInspectorNodeProps;
-  collapsed?: boolean;
-  onToggleCollapsed?: () => void;
 };
 
 export default function WorkflowInspectorPane({
   canvasFullscreen,
   toolsProps,
   nodeProps,
-  collapsed = false,
-  onToggleCollapsed,
 }: WorkflowInspectorPaneProps) {
   const { t } = useI18n();
   if (canvasFullscreen) {
@@ -26,7 +22,7 @@ export default function WorkflowInspectorPane({
   const hasSelectedNode = Boolean(nodeProps.selectedNode);
 
   return (
-    <aside className={`inspector-pane ${hasSelectedNode ? "is-node-selected" : ""} ${collapsed ? "is-collapsed" : ""}`.trim()}>
+    <aside className={`inspector-pane ${hasSelectedNode ? "is-node-selected" : ""}`.trim()}>
       <div className="inspector-head">
         <div className="inspector-head-title">
           {!hasSelectedNode ? <div className="inspector-title-chip">{nodeProps.nodeSettingsTitle}</div> : <div className="inspector-title-chip">{nodeProps.nodeSettingsTitle}</div>}
@@ -42,20 +38,8 @@ export default function WorkflowInspectorPane({
             {t("workflow.nodeSettings.help")}
           </div>
         </div>
-        <button
-          aria-label={collapsed ? "노드 설정 펼치기" : "노드 설정 축소"}
-          className="workflow-island-collapse-button"
-          onClick={onToggleCollapsed}
-          type="button"
-        >
-          <img
-            alt=""
-            className="workflow-island-collapse-icon"
-            src={collapsed ? "/down-arrow.svg" : "/up-arrow.svg"}
-          />
-        </button>
       </div>
-      {!collapsed && <div className="inspector-content">
+      <div className="inspector-content">
         <div className="inspector-section inspector-switcher">
           <div className={`inspector-panel inspector-panel-tools ${hasSelectedNode ? "is-hidden" : "is-visible"}`}>
             <div className="inspector-panel-inner">
@@ -68,7 +52,7 @@ export default function WorkflowInspectorPane({
             </div>
           </div>
         </div>
-      </div>}
+      </div>
     </aside>
   );
 }

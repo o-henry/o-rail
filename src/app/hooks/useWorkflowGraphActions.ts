@@ -15,12 +15,12 @@ import type {
 } from "../../features/workflow/types";
 import type { LogicalPoint, NodeRunState, NodeVisualSize } from "../main";
 import {
-  GRAPH_STAGE_INSET_X,
   GRAPH_STAGE_INSET_Y,
   NODE_DRAG_MARGIN,
   NODE_HEIGHT,
   NODE_WIDTH,
 } from "../main";
+import { getCanvasViewportCenterLogical as resolveCanvasViewportCenterLogical } from "../main/canvas/canvasViewport";
 
 type UseWorkflowGraphActionsParams = {
   graph: GraphData;
@@ -85,14 +85,7 @@ export function useWorkflowGraphActions(params: UseWorkflowGraphActionsParams) {
   } = params;
 
   const getCanvasViewportCenterLogical = useCallback((): { x: number; y: number } | null => {
-    const canvas = graphCanvasRef.current;
-    if (!canvas) {
-      return null;
-    }
-    return {
-      x: (canvas.scrollLeft + canvas.clientWidth / 2 - GRAPH_STAGE_INSET_X) / canvasZoom,
-      y: (canvas.scrollTop + canvas.clientHeight / 2 - GRAPH_STAGE_INSET_Y) / canvasZoom,
-    };
+    return resolveCanvasViewportCenterLogical({ canvasZoom, graphCanvasRef });
   }, [canvasZoom, graphCanvasRef]);
 
   const addNode = useCallback(

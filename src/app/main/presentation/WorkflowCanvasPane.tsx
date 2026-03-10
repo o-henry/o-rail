@@ -65,6 +65,8 @@ type WorkflowCanvasPaneProps = {
   onOpenFeedFromNode: (nodeId: string) => void;
   runtimeNowMs: number;
   formatNodeElapsedTime: (state: NodeRunState | undefined, nowMs: number) => string;
+  openTerminalNodeId: string;
+  onToggleNodeTerminal: (nodeId: string) => void;
   marqueeSelection: MarqueeSelection | null;
   onCanvasZoomIn: () => void;
   onCanvasZoomOut: () => void;
@@ -150,6 +152,8 @@ export default function WorkflowCanvasPane({
   onOpenFeedFromNode,
   runtimeNowMs,
   formatNodeElapsedTime,
+  openTerminalNodeId,
+  onToggleNodeTerminal,
   marqueeSelection,
   onCanvasZoomIn,
   onCanvasZoomOut,
@@ -385,6 +389,8 @@ export default function WorkflowCanvasPane({
                   onNodeDragStart={onNodeDragStart}
                   onOpenFeedFromNode={onOpenFeedFromNode}
                   onOpenWebInputForNode={onOpenWebInputForNode}
+                  openTerminalNodeId={openTerminalNodeId}
+                  onToggleNodeTerminal={onToggleNodeTerminal}
                   questionDirectInputNodeIds={questionDirectInputNodeIds}
                   runtimeNowMs={runtimeNowMs}
                   selectedEdgeKey={selectedEdgeKey}

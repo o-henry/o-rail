@@ -1431,6 +1431,31 @@
   cursor: pointer;
 }
 
+.node-head-icon-button {
+  width: var(--node-head-action-height);
+  min-width: var(--node-head-action-height);
+  height: var(--node-head-action-height);
+  min-height: var(--node-head-action-height);
+  padding: 0;
+  border-radius: 3px;
+  display: inline-grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--surface-soft) 82%, var(--surface));
+  cursor: pointer;
+}
+
+.node-head-icon-button.is-active {
+  background: color-mix(in srgb, var(--focus-ring) 14%, var(--surface-soft));
+}
+
+.node-head-icon-image {
+  width: 14px;
+  height: 14px;
+  display: block;
+  object-fit: contain;
+  opacity: 0.88;
+}
+
 .node-head-action-badge {
   height: var(--node-head-action-height);
   min-height: var(--node-head-action-height);

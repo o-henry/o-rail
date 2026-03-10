@@ -11,6 +11,7 @@ type WorkflowAgentTerminalIslandProps = {
   graphNodes: GraphNode[];
   isGraphRunning: boolean;
   nodeStates: Record<string, WorkflowWorkspaceNodeState & { threadId?: string }>;
+  openNodeId: string;
   onInterruptNode: (nodeId: string) => Promise<void>;
   onQueueNodeRequest: (nodeId: string, text: string) => void;
   pendingNodeRequests: Record<string, string[]>;
@@ -106,6 +107,21 @@ export function canSubmitNodeFollowup(paneInput: string | null | undefined, hasP
   return hasPane && cleanLine(paneInput).length > 0;
 }
 
+export function isAgentTerminalVisible(input: {
+  selectedNodeId: string | null | undefined;
+  openNodeId: string | null | undefined;
+  activeRoleId: StudioRoleId | null;
+  hasPane: boolean;
+}) {
+  return Boolean(
+    input.selectedNodeId &&
+      input.openNodeId &&
+      input.selectedNodeId === input.openNodeId &&
+      input.activeRoleId &&
+      input.hasPane,
+  );
+}
+
 export default function WorkflowAgentTerminalIsland(props: WorkflowAgentTerminalIslandProps) {
   const runtime = useWorkflowWorkspaceTerminalGrid({
     cwd: props.cwd,
@@ -138,7 +154,12 @@ export default function WorkflowAgentTerminalIsland(props: WorkflowAgentTerminal
     return panes.find((row) => row.roleId === props.activeRoleId) ?? null;
   }, [panes, props.activeRoleId]);
 
-  const visible = Boolean(props.selectedNode && props.activeRoleId && pane);
+  const visible = isAgentTerminalVisible({
+    selectedNodeId: props.selectedNode?.id,
+    openNodeId: props.openNodeId,
+    activeRoleId: props.activeRoleId,
+    hasPane: Boolean(pane),
+  });
   const selectedNodeState = props.selectedNode ? props.nodeStates[props.selectedNode.id] : undefined;
   const pendingRequests = props.selectedNode ? props.pendingNodeRequests[props.selectedNode.id] ?? [] : [];
   const viewportText = useMemo(

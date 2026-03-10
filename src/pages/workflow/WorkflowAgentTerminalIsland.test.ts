@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildViewportText, canSubmitNodeFollowup } from "./WorkflowAgentTerminalIsland";
+import { buildViewportText, canSubmitNodeFollowup, isAgentTerminalVisible } from "./WorkflowAgentTerminalIsland";
 
 describe("buildViewportText", () => {
   it("shows selected node request and queued follow-ups before logs", () => {
@@ -38,5 +38,32 @@ describe("buildViewportText", () => {
     expect(canSubmitNodeFollowup("   ", true)).toBe(false);
     expect(canSubmitNodeFollowup("수정해줘", true)).toBe(true);
     expect(canSubmitNodeFollowup("수정해줘", false)).toBe(false);
+  });
+
+  it("shows the terminal only when the selected node matches the opened node", () => {
+    expect(
+      isAgentTerminalVisible({
+        selectedNodeId: "pm-node",
+        openNodeId: "pm-node",
+        activeRoleId: "pm_planner",
+        hasPane: true,
+      }),
+    ).toBe(true);
+    expect(
+      isAgentTerminalVisible({
+        selectedNodeId: "pm-node",
+        openNodeId: "qa-node",
+        activeRoleId: "pm_planner",
+        hasPane: true,
+      }),
+    ).toBe(false);
+    expect(
+      isAgentTerminalVisible({
+        selectedNodeId: "pm-node",
+        openNodeId: "pm-node",
+        activeRoleId: null,
+        hasPane: true,
+      }),
+    ).toBe(false);
   });
 });

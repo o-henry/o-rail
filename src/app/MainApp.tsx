@@ -370,6 +370,7 @@ function App() {
   const [workflowRoleDockCollapsed, setWorkflowRoleDockCollapsed] = useState(false);
   const [workflowInspectorCollapsed, setWorkflowInspectorCollapsed] = useState(false);
   const [workflowUnityAutomationCollapsed, setWorkflowUnityAutomationCollapsed] = useState(false);
+  const [openWorkflowAgentTerminalNodeId, setOpenWorkflowAgentTerminalNodeId] = useState("");
 
   const {
     engineStarted,
@@ -536,6 +537,15 @@ function App() {
     () => buildGraphForViewMode(graph, workflowGraphViewMode),
     [graph, workflowGraphViewMode],
   );
+  useEffect(() => {
+    if (!openWorkflowAgentTerminalNodeId) {
+      return;
+    }
+    const stillExists = graph.nodes.some((node) => node.id === openWorkflowAgentTerminalNodeId);
+    if (!stillExists) {
+      setOpenWorkflowAgentTerminalNodeId("");
+    }
+  }, [graph.nodes, openWorkflowAgentTerminalNodeId]);
   const ragModeNodes = useMemo(
     () =>
       graph.nodes
@@ -1743,6 +1753,19 @@ function App() {
     }
     return toStudioRoleId(String(config.handoffRoleId ?? ""));
   }, [selectedNode]);
+  const selectedTerminalNode =
+    selectedNode && selectedNode.id === openWorkflowAgentTerminalNodeId ? selectedNode : null;
+  const selectedTerminalRoleLockId = useMemo<StudioRoleId | null>(() => {
+    if (!selectedTerminalNode || selectedTerminalNode.type !== "turn") {
+      return null;
+    }
+    const config = selectedTerminalNode.config as Record<string, unknown>;
+    const sourceKind = String(config.sourceKind ?? "").trim().toLowerCase();
+    if (sourceKind !== "handoff") {
+      return null;
+    }
+    return toStudioRoleId(String(config.handoffRoleId ?? ""));
+  }, [selectedTerminalNode]);
   const selectedTurnExecutor: TurnExecutor =
     selectedTurnConfig ? getTurnExecutor(selectedTurnConfig) : "codex";
   const selectedQualityProfile: QualityProfileId =
@@ -2332,10 +2355,11 @@ function App() {
   );
   const workflowAgentTerminalIslandElement = (
     <WorkflowAgentTerminalIsland
-      activeRoleId={selectedNodeRoleLockId} cwd={cwd} graphFileName={graphFileName} graphNodes={graph.nodes}
+      activeRoleId={selectedTerminalRoleLockId} cwd={cwd} graphFileName={graphFileName} graphNodes={graph.nodes}
       isGraphRunning={isGraphRunning} nodeStates={nodeStates} onInterruptNode={onInterruptWorkflowNode}
+      openNodeId={openWorkflowAgentTerminalNodeId}
       onQueueNodeRequest={enqueueNodeRequest} pendingNodeRequests={pendingNodeRequests}
-      selectedNode={selectedNode} workspaceEvents={workspaceEvents}
+      selectedNode={selectedTerminalNode} workspaceEvents={workspaceEvents}
     />
   );
   const selectedNodeSourceKind = String((selectedNode?.config as Record<string, unknown> | undefined)?.sourceKind ?? "").trim().toLowerCase();
@@ -2895,6 +2919,7 @@ function App() {
               nodeStates={nodeStates}
               nodeStatusLabel={nodeStatusLabel}
               nodeTypeLabel={nodeTypeLabel}
+              openTerminalNodeId={openWorkflowAgentTerminalNodeId}
               onCancelGraphRun={onCancelGraphRun}
               onCanvasKeyDown={onCanvasKeyDown}
               onCanvasMouseDown={onCanvasMouseDown}
@@ -2914,6 +2939,9 @@ function App() {
                 setStatus(`데이터베이스에서 ${nodeId} 노드 결과를 확인하세요.`);
               }}
               onOpenWebInputForNode={onOpenWebInputForNode}
+              onToggleNodeTerminal={(nodeId) =>
+                setOpenWorkflowAgentTerminalNodeId((prev) => (prev === nodeId ? "" : nodeId))
+              }
               onClearGraph={onClearGraphCanvas}
               onRedoGraph={onRedoGraph}
               onReopenPendingWebTurn={onReopenPendingWebTurn}

@@ -33,6 +33,8 @@ type WorkflowCanvasNodesLayerProps = {
   runtimeNowMs: number;
   onOpenFeedFromNode: (nodeId: string) => void;
   onOpenWebInputForNode: (nodeId: string) => void;
+  openTerminalNodeId: string;
+  onToggleNodeTerminal: (nodeId: string) => void;
   marqueeSelection: MarqueeSelection | null;
 };
 
@@ -64,6 +66,8 @@ export default function WorkflowCanvasNodesLayer({
   runtimeNowMs,
   onOpenFeedFromNode,
   onOpenWebInputForNode,
+  openTerminalNodeId,
+  onToggleNodeTerminal,
   marqueeSelection,
 }: WorkflowCanvasNodesLayerProps) {
   const { t } = useI18n();
@@ -80,6 +84,8 @@ export default function WorkflowCanvasNodesLayer({
         const receivesQuestionDirectly = questionDirectInputNodeIds.has(node.id);
         const isWebTurnNode = node.type === "turn" && String(node.config?.executor ?? "").startsWith("web_");
         const sourceKind = String((node.config as Record<string, unknown>)?.sourceKind ?? "").trim().toLowerCase();
+        const canToggleTerminal = node.type === "turn" && sourceKind === "handoff";
+        const isTerminalOpen = canToggleTerminal && openTerminalNodeId === node.id;
         const viaNodeType = String((node.config as Record<string, unknown>)?.viaNodeType ?? "").trim();
         const ragNodeLabel = viaNodeLabel(viaNodeType);
         const ragNodeTypeLabel = ragNodeLabel.replace(/\s*\(미\/일\/중\/한\)\s*/g, "").trim();
@@ -173,6 +179,27 @@ export default function WorkflowCanvasNodesLayer({
                     ) : null}
                     {isDataPipelineNode ? <span className="node-type-badge data node-head-action-badge">DATA</span> : null}
                     {isDataResearchNode ? <span className="node-type-badge research node-head-action-badge">RAG</span> : null}
+                    {canToggleTerminal ? (
+                      <button
+                        aria-label={isTerminalOpen ? "에이전트 터미널 닫기" : "에이전트 터미널 열기"}
+                        className={`node-head-icon-button${isTerminalOpen ? " is-active" : ""}`}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setNodeSelection([node.id], node.id);
+                          setSelectedEdgeKey("");
+                          onToggleNodeTerminal(node.id);
+                        }}
+                        title={isTerminalOpen ? "에이전트 터미널 닫기" : "에이전트 터미널 열기"}
+                        type="button"
+                      >
+                        <img
+                          alt=""
+                          aria-hidden="true"
+                          className="node-head-icon-image"
+                          src={isTerminalOpen ? "/terminal-close.svg" : "/terminal-open.svg"}
+                        />
+                      </button>
+                    ) : null}
                     <button className="node-head-delete-button" onClick={() => deleteNode(node.id)} type="button">
                       {t("common.delete")}
                     </button>

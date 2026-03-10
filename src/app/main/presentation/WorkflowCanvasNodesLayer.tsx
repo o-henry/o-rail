@@ -196,7 +196,7 @@ export default function WorkflowCanvasNodesLayer({
                           alt=""
                           aria-hidden="true"
                           className="node-head-icon-image"
-                          src={isTerminalOpen ? "/terminal-close.svg" : "/terminal-open.svg"}
+                          src={isTerminalOpen ? "/terminal-open.svg" : "/terminal-close.svg"}
                         />
                       </button>
                     ) : null}

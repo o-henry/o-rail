@@ -1,0 +1,368 @@
+.settings-dashboard-topic-allowlist-block {
+  margin-top: 8px;
+  position: relative;
+}
+
+.settings-dashboard-topic-allowlist-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.settings-dashboard-allowlist-help {
+  width: 16px;
+  min-width: 16px;
+  height: 16px;
+  min-height: 16px;
+  border: 0;
+  background: #e8edf4;
+  color: #5b6573;
+  font-size: 11px;
+  line-height: 1;
+  padding: 0;
+  border-radius: 999px;
+  display: inline-grid;
+  place-items: center;
+  cursor: help;
+  outline: none;
+  box-shadow: none;
+}
+
+.settings-dashboard-allowlist-tooltip {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  z-index: 30;
+  border-radius: 6px;
+  background: #111418;
+  color: #e9eef5;
+  padding: 8px 0;
+  box-shadow: 0 8px 24px rgba(9, 13, 20, 0.24);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-4px);
+  transition:
+    opacity 140ms ease,
+    transform 140ms ease;
+}
+
+.settings-dashboard-allowlist-tooltip ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 4px;
+}
+
+.settings-dashboard-allowlist-tooltip li,
+.settings-dashboard-allowlist-tooltip p {
+  margin: 0;
+  font-size: 11px;
+  color: #ffffff;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.settings-dashboard-topic-allowlist-head:hover + .settings-dashboard-allowlist-tooltip,
+.settings-dashboard-topic-allowlist-head:focus-within + .settings-dashboard-allowlist-tooltip {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.settings-dashboard-topic-allowlist-block:hover .settings-dashboard-allowlist-tooltip {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.settings-dashboard-topic-detail-section small {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+
+.settings-dashboard-topic-detail-section ul {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+}
+
+.settings-dashboard-topic-detail-section li {
+  font-size: 12px;
+  color: var(--text-main);
+  line-height: 1.35;
+}
+
+.settings-dashboard-topic-detail-section .settings-dashboard-allowlist-tooltip li,
+.settings-dashboard-topic-detail-section .settings-dashboard-allowlist-tooltip p {
+  color: #ffffff;
+}
+
+.settings-dashboard-topic-detail-links {
+  margin: 0;
+  padding-left: 16px;
+  display: grid;
+  gap: 4px;
+}
+
+.settings-dashboard-topic-detail-links a {
+  color: var(--text-main);
+  text-decoration: none;
+}
+
+.settings-dashboard-topic-detail-links a:hover {
+  text-decoration: underline;
+}
+
+.settings-dashboard-topic-doc-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+}
+
+.settings-dashboard-topic-doc-flat {
+  display: grid;
+  gap: 8px;
+}
+
+.settings-dashboard-topic-doc-row {
+  display: grid;
+  gap: 4px;
+  padding: 0 0 8px;
+  border-bottom: 1px solid color-mix(in srgb, var(--surface-strong) 52%, transparent);
+}
+
+.settings-dashboard-topic-doc-row:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.settings-dashboard-topic-doc-row strong {
+  font-size: 12px;
+  color: var(--text-main);
+  line-height: 1.35;
+}
+
+.settings-dashboard-topic-doc-row code {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-family: "BasicallyAMono", "Noto Sans KR", monospace;
+  padding-left: 0;
+}
+
+.settings-dashboard-topic-doc-row p {
+  padding-left: 0;
+}
+
+.settings-dashboard-topic-doc-row > .settings-dashboard-topic-doc-open {
+  margin-top: 10px;
+}
+
+.settings-dashboard-topic-doc-open,
+.settings-dashboard-topic-doc-open-all {
+  min-height: 30px;
+  height: 30px;
+  border-radius: 4px;
+  border: 0;
+  background: #d8f3df;
+  color: #1f6d43;
+  font-size: 11px;
+  font-family: "BasicallyAMono", "Noto Sans KR", monospace;
+  padding: 0 10px;
+}
+
+.settings-dashboard-topic-doc-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.settings-dashboard-topic-doc-open:hover:not(:disabled),
+.settings-dashboard-topic-doc-open-all:hover:not(:disabled) {
+  background: #c9ecda;
+}
+
+.settings-dashboard-topic-doc-open:disabled,
+.settings-dashboard-topic-doc-open-all:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.settings-dashboard-topic-request {
+  margin-top: 2px;
+  padding: 8px 10px 8px;
+  background: color-mix(in srgb, var(--surface-panel) 76%, var(--surface));
+  box-shadow: none;
+}
+
+.settings-dashboard-topic-request textarea {
+  min-height: 34px;
+  max-height: 96px;
+  background: transparent;
+}
+
+.settings-dashboard-topic-request .question-input-footer {
+  min-height: 30px;
+  justify-content: flex-end;
+}
+
+.settings-dashboard-topic-request-send {
+  background: #8b8f95;
+  border: 0;
+  box-shadow: none;
+}
+
+.settings-dashboard-topic-request-send.primary-action {
+  background: rgb(139, 143, 149);
+  color: #ffffff;
+}
+
+.settings-dashboard-topic-request-send:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.settings-run-history-hidden {
+  display: none;
+}
+
+.settings-run-history-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.settings-run-history-head h3 {
+  margin: 0;
+  font-family: "DialogNanumBody1984", "Noto Sans KR", sans-serif;
+  font-size: 13px;
+}
+
+.settings-history-layout {
+  margin: 0;
+  height: auto;
+  min-height: 0;
+  grid-template-columns: 280px minmax(0, 1fr);
+}
+
+.settings-history-layout > .panel-card {
+  max-height: 420px;
+  overflow: auto;
+}
+
+.settings-dashboard-topic-select .fancy-select-trigger,
+.settings-dashboard-topic-select.fancy-select.is-open .fancy-select-trigger,
+.settings-dashboard-topic-select .fancy-select-trigger:focus,
+.settings-dashboard-topic-select .fancy-select-trigger:focus-visible {
+  min-height: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--surface-soft) 74%, var(--surface-elevated));
+  box-shadow: none;
+}
+
+.settings-multiagent-select .fancy-select-trigger,
+.settings-multiagent-select.fancy-select.is-open .fancy-select-trigger,
+.settings-multiagent-select .fancy-select-trigger:focus,
+.settings-multiagent-select .fancy-select-trigger:focus-visible {
+  border: 0;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--surface-soft) 74%, var(--surface-elevated));
+  box-shadow: none;
+}
+
+.settings-view .controls .fancy-select.is-open .fancy-select-trigger {
+  background: color-mix(in srgb, var(--focus-ring) 18%, var(--surface-soft));
+  border-color: transparent;
+}
+
+.settings-view .controls .fancy-select-trigger:focus,
+.settings-view .controls .fancy-select-trigger:focus-visible {
+  border-color: transparent;
+  box-shadow: none;
+}
+
+:root[data-theme="dark"] .settings-view .controls .fancy-select-trigger {
+  background: color-mix(in srgb, var(--surface-soft) 74%, var(--surface-elevated));
+  border-color: transparent;
+}
+
+:root[data-theme="dark"] .settings-view .controls .fancy-select.is-open .fancy-select-trigger {
+  background: color-mix(in srgb, var(--focus-ring) 18%, var(--surface-soft));
+  border-color: transparent;
+}
+
+:root[data-theme="dark"] .settings-view .controls .fancy-select-trigger:focus,
+:root[data-theme="dark"] .settings-view .controls .fancy-select-trigger:focus-visible {
+  border-color: transparent;
+  box-shadow: none;
+}
+
+:root[data-theme="light"] .panel-card.settings-view.data-intelligence-view {
+  background: transparent;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+:root[data-theme="dark"] .settings-usage-guide,
+:root[data-theme="dark"] .settings-dashboard-topic-row,
+:root[data-theme="dark"] .settings-dashboard-intelligence-actions button,
+:root[data-theme="dark"] .settings-cwd-picker,
+:root[data-theme="dark"] .settings-account-button,
+:root[data-theme="dark"] .settings-refresh-button {
+  background: var(--surface-soft);
+  color: var(--text-main);
+  border-color: var(--panel-border);
+}
+
+:root[data-theme="dark"] .settings-dashboard-topic-title p {
+  color: #f19a9d;
+}
+
+:root[data-theme="dark"] .settings-dashboard-topic-select .fancy-select-trigger,
+:root[data-theme="dark"] .settings-theme-select .fancy-select-trigger,
+:root[data-theme="dark"] .settings-view .controls input,
+:root[data-theme="dark"] .settings-view .controls textarea {
+  background: color-mix(in srgb, var(--surface-soft) 74%, var(--surface-elevated));
+  border-color: transparent;
+  color: var(--text-main);
+}
+
+:root[data-theme="dark"] .settings-dashboard-topic-cadence input {
+  background: #ffffff;
+  color: #1b2229;
+  border: 0;
+  border-bottom: 1px solid #c2cedd;
+}
+
+@media (max-width: 1180px) {
+  .settings-dashboard-topic-row {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+  }
+
+  .settings-dashboard-intelligence-split {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto;
+  }
+
+  .settings-dashboard-topic-columns {
+    display: none;
+  }
+
+  .settings-dashboard-topic-cadence {
+    justify-content: flex-start;
+  }
+
+  .settings-dashboard-topic-cadence input {
+    width: 48px;
+    min-width: 48px;
+  }
+}

@@ -1,0 +1,133 @@
+/* settings/bridge page styles are incrementally extracted from layout/shell.css. */
+
+.settings-view .controls > h3 {
+  margin-top: 4px;
+  font-size: 15px !important;
+  line-height: 18px !important;
+}
+
+.panel-card.settings-view.workspace-tab-panel > .controls > h3,
+.panel-card.settings-view.workspace-tab-panel .web-automation-head h2 {
+  font-size: 15px !important;
+  line-height: 18px !important;
+  min-height: 18px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.panel-card.settings-view.workspace-tab-panel .web-automation-head h2 {
+  font-family: "Galmuri11", "DialogNanumBody1984", "Noto Sans KR", sans-serif !important;
+}
+
+.panel-card.settings-view.workspace-tab-panel > .controls > h3 + .settings-badges {
+  margin-top: -10px !important;
+}
+
+.panel-card.settings-view.workspace-tab-panel .bridge-head-panel > .web-automation-head + .settings-badges {
+  margin-top: 0 !important;
+}
+
+.settings-view .controls {
+  gap: 21px;
+}
+
+.settings-view .bridge-head-panel {
+  gap: 6px;
+}
+
+.settings-compact {
+  margin-top: 16px;
+  padding-top: 0;
+  padding-bottom: 22px;
+  border-top: 0;
+}
+
+.cwd-directory-input {
+  display: none;
+}
+
+.settings-cwd-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.settings-cwd-row .lowercase-path-input {
+  min-height: 36px;
+  height: 36px;
+}
+
+.settings-background-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  gap: 8px;
+}
+
+.settings-background-name {
+  min-width: 0;
+  min-height: 36px;
+  height: 36px;
+}
+
+.settings-background-file-input {
+  display: none;
+}
+
+.settings-background-controls {
+  display: grid;
+  gap: 8px;
+}
+
+.settings-opacity-slider {
+  width: 100%;
+  accent-color: #5f88d7;
+}
+
+.settings-opacity-input {
+  min-width: 46px;
+  width: 46px;
+  min-height: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 5px;
+  background: var(--surface-panel);
+  color: var(--text-main);
+  padding: 8px 6px;
+  text-align: center;
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.settings-opacity-input::-webkit-outer-spin-button,
+.settings-opacity-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.settings-cwd-picker {
+  min-width: 78px;
+  min-height: 36px;
+  height: 36px;
+}
+
+.settings-view .controls .fancy-select-trigger {
+  background: color-mix(in srgb, var(--surface-soft) 74%, var(--surface-elevated));
+  border: 0;
+  border-radius: 4px;
+  box-shadow: none;
+}
+
+.data-intelligence-view > .settings-dashboard-intelligence {
+  width: 100%;
+  max-width: none;
+  margin-inline: 0;
+  min-height: 0;
+  height: 100%;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.settings-run-history {
+  display: grid;
+  gap: 10px;
+}

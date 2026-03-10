@@ -1,0 +1,399 @@
+.agents-mission-panel {
+  display: grid;
+  gap: 10px;
+  padding: 10px 10px 14px;
+  margin-bottom: 14px;
+  background: #ffffff;
+  border: 0;
+}
+
+.agents-mission-panel.is-preview {
+  min-height: 0;
+}
+
+.agents-mission-empty-copy {
+  display: grid;
+  gap: 6px;
+}
+
+.agents-mission-preview-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-panel) 88%, var(--surface));
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.agents-mission-empty-copy strong,
+.agents-mission-head strong,
+.agents-mission-banner-copy strong,
+.agents-mission-role-card strong,
+.agents-mission-card-head strong {
+  font-family: "Galmuri11", "DialogNanumBody1984", "Noto Sans KR", sans-serif;
+}
+
+.agents-mission-empty-copy p,
+.agents-mission-head p,
+.agents-mission-banner-copy p,
+.agents-mission-role-card p,
+.agents-mission-card p,
+.agents-mission-card li,
+.agents-mission-memory p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.agents-mission-head,
+.agents-mission-role-head,
+.agents-mission-card-head,
+.agents-mission-terminal-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.agents-mission-head p {
+  margin-top: 4px;
+}
+
+.agents-mission-summary {
+  display: grid;
+  gap: 8px;
+}
+
+.agents-mission-summary-card,
+.agents-mission-focus-card {
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface-panel) 86%, var(--surface));
+  border: 0;
+}
+
+.agents-mission-summary-card strong {
+  font-family: "Galmuri11", "DialogNanumBody1984", "Noto Sans KR", sans-serif;
+  font-size: 14px;
+}
+
+.agents-mission-summary-card p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.agents-mission-summary-card-wide strong {
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.agents-mission-focus-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.agents-mission-focus-copy strong {
+  font-family: "Galmuri11", "DialogNanumBody1984", "Noto Sans KR", sans-serif;
+  font-size: 14px;
+}
+
+.agents-mission-focus-copy p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.agents-mission-section-head {
+  display: grid;
+  gap: 4px;
+}
+
+.agents-mission-section-head strong {
+  font-family: "Galmuri11", "DialogNanumBody1984", "Noto Sans KR", sans-serif;
+  font-size: 13px;
+}
+
+.agents-mission-section-head p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.agents-mission-clear-button,
+.agents-mission-button-row button,
+.agents-mission-command-button {
+  border: 0;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--surface-panel) 86%, var(--surface));
+  color: var(--text-main);
+  box-shadow: none;
+}
+
+.agents-mission-clear-button {
+  min-height: 26px;
+  padding: 0 8px;
+  font-size: 10px;
+}
+
+.agents-mission-banner {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: 8px;
+  padding: 10px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface-panel) 86%, var(--surface));
+}
+
+.agents-mission-banner-kicker,
+.agents-mission-next-action span,
+.agents-mission-memory span {
+  display: inline-flex;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+.agents-mission-banner-copy,
+.agents-mission-next-action,
+.agents-mission-memory {
+  display: grid;
+  gap: 4px;
+}
+
+.agents-mission-next-action {
+  padding: 10px;
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+.agents-mission-next-action b {
+  color: var(--text-main);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.agents-mission-next-action small {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.agents-mission-role-board {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+.agents-mission-role-section {
+  display: grid;
+  gap: 8px;
+}
+
+.agents-mission-role-card,
+.agents-mission-card {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface-panel) 86%, var(--surface));
+}
+
+.agents-mission-role-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.agents-mission-status-chip {
+  min-height: 18px;
+  padding: 0 8px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  background: color-mix(in srgb, var(--surface-panel) 72%, var(--surface-strong));
+  color: var(--text-muted);
+}
+
+.agents-mission-status-chip.is-done {
+  background: #e8f0ff;
+  color: #1f5ec6;
+}
+
+.agents-mission-status-chip.is-running {
+  background: #dff4e8;
+  color: #1f6744;
+}
+
+.agents-mission-status-chip.is-blocked {
+  background: #fff0d8;
+  color: #946100;
+}
+
+.agents-mission-status-chip.is-error {
+  background: #fbe3e3;
+  color: #b34b4b;
+}
+
+.agents-mission-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+.agents-mission-details {
+  display: grid;
+  gap: 8px;
+}
+
+.agents-mission-details summary {
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.agents-mission-details[open] {
+  padding-top: 2px;
+}
+
+.agents-mission-card-terminal {
+  grid-column: auto;
+  gap: 8px;
+  border: 0;
+}
+
+.agents-mission-card-copy {
+  font-size: 12px;
+  color: var(--text-main);
+}
+
+.agents-mission-card-head small,
+.agents-mission-contract-path,
+.agents-mission-muted,
+.agents-mission-event-list span,
+.agents-mission-terminal-meta span {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.agents-mission-contract-path {
+  word-break: break-all;
+}
+
+.agents-mission-button-row,
+.agents-mission-command-list {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.agents-mission-button-row button,
+.agents-mission-command-button {
+  min-height: 28px;
+  padding: 0 8px;
+  font-size: 10px;
+}
+
+.agents-mission-command-button code {
+  font-size: 11px;
+}
+
+.agents-mission-button-row button:disabled,
+.agents-mission-command-button:disabled {
+  opacity: 0.55;
+}
+
+.agents-mission-event-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+}
+
+.agents-mission-event-list li {
+  display: grid;
+  gap: 3px;
+  padding: 10px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface-panel) 78%, var(--surface));
+}
+
+.agents-mission-status-note {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+.agents-mission-status-note span {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.agents-mission-status-note p {
+  margin: 0;
+  color: var(--text-main);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.agents-mission-terminal-result {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+.agents-mission-terminal-details {
+  display: grid;
+  gap: 8px;
+}
+
+.agents-mission-terminal-details summary {
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.agents-mission-terminal-result pre {
+  margin: 0;
+  max-height: 132px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text-main);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.agents-mission-terminal-meta b.is-ok {
+  color: #1f7a46;
+}
+
+.agents-mission-terminal-meta b.is-error {
+  color: #b34b4b;
+}
+
+@media (max-width: 1180px) {
+  .agents-mission-banner {
+    grid-template-columns: 1fr;
+  }
+}

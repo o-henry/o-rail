@@ -1,0 +1,162 @@
+.workflow-right-stack {
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 320px;
+  min-width: 320px;
+  max-width: 320px;
+  border-radius: 0;
+  background: transparent;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0 2px 0 0;
+  scroll-padding-bottom: 0;
+}
+
+.workflow-right-stack > .panel-card {
+  flex: 0 0 auto;
+  overflow: visible;
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.workflow-right-stack > .panel-card.workflow-role-dock {
+  flex: 0 0 auto;
+  min-height: auto;
+  display: grid;
+  background: var(--surface);
+}
+
+.workflow-right-stack > .panel-card.workflow-unity-automation-island {
+  flex: 0 0 auto;
+  min-height: auto;
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  background: var(--surface);
+}
+
+.workflow-right-stack > .panel-card.inspector-pane.is-collapsed:last-child {
+  flex: 0 0 auto;
+  min-height: auto;
+}
+
+.workflow-right-stack .inspector-pane.is-collapsed,
+.workflow-role-dock.is-collapsed,
+.workflow-unity-automation-island.is-collapsed {
+  min-height: 48px;
+}
+
+.workflow-right-stack .inspector-pane.is-collapsed {
+  grid-template-rows: auto;
+}
+
+.workflow-role-dock.is-collapsed {
+  padding: 10px;
+}
+
+.workflow-unity-automation-island.is-collapsed {
+  gap: 0;
+  padding: 10px;
+}
+
+.workflow-right-stack > .panel-card.workflow-mission-island {
+  flex: 0 0 auto;
+  min-height: auto;
+  display: grid;
+  background: var(--surface);
+  margin-bottom: 0;
+  border-radius: 8px;
+}
+
+.workflow-right-stack > .panel-card.workflow-mission-island.agents-mission-panel {
+  margin-bottom: 0;
+  padding: 10px 10px 14px;
+}
+
+.workflow-right-stack > .panel-card.workflow-mission-island .agents-mission-banner,
+.workflow-right-stack > .panel-card.workflow-mission-island .agents-mission-role-board,
+.workflow-right-stack > .panel-card.workflow-mission-island .agents-mission-grid {
+  grid-template-columns: 1fr;
+}
+
+.workflow-right-stack > .panel-card.workflow-mission-island .agents-mission-button-row button,
+.workflow-right-stack > .panel-card.workflow-mission-island .agents-mission-command-button {
+  min-height: 28px;
+  font-size: 11px;
+}
+
+.workflow-right-stack > .panel-card.workflow-mission-island .agents-mission-contract-path,
+.workflow-right-stack > .panel-card.workflow-mission-island .agents-mission-card-copy,
+.workflow-right-stack > .panel-card.workflow-mission-island .agents-mission-event-list span,
+.workflow-right-stack > .panel-card.workflow-mission-island .agents-mission-terminal-meta span,
+.workflow-right-stack > .panel-card.workflow-mission-island .agents-mission-role-meta {
+  font-size: 10px;
+}
+
+.workflow-right-stack > .panel-card.workflow-mission-island .agents-mission-empty-copy strong,
+.workflow-right-stack > .panel-card.workflow-mission-island .agents-mission-head strong {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.4px;
+}
+
+.workflow-right-stack > .panel-card.inspector-pane:last-child {
+  flex: 1 1 auto;
+  margin-bottom: 0;
+  min-height: 0;
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+}
+
+.workflow-right-stack .inspector-pane {
+  min-height: auto;
+  height: auto;
+  overflow: visible;
+  grid-template-rows: auto auto;
+  border-radius: 10px;
+}
+
+.workflow-right-stack .inspector-content {
+  min-height: auto;
+  overflow: visible;
+  padding-bottom: 16px;
+}
+
+.workflow-role-dock {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 10px 10px 24px;
+  overflow: visible;
+  min-height: 0;
+  height: auto;
+  flex: 0 0 auto;
+  box-sizing: border-box;
+}
+
+.workflow-role-dock-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.workflow-unity-automation-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.workflow-role-dock-head-text,
+.workflow-unity-automation-head-text {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}

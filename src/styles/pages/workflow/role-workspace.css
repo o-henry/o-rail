@@ -147,19 +147,65 @@
   border-radius: 4px;
   background: color-mix(in srgb, var(--surface-panel) 84%, var(--surface));
   padding: 6px 8px;
+  display: grid;
+  gap: 6px;
+}
+
+.workflow-role-summary-item-actions {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  padding: 6px 0;
+  border-top: 1px solid color-mix(in srgb, var(--surface-strong) 68%, transparent);
+}
+
+.workflow-role-summary-item-actions small {
+  font-size: 10px;
+  line-height: 1;
+  color: var(--text-muted);
+}
+
+.workflow-role-summary-remove {
+  min-width: 44px;
+  height: 22px;
+  min-height: 22px;
+  border: 0;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--surface) 88%, var(--surface-panel));
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 8px;
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(17, 24, 39, 0.12);
+  transition: background-color 140ms ease, color 140ms ease, border-color 140ms ease;
+}
+
+.workflow-role-summary-remove:hover {
+  background: color-mix(in srgb, var(--surface-panel) 76%, var(--surface));
+  color: var(--text-main);
+}
+
+.workflow-role-summary-remove:focus-visible {
+  outline: 1px solid color-mix(in srgb, var(--focus-ring) 72%, transparent);
+  outline-offset: 1px;
 }
 
 .workflow-role-summary-list li span {
+  display: block;
+  padding: 6px 0;
   font-size: 11px;
   color: var(--text-main);
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .workflow-role-summary-list li code {

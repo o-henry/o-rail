@@ -1,4 +1,4 @@
-import type { HandoffRecord, StudioRoleId } from "../../features/studio/handoffTypes";
+import type { StudioRoleId } from "../../features/studio/handoffTypes";
 import { isStudioRolePaletteVisible, normalizeStudioRoleSelection } from "../../features/studio/pmPlanningMode";
 import { STUDIO_ROLE_TEMPLATES } from "../../features/studio/roleTemplates";
 
@@ -8,28 +8,17 @@ type WorkflowRoleDockProps = {
   roleId: StudioRoleId;
   onSelectRoleId: (roleId: StudioRoleId) => void;
   roleSelectionLockedTo?: StudioRoleId | null;
-  taskId: string;
-  onChangeTaskId: (value: string) => void;
   prompt: string;
   onChangePrompt: (value: string) => void;
-  onRunRole: () => void;
-  runDisabled: boolean;
+  onSaveRequest: () => void;
+  onDeleteQueuedRequest: (text: string) => void;
+  saveDisabled: boolean;
   roleStatusById: Partial<Record<StudioRoleId, { status: RoleDockStatus; taskId?: string }>>;
-  selectedRoleHandoffs: HandoffRecord[];
-  selectedRoleBlockers: HandoffRecord[];
-  onClearRecentHandoffs: () => void;
-  onOpenKnowledge: () => void;
+  queuedRequests: string[];
+  requestTargetCount: number;
 };
 
 export default function WorkflowRoleDock(props: WorkflowRoleDockProps) {
-  const latestArtifactPath = props.selectedRoleHandoffs
-    .flatMap((row) => row.artifactPaths.map((path) => String(path ?? "").trim()).filter(Boolean))
-    .find((path) => path.toLowerCase().endsWith(".json"))
-    ?? props.selectedRoleHandoffs
-      .flatMap((row) => row.artifactPaths.map((path) => String(path ?? "").trim()).filter(Boolean))[0];
-  const latestArtifactName = latestArtifactPath
-    ? latestArtifactPath.split(/[\\/]/).filter(Boolean).pop() ?? latestArtifactPath
-    : "";
   const lockedRoleId = normalizeStudioRoleSelection(props.roleSelectionLockedTo ?? null);
   const selectedRoleId = normalizeStudioRoleSelection(props.roleId) ?? props.roleId;
 
@@ -38,7 +27,7 @@ export default function WorkflowRoleDock(props: WorkflowRoleDockProps) {
       <header className="workflow-role-dock-head">
         <div className="workflow-role-dock-head-text">
           <strong>역할 워크스페이스</strong>
-          <span>그래프 단일 실행 보드</span>
+          <span>그래프 역할 추가 요청 저장</span>
         </div>
       </header>
 
@@ -71,76 +60,49 @@ export default function WorkflowRoleDock(props: WorkflowRoleDockProps) {
 
       <section className="workflow-role-form">
         <label>
-          TASK ID
-          <input
-            className="workflow-handoff-task-input"
-            onChange={(event) => props.onChangeTaskId(event.currentTarget.value)}
-            placeholder="TASK-001"
-            value={props.taskId}
-          />
-        </label>
-        <label>
           요청사항
           <textarea
             className="workflow-handoff-request-input"
             onChange={(event) => props.onChangePrompt(event.currentTarget.value)}
-            placeholder="현재 역할에서 바로 처리할 요청을 입력하세요."
+            placeholder="다음 그래프 실행 때 이 역할에 추가로 반영할 요청을 입력하세요."
             value={props.prompt}
           />
         </label>
         <button
           className="mini-action-button workflow-role-run-button"
-          disabled={props.runDisabled}
-          onClick={props.onRunRole}
+          disabled={props.saveDisabled}
+          onClick={props.onSaveRequest}
           type="button"
         >
-          <span className="mini-action-button-label">역할 실행</span>
+          <span className="mini-action-button-label">추가 요청 저장</span>
         </button>
       </section>
 
       <section className="workflow-role-summary">
-        <div className="workflow-role-summary-head">
-          <strong>최근 인수인계</strong>
-          <button className="mini-action-button workflow-role-summary-clear" onClick={props.onClearRecentHandoffs} type="button">
-            <span className="mini-action-button-label">CLEAR</span>
-          </button>
-        </div>
-        {props.selectedRoleHandoffs.length === 0 ? (
-          <p className="workflow-role-summary-empty">HANDOFF 없음</p>
-        ) : (
-          <ul className="workflow-role-summary-list">
-            {props.selectedRoleHandoffs.map((row) => (
-              <li key={row.id}>
-                <span>{row.taskId}</span>
-                <code>{row.status.toUpperCase()}</code>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      <section className="workflow-role-summary">
-        <div className="workflow-role-summary-head">
-          <strong>최근 산출물</strong>
-          <button className="mini-action-button workflow-role-summary-open" onClick={props.onOpenKnowledge} type="button">
-            <span className="mini-action-button-label">데이터베이스에서 보기</span>
-          </button>
-        </div>
+        <strong>저장된 추가 요청</strong>
         <p className="workflow-role-summary-path">
-          {latestArtifactName || "산출물 없음"}
+          {props.requestTargetCount > 0
+            ? `대상 역할 노드 ${props.requestTargetCount}개`
+            : "대상 역할 노드 없음"}
         </p>
-      </section>
-
-      <section className="workflow-role-summary">
-        <strong>차단 이슈</strong>
-        {props.selectedRoleBlockers.length === 0 ? (
-          <p className="workflow-role-summary-empty">BLOCKER 없음</p>
+        {props.queuedRequests.length === 0 ? (
+          <p className="workflow-role-summary-empty">저장된 추가 요청 없음</p>
         ) : (
           <ul className="workflow-role-summary-list">
-            {props.selectedRoleBlockers.map((row) => (
-              <li key={row.id}>
-                <span>{row.taskId}</span>
-                <code>{String(row.rejectReason ?? "REJECTED").trim() || "REJECTED"}</code>
+            {props.queuedRequests.map((row, index) => (
+              <li key={`${index}:${row}`}>
+                <span>{row}</span>
+                <div className="workflow-role-summary-item-actions">
+                  <small>저장됨</small>
+                  <button
+                    aria-label={`저장된 추가 요청 삭제: ${row}`}
+                    className="workflow-role-summary-remove"
+                    onClick={() => props.onDeleteQueuedRequest(row)}
+                    type="button"
+                  >
+                    삭제
+                  </button>
+                </div>
               </li>
             ))}
           </ul>

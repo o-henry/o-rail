@@ -15,6 +15,11 @@ import { useGraphFileActions } from "./hooks/useGraphFileActions";
 import { useGraphState } from "./hooks/useGraphState";
 import { useWebConnectState } from "./hooks/useWebConnectState";
 import { useWorkflowGraphActions } from "./hooks/useWorkflowGraphActions";
+import {
+  collectWorkflowRoleQueuedRequests,
+  removeWorkflowRoleQueuedRequest,
+  resolveWorkflowRoleRequestTargetNodeIds,
+} from "./hooks/workflowRoleRequestTargets";
 import { useWorkflowRoleCollaboration } from "./hooks/useWorkflowRoleCollaboration";
 import { useWorkflowShortcuts } from "./hooks/useWorkflowShortcuts";
 import { useAdaptiveWorkspaceState } from "./hooks/useAdaptiveWorkspaceState";
@@ -325,7 +330,7 @@ function App() {
   const themeModeOptions = useMemo(() => [{ value: "light", label: t("settings.theme.light") }, { value: "dark", label: t("settings.theme.dark") }], [t]);
   const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>("workflow");
   const [workflowRoleId, setWorkflowRoleId] = useState<StudioRoleId>("pm_planner");
-  const [workflowRoleTaskId, setWorkflowRoleTaskId] = useState("TASK-001");
+  const [, setWorkflowRoleTaskId] = useState("TASK-001");
   const [workflowRolePrompt, setWorkflowRolePrompt] = useState("");
   const [expandedRoleNodeIds, setExpandedRoleNodeIds] = useState<string[]>([]);
   const [workflowRoleRuntimeStateByRole, setWorkflowRoleRuntimeStateByRole] = useState<
@@ -821,23 +826,6 @@ function App() {
       handoffRecords: workflowHandoffPanel.handoffRecords,
     });
   }, [workflowHandoffPanel.handoffRecords, workflowRoleRuntimeStateByRole]);
-  const workflowSelectedRoleHandoffs = useMemo(
-    () =>
-      workflowHandoffPanel.handoffRecords
-        .filter((row) => row.fromRole === workflowRoleId || row.toRole === workflowRoleId)
-        .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
-        .slice(0, 4),
-    [workflowHandoffPanel.handoffRecords, workflowRoleId],
-  );
-  const workflowSelectedRoleBlockers = useMemo(
-    () =>
-      workflowHandoffPanel.handoffRecords
-        .filter((row) => (row.fromRole === workflowRoleId || row.toRole === workflowRoleId) && row.status === "rejected")
-        .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
-        .slice(0, 3),
-    [workflowHandoffPanel.handoffRecords, workflowRoleId],
-  );
-
   let webTurnRunHandlers: ReturnType<typeof createWebTurnRunHandlers> | null = null;
 
   function resolvePendingWebTurn(result: { ok: boolean; output?: unknown; error?: string }) {
@@ -2190,56 +2178,99 @@ function App() {
   );
   const boundedStageWidth = Math.min(stageWidth, MAX_STAGE_WIDTH);
   const boundedStageHeight = Math.min(stageHeight, MAX_STAGE_HEIGHT);
-  const onRunRole = useCallback(() => {
-    const taskId = workflowRoleTaskId.trim();
-    if (!taskId) {
-      setStatus("TASK ID를 입력해 주세요.");
+  const workflowRoleRequestTargetNodeIds = useMemo(
+    () =>
+      resolveWorkflowRoleRequestTargetNodeIds({
+        graph,
+        roleId: workflowRoleId,
+        selectedNodeId: selectedNode?.id,
+      }),
+    [graph, selectedNode?.id, workflowRoleId],
+  );
+  const workflowRoleQueuedRequests = useMemo(
+    () =>
+      collectWorkflowRoleQueuedRequests({
+        targetNodeIds: workflowRoleRequestTargetNodeIds,
+        pendingNodeRequests,
+      }),
+    [pendingNodeRequests, workflowRoleRequestTargetNodeIds],
+  );
+  const saveRoleRequestDisabled =
+    workflowRolePrompt.trim().length === 0 || workflowRoleRequestTargetNodeIds.length === 0;
+  const onSaveRoleRequest = useCallback(() => {
+    const nextPrompt = workflowRolePrompt.trim();
+    if (!nextPrompt) {
+      setStatus("저장할 추가 요청을 입력해 주세요.");
       return;
     }
-    const latestIncomingHandoff = workflowHandoffPanel.handoffRecords
-      .filter((row) => row.toRole === workflowRoleId && (row.status === "requested" || row.status === "accepted"))
-      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0];
-    const basePrompt = workflowRolePrompt.trim();
-    const handoffInjectedPrompt = latestIncomingHandoff
-      ? `[HANDOFF_CONTEXT ${latestIncomingHandoff.taskId}] ${latestIncomingHandoff.request}\n\n${basePrompt}`.trim()
-      : basePrompt;
-    setWorkflowRoleRuntimeStateByRole((prev) => ({
-      ...prev,
-      [workflowRoleId]: {
-        status: "RUNNING",
-        taskId,
-        message: "RUN_PENDING",
-      },
-    }));
-    const missionHandle = missionControl.launchMission({
-      sourceTab: "workflow",
-      roleId: workflowRoleId,
-      roleLabel: STUDIO_ROLE_TEMPLATES.find((role) => role.id === workflowRoleId)?.label ?? workflowRoleId,
-      taskId,
-      prompt: handoffInjectedPrompt || basePrompt || taskId,
+    if (workflowRoleRequestTargetNodeIds.length === 0) {
+      setStatus("추가 요청을 저장할 역할 노드가 없습니다.");
+      return;
+    }
+    workflowRoleRequestTargetNodeIds.forEach((nodeId) => {
+      enqueueNodeRequest(nodeId, nextPrompt);
     });
-    publishAction({
-      type: "run_role",
-      payload: {
-        roleId: workflowRoleId,
-        taskId,
-        prompt: handoffInjectedPrompt || undefined,
-        runId: missionHandle.implementerRunId,
-        sourceTab: "workflow",
-        handoffToRole: workflowHandoffPanel.handoffToRole,
-        handoffRequest: basePrompt || undefined,
-      },
+    const roleLabel =
+      resolveStudioRoleDisplayLabel(workflowRoleId)
+      || STUDIO_ROLE_TEMPLATES.find((role) => role.id === workflowRoleId)?.label
+      || workflowRoleId;
+    appendWorkspaceEvent({
+      source: "workflow",
+      actor: "user",
+      level: "info",
+      message:
+        workflowRoleRequestTargetNodeIds.length === 1
+          ? `${roleLabel} 추가 요청 저장`
+          : `${roleLabel} 추가 요청 ${workflowRoleRequestTargetNodeIds.length}개 노드에 저장`,
     });
+    setWorkflowRolePrompt("");
+    setStatus(
+      workflowRoleRequestTargetNodeIds.length === 1
+        ? `${roleLabel} 노드에 추가 요청을 저장했습니다.`
+        : `${roleLabel} 역할 노드 ${workflowRoleRequestTargetNodeIds.length}개에 추가 요청을 저장했습니다.`,
+      );
   }, [
-    missionControl,
-    publishAction,
+    appendWorkspaceEvent,
+    enqueueNodeRequest,
     setStatus,
-    setWorkflowRoleRuntimeStateByRole,
-    workflowHandoffPanel.handoffRecords,
-    workflowHandoffPanel.handoffToRole,
+    setWorkflowRolePrompt,
     workflowRoleId,
     workflowRolePrompt,
-    workflowRoleTaskId,
+    workflowRoleRequestTargetNodeIds,
+  ]);
+  const onDeleteQueuedRoleRequest = useCallback((requestText: string) => {
+    const trimmed = requestText.trim();
+    if (!trimmed || workflowRoleRequestTargetNodeIds.length === 0) {
+      return;
+    }
+    const nextPendingNodeRequests = removeWorkflowRoleQueuedRequest({
+      targetNodeIds: workflowRoleRequestTargetNodeIds,
+      pendingNodeRequests: pendingNodeRequestsRef.current,
+      text: trimmed,
+    });
+    if (nextPendingNodeRequests === pendingNodeRequestsRef.current) {
+      return;
+    }
+    pendingNodeRequestsRef.current = nextPendingNodeRequests;
+    setPendingNodeRequests(nextPendingNodeRequests);
+    const roleLabel =
+      resolveStudioRoleDisplayLabel(workflowRoleId)
+      || STUDIO_ROLE_TEMPLATES.find((role) => role.id === workflowRoleId)?.label
+      || workflowRoleId;
+    appendWorkspaceEvent({
+      source: "workflow",
+      actor: "user",
+      level: "info",
+      message: `${roleLabel} 추가 요청 삭제`,
+    });
+    setStatus(`${roleLabel} 저장 추가 요청을 삭제했습니다.`);
+  }, [
+    appendWorkspaceEvent,
+    pendingNodeRequestsRef,
+    setPendingNodeRequests,
+    setStatus,
+    workflowRoleId,
+    workflowRoleRequestTargetNodeIds,
   ]);
   useGraphResearchKnowledgeSync({ cwd, feedPosts, graphNodes: graph.nodes, invokeFn: invoke });
   const {
@@ -2374,10 +2405,14 @@ function App() {
     },
     nodeStates,
     onInterruptWorkflowNode,
-    onRunRole,
+    onDeleteQueuedRoleRequest,
+    onSaveRoleRequest,
     openWorkflowAgentTerminalNodeId,
     pendingNodeRequests,
     presetTemplateOptions,
+    workflowRoleQueuedRequests,
+    workflowRoleRequestTargetNodeIds,
+    saveRoleRequestDisabled,
     selectedNode,
     selectedNodeRoleLockId,
     selectedTerminalNode,
@@ -2385,7 +2420,6 @@ function App() {
     setStatus,
     setWorkflowRoleId,
     setWorkflowRolePrompt,
-    setWorkflowRoleTaskId,
     setWorkspaceTab,
     toolsProps: {
       cwd,
@@ -2445,9 +2479,6 @@ function App() {
     workflowRoleId,
     workflowRolePrompt,
     workflowRoleStatusByRole,
-    workflowRoleTaskId,
-    workflowSelectedRoleBlockers,
-    workflowSelectedRoleHandoffs,
     workspaceEvents,
   });
   const { onSelectWorkspaceTab } = useWorkspaceNavigation({

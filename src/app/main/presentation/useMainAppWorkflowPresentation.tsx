@@ -22,22 +22,16 @@ export function useMainAppWorkflowPresentation(params: any) {
   const workflowRoleDockElement = (
     <WorkflowRoleDock
       onChangePrompt={params.setWorkflowRolePrompt}
-      onChangeTaskId={params.setWorkflowRoleTaskId}
-      onRunRole={params.onRunRole}
+      onDeleteQueuedRequest={params.onDeleteQueuedRoleRequest}
+      onSaveRequest={params.onSaveRoleRequest}
       onSelectRoleId={params.setWorkflowRoleId}
       roleSelectionLockedTo={params.selectedNodeRoleLockId}
       roleStatusById={params.workflowRoleStatusByRole}
-      selectedRoleBlockers={params.workflowSelectedRoleBlockers}
-      selectedRoleHandoffs={params.workflowSelectedRoleHandoffs}
+      queuedRequests={params.workflowRoleQueuedRequests}
       prompt={params.workflowRolePrompt}
+      requestTargetCount={params.workflowRoleRequestTargetNodeIds.length}
       roleId={params.workflowRoleId}
-      runDisabled={params.isWorkflowBusy}
-      taskId={params.workflowRoleTaskId}
-      onClearRecentHandoffs={() => params.workflowHandoffPanel.clearHandoffsByRole(params.workflowRoleId)}
-      onOpenKnowledge={() => {
-        params.setWorkspaceTab("knowledge");
-        params.setStatus("데이터베이스 탭으로 이동");
-      }}
+      saveDisabled={params.saveRoleRequestDisabled}
     />
   );
 

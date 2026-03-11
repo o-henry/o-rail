@@ -82,4 +82,55 @@ describe("resolveQuestionDirectInputNodeIds", () => {
 
     expect(directInputNodeIds.has("role")).toBe(false);
   });
+
+  it("does not mark internal synthesis or verification nodes as direct-input", () => {
+    const graph: GraphData = {
+      nodes: [
+        {
+          id: "role",
+          type: "turn",
+          position: { x: 0, y: 0 },
+          config: { sourceKind: "handoff", handoffRoleId: "pm_planner" },
+        },
+        {
+          id: "synthesis",
+          type: "turn",
+          position: { x: 0, y: 0 },
+          config: {
+            sourceKind: "data_pipeline",
+            internalParentNodeId: "role",
+            internalNodeKind: "synthesis",
+          },
+        },
+        {
+          id: "verification",
+          type: "turn",
+          position: { x: 0, y: 0 },
+          config: {
+            sourceKind: "data_pipeline",
+            internalParentNodeId: "role",
+            internalNodeKind: "verification",
+          },
+        },
+      ],
+      edges: [
+        {
+          from: { nodeId: "synthesis", port: "out" },
+          to: { nodeId: "verification", port: "in" },
+        },
+        {
+          from: { nodeId: "verification", port: "out" },
+          to: { nodeId: "role", port: "in" },
+        },
+      ],
+      version: 1,
+      knowledge: { files: [], topK: 0, maxChars: 0 },
+    };
+
+    const directInputNodeIds = resolveQuestionDirectInputNodeIds(graph);
+
+    expect(directInputNodeIds.has("role")).toBe(true);
+    expect(directInputNodeIds.has("synthesis")).toBe(false);
+    expect(directInputNodeIds.has("verification")).toBe(false);
+  });
 });

@@ -7,6 +7,14 @@ import type { CanvasDisplayEdge } from "../index";
 export function resolveQuestionDirectInputNodeIds(graph: GraphData): Set<string> {
   const nodeById = new Map(graph.nodes.map((node) => [node.id, node] as const));
   const incomingNodeIds = new Set<string>();
+  const internalNodeIds = new Set(
+    graph.nodes
+      .filter((node) => {
+        const config = (node.config ?? {}) as Record<string, unknown>;
+        return String(config.internalParentNodeId ?? "").trim().length > 0;
+      })
+      .map((node) => node.id),
+  );
 
   graph.edges.forEach((edge) => {
     const sourceNode = nodeById.get(edge.from.nodeId);
@@ -20,6 +28,7 @@ export function resolveQuestionDirectInputNodeIds(graph: GraphData): Set<string>
 
   return new Set(
     graph.nodes
+      .filter((node) => !internalNodeIds.has(node.id))
       .filter((node) => !incomingNodeIds.has(node.id))
       .map((node) => node.id),
   );

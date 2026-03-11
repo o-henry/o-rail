@@ -16,7 +16,7 @@ export const KO_MESSAGES: Dictionary = {
     "nav.knowledge": "데이터베이스",
     "nav.settings": "설정",
     "nav.language": "언어",
-    "settings.title": "설정",
+    "settings.title": "기본 설정",
     "settings.engine.connected": "엔진 연결됨",
     "settings.engine.waiting": "엔진 대기",
     "settings.login.done": "로그인 완료",

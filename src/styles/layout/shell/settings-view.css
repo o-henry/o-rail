@@ -32,10 +32,16 @@
 
 .panel-card.settings-view {
   background: var(--bg-app);
+  box-shadow: none;
+  border-radius: 0;
+  padding: 18px 20px 20px;
+  gap: 18px;
 }
 
 .panel-card.settings-view.workspace-tab-panel > .controls,
 .panel-card.settings-view.workspace-tab-panel > .bridge-embedded > .controls {
+  width: 100%;
+  max-width: 720px;
   background: #ffffff;
   border-radius: 8px;
   padding: 12px;

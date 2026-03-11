@@ -38,6 +38,12 @@
   box-shadow: none;
 }
 
+:root[data-theme="dark"] .panel-card.settings-view.workspace-tab-panel {
+  background: var(--bg-app);
+  box-shadow: none;
+  border-radius: 0;
+}
+
 :root[data-theme="dark"] .dashboard-hero-reset,
 :root[data-theme="dark"] .dashboard-actions button {
   background: color-mix(in srgb, var(--surface-soft) 78%, var(--surface-elevated));

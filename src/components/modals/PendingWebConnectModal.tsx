@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import { useI18n } from "../../i18n";
 
 type PendingWebConnectModalProps = {
@@ -22,9 +23,9 @@ export default function PendingWebConnectModal({
     return null;
   }
 
-  return (
+  const content = (
     <div className="modal-backdrop">
-      <section className="approval-modal web-turn-modal">
+      <section className="approval-modal web-turn-modal pending-web-connect-modal">
         <h2>{t("modal.webConnectRequired")}</h2>
         <div>{t("modal.service")}: {providersLabel}</div>
         <div>{reason}</div>
@@ -43,4 +44,10 @@ export default function PendingWebConnectModal({
       </section>
     </div>
   );
+
+  if (typeof document === "undefined") {
+    return content;
+  }
+
+  return createPortal(content, document.body);
 }

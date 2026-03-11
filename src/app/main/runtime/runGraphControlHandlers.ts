@@ -57,9 +57,9 @@ export function createRunGraphControlHandlers(params: any) {
     const runGroup = params.inferRunGroupMeta(params.graph, params.lastAppliedPresetRef.current, params.locale);
     if (!isViaOnlyGraph(params.graph)) {
       const directInputNodeIds = params.findDirectInputNodeIds(params.graph);
-      if (directInputNodeIds.length !== 1) {
+      if (directInputNodeIds.length === 0) {
         params.setError(
-          `질문 직접 입력 노드는 1개여야 합니다. 현재 ${directInputNodeIds.length}개입니다. 노드 연결을 정리하세요.`,
+          "질문 직접 입력으로 시작되는 노드가 없습니다. 최소 1개 노드를 질문에서 시작되게 연결하세요.",
         );
         params.setStatus("그래프 실행 대기");
         return null;
@@ -88,6 +88,7 @@ export function createRunGraphControlHandlers(params: any) {
     params.internalMemoryCorpusRef.current = [];
     params.activeRunPresetKindRef.current = undefined;
     params.activeTurnNodeIdRef.current = "";
+    params.activeTurnThreadByNodeIdRef.current = {};
     params.setIsGraphRunning(false);
     params.setIsGraphPaused(false);
     params.setIsRunStarting(false);
@@ -146,8 +147,7 @@ export function createRunGraphControlHandlers(params: any) {
       clearQueuedWebTurnRequests: params.clearQueuedWebTurnRequests,
       resolvePendingWebTurn: params.resolvePendingWebTurn,
       pauseErrorToken: params.pauseErrorToken,
-      activeTurnNodeId: params.activeTurnNodeIdRef.current,
-      nodeStates: params.nodeStates,
+      activeTurnThreadByNodeId: params.activeTurnThreadByNodeIdRef.current,
     });
   }
 

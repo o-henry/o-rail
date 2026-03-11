@@ -23,6 +23,8 @@ function createBaseParams() {
     graph: { nodes: [], edges: [], knowledge: { files: [], topK: 3, maxChars: 2400 } },
     runLogCollectorRef: { current: [] },
     setNodeStates: vi.fn(),
+    findDirectInputNodeIds: vi.fn(() => []),
+    resolveGraphDagMaxThreads: vi.fn(() => 1),
   } as any;
 }
 
@@ -46,4 +48,3 @@ describe("createRunGraphRunner", () => {
     expect(params.validateUnifiedRunInput).toHaveBeenCalledWith("workflow question", "ko");
   });
 });
-

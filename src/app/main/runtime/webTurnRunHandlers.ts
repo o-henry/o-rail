@@ -101,6 +101,7 @@ export function createWebTurnRunHandlers(params: any) {
       pauseRequestedRef: params.pauseRequestedRef,
       cancelRequestedRef: params.cancelRequestedRef,
       activeTurnNodeIdRef: params.activeTurnNodeIdRef,
+      activeTurnThreadByNodeIdRef: params.activeTurnThreadByNodeIdRef,
       activeRunDeltaRef: params.activeRunDeltaRef,
       turnTerminalResolverRef: params.turnTerminalResolverRef,
       consumeNodeRequests: params.consumeNodeRequests,

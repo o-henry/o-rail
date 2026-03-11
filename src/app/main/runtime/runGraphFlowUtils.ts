@@ -1,4 +1,4 @@
-import { getWebProviderFromExecutor, getTurnExecutor, type TurnConfig, type WebProvider } from "../../../features/workflow/domain";
+import { getTurnExecutor, type TurnConfig, type WebProvider } from "../../../features/workflow/domain";
 import { resolveQuestionDirectInputNodeIds } from "../../../features/workflow/graph-utils";
 import type { GraphData, GraphEdge, GraphNode, NodeExecutionStatus } from "../../../features/workflow/types";
 import type {
@@ -24,6 +24,14 @@ export function resolveDagMaxThreads(mode: CodexMultiAgentMode): number {
     return 2;
   }
   return 1;
+}
+
+export function resolveGraphDagMaxThreads(mode: CodexMultiAgentMode, directInputNodeCount: number): number {
+  const base = resolveDagMaxThreads(mode);
+  if (directInputNodeCount <= 1) {
+    return base;
+  }
+  return Math.max(base, directInputNodeCount);
 }
 
 export function buildWebConnectPreflightReasons(params: {
@@ -325,7 +333,6 @@ export function scheduleRunnableGraphNodes(params: {
   processNode: (nodeId: string) => Promise<void>;
   reportSoftError: (prefix: string, error: unknown) => void;
 }): number {
-  let nextActiveTurnTasks = params.activeTurnTasks;
   for (let index = 0; index < params.queue.length && params.activeTasks.size < params.dagMaxThreads; ) {
     const nodeId = params.queue[index];
     const node = params.nodeMap.get(nodeId);
@@ -333,28 +340,15 @@ export function scheduleRunnableGraphNodes(params: {
       params.queue.splice(index, 1);
       continue;
     }
-    const turnExecutor = node.type === "turn" ? getTurnExecutor(node.config as TurnConfig) : null;
-    const isWebTurn = Boolean(turnExecutor && getWebProviderFromExecutor(turnExecutor));
-    const requiresTurnLock = node.type === "turn" && !isWebTurn;
-    if (requiresTurnLock && nextActiveTurnTasks > 0) {
-      index += 1;
-      continue;
-    }
     params.queue.splice(index, 1);
-    if (requiresTurnLock) {
-      nextActiveTurnTasks += 1;
-    }
     const task = params.processNode(nodeId)
       .catch((error) => {
         params.reportSoftError(`노드 실행 실패(${nodeId})`, error);
       })
       .finally(() => {
         params.activeTasks.delete(nodeId);
-        if (requiresTurnLock) {
-          nextActiveTurnTasks = Math.max(0, nextActiveTurnTasks - 1);
-        }
       });
     params.activeTasks.set(nodeId, task);
   }
-  return nextActiveTurnTasks;
+  return params.activeTurnTasks;
 }

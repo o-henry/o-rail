@@ -198,8 +198,7 @@ export async function cancelGraphRun(params: {
   clearQueuedWebTurnRequests: (reason: string) => void;
   resolvePendingWebTurn: (result: { ok: boolean; output?: unknown; error?: string }) => void;
   pauseErrorToken: string;
-  activeTurnNodeId: string;
-  nodeStates: Record<string, { threadId?: string } | undefined>;
+  activeTurnThreadByNodeId: Record<string, string>;
 }) {
   if (!params.isGraphRunning) {
     return;
@@ -240,20 +239,15 @@ export async function cancelGraphRun(params: {
     return;
   }
 
-  const activeNodeId = params.activeTurnNodeId;
-  if (!activeNodeId) {
-    return;
-  }
-
-  const active = params.nodeStates[activeNodeId];
-  if (!active?.threadId) {
-    return;
-  }
-
-  try {
-    await params.invokeFn("turn_interrupt", { threadId: active.threadId });
-    params.addNodeLog(activeNodeId, "turn_interrupt 요청 전송");
-  } catch (error) {
-    params.setError(String(error));
+  const activeTurnEntries = Object.entries(params.activeTurnThreadByNodeId).filter(([, threadId]) =>
+    String(threadId ?? "").trim(),
+  );
+  for (const [activeNodeId, threadId] of activeTurnEntries) {
+    try {
+      await params.invokeFn("turn_interrupt", { threadId });
+      params.addNodeLog(activeNodeId, "turn_interrupt 요청 전송");
+    } catch (error) {
+      params.setError(String(error));
+    }
   }
 }

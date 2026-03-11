@@ -24,6 +24,7 @@ function buildContext(): ExecuteTurnNodeContext {
     pauseRequestedRef: { current: false },
     cancelRequestedRef: { current: false },
     activeTurnNodeIdRef: { current: "" },
+    activeTurnThreadByNodeIdRef: { current: {} },
     activeRunDeltaRef: { current: {} },
     turnTerminalResolverRef: { current: null },
     consumeNodeRequests: () => [],
@@ -63,13 +64,8 @@ describe("executeTurnNodeWithContext", () => {
       if (command === "thread_start") {
         return { threadId: "thread-1", raw: {} } as never;
       }
-      if (command === "turn_start") {
-        ctx.turnTerminalResolverRef.current?.({
-          ok: true,
-          status: "completed",
-          params: { text: "done", output_text: "done", usage: {} },
-        });
-        return { turnId: "turn-1" } as never;
+      if (command === "turn_start_blocking") {
+        return { turnId: "turn-1", output_text: "done", usage: {} } as never;
       }
       throw new Error(`unexpected command ${command}: ${JSON.stringify(args)}`);
     });
@@ -82,7 +78,7 @@ describe("executeTurnNodeWithContext", () => {
       model: "gpt-5.4",
       cwd: "/tmp/project",
     });
-    const turnStartCall = vi.mocked(invokeFn).mock.calls.find((row) => row[0] === "turn_start");
+    const turnStartCall = vi.mocked(invokeFn).mock.calls.find((row) => row[0] === "turn_start_blocking");
     expect(turnStartCall?.[1]).toMatchObject({
       threadId: "thread-1",
       reasoningEffort: "xhigh",
@@ -112,13 +108,8 @@ describe("executeTurnNodeWithContext", () => {
       if (command === "thread_start") {
         return { threadId: "thread-1", raw: {} } as never;
       }
-      if (command === "turn_start") {
-        ctx.turnTerminalResolverRef.current?.({
-          ok: true,
-          status: "completed",
-          params: { text: "done", output_text: "done", usage: {} },
-        });
-        return { turnId: "turn-1" } as never;
+      if (command === "turn_start_blocking") {
+        return { turnId: "turn-1", output_text: "done", usage: {} } as never;
       }
       throw new Error(`unexpected command ${command}`);
     });
@@ -127,7 +118,7 @@ describe("executeTurnNodeWithContext", () => {
     const result = await executeTurnNodeWithContext(node, "x".repeat(2400), ctx);
 
     expect(result.ok).toBe(true);
-    const turnStartCall = vi.mocked(invokeFn).mock.calls.find((row) => row[0] === "turn_start");
+    const turnStartCall = vi.mocked(invokeFn).mock.calls.find((row) => row[0] === "turn_start_blocking");
     expect(turnStartCall?.[1]).toMatchObject({
       temperature: 0.36,
       contextBudget: "tight",
@@ -175,13 +166,8 @@ describe("executeTurnNodeWithContext", () => {
       if (command === "thread_start") {
         return { threadId: "thread-1", raw: {} } as never;
       }
-      if (command === "turn_start") {
-        ctx.turnTerminalResolverRef.current?.({
-          ok: true,
-          status: "completed",
-          params: { text: "done", output_text: "done", usage: {} },
-        });
-        return { turnId: "turn-1" } as never;
+      if (command === "turn_start_blocking") {
+        return { turnId: "turn-1", output_text: "done", usage: {} } as never;
       }
       throw new Error(`unexpected command ${command}`);
     });
@@ -190,8 +176,39 @@ describe("executeTurnNodeWithContext", () => {
     const result = await executeTurnNodeWithContext(node, "에러 로그", ctx);
 
     expect(result.ok).toBe(true);
-    const turnStartCall = vi.mocked(invokeFn).mock.calls.find((row) => row[0] === "turn_start");
+    const turnStartCall = vi.mocked(invokeFn).mock.calls.find((row) => row[0] === "turn_start_blocking");
     expect(String(turnStartCall?.[1]?.text ?? "")).toContain("[UNITY_AUTOMATION_CONTEXT]");
     expect(String(turnStartCall?.[1]?.text ?? "")).toContain("recommendedMode=git_worktree");
+  });
+
+  it("tracks and clears active turn threads around blocking codex execution", async () => {
+    const node: GraphNode = {
+      id: "parallel-turn",
+      type: "turn",
+      position: { x: 0, y: 0 },
+      config: {
+        executor: "codex",
+        model: "GPT-5.4",
+        promptTemplate: "{{input}}",
+      },
+    };
+    const ctx = buildContext();
+    let observedDuringRun = "";
+    ctx.invokeFn = vi.fn(async (command: string) => {
+      if (command === "thread_start") {
+        return { threadId: "thread-parallel", raw: {} } as never;
+      }
+      if (command === "turn_start_blocking") {
+        observedDuringRun = ctx.activeTurnThreadByNodeIdRef.current[node.id] ?? "";
+        return { turnId: "turn-1", output_text: "done", usage: {} } as never;
+      }
+      throw new Error(`unexpected command ${command}`);
+    });
+
+    const result = await executeTurnNodeWithContext(node, "테스트 입력", ctx);
+
+    expect(result.ok).toBe(true);
+    expect(observedDuringRun).toBe("thread-parallel");
+    expect(ctx.activeTurnThreadByNodeIdRef.current[node.id]).toBeUndefined();
   });
 });

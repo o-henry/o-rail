@@ -41,6 +41,7 @@ export function useExecutionState(options: {
   const cancelRequestedRef = useRef(false);
   const pauseRequestedRef = useRef(false);
   const activeTurnNodeIdRef = useRef<string>("");
+  const activeTurnThreadByNodeIdRef = useRef<Record<string, string>>({});
   const turnTerminalResolverRef = useRef<((terminal: TurnTerminal) => void) | null>(null);
   const activeRunDeltaRef = useRef<Record<string, string>>({});
   const collectingRunRef = useRef(false);
@@ -91,6 +92,7 @@ export function useExecutionState(options: {
     cancelRequestedRef,
     pauseRequestedRef,
     activeTurnNodeIdRef,
+    activeTurnThreadByNodeIdRef,
     turnTerminalResolverRef,
     activeRunDeltaRef,
     collectingRunRef,

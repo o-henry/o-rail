@@ -38,6 +38,7 @@ export function createRunGraphRunner(params: any) {
     }
 
     const viaOnlyGraph = isViaOnlyGraph(params.graph);
+    const directInputNodeCount = viaOnlyGraph ? 0 : params.findDirectInputNodeIds(params.graph).length;
     const requestedQuestion = typeof questionOverride === "string" ? questionOverride : params.workflowQuestion;
     const seededQuestion =
       viaOnlyGraph && String(requestedQuestion ?? "").trim().length === 0
@@ -158,7 +159,7 @@ export function createRunGraphRunner(params: any) {
         },
       });
 
-      const dagMaxThreads = params.resolveDagMaxThreads(params.codexMultiAgentMode);
+      const dagMaxThreads = params.resolveGraphDagMaxThreads(params.codexMultiAgentMode, directInputNodeCount);
       const activeTasks = new Map<string, Promise<void>>();
       let activeTurnTasks = 0;
       let pauseStatusShown = false;

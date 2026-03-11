@@ -14,7 +14,7 @@ import {
   replaceInputPlaceholder,
   stringifyInput,
 } from "../../../features/workflow/promptUtils";
-import { codexMultiAgentModeLabel, extractDeltaText, extractUsageStats, resolveNodeCwd } from "../../mainAppUtils";
+import { codexMultiAgentModeLabel, resolveNodeCwd } from "../../mainAppUtils";
 import {
   getTurnExecutor,
   getWebProviderFromExecutor,
@@ -30,14 +30,15 @@ import {
 } from "../../../features/workflow/domain";
 import { DEFAULT_TURN_REASONING_LEVEL, toTurnReasoningEffort } from "../../../features/workflow/reasoningLevels";
 import {
-  applyTurnInputBudget, buildTurnStartArgs, resolveTurnRuntimeConfig,
+  applyTurnInputBudget, resolveTurnRuntimeConfig,
 } from "./turnRuntimeConfig";
 import { normalizeWebEvidenceOutput } from "../../mainAppRuntimeHelpers";
 import { runViaFlowTurn } from "./viaTurnRunHandler";
 import { applyUnityAutomationPromptContext } from "./unityAutomationPromptApply";
-import type { InternalMemoryTraceEntry, KnowledgeTraceEntry, ThreadStartResult, UsageStats, WebProviderRunResult } from "../types";
+import type { InternalMemoryTraceEntry, KnowledgeTraceEntry, UsageStats, WebProviderRunResult } from "../types";
 import type { GraphNode } from "../../../features/workflow/types";
 import type { TurnTerminal } from "../../mainAppGraphHelpers";
+import { runCodexTurnBlocking } from "./codexTurnBlocking";
 export type ExecuteTurnNodeResult = {
   ok: boolean;
   output?: unknown;
@@ -76,6 +77,7 @@ export type ExecuteTurnNodeContext = {
   pauseRequestedRef: MutableRefObject<boolean>;
   cancelRequestedRef: MutableRefObject<boolean>;
   activeTurnNodeIdRef: MutableRefObject<string>;
+  activeTurnThreadByNodeIdRef: MutableRefObject<Record<string, string>>;
   activeRunDeltaRef: MutableRefObject<Record<string, string>>;
   turnTerminalResolverRef: MutableRefObject<((value: TurnTerminal) => void) | null>;
   consumeNodeRequests: (nodeId: string) => string[];
@@ -403,94 +405,23 @@ export async function executeTurnNodeWithContext(
       memoryTrace,
     }));
   }
-  let activeThreadId = extractStringByPaths(ctx.nodeStates[node.id], ["threadId"]);
-  if (!activeThreadId) {
-    const threadStart = await ctx.invokeFn<ThreadStartResult>("thread_start", {
-      model: nodeModelEngine,
-      cwd: nodeCwd,
-    });
-    activeThreadId = threadStart.threadId;
-  }
-  if (!activeThreadId) {
-    return { ok: false, error: "threadId를 가져오지 못했습니다.", executor, provider: "codex", knowledgeTrace, memoryTrace };
-  }
-  ctx.setNodeRuntimeFields(node.id, { threadId: activeThreadId });
-  ctx.activeTurnNodeIdRef.current = node.id;
-  ctx.activeRunDeltaRef.current[node.id] = "";
-  let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
-  const terminalPromise = new Promise<TurnTerminal>((resolve) => {
-    ctx.turnTerminalResolverRef.current = resolve;
-    timeoutHandle = setTimeout(() => {
-      if (ctx.turnTerminalResolverRef.current) {
-        const resolver = ctx.turnTerminalResolverRef.current;
-        ctx.turnTerminalResolverRef.current = null;
-        resolver({ ok: false, status: "timeout", params: null });
-      }
-    }, 300000);
-  });
-  let turnStartResponse: unknown;
-  try {
-    turnStartResponse = await ctx.invokeFn<unknown>("turn_start", buildTurnStartArgs({
-      threadId: activeThreadId,
-      text: textToSend,
-      reasoningEffort: nodeReasoningEffort,
-      config: turnRuntimeConfig,
-    }));
-  } catch (error) {
-    if (ctx.turnTerminalResolverRef.current) {
-      ctx.turnTerminalResolverRef.current = null;
-    }
-    if (timeoutHandle) {
-      clearTimeout(timeoutHandle);
-    }
-    ctx.activeTurnNodeIdRef.current = "";
-    return { ok: false, error: String(error), threadId: activeThreadId, executor: "codex", provider: "codex", knowledgeTrace, memoryTrace };
-  }
-  const terminal = await terminalPromise;
-  if (timeoutHandle) {
-    clearTimeout(timeoutHandle);
-  }
-  const turnId =
-    extractStringByPaths(turnStartResponse, ["turnId", "turn_id", "id", "turn.id"]) ??
-    extractStringByPaths(terminal.params, ["turnId", "turn_id", "id", "turn.id"]);
-  const usage = extractUsageStats(terminal.params);
-  ctx.activeTurnNodeIdRef.current = "";
-  if (!terminal.ok) {
-    return {
-      ok: false,
-      error: `턴 실행 실패 (${terminal.status})`,
-      threadId: activeThreadId,
-      turnId: turnId ?? undefined,
-      usage,
-      executor: "codex",
-      provider: "codex",
-      knowledgeTrace,
-      memoryTrace,
-    };
-  }
-  const streamedText = String(ctx.activeRunDeltaRef.current[node.id] ?? "");
-  const completionText =
-    extractStringByPaths(terminal.params, [
-      "text",
-      "output_text",
-      "turn.output_text",
-      "turn.response.output_text",
-      "turn.response.text",
-      "response.output_text",
-      "response.text",
-    ]) ?? extractDeltaText(terminal.params);
-  const finalOutputText = (streamedText.trim() || completionText.trim())
-    ? (streamedText.trim() ? streamedText : completionText)
-    : "";
-  return {
-    ok: true,
-    output: { text: finalOutputText, completion: terminal.params },
-    threadId: activeThreadId,
-    turnId: turnId ?? undefined,
-    usage,
-    executor: "codex",
-    provider: "codex",
+  return runCodexTurnBlocking({
+    node,
+    nodeCwd,
+    nodeModelEngine,
+    nodeReasoningEffort,
+    textToSend,
+    turnRuntimeConfig,
+    nodeStates: ctx.nodeStates,
+    pauseRequestedRef: ctx.pauseRequestedRef,
+    cancelRequestedRef: ctx.cancelRequestedRef,
+    pauseErrorToken: ctx.pauseErrorToken,
+    activeTurnNodeIdRef: ctx.activeTurnNodeIdRef,
+    activeTurnThreadByNodeIdRef: ctx.activeTurnThreadByNodeIdRef,
+    setNodeRuntimeFields: ctx.setNodeRuntimeFields,
+    invokeFn: ctx.invokeFn,
+    t: ctx.t,
     knowledgeTrace,
     memoryTrace,
-  };
+  });
 }

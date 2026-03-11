@@ -8,7 +8,7 @@
 
 .bridge-embedded {
   display: grid;
-  gap: 4.5rem;
+  gap: 1rem;
   align-content: start;
 }
 

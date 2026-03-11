@@ -150,9 +150,11 @@ export default function UserMemoryPanel() {
           </button>
         </div>
       </div>
-      <div aria-live="polite" className="usage-method">
-        {notice || "질문에 \"나는/저는/내 프로젝트는\" 같은 장기 정보가 명확히 드러나면 자동 기억이 보수적으로 저장됩니다."}
-      </div>
+      {notice ? (
+        <div aria-live="polite" className="usage-method">
+          {notice}
+        </div>
+      ) : null}
       <div className="settings-memory-list">
         {sortedEntries.length === 0 ? (
           <div className="settings-memory-empty">아직 저장된 사용자 메모리가 없습니다.</div>

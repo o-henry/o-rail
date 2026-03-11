@@ -66,7 +66,8 @@ export function useWorkflowShortcuts(params: UseWorkflowShortcutsParams) {
     const tabHotkeys: Record<string, WorkspaceTab> = {
       "1": "workflow",
       "2": "knowledge",
-      "3": "settings",
+      "3": "adaptation",
+      "4": "settings",
     };
     const tabStatusByKey: Record<WorkspaceTab, string> = {
       workbench: "그래프 탭으로 이동",
@@ -77,6 +78,7 @@ export function useWorkflowShortcuts(params: UseWorkflowShortcutsParams) {
       feed: "피드 탭으로 이동",
       handoff: "그래프 탭으로 이동",
       knowledge: "데이터베이스 탭으로 이동",
+      adaptation: "개선 탭으로 이동",
       settings: "설정 탭으로 이동",
       bridge: "설정 탭으로 이동",
     };

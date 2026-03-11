@@ -14,6 +14,7 @@ export const JA_MESSAGES: Dictionary = {
     "nav.feed": "フィード",
     "nav.handoff": "ハンドオフ",
     "nav.knowledge": "データベース",
+    "nav.adaptation": "改善",
     "nav.settings": "設定",
     "nav.language": "言語",
     "settings.title": "設定",

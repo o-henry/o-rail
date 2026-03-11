@@ -1,5 +1,6 @@
 import type { PresetKind, QualityProfileId, TurnExecutor, WebProvider, WebResultMode } from "../../features/workflow/domain";
 import type { GraphData, GraphEdge, GraphNode, NodeAnchorSide, NodeExecutionStatus, NodeType } from "../../features/workflow/types";
+import type { AdaptiveRecipeSnapshot } from "../adaptation/types";
 import type {
   ApprovalRequest as OrchestrationApprovalRequest,
   BatchRunResult as OrchestrationBatchRunResult,
@@ -362,6 +363,7 @@ export type RunRecord = {
   collaborationTrace?: WorkbenchTimelineEvent[];
   unityTaskBundle?: UnityTaskBundle;
   patchBundle?: PatchBundle;
+  adaptiveRecipeSnapshot?: AdaptiveRecipeSnapshot;
 };
 
 export type FeedViewPost = FeedPost & {

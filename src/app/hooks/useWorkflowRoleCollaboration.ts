@@ -1,4 +1,6 @@
 import { type Dispatch, type RefObject, type SetStateAction, useCallback } from "react";
+import { cloneAdaptiveRoleTemplate } from "../adaptation/defaults";
+import type { AdaptiveChampionRecord } from "../adaptation/types";
 import { resolvePmPlanningMode, resolveStudioRoleDisplayLabel } from "../../features/studio/pmPlanningMode";
 import { STUDIO_ROLE_TEMPLATES } from "../../features/studio/roleTemplates";
 import type { StudioRoleId } from "../../features/studio/handoffTypes";
@@ -31,6 +33,7 @@ type UseWorkflowRoleCollaborationParams = {
   graphCanvasRef: RefObject<HTMLDivElement | null>;
   setCanvasZoom: (updater: (prev: number) => number) => void;
   clampCanvasZoom: (next: number) => number;
+  resolveAdaptiveRoleChampion: (family: string) => AdaptiveChampionRecord | null;
 };
 
 function cloneIncomingExternalEdges(params: {
@@ -90,13 +93,22 @@ export function useWorkflowRoleCollaboration(params: UseWorkflowRoleCollaboratio
       const maxY = params.graph.nodes.reduce((max, node) => Math.max(max, Number(node.position?.y ?? 0)), 40);
       const roleX = center ? Math.round(center.x - NODE_WIDTH / 2) : maxX + (includeResearch ? 820 : 320);
       const roleY = center ? Math.max(40, Math.round(center.y - NODE_HEIGHT / 2)) : Math.max(60, maxY);
-      const scaffold = buildRoleNodeScaffold({
-        roleId,
-        anchorX: roleX,
-        anchorY: roleY,
-        includeResearch,
-      });
       const roleLabel = STUDIO_ROLE_TEMPLATES.find((row) => row.id === roleId)?.label ?? roleId;
+      const scaffold =
+        cloneAdaptiveRoleTemplate({
+          champion: params.resolveAdaptiveRoleChampion(`role:${roleId}`),
+          roleId,
+          anchorX: roleX,
+          anchorY: roleY,
+          roleInstanceId: `${roleId}:primary`,
+          roleInstanceLabel: roleLabel,
+        }) ??
+        buildRoleNodeScaffold({
+          roleId,
+          anchorX: roleX,
+          anchorY: roleY,
+          includeResearch,
+        });
 
       params.applyGraphChange(
         (prev) => ({

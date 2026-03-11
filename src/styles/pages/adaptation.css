@@ -1,0 +1,94 @@
+.adaptation-view {
+  margin: 0 10px 10px;
+  padding: 18px 20px 20px;
+  display: grid;
+  gap: 1rem;
+  align-content: start;
+  background: var(--bg-app);
+  box-shadow: none;
+}
+
+.adaptation-island {
+  width: 100%;
+  max-width: 720px;
+  margin-inline: auto;
+  background: #ffffff;
+  border-radius: 8px;
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.adaptation-island-head {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.adaptation-island-head h2,
+.adaptation-island-head p {
+  margin: 0;
+}
+
+.adaptation-island-head h2 {
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+.adaptation-island-head p {
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.adaptation-card-list {
+  display: grid;
+  gap: 8px;
+}
+
+.adaptation-card,
+.adaptation-empty {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--surface-soft) 72%, var(--surface-elevated));
+}
+
+.adaptation-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.adaptation-card-head strong {
+  font-size: 12px;
+  line-height: 1.1;
+}
+
+.adaptation-card-head small,
+.adaptation-card-lines span,
+.adaptation-empty {
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.adaptation-card p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-main);
+}
+
+.adaptation-card-lines {
+  display: grid;
+  gap: 2px;
+}
+
+.adaptation-control-row {
+  justify-content: flex-start;
+}

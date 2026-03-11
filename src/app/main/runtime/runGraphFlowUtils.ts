@@ -9,6 +9,7 @@ import type {
   NodeRunState,
   RunRecord,
 } from "../types";
+import type { AdaptiveRecipeSnapshot } from "../../adaptation/types";
 
 export function graphRequiresCodexEngine(nodes: GraphNode[]): boolean {
   return nodes.some((node) => node.type === "turn" && getTurnExecutor(node.config as TurnConfig) === "codex");
@@ -77,6 +78,7 @@ export function createRunRecord(params: {
   workflowGroupName?: string;
   workflowGroupKind?: RunRecord["workflowGroupKind"];
   workflowPresetKind?: RunRecord["workflowPresetKind"];
+  adaptiveRecipeSnapshot?: AdaptiveRecipeSnapshot;
   runId?: string;
 }): RunRecord {
   return {
@@ -99,6 +101,7 @@ export function createRunRecord(params: {
     normalizedEvidenceByNodeId: {},
     conflictLedger: [],
     runMemory: {},
+    adaptiveRecipeSnapshot: params.adaptiveRecipeSnapshot,
   };
 }
 

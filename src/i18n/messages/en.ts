@@ -14,6 +14,7 @@ export const EN_MESSAGES: Dictionary = {
     "nav.feed": "Feed",
     "nav.handoff": "Handoff",
     "nav.knowledge": "Database",
+    "nav.adaptation": "Adapt",
     "nav.settings": "Settings",
     "nav.language": "Language",
     "settings.title": "Settings",

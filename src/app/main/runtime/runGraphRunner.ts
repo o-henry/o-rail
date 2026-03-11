@@ -73,6 +73,14 @@ export function createRunGraphRunner(params: any) {
       workflowGroupName: runGroup.name,
       workflowGroupKind: runGroup.kind,
       workflowPresetKind: runGroup.presetKind,
+      adaptiveRecipeSnapshot:
+        typeof params.buildAdaptiveRecipeSnapshot === "function"
+          ? params.buildAdaptiveRecipeSnapshot({
+              graph: params.graph,
+              workflowPresetKind: runGroup.presetKind,
+              presetHint: params.lastAppliedPresetRef?.current?.kind,
+            })
+          : undefined,
     });
     runRecord.collaborationTrace = [
       {
@@ -283,6 +291,7 @@ export function createRunGraphRunner(params: any) {
         buildRunMissionFlow: params.buildRunMissionFlow,
         buildRunApprovalSnapshot: params.buildRunApprovalSnapshot,
         buildRunUnityArtifacts: params.buildRunUnityArtifacts,
+        finalizeAdaptiveRun: params.finalizeAdaptiveRun,
       });
     } catch (e) {
       params.markCodexNodesStatusOnEngineIssue("failed", `그래프 실행 실패: ${String(e)}`, true);

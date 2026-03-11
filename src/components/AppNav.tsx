@@ -10,6 +10,7 @@ type WorkspaceTab =
   | "agents"
   | "handoff"
   | "knowledge"
+  | "adaptation"
   | "bridge"
   | "settings";
 
@@ -29,6 +30,7 @@ type AppNavProps = {
 const NAV_ITEMS: NavItem[] = [
   { tab: "workflow", label: "nav.workflow.short", ariaLabel: "nav.workflow.title", title: "nav.workflow.title" },
   { tab: "knowledge", label: "nav.knowledge", ariaLabel: "nav.knowledge", title: "nav.knowledge" },
+  { tab: "adaptation", label: "nav.adaptation", ariaLabel: "nav.adaptation", title: "nav.adaptation" },
   { tab: "settings", label: "nav.settings", ariaLabel: "nav.settings", title: "nav.settings" },
 ];
 const SHOW_LANGUAGE_SWITCH = false;

@@ -379,6 +379,8 @@ export function MainAppShell(props: any) {
           dashboardIntelligenceConfig={dashboardIntelligenceConfig}
           dashboardIntelligenceRunStateByTopic={dashboardIntelligenceRunStateByTopic}
           dashboardSnapshotsByTopic={dashboardSnapshotsByTopic}
+          adaptiveWorkspaceData={props.adaptiveWorkspaceData}
+          adaptiveWorkspaceLoading={props.adaptiveWorkspaceLoading}
           enabledScheduleCount={batchScheduler.schedules.filter((item: any) => item.status === "enabled").length}
           engineStarted={props.engineStarted}
           feedPageVm={feedPageVm}
@@ -399,6 +401,9 @@ export function MainAppShell(props: any) {
           onRestartWebBridge={onRestartWebBridge}
           onRunDashboardTopicFromAgents={onRunDashboardTopicFromAgents}
           onRunDashboardTopicFromData={onRunDashboardTopicFromData}
+          onFreezeAdaptiveWorkspace={props.onFreezeAdaptiveWorkspace}
+          onResumeAdaptiveWorkspace={props.onResumeAdaptiveWorkspace}
+          onResetAdaptiveWorkspace={props.onResetAdaptiveWorkspace}
           onSelectCwdDirectory={onSelectCwdDirectory}
           onSelectWorkspaceTab={onSelectWorkspaceTab}
           pendingApprovalsCount={pendingApprovals.length}

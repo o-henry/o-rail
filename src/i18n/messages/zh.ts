@@ -14,6 +14,7 @@ export const ZH_MESSAGES: Dictionary = {
     "nav.feed": "动态",
     "nav.handoff": "交接",
     "nav.knowledge": "数据库",
+    "nav.adaptation": "改进",
     "nav.settings": "设置",
     "nav.language": "语言",
     "settings.title": "设置",

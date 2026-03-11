@@ -42,6 +42,7 @@ export type WorkspaceTab =
   | "agents"
   | "handoff"
   | "knowledge"
+  | "adaptation"
   | "settings"
   | "bridge";
 
@@ -229,6 +230,19 @@ export function NavIcon({ tab, active = false }: { tab: WorkspaceTab; active?: b
   }
   if (tab === "settings") {
     return <img alt="" aria-hidden="true" className="nav-workflow-image" src="/setting.svg" />;
+  }
+  if (tab === "adaptation") {
+    return (
+      <svg aria-hidden="true" fill="none" height="20" viewBox="0 0 24 24" width="20">
+        <path
+          d="M12 4.5l1.8 3.7 4.1.6-2.9 2.9.7 4.1-3.7-2-3.7 2 .7-4.1-2.9-2.9 4.1-.6 1.8-3.7z"
+          stroke="currentColor"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth="1.4"
+        />
+      </svg>
+    );
   }
   if (tab === "handoff") {
     return <img alt="" aria-hidden="true" className="nav-workflow-image" src="/scroll.svg" />;

@@ -43,9 +43,12 @@ export function createWorkflowPresetHandlers(params: any) {
 
   function applyPreset(kind: any) {
     const builtPreset = params.buildPresetGraphByKind(kind);
+    const adaptivePreset = typeof params.resolveAdaptivePresetGraph === "function"
+      ? params.resolveAdaptivePresetGraph(kind, builtPreset)
+      : builtPreset;
     const presetWithPolicies = params.applyPresetOutputSchemaPolicies({
-      ...builtPreset,
-      nodes: params.applyPresetTurnPolicies(kind, builtPreset.nodes),
+      ...adaptivePreset,
+      nodes: params.applyPresetTurnPolicies(kind, adaptivePreset.nodes),
     });
     const preset = params.simplifyPresetForSimpleWorkflow(presetWithPolicies, params.simpleWorkflowUi);
     const localizedPreset = {

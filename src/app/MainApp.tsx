@@ -4,6 +4,8 @@ import { invoke, listen, openUrl } from "../shared/tauri";
 import { type DashboardDetailTopic } from "../pages/dashboard/DashboardDetailPage";
 import type { AgentWorkspaceLaunchRequest } from "../pages/agents/agentTypes";
 import { buildRoleDockStatusByRole, type RoleDockRuntimeState } from "../pages/workflow/roleDockState";
+import { evaluateAdaptiveRecipe } from "./adaptation/engine";
+import { resolveAdaptivePresetGraph as applyAdaptivePresetGraphDefaults } from "./adaptation/defaults";
 import { useFloatingPanel } from "../features/ui/useFloatingPanel";
 import { useExecutionState } from "./hooks/useExecutionState";
 import { useFeedRunActions } from "./hooks/useFeedRunActions";
@@ -15,6 +17,7 @@ import { useWebConnectState } from "./hooks/useWebConnectState";
 import { useWorkflowGraphActions } from "./hooks/useWorkflowGraphActions";
 import { useWorkflowRoleCollaboration } from "./hooks/useWorkflowRoleCollaboration";
 import { useWorkflowShortcuts } from "./hooks/useWorkflowShortcuts";
+import { useAdaptiveWorkspaceState } from "./hooks/useAdaptiveWorkspaceState";
 import { useDashboardIntelligenceConfig } from "./hooks/useDashboardIntelligenceConfig";
 import { useDashboardIntelligenceRunner } from "./hooks/useDashboardIntelligenceRunner";
 import { DASHBOARD_TOPIC_IDS } from "../features/dashboard/intelligence";
@@ -247,6 +250,10 @@ import { useMainAppWorkflowPresentation } from "./main/presentation/useMainAppWo
 import { useWorkflowRagActions } from "./main/canvas/useWorkflowRagActions";
 import { useTurnModelSelectionActions } from "./main/canvas/useTurnModelSelectionActions";
 import { useBriefingDocumentActions } from "./main/runtime/useBriefingDocumentActions";
+import {
+  buildAdaptiveEvaluationInput,
+  buildAdaptiveRecipeSnapshotForRun,
+} from "./main/runtime/adaptiveRunHelpers";
 import { useRoleRunCompletionBridge } from "./main/runtime/useRoleRunCompletionBridge";
 import { buildRoleNodeScaffold } from "./main/runtime/roleNodeScaffold";
 import {
@@ -299,7 +306,12 @@ import {
 import { executeTurnNodeWithContext } from "./main/runtime/executeTurnNode";
 import type { FeedCategory, InternalMemorySnippet, WebProviderRunResult, RunRecord } from "./main";
 const HIDDEN_WORKSPACE_TABS = new Set<WorkspaceTab>(["workbench", "dashboard", "intelligence", "feed", "handoff", "agents"]);
-const WORKSPACE_TOPBAR_TABS: Array<{ tab: WorkspaceTab; label: string }> = [{ tab: "workflow", label: "그래프" }, { tab: "knowledge", label: "데이터베이스" }, { tab: "settings", label: "설정" }];
+const WORKSPACE_TOPBAR_TABS: Array<{ tab: WorkspaceTab; label: string }> = [
+  { tab: "workflow", label: "그래프" },
+  { tab: "knowledge", label: "데이터베이스" },
+  { tab: "adaptation", label: "개선" },
+  { tab: "settings", label: "설정" },
+];
 
 function App() {
   const USER_BG_IMAGE_STORAGE_KEY = "rail.settings.user_bg_image";
@@ -627,6 +639,11 @@ function App() {
     () => Boolean((window as Window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__),
     [],
   );
+  const adaptiveWorkspaceState = useAdaptiveWorkspaceState({
+    cwd,
+    hasTauriRuntime,
+    invokeFn: invoke,
+  });
   const agenticQueue = useMemo(() => createAgenticQueue(), []);
 
   useEffect(() => {
@@ -1193,6 +1210,51 @@ function App() {
     t,
   });
 
+  const resolveAdaptivePresetGraph = useCallback(
+    (kind: PresetKind, builtGraph: Parameters<typeof applyAdaptivePresetGraphDefaults>[1]) =>
+      applyAdaptivePresetGraphDefaults(
+        kind,
+        builtGraph,
+        adaptiveWorkspaceState.championByFamily.get(`preset:${kind}`) ?? null,
+      ),
+    [adaptiveWorkspaceState.championByFamily],
+  );
+
+  const buildAdaptiveRunRecipe = useCallback(
+    (params: { graph: typeof graphForCanvas; workflowPresetKind?: PresetKind; presetHint?: PresetKind }) =>
+      buildAdaptiveRecipeSnapshotForRun({
+        cwd,
+        graph: params.graph,
+        workflowPresetKind: params.workflowPresetKind,
+        presetHint: params.presetHint,
+      }),
+    [cwd],
+  );
+
+  const finalizeAdaptiveRun = useCallback(
+    async (runRecord: RunRecord) => {
+      if (!hasTauriRuntime || !cwd.trim()) {
+        return;
+      }
+      const recipe =
+        runRecord.adaptiveRecipeSnapshot ??
+        buildAdaptiveRecipeSnapshotForRun({
+          cwd,
+          graph: runRecord.graphSnapshot,
+          workflowPresetKind: runRecord.workflowPresetKind,
+          presetHint: lastAppliedPresetRef.current?.kind,
+        });
+      const next = await evaluateAdaptiveRecipe({
+        cwd,
+        invokeFn: invoke,
+        recipe,
+        evaluation: buildAdaptiveEvaluationInput(runRecord),
+      });
+      adaptiveWorkspaceState.updateFromRuntime(next);
+    },
+    [adaptiveWorkspaceState, cwd, hasTauriRuntime, lastAppliedPresetRef, invoke],
+  );
+
   const {
     onRespondApproval,
     pickDefaultCanvasNodeId,
@@ -1208,6 +1270,7 @@ function App() {
     approvalDecisionLabel,
     simpleWorkflowUi: SIMPLE_WORKFLOW_UI,
     buildPresetGraphByKind,
+    resolveAdaptivePresetGraph,
     applyPresetOutputSchemaPolicies,
     applyPresetTurnPolicies,
     simplifyPresetForSimpleWorkflow,
@@ -1647,6 +1710,16 @@ function App() {
         ...params,
         runId: graphRunOverrideIdRef.current ?? undefined,
       }),
+    buildAdaptiveRecipeSnapshot: ({
+      graph,
+      workflowPresetKind,
+      presetHint,
+    }: {
+      graph: typeof graphForCanvas;
+      workflowPresetKind?: PresetKind;
+      presetHint?: PresetKind;
+    }) => buildAdaptiveRunRecipe({ graph, workflowPresetKind, presetHint }),
+    lastAppliedPresetRef,
     workflowQuestion,
     locale,
     setActiveFeedRunMeta,
@@ -1709,6 +1782,7 @@ function App() {
     buildRunMissionFlow,
     buildRunApprovalSnapshot,
     buildRunUnityArtifacts,
+    finalizeAdaptiveRun,
     markCodexNodesStatusOnEngineIssue,
     cleanupRunGraphExecutionState,
   });
@@ -2069,6 +2143,7 @@ function App() {
     setStatus,
     setCanvasZoom,
     clampCanvasZoom,
+    resolveAdaptiveRoleChampion: (family) => adaptiveWorkspaceState.championByFamily.get(family) ?? null,
   });
 
   const onInterruptWorkflowNode = useCallback(
@@ -2516,6 +2591,8 @@ function App() {
       approvalDecisions={APPROVAL_DECISIONS}
       approvalSourceLabel={approvalSourceLabel}
       approvalSubmitting={approvalSubmitting}
+      adaptiveWorkspaceData={adaptiveWorkspaceState.data}
+      adaptiveWorkspaceLoading={adaptiveWorkspaceState.loading}
       appShellStyle={appShellStyle}
       authMode={authMode}
       authModeLabel={authModeLabel}
@@ -2617,6 +2694,15 @@ function App() {
       onSelectCwdDirectory={onSelectCwdDirectory}
       onAddRolePerspectivePassForNode={addRolePerspectivePassForNode}
       onAddRoleReviewPassForNode={addRoleReviewPassForNode}
+      onFreezeAdaptiveWorkspace={() => {
+        void adaptiveWorkspaceState.setLearningState("frozen");
+      }}
+      onResumeAdaptiveWorkspace={() => {
+        void adaptiveWorkspaceState.setLearningState("active");
+      }}
+      onResetAdaptiveWorkspace={() => {
+        void adaptiveWorkspaceState.resetWorkspaceLearning();
+      }}
       onSetPmPlanningMode={onSetPmPlanningMode}
       onSelectRagModeNode={onSelectRagModeNode}
       onSelectWorkspaceTab={onSelectWorkspaceTab}

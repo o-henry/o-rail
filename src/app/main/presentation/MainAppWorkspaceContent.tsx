@@ -1,4 +1,5 @@
 import AgentsPage from "../../../pages/agents/AgentsPage";
+import AdaptationPage from "./AdaptationPage";
 import BridgePage from "../../../pages/bridge/BridgePage";
 import FeedPage from "../../../pages/feed/FeedPage";
 import KnowledgeBasePage from "../../../pages/knowledge/KnowledgeBasePage";
@@ -25,6 +26,15 @@ export function MainAppWorkspaceContent(props: any) {
           cwd={props.cwd}
           posts={props.feedPosts}
           onInjectContextSources={handleInjectContextSources}
+        />
+      )}
+      {props.workspaceTab === "adaptation" && (
+        <AdaptationPage
+          data={props.adaptiveWorkspaceData}
+          loading={props.adaptiveWorkspaceLoading}
+          onFreeze={props.onFreezeAdaptiveWorkspace}
+          onResume={props.onResumeAdaptiveWorkspace}
+          onReset={props.onResetAdaptiveWorkspace}
         />
       )}
       {props.workspaceTab === "agents" && (

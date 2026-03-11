@@ -28,6 +28,7 @@ export async function finalizeRunGraphExecution(params: any) {
     buildRunMissionFlow,
     buildRunApprovalSnapshot,
     buildRunUnityArtifacts,
+    finalizeAdaptiveRun,
   } = params;
 
   if (cancelRequestedRef.current) {
@@ -109,6 +110,9 @@ export async function finalizeRunGraphExecution(params: any) {
     invokeFn,
   });
   await saveRunRecord(runRecord);
+  if (typeof finalizeAdaptiveRun === "function") {
+    await finalizeAdaptiveRun(runRecord);
+  }
   const normalizedRunRecord = normalizeRunRecord(runRecord);
   const runFileName = `run-${runRecord.runId}.json`;
   feedRunCacheRef.current[runFileName] = normalizedRunRecord;

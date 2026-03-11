@@ -22,13 +22,21 @@
   width: min(860px, 100%);
 }
 
+.web-turn-modal-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 180;
+  pointer-events: none;
+}
+
 .web-turn-floating {
   position: fixed;
-  z-index: 120;
+  z-index: 181;
   width: min(860px, calc(100vw - 24px));
   max-height: calc(100vh - 24px);
   overflow: auto;
   box-shadow: 0 14px 36px rgba(8, 19, 38, 0.28);
+  pointer-events: auto;
 }
 
 .web-turn-floating.is-dragging {
@@ -58,6 +66,27 @@
   color: #6b7384;
 }
 
+.web-turn-drag-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.web-turn-close-button {
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  min-height: 24px;
+  border-radius: 4px;
+  background: #ececec;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
 .web-turn-prompt {
   max-height: 180px;
   overflow: auto;
@@ -79,6 +108,26 @@
 
 .web-turn-modal .button-row button {
   background: var(--surface);
+}
+
+.web-turn-modal .button-row .web-turn-action-open {
+  background: #e4eefb;
+}
+
+.web-turn-modal .button-row .web-turn-action-copy {
+  background: #ece8fb;
+}
+
+.web-turn-modal .button-row .web-turn-action-submit {
+  background: #dff0e4;
+}
+
+.web-turn-modal .button-row .web-turn-action-dismiss {
+  background: #ececec;
+}
+
+.web-turn-modal .button-row .web-turn-action-stop {
+  background: #f4e0e0;
 }
 
 .pending-web-connect-modal .button-row button {

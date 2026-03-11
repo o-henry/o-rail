@@ -3,6 +3,7 @@ import { useI18n } from "../../../i18n";
 import { resolvePmPlanningMode, resolvePmPlanningModeLabel, type PmPlanningMode } from "../../../features/studio/pmPlanningMode";
 import { toStudioRoleId } from "../../../features/studio/roleUtils";
 import type { GraphNode, NodeAnchorSide, NodeExecutionStatus } from "../../../features/workflow/types";
+import { getTurnExecutor, getWebProviderFromExecutor, type TurnConfig } from "../../../features/workflow/domain";
 import type { MarqueeSelection, NodeRunState } from "../types";
 import type { WorkflowGraphViewMode } from "../../../features/workflow/viaGraph";
 import { viaNodeIconSrc, viaNodeIconText, viaNodeLabel } from "../../../features/workflow/viaCatalog";
@@ -36,6 +37,7 @@ type WorkflowCanvasNodesLayerProps = {
   formatNodeElapsedTime: (state: NodeRunState | undefined, nowMs: number) => string;
   runtimeNowMs: number;
   onOpenFeedFromNode: (nodeId: string) => void;
+  onOpenWebInputForNode: (nodeId: string) => void;
   openTerminalNodeId: string;
   onToggleNodeTerminal: (nodeId: string) => void;
   onSetPmPlanningMode: (nodeId: string, mode: PmPlanningMode) => void;
@@ -74,6 +76,7 @@ export default function WorkflowCanvasNodesLayer({
   formatNodeElapsedTime,
   runtimeNowMs,
   onOpenFeedFromNode,
+  onOpenWebInputForNode,
   openTerminalNodeId,
   onToggleNodeTerminal,
   onSetPmPlanningMode,
@@ -99,6 +102,9 @@ export default function WorkflowCanvasNodesLayer({
         const canToggleTerminal = node.type === "turn" && sourceKind === "handoff";
         const isTerminalOpen = canToggleTerminal && openTerminalNodeId === node.id;
         const viaNodeType = String((node.config as Record<string, unknown>)?.viaNodeType ?? "").trim();
+        const turnExecutor = node.type === "turn" ? getTurnExecutor(node.config as TurnConfig) : null;
+        const webProvider = turnExecutor ? getWebProviderFromExecutor(turnExecutor) : null;
+        const isWebTurnNode = Boolean(webProvider);
         const ragNodeLabel = viaNodeLabel(viaNodeType);
         const ragNodeTypeLabel = ragNodeLabel.replace(/\s*\(미\/일\/중\/한\)\s*/g, "").trim();
         const ragNodeIconText = viaNodeIconText(viaNodeType);
@@ -267,6 +273,18 @@ export default function WorkflowCanvasNodesLayer({
                       <span className="node-input-chip">
                         <span className="node-input-chip-text">{t("workflow.node.inputDirect")}</span>
                       </span>
+                    )}
+                    {isWebTurnNode && (
+                      <button
+                        className="node-wait-action-button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onOpenWebInputForNode(node.id);
+                        }}
+                        type="button"
+                      >
+                        수동입력
+                      </button>
                     )}
                   </div>
                 </div>

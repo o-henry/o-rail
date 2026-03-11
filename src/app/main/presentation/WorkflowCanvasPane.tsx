@@ -65,6 +65,7 @@ type WorkflowCanvasPaneProps = {
   nodeStatusLabel: (status: NodeExecutionStatus) => string;
   deleteNode: (nodeId: string) => void;
   onOpenFeedFromNode: (nodeId: string) => void;
+  onOpenWebInputForNode: (nodeId: string) => void;
   runtimeNowMs: number;
   formatNodeElapsedTime: (state: NodeRunState | undefined, nowMs: number) => string;
   openTerminalNodeId: string;
@@ -156,6 +157,7 @@ export default function WorkflowCanvasPane({
   nodeStatusLabel,
   deleteNode,
   onOpenFeedFromNode,
+  onOpenWebInputForNode,
   runtimeNowMs,
   formatNodeElapsedTime,
   openTerminalNodeId,
@@ -398,6 +400,7 @@ export default function WorkflowCanvasPane({
                   onNodeAnchorDrop={onNodeAnchorDrop}
                   onNodeDragStart={onNodeDragStart}
                   onOpenFeedFromNode={onOpenFeedFromNode}
+                  onOpenWebInputForNode={onOpenWebInputForNode}
                   openTerminalNodeId={openTerminalNodeId}
                   onToggleNodeTerminal={onToggleNodeTerminal}
                   onSetPmPlanningMode={onSetPmPlanningMode}

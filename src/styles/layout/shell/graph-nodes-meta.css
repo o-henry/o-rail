@@ -130,6 +130,7 @@
 }
 
 .node-wait-slot .status-pill,
+.node-wait-action-button,
 .node-inline-action-button {
   min-height: 22px;
   height: 22px;
@@ -141,6 +142,17 @@
   justify-content: center;
   white-space: nowrap;
   line-height: 1;
+}
+
+.node-wait-action-button {
+  border: 0;
+  background: var(--status-pill-bg);
+  color: var(--status-pill-color);
+  cursor: pointer;
+}
+
+.node-wait-action-button:hover {
+  background: color-mix(in srgb, var(--status-pill-bg) 82%, var(--surface-strong));
 }
 
 .node-inline-action-button {

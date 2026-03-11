@@ -84,6 +84,7 @@ export function MainAppShell(props: any) {
     onNodeDragStart,
     onOpenBriefingDocumentFromData,
     onOpenFeedFromNode,
+    onOpenWebInputForNode,
     onOpenPendingProviderWindow,
     onOpenProviderSession,
     onOpenQuickPanelAgents,
@@ -290,6 +291,7 @@ export function MainAppShell(props: any) {
               onNodeAnchorDrop={onNodeAnchorDrop}
               onNodeDragStart={onNodeDragStart}
               onOpenFeedFromNode={onOpenFeedFromNode}
+              onOpenWebInputForNode={onOpenWebInputForNode}
               onAddRolePerspectivePass={onAddRolePerspectivePassForNode}
               onAddRoleReviewPass={onAddRoleReviewPassForNode}
               onSetPmPlanningMode={onSetPmPlanningMode}

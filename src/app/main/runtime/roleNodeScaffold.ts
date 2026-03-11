@@ -11,6 +11,7 @@ import {
   resolveStudioRolePromptLabel,
   type PmPlanningMode,
 } from "../../../features/studio/pmPlanningMode";
+import { resolveStudioRoleExecutionConfigPatch } from "./roleExecutionTuning";
 import {
   getRoleResearchProfile,
   type RoleResearchLaneBlueprint,
@@ -237,6 +238,7 @@ export function buildRoleNodeScaffold(params: RoleNodeScaffoldParams): RoleNodeS
       roleInstanceId,
       roleInstanceLabel,
       roleMode,
+      ...resolveStudioRoleExecutionConfigPatch(baseRoleId, pmPlanningMode),
       ...(pmPlanningMode ? { pmPlanningMode } : {}),
       ...(getStudioRoleModeOptions(baseRoleId).length > 0 ? { roleModeOptions: getStudioRoleModeOptions(baseRoleId) } : {}),
     },

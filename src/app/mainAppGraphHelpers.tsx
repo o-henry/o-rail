@@ -10,6 +10,12 @@ import {
   type WebProvider,
 } from "../features/workflow/domain";
 import { QUALITY_DEFAULT_THRESHOLD } from "../features/workflow/quality";
+import {
+  normalizeTurnContextBudget,
+  normalizeTurnMaxInputChars,
+  normalizeTurnTemperature,
+  TURN_CONTEXT_BUDGET_MAX_INPUT_CHARS,
+} from "../features/workflow/turnExecutionTuning";
 import type {
   GraphData,
   GraphEdge,
@@ -292,11 +298,18 @@ export function normalizeGraph(input: unknown): GraphData {
       const executor = TURN_EXECUTOR_OPTIONS.includes(rawExecutor as TurnExecutor)
         ? rawExecutor
         : "codex";
+      const contextBudget = normalizeTurnContextBudget(config.contextBudget);
       const normalizedConfig = {
         ...config,
         executor,
         webResultMode: normalizeWebResultMode(config.webResultMode),
         model: toTurnModelDisplayName(String(config.model ?? DEFAULT_TURN_MODEL)),
+        temperature: normalizeTurnTemperature(config.temperature),
+        contextBudget,
+        maxInputChars: normalizeTurnMaxInputChars(
+          config.maxInputChars,
+          TURN_CONTEXT_BUDGET_MAX_INPUT_CHARS[contextBudget],
+        ),
         knowledgeEnabled:
           typeof config.knowledgeEnabled === "boolean" ? config.knowledgeEnabled : true,
         qualityProfile: toQualityProfileId(config.qualityProfile) ?? undefined,

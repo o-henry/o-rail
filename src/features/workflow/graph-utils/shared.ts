@@ -7,6 +7,11 @@ import {
 } from "../domain";
 import { t } from "../../../i18n";
 import { DEFAULT_TURN_REASONING_LEVEL } from "../reasoningLevels";
+import {
+  DEFAULT_TURN_CONTEXT_BUDGET,
+  DEFAULT_TURN_TEMPERATURE,
+  TURN_CONTEXT_BUDGET_MAX_INPUT_CHARS,
+} from "../turnExecutionTuning";
 import type {
   GateConfig,
   GraphNode,
@@ -47,6 +52,9 @@ export function defaultNodeConfig(type: NodeType): Record<string, unknown> {
       executor: "codex",
       model: DEFAULT_TURN_MODEL,
       reasoningLevel: DEFAULT_TURN_REASONING_LEVEL,
+      temperature: DEFAULT_TURN_TEMPERATURE,
+      contextBudget: DEFAULT_TURN_CONTEXT_BUDGET,
+      maxInputChars: TURN_CONTEXT_BUDGET_MAX_INPUT_CHARS[DEFAULT_TURN_CONTEXT_BUDGET],
       role: "",
       cwd: ".",
       promptTemplate: "{{input}}",

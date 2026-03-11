@@ -1,5 +1,6 @@
 import type { GraphNode } from "./types";
 import { t } from "../../i18n";
+import type { TurnContextBudget } from "./turnExecutionTuning";
 
 export type TurnExecutor =
   | "codex"
@@ -50,6 +51,9 @@ export type TurnConfig = {
   executor?: TurnExecutor;
   model?: string;
   reasoningLevel?: string;
+  temperature?: number;
+  contextBudget?: TurnContextBudget;
+  maxInputChars?: number;
   role?: string;
   cwd?: string;
   promptTemplate?: string;

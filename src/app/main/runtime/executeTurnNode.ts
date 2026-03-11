@@ -29,6 +29,9 @@ import {
   type WebProvider,
 } from "../../../features/workflow/domain";
 import { DEFAULT_TURN_REASONING_LEVEL, toTurnReasoningEffort } from "../../../features/workflow/reasoningLevels";
+import {
+  applyTurnInputBudget, buildTurnStartArgs, resolveTurnRuntimeConfig,
+} from "./turnRuntimeConfig";
 import { normalizeWebEvidenceOutput } from "../../mainAppRuntimeHelpers";
 import { runViaFlowTurn } from "./viaTurnRunHandler";
 import { applyUnityAutomationPromptContext } from "./unityAutomationPromptApply";
@@ -52,12 +55,7 @@ type InjectKnowledgeContextFn = (params: { node: GraphNode; prompt: string; conf
   prompt: string; trace: KnowledgeTraceEntry[]; memoryTrace: InternalMemoryTraceEntry[];
 }>;
 type InvokeFn = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
-type RequestWebTurnResponseFn = (
-  nodeId: string,
-  provider: WebProvider,
-  prompt: string,
-  mode: "auto" | "bridgeAssisted" | "manualPasteText" | "manualPasteJson",
-) => Promise<{ ok: boolean; output?: unknown; error?: string }>;
+type RequestWebTurnResponseFn = (nodeId: string, provider: WebProvider, prompt: string, mode: "auto" | "bridgeAssisted" | "manualPasteText" | "manualPasteJson") => Promise<{ ok: boolean; output?: unknown; error?: string }>;
 export type ExecuteTurnNodeContext = {
   model: string;
   cwd: string;
@@ -104,11 +102,13 @@ export async function executeTurnNodeWithContext(
   const nodeModel = toTurnModelDisplayName(String(config.model ?? ctx.model).trim() || ctx.model);
   const nodeModelEngine = toTurnModelEngineId(nodeModel);
   const nodeReasoningEffort = toTurnReasoningEffort(config.reasoningLevel ?? DEFAULT_TURN_REASONING_LEVEL);
+  const turnRuntimeConfig = resolveTurnRuntimeConfig(config);
   const nodeCwd = resolveNodeCwd(config.cwd ?? ctx.cwd, ctx.cwd);
   const promptTemplate = injectOutputLanguageDirective(String(config.promptTemplate ?? "{{input}}"), ctx.locale);
   const nodeOllamaModel = String(config.ollamaModel ?? "llama3.1:8b").trim() || "llama3.1:8b";
   const qualityProfile = inferQualityProfile(node, config);
-  const inputText = qualityProfile === "synthesis_final" ? extractFinalSynthesisInputText(input) : extractPromptInputText(input);
+  const rawInputText = qualityProfile === "synthesis_final" ? extractFinalSynthesisInputText(input) : extractPromptInputText(input);
+  const { text: inputText, clipped: inputTextClipped } = applyTurnInputBudget(rawInputText, turnRuntimeConfig);
   const queuedRequests = ctx.consumeNodeRequests(node.id);
   const queuedRequestBlock =
     queuedRequests.length > 0
@@ -116,6 +116,9 @@ export async function executeTurnNodeWithContext(
       : "";
   if (queuedRequests.length > 0) {
     ctx.addNodeLog(node.id, `[요청 반영] ${queuedRequests.length}개 추가 요청을 이번 실행에 반영했습니다.`);
+  }
+  if (inputTextClipped) {
+    ctx.addNodeLog(node.id, `[컨텍스트] 입력을 ${turnRuntimeConfig.maxInputChars}자로 제한했습니다. (budget=${turnRuntimeConfig.contextBudget})`);
   }
   const basePrompt = promptTemplate.includes("{{input}}")
     ? replaceInputPlaceholder(promptTemplate, inputText)
@@ -427,11 +430,12 @@ export async function executeTurnNodeWithContext(
   });
   let turnStartResponse: unknown;
   try {
-    turnStartResponse = await ctx.invokeFn<unknown>("turn_start", {
+    turnStartResponse = await ctx.invokeFn<unknown>("turn_start", buildTurnStartArgs({
       threadId: activeThreadId,
       text: textToSend,
       reasoningEffort: nodeReasoningEffort,
-    });
+      config: turnRuntimeConfig,
+    }));
   } catch (error) {
     if (ctx.turnTerminalResolverRef.current) {
       ctx.turnTerminalResolverRef.current = null;

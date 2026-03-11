@@ -1906,6 +1906,9 @@ pub async fn turn_start(
     thread_id: String,
     text: String,
     reasoning_effort: Option<String>,
+    temperature: Option<f64>,
+    context_budget: Option<String>,
+    max_input_chars: Option<u32>,
 ) -> Result<Value, String> {
     let runtime = current_runtime(&state).await?;
     let mut payload = json!({
@@ -1931,6 +1934,27 @@ pub async fn turn_start(
         }
     }
 
+    if let Some(value) = temperature.filter(|value| value.is_finite()) {
+        if let Some(object) = payload.as_object_mut() {
+            object.insert("temperature".to_string(), json!(value));
+        }
+    }
+
+    if let Some(value) = context_budget
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+    {
+        if let Some(object) = payload.as_object_mut() {
+            object.insert("contextBudget".to_string(), json!(value));
+        }
+    }
+
+    if let Some(value) = max_input_chars.filter(|value| *value > 0) {
+        if let Some(object) = payload.as_object_mut() {
+            object.insert("maxInputChars".to_string(), json!(value));
+        }
+    }
+
     runtime.request("turn/start", payload).await
 }
 
@@ -1940,6 +1964,9 @@ pub async fn turn_start_blocking(
     thread_id: String,
     text: String,
     reasoning_effort: Option<String>,
+    temperature: Option<f64>,
+    context_budget: Option<String>,
+    max_input_chars: Option<u32>,
 ) -> Result<Value, String> {
     let runtime = current_runtime(&state).await?;
     let mut payload = json!({
@@ -1963,6 +1990,27 @@ pub async fn turn_start_blocking(
     {
         if let Some(object) = payload.as_object_mut() {
             object.insert("reasoning".to_string(), json!({ "effort": effort }));
+        }
+    }
+
+    if let Some(value) = temperature.filter(|value| value.is_finite()) {
+        if let Some(object) = payload.as_object_mut() {
+            object.insert("temperature".to_string(), json!(value));
+        }
+    }
+
+    if let Some(value) = context_budget
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+    {
+        if let Some(object) = payload.as_object_mut() {
+            object.insert("contextBudget".to_string(), json!(value));
+        }
+    }
+
+    if let Some(value) = max_input_chars.filter(|value| *value > 0) {
+        if let Some(object) = payload.as_object_mut() {
+            object.insert("maxInputChars".to_string(), json!(value));
         }
     }
 

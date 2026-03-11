@@ -3,6 +3,12 @@ import type {
   QualityProfileId,
 } from "../domain";
 import type { GraphNode, KnowledgeConfig, NodeType } from "../types";
+import {
+  DEFAULT_TURN_CONTEXT_BUDGET,
+  DEFAULT_TURN_TEMPERATURE,
+  TURN_CONTEXT_BUDGET_MAX_INPUT_CHARS,
+  type TurnContextBudget,
+} from "../turnExecutionTuning";
 
 export const GRAPH_SCHEMA_VERSION = 3;
 const KNOWLEDGE_DEFAULT_TOP_K = 0;
@@ -50,6 +56,9 @@ export type PresetTurnPolicy = {
   qualityCommandEnabled: boolean;
   qualityCommands: string;
   artifactType: ArtifactType;
+  temperature: number;
+  contextBudget: TurnContextBudget;
+  maxInputChars: number;
 };
 
 export const DEFAULT_PRESET_TURN_POLICY: PresetTurnPolicy = {
@@ -58,4 +67,7 @@ export const DEFAULT_PRESET_TURN_POLICY: PresetTurnPolicy = {
   qualityCommandEnabled: false,
   qualityCommands: "npm run build",
   artifactType: "none",
+  temperature: DEFAULT_TURN_TEMPERATURE,
+  contextBudget: DEFAULT_TURN_CONTEXT_BUDGET,
+  maxInputChars: TURN_CONTEXT_BUDGET_MAX_INPUT_CHARS[DEFAULT_TURN_CONTEXT_BUDGET],
 };

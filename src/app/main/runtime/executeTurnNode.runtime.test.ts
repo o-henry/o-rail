@@ -52,6 +52,9 @@ describe("executeTurnNodeWithContext", () => {
         executor: "codex",
         model: "GPT-5.4",
         reasoningLevel: "매우 높음",
+        temperature: 0.48,
+        contextBudget: "wide",
+        maxInputChars: 5200,
         promptTemplate: "{{input}}",
       },
     };
@@ -83,8 +86,54 @@ describe("executeTurnNodeWithContext", () => {
     expect(turnStartCall?.[1]).toMatchObject({
       threadId: "thread-1",
       reasoningEffort: "xhigh",
+      temperature: 0.48,
+      contextBudget: "wide",
+      maxInputChars: 5200,
     });
     expect(String(turnStartCall?.[1]?.text ?? "")).toContain("테스트 입력");
+  });
+
+  it("clips oversized prompt input by maxInputChars before execution", async () => {
+    const node: GraphNode = {
+      id: "turn-node",
+      type: "turn",
+      position: { x: 0, y: 0 },
+      config: {
+        executor: "codex",
+        model: "GPT-5.4",
+        temperature: 0.36,
+        contextBudget: "tight",
+        maxInputChars: 640,
+        promptTemplate: "{{input}}",
+      },
+    };
+    const ctx = buildContext();
+    const invokeFn: ExecuteTurnNodeContext["invokeFn"] = vi.fn(async (command: string) => {
+      if (command === "thread_start") {
+        return { threadId: "thread-1", raw: {} } as never;
+      }
+      if (command === "turn_start") {
+        ctx.turnTerminalResolverRef.current?.({
+          ok: true,
+          status: "completed",
+          params: { text: "done", output_text: "done", usage: {} },
+        });
+        return { turnId: "turn-1" } as never;
+      }
+      throw new Error(`unexpected command ${command}`);
+    });
+    ctx.invokeFn = invokeFn;
+
+    const result = await executeTurnNodeWithContext(node, "x".repeat(2400), ctx);
+
+    expect(result.ok).toBe(true);
+    const turnStartCall = vi.mocked(invokeFn).mock.calls.find((row) => row[0] === "turn_start");
+    expect(turnStartCall?.[1]).toMatchObject({
+      temperature: 0.36,
+      contextBudget: "tight",
+      maxInputChars: 640,
+    });
+    expect(String(turnStartCall?.[1]?.text ?? "")).toContain("[입력 일부 생략됨: context budget 제한]");
   });
 
   it("injects unity automation guard context for unity automation presets", async () => {

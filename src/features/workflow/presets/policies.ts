@@ -230,13 +230,34 @@ export function resolvePresetTurnPolicy(kind: PresetKind, nodeId: string): Prese
 
   if (kind === "creative") {
     if (key.includes("intake")) {
-      return { ...DEFAULT_PRESET_TURN_POLICY, profile: "design_planning", threshold: 66 };
+      return {
+        ...DEFAULT_PRESET_TURN_POLICY,
+        profile: "design_planning",
+        threshold: 66,
+        temperature: 0.28,
+        contextBudget: "wide",
+        maxInputChars: 4800,
+      };
     }
     if (key.includes("diverge")) {
-      return { ...DEFAULT_PRESET_TURN_POLICY, profile: "generic", threshold: 58 };
+      return {
+        ...DEFAULT_PRESET_TURN_POLICY,
+        profile: "generic",
+        threshold: 58,
+        temperature: 0.62,
+        contextBudget: "wide",
+        maxInputChars: 5200,
+      };
     }
     if (key.includes("critic")) {
-      return { ...DEFAULT_PRESET_TURN_POLICY, profile: "synthesis_final", threshold: 80 };
+      return {
+        ...DEFAULT_PRESET_TURN_POLICY,
+        profile: "synthesis_final",
+        threshold: 80,
+        temperature: 0.16,
+        contextBudget: "balanced",
+        maxInputChars: 3800,
+      };
     }
     if (key.includes("final")) {
       return {
@@ -244,6 +265,9 @@ export function resolvePresetTurnPolicy(kind: PresetKind, nodeId: string): Prese
         profile: "synthesis_final",
         threshold: 74,
         artifactType: "TaskPlanArtifact",
+        temperature: 0.3,
+        contextBudget: "wide",
+        maxInputChars: 5400,
       };
     }
   }
@@ -297,6 +321,9 @@ export function applyPresetTurnPolicies(kind: PresetKind, nodes: GraphNode[]): G
         qualityCommandEnabled: policy.qualityCommandEnabled,
         qualityCommands: policy.qualityCommands,
         artifactType: policy.artifactType,
+        temperature: policy.temperature,
+        contextBudget: policy.contextBudget,
+        maxInputChars: policy.maxInputChars,
       },
     };
   });

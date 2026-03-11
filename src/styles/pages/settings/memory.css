@@ -1,6 +1,18 @@
 .bridge-memory-panel {
   display: grid;
-  gap: 10px;
+  gap: 8px;
+}
+
+.bridge-memory-panel > .web-automation-head + .settings-badges {
+  margin-top: 0;
+}
+
+.bridge-memory-panel > .settings-badges + .settings-memory-copy {
+  margin-top: -3px;
+}
+
+.bridge-memory-panel > .usage-method + .settings-memory-list {
+  margin-top: -3px;
 }
 
 .settings-memory-copy {
@@ -32,7 +44,7 @@
 
 .settings-memory-list {
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 .settings-memory-activity {
@@ -50,6 +62,7 @@
 .settings-memory-activity-head strong {
   font-size: 12px;
   line-height: 1;
+  font-weight: 400;
 }
 
 .settings-memory-activity-head small {
@@ -113,6 +126,8 @@
   grid-template-columns: minmax(0, 1fr);
   color: var(--text-muted);
   font-size: 12px;
+  min-height: 36px;
+  align-items: center;
 }
 
 .settings-memory-item-copy {

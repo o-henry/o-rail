@@ -277,10 +277,12 @@
 
 .node-input-chip {
   flex: 0 0 auto;
+  min-height: 22px;
+  height: 22px;
   border-radius: 2px;
   padding: 2px 8px;
-  font-size: 0.74rem;
-  /* line-height: 1.1; */
+  font-size: 0.72rem;
+  line-height: 1;
   letter-spacing: 0.02em;
   color: var(--node-input-chip-color);
   background: var(--node-input-chip-bg);

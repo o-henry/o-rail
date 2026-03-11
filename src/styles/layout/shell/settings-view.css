@@ -31,7 +31,14 @@
 }
 
 .panel-card.settings-view {
+  background: var(--bg-app);
+}
+
+.panel-card.settings-view.workspace-tab-panel > .controls,
+.panel-card.settings-view.workspace-tab-panel > .bridge-embedded > .controls {
   background: #ffffff;
+  border-radius: 8px;
+  padding: 12px;
 }
 
 .panel-card.settings-view.data-intelligence-view {

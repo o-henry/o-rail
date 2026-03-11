@@ -3,6 +3,7 @@ import { resolvePmPlanningMode, resolveStudioRoleDisplayLabel } from "../../feat
 import { STUDIO_ROLE_TEMPLATES } from "../../features/studio/roleTemplates";
 import type { StudioRoleId } from "../../features/studio/handoffTypes";
 import { toStudioRoleId } from "../../features/studio/roleUtils";
+import { arrangeExpandedRoleInternalNodes } from "../../features/workflow/graph-utils";
 import { buildRoleNodeScaffold } from "../main/runtime/roleNodeScaffold";
 import type { GraphData, GraphEdge, GraphNode } from "../../features/workflow/types";
 import { NODE_HEIGHT, NODE_WIDTH } from "../main";
@@ -10,6 +11,7 @@ import { getCanvasViewportCenterLogical } from "../main/canvas/canvasViewport";
 
 type UseWorkflowRoleCollaborationParams = {
   graph: GraphData;
+  canvasNodeIdSet: Set<string>;
   selectedNode: GraphNode | null;
   expandedRoleNodeIds: string[];
   setExpandedRoleNodeIds: Dispatch<SetStateAction<string[]>>;
@@ -127,6 +129,10 @@ export function useWorkflowRoleCollaboration(params: UseWorkflowRoleCollaboratio
     const normalizedNodeId = String(nodeId ?? "").trim();
     if (!normalizedNodeId) {
       return;
+    }
+    const isExpanding = !params.expandedRoleNodeIds.includes(normalizedNodeId);
+    if (isExpanding) {
+      params.applyGraphChange((prev) => arrangeExpandedRoleInternalNodes(prev, normalizedNodeId, params.canvasNodeIdSet));
     }
     params.setExpandedRoleNodeIds((prev) =>
       prev.includes(normalizedNodeId) ? prev.filter((id) => id !== normalizedNodeId) : [...prev, normalizedNodeId],

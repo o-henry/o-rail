@@ -2057,6 +2057,7 @@ function App() {
     addRoleReviewPassForNode,
   } = useWorkflowRoleCollaboration({
     canvasZoom,
+    canvasNodeIdSet,
     graph,
     graphCanvasRef,
     selectedNode,

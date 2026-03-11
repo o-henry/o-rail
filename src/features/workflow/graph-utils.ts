@@ -23,4 +23,5 @@ export {
   snapToNearbyNodeAxis,
 } from "./graph-utils/edges";
 export { autoArrangeGraphLayout } from "./graph-utils/layout";
+export { arrangeExpandedRoleInternalNodes, arrangeGraphAfterEdgeConnect } from "./graph-utils/localLayout";
 export { buildCanvasEdgeLines, type CanvasEdgeEntry, type CanvasEdgeLine } from "./graph-utils/renderEdges";

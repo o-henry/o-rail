@@ -1,6 +1,7 @@
 import { MouseEvent as ReactMouseEvent, useCallback } from "react";
 import type { Dispatch, MutableRefObject, RefObject, SetStateAction } from "react";
 import {
+  arrangeGraphAfterEdgeConnect,
   defaultNodeConfig,
   getAutoConnectionSides,
   getNodeAnchorPoint,
@@ -326,8 +327,16 @@ export function useWorkflowGraphActions(params: UseWorkflowGraphActionsParams) {
           from: { nodeId: fromNodeId, port: "out", side: resolvedFromSide },
           to: { nodeId: toNodeId, port: "in", side: resolvedToSide },
         };
-        return { ...prev, edges: [...prev.edges, edge] };
-      }, { autoLayout: true });
+        return arrangeGraphAfterEdgeConnect(
+          { ...prev, edges: [...prev.edges, edge] },
+          {
+            fromNodeId,
+            toNodeId,
+            fromSide: resolvedFromSide,
+            toSide: resolvedToSide,
+          },
+        );
+      });
     },
     [applyGraphChange, graph.edges, graph.nodes, setStatus],
   );

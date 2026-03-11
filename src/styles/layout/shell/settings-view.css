@@ -39,7 +39,7 @@
 }
 
 .panel-card.settings-view.workspace-tab-panel {
-  background: var(--bg-app);
+  background: var(--bg-app) !important;
   gap: 1rem;
 }
 

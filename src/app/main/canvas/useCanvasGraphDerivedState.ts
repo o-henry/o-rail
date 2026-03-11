@@ -1,38 +1,12 @@
 import { useMemo } from "react";
-import { buildSimpleReadonlyTurnEdges, getGraphEdgeKey } from "../../../features/workflow/graph-utils";
+import {
+  buildSimpleReadonlyTurnEdges,
+  getGraphEdgeKey,
+  resolveQuestionDirectInputNodeIds,
+} from "../../../features/workflow/graph-utils";
 import type { GraphData, GraphEdge, GraphNode, KnowledgeConfig } from "../../../features/workflow/types";
 import { closestNumericOptionValue } from "../../mainAppUtils";
 import type { CanvasDisplayEdge } from "../index";
-
-export function resolveQuestionDirectInputNodeIds(graph: GraphData): Set<string> {
-  const nodeById = new Map(graph.nodes.map((node) => [node.id, node] as const));
-  const incomingNodeIds = new Set<string>();
-  const internalNodeIds = new Set(
-    graph.nodes
-      .filter((node) => {
-        const config = (node.config ?? {}) as Record<string, unknown>;
-        return String(config.internalParentNodeId ?? "").trim().length > 0;
-      })
-      .map((node) => node.id),
-  );
-
-  graph.edges.forEach((edge) => {
-    const sourceNode = nodeById.get(edge.from.nodeId);
-    const sourceConfig = (sourceNode?.config ?? {}) as Record<string, unknown>;
-    const sourceInternalParentNodeId = String(sourceConfig.internalParentNodeId ?? "").trim();
-    if (sourceInternalParentNodeId) {
-      return;
-    }
-    incomingNodeIds.add(edge.to.nodeId);
-  });
-
-  return new Set(
-    graph.nodes
-      .filter((node) => !internalNodeIds.has(node.id))
-      .filter((node) => !incomingNodeIds.has(node.id))
-      .map((node) => node.id),
-  );
-}
 
 export function useCanvasGraphDerivedState(params: any) {
   const expandedRoleNodeIds = params.expandedRoleNodeIds as Set<string> | undefined;
@@ -107,7 +81,7 @@ export function useCanvasGraphDerivedState(params: any) {
   const selectedNode = (params.graph as GraphData).nodes.find((node) => node.id === params.selectedNodeId) ?? null;
 
   const questionDirectInputNodeIds = useMemo<Set<string>>(() => {
-    return resolveQuestionDirectInputNodeIds(params.graph as GraphData);
+    return new Set(resolveQuestionDirectInputNodeIds(params.graph as GraphData));
   }, [params.graph.edges, params.graph.nodes]);
 
   const graphKnowledge = params.normalizeKnowledgeConfig(params.graph.knowledge) as KnowledgeConfig;

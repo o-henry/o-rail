@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { resolveQuestionDirectInputNodeIds } from "../../../features/workflow/graph-utils";
 import type { GraphData } from "../../../features/workflow/types";
-import { resolveQuestionDirectInputNodeIds } from "./useCanvasGraphDerivedState";
 
 describe("resolveQuestionDirectInputNodeIds", () => {
   it("keeps a role node as direct-input when only internal research nodes point to it", () => {
@@ -49,7 +49,7 @@ describe("resolveQuestionDirectInputNodeIds", () => {
 
     const directInputNodeIds = resolveQuestionDirectInputNodeIds(graph);
 
-    expect(directInputNodeIds.has("role")).toBe(true);
+    expect(directInputNodeIds).toContain("role");
   });
 
   it("removes direct-input when an external node feeds the role node", () => {
@@ -80,7 +80,7 @@ describe("resolveQuestionDirectInputNodeIds", () => {
 
     const directInputNodeIds = resolveQuestionDirectInputNodeIds(graph);
 
-    expect(directInputNodeIds.has("role")).toBe(false);
+    expect(directInputNodeIds).not.toContain("role");
   });
 
   it("does not mark internal synthesis or verification nodes as direct-input", () => {
@@ -129,8 +129,8 @@ describe("resolveQuestionDirectInputNodeIds", () => {
 
     const directInputNodeIds = resolveQuestionDirectInputNodeIds(graph);
 
-    expect(directInputNodeIds.has("role")).toBe(true);
-    expect(directInputNodeIds.has("synthesis")).toBe(false);
-    expect(directInputNodeIds.has("verification")).toBe(false);
+    expect(directInputNodeIds).toContain("role");
+    expect(directInputNodeIds).not.toContain("synthesis");
+    expect(directInputNodeIds).not.toContain("verification");
   });
 });

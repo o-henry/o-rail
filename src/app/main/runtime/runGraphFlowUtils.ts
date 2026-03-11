@@ -1,4 +1,5 @@
 import { getWebProviderFromExecutor, getTurnExecutor, type TurnConfig, type WebProvider } from "../../../features/workflow/domain";
+import { resolveQuestionDirectInputNodeIds } from "../../../features/workflow/graph-utils";
 import type { GraphData, GraphEdge, GraphNode, NodeExecutionStatus } from "../../../features/workflow/types";
 import type {
   CodexMultiAgentMode,
@@ -52,8 +53,7 @@ export function buildWebConnectPreflightReasons(params: {
 }
 
 export function findDirectInputNodeIds(graph: GraphData): string[] {
-  const incomingNodeIds = new Set(graph.edges.map((edge) => edge.to.nodeId));
-  return graph.nodes.filter((node) => !incomingNodeIds.has(node.id)).map((node) => node.id);
+  return resolveQuestionDirectInputNodeIds(graph);
 }
 
 export function createRunNodeStateSnapshot(nodes: GraphNode[]): {

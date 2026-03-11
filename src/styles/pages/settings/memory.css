@@ -1,18 +1,18 @@
-.bridge-memory-panel {
+.settings-view .controls.bridge-memory-panel {
   display: grid;
-  gap: 8px;
+  gap: 10px;
 }
 
 .bridge-memory-panel > .web-automation-head + .settings-badges {
-  margin-top: 0;
+  margin-top: -2px;
 }
 
 .bridge-memory-panel > .settings-badges + .settings-memory-copy {
-  margin-top: -3px;
+  margin-top: -2px;
 }
 
 .bridge-memory-panel > .usage-method + .settings-memory-list {
-  margin-top: -3px;
+  margin-top: -2px;
 }
 
 .settings-memory-copy {

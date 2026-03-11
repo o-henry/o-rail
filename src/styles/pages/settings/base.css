@@ -23,16 +23,12 @@
   margin-top: -10px !important;
 }
 
-.panel-card.settings-view.workspace-tab-panel .bridge-head-panel > .web-automation-head + .settings-badges {
-  margin-top: 0 !important;
-}
-
 .settings-view .controls {
   gap: 21px;
 }
 
 .settings-view .bridge-head-panel {
-  gap: 6px;
+  gap: 10px;
 }
 
 .settings-compact {

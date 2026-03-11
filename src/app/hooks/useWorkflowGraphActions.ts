@@ -22,6 +22,7 @@ import {
   NODE_WIDTH,
 } from "../main";
 import { getCanvasViewportCenterLogical as resolveCanvasViewportCenterLogical } from "../main/canvas/canvasViewport";
+import { removeGraphNodesPreservingLayout } from "./workflowGraphDelete";
 
 type UseWorkflowGraphActionsParams = {
   graph: GraphData;
@@ -141,11 +142,7 @@ export function useWorkflowGraphActions(params: UseWorkflowGraphActionsParams) {
         return;
       }
       const targetSet = new Set(targets);
-      applyGraphChange((prev) => ({
-        ...prev,
-        nodes: prev.nodes.filter((n) => !targetSet.has(n.id)),
-        edges: prev.edges.filter((e) => !targetSet.has(e.from.nodeId) && !targetSet.has(e.to.nodeId)),
-      }), { autoLayout: true });
+      applyGraphChange((prev) => removeGraphNodesPreservingLayout(prev, targets), { autoLayout: false });
       setNodeSelection(selectedNodeIds.filter((id) => !targetSet.has(id)));
       setSelectedEdgeKey("");
       setNodeStates((prev) => {

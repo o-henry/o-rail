@@ -1,4 +1,5 @@
 import { useI18n } from "../i18n";
+import UserMemoryPanel from "./UserMemoryPanel";
 
 type WebBridgeProviderSeen = {
   provider: string;
@@ -171,6 +172,8 @@ function BridgePanel({
           ))}
         </div>
       </section> */}
+
+      <UserMemoryPanel />
     </>
   );
 

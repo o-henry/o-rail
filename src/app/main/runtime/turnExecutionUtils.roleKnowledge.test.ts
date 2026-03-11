@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { injectKnowledgeContext } from "./turnExecutionUtils";
 import { writeRoleKnowledgeProfiles } from "../../../features/studio/roleKnowledgeStore";
+import { addUserMemoryEntry } from "../../../features/studio/userMemoryStore";
 import type { GraphNode } from "../../../features/workflow/types";
 
 function createLocalStorageMock() {
@@ -176,5 +177,35 @@ describe("injectKnowledgeContext role knowledge", () => {
     expect(result.prompt).toContain("현실성 점수 기준");
     expect(result.prompt).toContain("0-10 점수");
     expect(result.prompt).toContain("냉정하게 검토");
+  });
+
+  it("prepends stored user memory when relevant", async () => {
+    addUserMemoryEntry("나는 1인 인디 게임 개발자이고 빠른 프로토타이핑을 중요하게 생각한다.", "manual");
+
+    const node: GraphNode = {
+      id: "turn-general",
+      type: "turn",
+      position: { x: 0, y: 0 },
+      config: {
+        knowledgeEnabled: true,
+      },
+    };
+
+    const result = await injectKnowledgeContext({
+      node,
+      prompt: "창의적인 게임 아이디어를 제안해줘",
+      config: node.config,
+      workflowQuestion: "인디 게임 아이디어를 빠르게 검증하고 싶다",
+      activeRunPresetKind: undefined,
+      internalMemoryCorpus: [],
+      enabledKnowledgeFiles: [],
+      graphKnowledge: { topK: 0, maxChars: 0 },
+      addNodeLog: vi.fn(),
+      invokeFn: vi.fn(),
+    });
+
+    expect(result.prompt).toContain("[사용자 장기 메모리]");
+    expect(result.prompt).toContain("1인 인디 게임 개발자");
+    expect(result.prompt).toContain("창의적인 게임 아이디어를 제안해줘");
   });
 });

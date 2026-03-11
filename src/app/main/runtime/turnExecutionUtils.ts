@@ -13,6 +13,7 @@ import { getRoleInstanceKnowledgeProfile, getRoleKnowledgeProfile } from "../../
 import { buildMergedRoleKnowledgePrompt } from "../../../features/studio/roleKnowledgePrompt";
 import { isLegacyPmStudioRole, resolveEffectiveStudioRoleId } from "../../../features/studio/pmPlanningMode";
 import { toStudioRoleId } from "../../../features/studio/roleUtils";
+import { buildUserMemoryPromptBlock, rankUserMemoryEntries } from "../../../features/studio/userMemoryStore";
 import type {
   AgentRuleDoc,
   AgentRulesReadResult,
@@ -114,6 +115,18 @@ export async function injectKnowledgeContext(params: {
       params.node.id,
       `[역할 지식] ${storedRoleKnowledge?.roleLabel ?? roleId ?? "role"} 누적 지식${storedInstanceKnowledge ? " + 관점 지식" : ""} 반영`,
     );
+  }
+
+  const rankedUserMemory = rankUserMemoryEntries({
+    query: `${params.workflowQuestion}\n${params.prompt}`,
+    topK: 4,
+  });
+  if (rankedUserMemory.length > 0) {
+    const userMemoryBlock = buildUserMemoryPromptBlock(rankedUserMemory.map((row) => row.entry));
+    if (userMemoryBlock) {
+      mergedPrompt = `${userMemoryBlock}\n\n[요청]\n${mergedPrompt}`.trim();
+      params.addNodeLog(params.node.id, `[사용자 메모리] 장기 메모리 ${rankedUserMemory.length}개 반영`);
+    }
   }
 
   const rankedMemory = rankInternalMemorySnippets({

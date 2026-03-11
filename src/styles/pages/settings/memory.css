@@ -1,0 +1,152 @@
+.bridge-memory-panel {
+  display: grid;
+  gap: 10px;
+}
+
+.settings-memory-copy {
+  margin: 0;
+}
+
+.settings-memory-composer {
+  display: grid;
+  gap: 8px;
+}
+
+.settings-memory-textarea {
+  width: 100%;
+  min-height: 84px;
+  resize: vertical;
+  border: 0;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--surface-soft) 74%, var(--surface-elevated));
+  color: var(--text-main);
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.settings-memory-textarea:focus,
+.settings-memory-textarea:focus-visible {
+  outline: 1px solid rgba(95, 136, 215, 0.55);
+}
+
+.settings-memory-list {
+  display: grid;
+  gap: 8px;
+}
+
+.settings-memory-activity {
+  display: grid;
+  gap: 8px;
+}
+
+.settings-memory-activity-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.settings-memory-activity-head strong {
+  font-size: 12px;
+  line-height: 1;
+}
+
+.settings-memory-activity-head small {
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1;
+}
+
+.settings-memory-activity-list {
+  display: grid;
+  gap: 8px;
+}
+
+.settings-memory-activity-item {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--surface-soft) 72%, var(--surface-elevated));
+}
+
+.settings-memory-activity-item p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-main);
+}
+
+.settings-memory-activity-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.settings-memory-rag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.settings-memory-rag-list code {
+  padding: 4px 6px;
+  border-radius: 4px;
+  background: rgba(19, 29, 38, 0.06);
+  font-size: 11px;
+  line-height: 1;
+}
+
+.settings-memory-item,
+.settings-memory-empty {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+  padding: 10px 12px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--surface-soft) 72%, var(--surface-elevated));
+}
+
+.settings-memory-empty {
+  grid-template-columns: minmax(0, 1fr);
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.settings-memory-item-copy {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.settings-memory-item-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.settings-memory-item-meta strong {
+  font-size: 12px;
+  line-height: 1;
+}
+
+.settings-memory-item-meta small {
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1;
+}
+
+.settings-memory-item-copy p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-main);
+  word-break: break-word;
+}
+
+.bridge-memory-panel .settings-cwd-picker {
+  min-width: 64px;
+}

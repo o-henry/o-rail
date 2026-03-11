@@ -1,4 +1,5 @@
 @import "./settings/base.css";
+@import "./settings/memory.css";
 @import "./settings/dashboard-intelligence.css";
 @import "./settings/dashboard-detail.css";
 @import "./settings/dashboard-controls.css";

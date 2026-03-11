@@ -1,5 +1,6 @@
 import { createRunGraphProcessNode } from "./runGraphProcessNode";
 import { finalizeRunGraphExecution } from "./runGraphFinalize";
+import { rememberUserMemoryFromText } from "../../../features/studio/userMemoryStore";
 
 function isViaOnlyGraph(graph: any): boolean {
   const nodes = Array.isArray(graph?.nodes) ? graph.nodes : [];
@@ -49,6 +50,7 @@ export function createRunGraphRunner(params: any) {
       return;
     }
     const workflowQuestion = unifiedInputResult.value.normalizedText;
+    rememberUserMemoryFromText(workflowQuestion);
 
     params.runStartGuardRef.current = true;
     params.setPendingWebConnectCheck(null);

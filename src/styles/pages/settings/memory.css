@@ -50,6 +50,7 @@
 .settings-memory-activity {
   display: grid;
   gap: 8px;
+  padding-top: 4px;
 }
 
 .settings-memory-activity-head {

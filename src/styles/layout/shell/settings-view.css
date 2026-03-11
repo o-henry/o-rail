@@ -20,7 +20,7 @@
   width: 100%;
   max-width: 720px;
   margin-inline: auto;
-  margin-top: 2rem;
+  margin-top: 0;
 }
 
 .settings-view > .bridge-embedded {

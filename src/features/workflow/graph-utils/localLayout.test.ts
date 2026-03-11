@@ -87,4 +87,34 @@ describe("localLayout", () => {
     expect(researchOne?.position.y).not.toBe(researchTwo?.position.y);
     expect(synthesis?.position.y).toBeLessThan(verification?.position.y ?? 0);
   });
+
+  it("keeps expanded internal role nodes inside the left canvas bound", () => {
+    const graph = createGraph([
+      {
+        id: "role",
+        type: "turn",
+        position: { x: 240, y: 420 },
+        config: { sourceKind: "handoff" },
+      },
+      {
+        id: "research-1",
+        type: "turn",
+        position: { x: 0, y: 0 },
+        config: { internalParentNodeId: "role", internalNodeKind: "research" },
+      },
+      {
+        id: "research-2",
+        type: "turn",
+        position: { x: 0, y: 0 },
+        config: { internalParentNodeId: "role", internalNodeKind: "research" },
+      },
+    ]);
+
+    const next = arrangeExpandedRoleInternalNodes(graph, "role", new Set(["role"]));
+    const minInternalX = next.nodes
+      .filter((node) => String((node.config as Record<string, unknown>).internalParentNodeId ?? "").trim() === "role")
+      .reduce((minX, node) => Math.min(minX, node.position.x), Number.POSITIVE_INFINITY);
+
+    expect(minInternalX).toBeGreaterThanOrEqual(0);
+  });
 });

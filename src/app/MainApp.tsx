@@ -35,6 +35,7 @@ import { useMissionControl } from "./hooks/useMissionControl";
 import { useWorkspaceEventPersistence } from "./hooks/useWorkspaceEventPersistence";
 import { useAgenticActionBus } from "./hooks/useAgenticActionBus";
 import { useWorkflowHandoffPanel } from "./hooks/useWorkflowHandoffPanel";
+import { computeCanvasStageSize } from "./main/canvas/canvasStageSize";
 import { STUDIO_ROLE_TEMPLATES } from "../features/studio/roleTemplates";
 import type { StudioRoleId } from "../features/studio/handoffTypes";
 import { getStudioRoleModeOptions, normalizePmPlanningMode, normalizeStudioRoleSelection, resolveStudioRoleDisplayLabel } from "../features/studio/pmPlanningMode";
@@ -2163,21 +2164,18 @@ function App() {
 
   const viewportWidth = Math.ceil(canvasLogicalViewport.width);
   const viewportHeight = Math.ceil(canvasLogicalViewport.height);
-  const stagePadding = canvasNodes.length > 0 ? STAGE_GROW_MARGIN : 0;
-  const maxNodeRight = canvasNodes.reduce((max, node) => Math.max(max, node.position.x + NODE_WIDTH), 0);
-  const maxNodeBottom = canvasNodes.reduce((max, node) => Math.max(max, node.position.y + NODE_HEIGHT), 0);
-  const softMaxWidth = viewportWidth + STAGE_GROW_LIMIT;
-  const softMaxHeight = viewportHeight + STAGE_GROW_LIMIT;
-  const stageWidth = Math.max(
+  const { width: boundedStageWidth, height: boundedStageHeight } = computeCanvasStageSize({
     viewportWidth,
-    Math.min(softMaxWidth, Math.max(viewportWidth, maxNodeRight + stagePadding)),
-  );
-  const stageHeight = Math.max(
     viewportHeight,
-    Math.min(softMaxHeight, Math.max(viewportHeight, maxNodeBottom + stagePadding)),
-  );
-  const boundedStageWidth = Math.min(stageWidth, MAX_STAGE_WIDTH);
-  const boundedStageHeight = Math.min(stageHeight, MAX_STAGE_HEIGHT);
+    canvasNodes,
+    nodeWidth: NODE_WIDTH,
+    nodeHeight: NODE_HEIGHT,
+    stageGrowMargin: STAGE_GROW_MARGIN,
+    stageGrowLimit: STAGE_GROW_LIMIT,
+    maxStageWidth: MAX_STAGE_WIDTH,
+    maxStageHeight: MAX_STAGE_HEIGHT,
+    expandToFitAllNodes: expandedRoleNodeIds.length > 0,
+  });
   const workflowRoleRequestTargetNodeIds = useMemo(
     () =>
       resolveWorkflowRoleRequestTargetNodeIds({

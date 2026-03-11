@@ -224,9 +224,6 @@ export function createCanvasDragZoomHandlers(params: any) {
     if (!params.dragRef.current) {
       return;
     }
-
-    params.dragPointerRef.current = { clientX: e.clientX, clientY: e.clientY };
-    applyDragPosition(e.clientX, e.clientY);
   }
 
   function onCanvasMouseUp(event?: { clientX: number; clientY: number }) {

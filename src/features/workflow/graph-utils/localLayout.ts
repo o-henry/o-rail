@@ -350,12 +350,24 @@ export function arrangeExpandedRoleInternalNodes(
     staticNodeIds,
     direction: "left",
   });
-  const nextNodes = candidateNodes.map((node) => {
+  const shiftedNodes = candidateNodes.map((node) => {
     if (!internalNodeIdSet.has(node.id)) {
       return node;
     }
     return cloneNodePosition(node, node.position.x + clusterShift.x, node.position.y + clusterShift.y);
   });
+  const leftOverflow = shiftedNodes
+    .filter((node) => internalNodeIdSet.has(node.id))
+    .reduce((minX, node) => Math.min(minX, node.position.x), Number.POSITIVE_INFINITY);
+  const leftBoundShift = Number.isFinite(leftOverflow) && leftOverflow < 0 ? -leftOverflow : 0;
+  const nextNodes = leftBoundShift > 0
+    ? shiftedNodes.map((node) => {
+        if (!internalNodeIdSet.has(node.id)) {
+          return node;
+        }
+        return cloneNodePosition(node, node.position.x + leftBoundShift, node.position.y);
+      })
+    : shiftedNodes;
 
   const hasChanged = nextNodes.some((node, index) => {
     const before = input.nodes[index];

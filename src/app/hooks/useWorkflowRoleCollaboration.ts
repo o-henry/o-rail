@@ -8,7 +8,8 @@ import { toStudioRoleId } from "../../features/studio/roleUtils";
 import { arrangeExpandedRoleInternalNodes } from "../../features/workflow/graph-utils";
 import { buildRoleNodeScaffold } from "../main/runtime/roleNodeScaffold";
 import type { GraphData, GraphEdge, GraphNode } from "../../features/workflow/types";
-import { NODE_HEIGHT, NODE_WIDTH } from "../main";
+import { GRAPH_STAGE_INSET_X, GRAPH_STAGE_INSET_Y, NODE_HEIGHT, NODE_WIDTH } from "../main";
+import { computeCanvasRevealViewport } from "../main/canvas/canvasRevealViewport";
 import { getCanvasViewportCenterLogical } from "../main/canvas/canvasViewport";
 
 type UseWorkflowRoleCollaborationParams = {
@@ -52,6 +53,65 @@ function cloneIncomingExternalEdges(params: {
       ...edge,
       to: { ...edge.to, nodeId: params.nextNodeId },
     }));
+}
+
+function focusExpandedRoleNodes(params: {
+  graph: GraphData;
+  nodeId: string;
+  graphCanvasRef: RefObject<HTMLDivElement | null>;
+  canvasZoom: number;
+  setCanvasZoom: (updater: (prev: number) => number) => void;
+  clampCanvasZoom: (next: number) => number;
+}) {
+  const canvas = params.graphCanvasRef.current;
+  if (!canvas) {
+    return;
+  }
+  const focusNodes = params.graph.nodes.filter((node) => {
+    const config = (node.config ?? {}) as Record<string, unknown>;
+    return node.id === params.nodeId || String(config.internalParentNodeId ?? "").trim() === params.nodeId;
+  });
+  if (focusNodes.length === 0) {
+    return;
+  }
+
+  const bounds = focusNodes.reduce(
+    (acc, node) => ({
+      minX: Math.min(acc.minX, Number(node.position?.x ?? 0)),
+      minY: Math.min(acc.minY, Number(node.position?.y ?? 0)),
+      maxX: Math.max(acc.maxX, Number(node.position?.x ?? 0) + NODE_WIDTH),
+      maxY: Math.max(acc.maxY, Number(node.position?.y ?? 0) + NODE_HEIGHT),
+    }),
+    { minX: Number.POSITIVE_INFINITY, minY: Number.POSITIVE_INFINITY, maxX: 0, maxY: 0 },
+  );
+  const reveal = computeCanvasRevealViewport({
+    clientWidth: canvas.clientWidth,
+    clientHeight: canvas.clientHeight,
+    currentZoom: params.canvasZoom,
+    bounds,
+    stageInsetX: GRAPH_STAGE_INSET_X,
+    stageInsetY: GRAPH_STAGE_INSET_Y,
+  });
+  const nextZoom = params.clampCanvasZoom(reveal.zoom);
+  const centerX = (bounds.minX + bounds.maxX) / 2;
+  const centerY = (bounds.minY + bounds.maxY) / 2;
+  params.setCanvasZoom(() => nextZoom);
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      const currentCanvas = params.graphCanvasRef.current;
+      if (!currentCanvas) {
+        return;
+      }
+      currentCanvas.scrollLeft = Math.max(
+        0,
+        centerX * nextZoom + GRAPH_STAGE_INSET_X - currentCanvas.clientWidth / 2,
+      );
+      currentCanvas.scrollTop = Math.max(
+        0,
+        centerY * nextZoom + GRAPH_STAGE_INSET_Y - currentCanvas.clientHeight / 2,
+      );
+    });
+  });
 }
 
 export function useWorkflowRoleCollaboration(params: UseWorkflowRoleCollaborationParams) {
@@ -143,12 +203,29 @@ export function useWorkflowRoleCollaboration(params: UseWorkflowRoleCollaboratio
       return;
     }
     const isExpanding = !params.expandedRoleNodeIds.includes(normalizedNodeId);
+    let arrangedGraph: GraphData | null = null;
     if (isExpanding) {
-      params.applyGraphChange((prev) => arrangeExpandedRoleInternalNodes(prev, normalizedNodeId, params.canvasNodeIdSet));
+      params.applyGraphChange((prev) => {
+        const next = arrangeExpandedRoleInternalNodes(prev, normalizedNodeId, params.canvasNodeIdSet);
+        arrangedGraph = next;
+        return next;
+      });
     }
     params.setExpandedRoleNodeIds((prev) =>
       prev.includes(normalizedNodeId) ? prev.filter((id) => id !== normalizedNodeId) : [...prev, normalizedNodeId],
     );
+    if (isExpanding && arrangedGraph) {
+      requestAnimationFrame(() => {
+        focusExpandedRoleNodes({
+          graph: arrangedGraph as GraphData,
+          nodeId: normalizedNodeId,
+          graphCanvasRef: params.graphCanvasRef,
+          canvasZoom: params.canvasZoom,
+          setCanvasZoom: params.setCanvasZoom,
+          clampCanvasZoom: params.clampCanvasZoom,
+        });
+      });
+    }
   }, [params]);
 
   const addRolePerspectivePassForNode = useCallback((nodeId?: string) => {

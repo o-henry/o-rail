@@ -1,6 +1,56 @@
 import type { QualityReport } from "../types";
 import { storeGraphRoleKnowledge } from "../../../features/studio/graphRoleKnowledgeMemory";
 import { toStudioRoleId } from "../../../features/studio/roleUtils";
+import { extractFinalAnswer } from "../../../features/workflow/labels";
+
+const TURN_OUTPUT_METADATA_KEYS = new Set([
+  "artifactType",
+  "authorNodeId",
+  "completion",
+  "confidenceBand",
+  "createdAt",
+  "executor",
+  "finishedAt",
+  "model",
+  "nodeId",
+  "provider",
+  "raw",
+  "response",
+  "status",
+  "threadId",
+  "turnId",
+  "usage",
+  "verificationStatus",
+  "version",
+]);
+
+function hasMeaningfulTurnOutputContent(value: unknown, depth = 0): boolean {
+  if (depth > 5 || value == null) {
+    return false;
+  }
+  if (typeof value === "string") {
+    return value.trim().length > 0;
+  }
+  if (typeof value === "number" || typeof value === "boolean") {
+    return true;
+  }
+  if (Array.isArray(value)) {
+    return value.some((entry) => hasMeaningfulTurnOutputContent(entry, depth + 1));
+  }
+  if (typeof value !== "object") {
+    return false;
+  }
+  return Object.entries(value as Record<string, unknown>)
+    .filter(([key]) => !TURN_OUTPUT_METADATA_KEYS.has(key))
+    .some(([, entry]) => hasMeaningfulTurnOutputContent(entry, depth + 1));
+}
+
+function isEmptyTurnOutput(output: unknown): boolean {
+  if (extractFinalAnswer(output).trim().length > 0) {
+    return false;
+  }
+  return !hasMeaningfulTurnOutputContent(output);
+}
 
 function applyViaArtifactPathsToFeedPost(post: any, output: unknown): any {
   if (!output || typeof output !== "object" || Array.isArray(output)) {
@@ -197,6 +247,65 @@ export async function handleRunGraphTurnNode(params: any): Promise<boolean> {
     addNodeLog(nodeId, `[아티팩트] ${warning}`);
   }
   const normalizedOutput = turnExecution.normalizedOutput ?? result.output;
+  if (isEmptyTurnOutput(normalizedOutput)) {
+    const finishedAtIso = new Date().toISOString();
+    const emptyOutputError = "빈 산출이 감지되어 실행을 중단했습니다. 이 결과는 다음 노드로 전달하지 않습니다.";
+    addNodeLog(nodeId, `[하드 실패] ${emptyOutputError}`);
+    setNodeStatus(nodeId, "failed", emptyOutputError);
+    setNodeRuntimeFields(nodeId, {
+      error: emptyOutputError,
+      status: "failed",
+      output: normalizedOutput,
+      threadId: result.threadId,
+      turnId: result.turnId,
+      usage: result.usage,
+      finishedAt: finishedAtIso,
+      durationMs: Date.now() - startedAtMs,
+    });
+    runRecord.providerTrace?.push({
+      nodeId,
+      executor: result.executor,
+      provider: result.provider,
+      status: "failed",
+      startedAt: new Date(startedAtMs).toISOString(),
+      finishedAt: finishedAtIso,
+      summary: emptyOutputError,
+    });
+    appendRunTransition(runRecord, nodeId, "failed", emptyOutputError);
+    const failedEvidence = appendNodeEvidence({
+      node,
+      output: normalizedOutput,
+      provider: result.provider,
+      summary: emptyOutputError,
+      createdAt: finishedAtIso,
+    });
+    const failedFeed = buildFeedPost({
+      runId: runRecord.runId,
+      node,
+      isFinalDocument: isFinalTurnNode,
+      status: "failed",
+      createdAt: finishedAtIso,
+      summary: emptyOutputError,
+      logs: runLogCollectorRef.current[nodeId] ?? [],
+      output: normalizedOutput,
+      error: emptyOutputError,
+      durationMs: Date.now() - startedAtMs,
+      usage: result.usage,
+      inputSources: params.nodeInputSources,
+      inputData: input,
+      verificationStatus: failedEvidence.verificationStatus,
+      confidenceBand: failedEvidence.confidenceBand,
+      dataIssues: failedEvidence.dataIssues,
+    });
+    const failedPost = applyViaArtifactPathsToFeedPost(failedFeed.post, normalizedOutput);
+    runRecord.feedPosts?.push(failedPost);
+    rememberFeedSource(latestFeedSourceByNodeId, failedPost);
+    feedRawAttachmentRef.current[feedAttachmentRawKey(failedPost.id, "markdown")] = failedFeed.rawAttachments.markdown;
+    feedRawAttachmentRef.current[feedAttachmentRawKey(failedPost.id, "json")] = failedFeed.rawAttachments.json;
+    terminalStateByNodeId[nodeId] = "failed";
+    scheduleChildren(nodeId);
+    return true;
+  }
   let qualityReport: QualityReport | undefined;
 
   if (isFinalTurnNode) {

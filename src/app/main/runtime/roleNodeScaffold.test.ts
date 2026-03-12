@@ -17,6 +17,7 @@ describe("roleNodeScaffold", () => {
       sourceKind: "handoff",
       handoffRoleId: "pm_planner",
       roleResearchEnabled: false,
+      model: "GPT-5.3-Codex",
     });
   });
 

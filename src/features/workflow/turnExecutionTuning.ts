@@ -1,6 +1,7 @@
 export const TURN_CONTEXT_BUDGET_OPTIONS = ["tight", "balanced", "wide"] as const;
 
 export type TurnContextBudget = (typeof TURN_CONTEXT_BUDGET_OPTIONS)[number];
+export type TurnInputOverflowPolicy = "clip" | "preserve";
 
 export const DEFAULT_TURN_TEMPERATURE = 0.2;
 export const DEFAULT_TURN_CONTEXT_BUDGET: TurnContextBudget = "balanced";
@@ -59,6 +60,21 @@ export function resolveTurnMaxInputChars(input: {
     input.maxInputChars,
     TURN_CONTEXT_BUDGET_MAX_INPUT_CHARS[budget],
   );
+}
+
+export function resolveTurnInputOverflowPolicy(input: {
+  qualityProfile?: unknown;
+  artifactType?: unknown;
+}): TurnInputOverflowPolicy {
+  const profile = String(input.qualityProfile ?? "").trim().toLowerCase();
+  const artifactType = String(input.artifactType ?? "").trim();
+  if (profile === "synthesis_final") {
+    return "preserve";
+  }
+  if (artifactType && artifactType !== "none") {
+    return "preserve";
+  }
+  return "clip";
 }
 
 export function clipTurnInputText(

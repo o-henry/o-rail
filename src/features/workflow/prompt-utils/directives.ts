@@ -124,6 +124,84 @@ export function buildReadableDocumentDirective(locale: AppLocale): string {
   ].join("\n");
 }
 
+export function buildDocumentCompletenessDirective(locale: AppLocale): string {
+  if (locale === "ko") {
+    return [
+      "[문서 완전성 계약]",
+      "- 문서 본문에서 `...`, `…`, `중략`, `생략`, `omitted`, `truncated` 같은 축약 표기를 사용하지 마세요.",
+      "- 섹션 제목만 남기고 내용을 비워두지 말고, 필요한 내용은 끝까지 작성하세요.",
+      "- 근거가 부족한 항목은 추측으로 메우지 말고 `추가 근거 필요` 또는 `검증 필요`로 명시하세요.",
+      "[/문서 완전성 계약]",
+    ].join("\n");
+  }
+  if (locale === "en") {
+    return [
+      "[Document Completeness Contract]",
+      "- Do not use `...`, `…`, `omitted`, or `truncated` to shorten the actual body.",
+      "- Do not leave section headers empty; complete each required section.",
+      "- If evidence is missing, say `needs more evidence` instead of inventing content.",
+      "[/Document Completeness Contract]",
+    ].join("\n");
+  }
+  if (locale === "jp") {
+    return [
+      "[文書完全性契約]",
+      "- 本文で `...`, `…`, `中略`, `省略`, `omitted`, `truncated` を使って内容を省略しないでください。",
+      "- 見出しだけを残して本文を空にしないでください。",
+      "- 根拠が不足する場合は推測で埋めず、`追加根拠が必要` と明記してください。",
+      "[/文書完全性契約]",
+    ].join("\n");
+  }
+  return [
+    "[文档完整性契约]",
+    "- 不要在正文中使用 `...`、`…`、`中略`、`省略`、`omitted`、`truncated` 来省略内容。",
+    "- 不要只保留标题而留空内容。",
+    "- 如果证据不足，请明确写出 `需要更多证据`，不要臆造内容。",
+    "[/文档完整性契约]",
+  ].join("\n");
+}
+
+export function buildMultiPerspectiveReviewDirective(locale: AppLocale): string {
+  if (locale === "ko") {
+    return [
+      "[다관점 검토 계약]",
+      "- 지금 입력은 여러 전문 역할의 결과를 함께 담고 있습니다. 안별 장점/치명 리스크/수정안을 분리해서 비교하세요.",
+      "- 창의적인 제안을 곧바로 거짓말로 취급하지 말고, 제약과 실행 가설 기준으로 검토하세요.",
+      "- 다수결처럼 평균내지 말고 공통 합의, 충돌 지점, 추가 검증 필요 항목을 나눠 적으세요.",
+      "- 최종 판단은 `keep`, `revise`, `drop` 중 하나로 명시하세요.",
+      "[/다관점 검토 계약]",
+    ].join("\n");
+  }
+  if (locale === "en") {
+    return [
+      "[Multi-Perspective Review Contract]",
+      "- Compare specialist outputs by separating strengths, critical risks, and revision actions.",
+      "- Do not treat creative proposals as false by default; test them against constraints and execution hypotheses.",
+      "- Do not average perspectives together; split shared agreement, conflicts, and items needing more verification.",
+      "- End with one explicit decision: `keep`, `revise`, or `drop`.",
+      "[/Multi-Perspective Review Contract]",
+    ].join("\n");
+  }
+  if (locale === "jp") {
+    return [
+      "[多視点レビュー契約]",
+      "- 各専門視点の強み、致命的リスク、修正案を分けて比較してください。",
+      "- 創造的な提案を即座に虚偽扱いせず、制約と実行仮説で検討してください。",
+      "- 多数決のように平均化せず、合意点、衝突点、追加検証項目を分離してください。",
+      "- 最終判断は `keep` / `revise` / `drop` のいずれかで明示してください。",
+      "[/多視点レビュー契約]",
+    ].join("\n");
+  }
+  return [
+    "[多视角评审契约]",
+    "- 分别比较各专业视角的优点、致命风险和修订建议。",
+    "- 不要把创意提案直接当成虚假内容，而要按约束和执行假设来审视。",
+    "- 不要平均化多个视角；请分开写出共识、冲突点和需要补充验证的部分。",
+    "- 最终判断必须明确写成 `keep`、`revise` 或 `drop`。",
+    "[/多视角评审契约]",
+  ].join("\n");
+}
+
 export function buildExpertOrchestrationDirective(
   locale: AppLocale,
   profile: "code_implementation" | "research_evidence" | "design_planning" | "synthesis_final" | "generic",

@@ -1,6 +1,11 @@
 import { readUserMemoryEntries } from "../../features/studio/userMemoryStore";
 import { buildAdaptiveDiff, buildAdaptiveShadowCandidates } from "./candidates";
-import { adaptiveFloorFailures, scoreAdaptiveRun, weightedAdaptiveScore } from "./score";
+import {
+  adaptiveFloorFailures,
+  compareAdaptiveScores,
+  scoreAdaptiveRun,
+  weightedAdaptiveScore,
+} from "./score";
 import { createEmptyAdaptiveWorkspaceData, loadAdaptiveWorkspaceData, saveAdaptiveWorkspaceData } from "./storage";
 import type {
   AdaptiveChampionRecord,
@@ -50,10 +55,12 @@ function buildComparison(params: {
   const eligible = candidateFloors.length === 0;
   let winner: AdaptiveComparisonRecord["winner"] = "seed";
   if (params.champion) {
-    winner =
-      eligible && params.candidateWeighted >= params.champion.weightedTotal + 0.6
-        ? "candidate"
-        : "champion";
+    const pairwise = compareAdaptiveScores(
+      params.candidate.family,
+      params.candidateScore,
+      params.champion.score,
+    );
+    winner = eligible && pairwise.winner === "candidate" ? "candidate" : "champion";
   }
   return {
     id: `${params.candidate.id}:${Date.now().toString(36)}`,

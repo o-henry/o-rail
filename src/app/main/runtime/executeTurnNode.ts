@@ -2,9 +2,11 @@ import type { MutableRefObject } from "react";
 import { extractStringByPaths } from "../../../shared/lib/valueUtils";
 import {
   buildCodexMultiAgentDirective,
+  buildDocumentCompletenessDirective,
   buildExpertOrchestrationDirective,
   buildFinalVisualizationDirective,
   buildForcedAgentRuleBlock,
+  buildMultiPerspectiveReviewDirective,
   buildOutputSchemaDirective,
   buildReadableDocumentDirective,
   extractFinalSynthesisInputText,
@@ -39,6 +41,7 @@ import type { InternalMemoryTraceEntry, KnowledgeTraceEntry, UsageStats, WebProv
 import type { GraphNode } from "../../../features/workflow/types";
 import type { TurnTerminal } from "../../mainAppGraphHelpers";
 import { runCodexTurnBlocking } from "./codexTurnBlocking";
+import { isStructuredNodeInputPacket } from "./nodeInputPackets";
 export type ExecuteTurnNodeResult = {
   ok: boolean;
   output?: unknown;
@@ -147,10 +150,26 @@ export async function executeTurnNodeWithContext(
   }
   const outputSchemaRaw = String(config.outputSchemaJson ?? "").trim();
   const hasStrictOutputSchema = ctx.turnOutputSchemaEnabled && outputSchemaRaw.length > 0;
+  const multiPerspectiveDirective =
+    isStructuredNodeInputPacket(input) && input.parentOutputs.length > 1 && qualityProfile !== "code_implementation"
+      ? buildMultiPerspectiveReviewDirective(ctx.locale)
+      : "";
+  if (multiPerspectiveDirective) {
+    textToSend = `${multiPerspectiveDirective}\n\n${textToSend}`.trim();
+    ctx.addNodeLog(node.id, "[검토] 다관점 전문 검토 계약 자동 적용");
+  }
   const readableDocumentDirective = qualityProfile === "synthesis_final" && !hasStrictOutputSchema ? buildReadableDocumentDirective(ctx.locale) : "";
   if (readableDocumentDirective) {
     textToSend = `${textToSend}\n\n${readableDocumentDirective}`.trim();
     ctx.addNodeLog(node.id, "[포맷] 최종 문서 가독성 포맷 지침 자동 적용");
+  }
+  const documentCompletenessDirective =
+    (qualityProfile === "synthesis_final" || String(config.artifactType ?? "") !== "none") && !hasStrictOutputSchema
+      ? buildDocumentCompletenessDirective(ctx.locale)
+      : "";
+  if (documentCompletenessDirective) {
+    textToSend = `${textToSend}\n\n${documentCompletenessDirective}`.trim();
+    ctx.addNodeLog(node.id, "[완전성] 문서 비절단/비추측 계약 자동 적용");
   }
   const visualizationDirective = qualityProfile === "synthesis_final" ? buildFinalVisualizationDirective() : "";
   if (visualizationDirective) {

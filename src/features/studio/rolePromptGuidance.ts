@@ -78,6 +78,14 @@ const ROLE_PROMPT_SPECS: Record<StudioRoleId, RolePromptSpec> = {
   },
 };
 
+const REVIEW_STYLE_ROLE_IDS = new Set<StudioRoleId>([
+  "pm_feasibility_critic",
+  "system_programmer",
+  "art_pipeline",
+  "qa_engineer",
+  "build_release",
+]);
+
 function cleanLine(value: unknown): string {
   return String(value ?? "").trim();
 }
@@ -141,6 +149,12 @@ export function buildStudioRolePromptEnvelope(input: RolePromptShape): string {
     ...(input.roleId === "pm_feasibility_critic"
       ? ["- 현실성 평가는 항목별 점수(0-10), 총점, 한 줄 근거를 함께 남깁니다."]
       : []),
+    ...(input.roleId && REVIEW_STYLE_ROLE_IDS.has(input.roleId as StudioRoleId)
+      ? [
+          "- 여러 제안안을 비교할 때는 창의성을 곧바로 허황됨으로 치부하지 말고 제약과 실행 가설 기준으로 판단합니다.",
+          "- 다수결처럼 평균내지 말고 공통 장점, 치명 리스크, 충돌 지점을 분리합니다.",
+        ]
+      : []),
   ]);
 
   const roleFocusBlock = wrapSection("role_focus", [
@@ -153,6 +167,12 @@ export function buildStudioRolePromptEnvelope(input: RolePromptShape): string {
     "- 아래 섹션 이름을 그대로 사용합니다.",
     ...roleSpec.deliverables.map((line) => `- ${line}`),
     "- 각 섹션은 bullet 또는 짧은 문단으로만 작성합니다.",
+    ...(input.roleId && REVIEW_STYLE_ROLE_IDS.has(input.roleId as StudioRoleId)
+      ? [
+          "- 각 제안안마다 `keep`, `revise`, `drop` 중 하나를 명시합니다.",
+          "- 장점 2개, 치명 단점 2개, 수정 제안 2개 이하로 제한합니다.",
+        ]
+      : []),
   ]);
 
   const starterBlock = starterPrompt

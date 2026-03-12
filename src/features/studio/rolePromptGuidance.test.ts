@@ -27,4 +27,16 @@ describe("rolePromptGuidance", () => {
     expect(prompt).toContain("## 현실성 평가표");
     expect(prompt).toContain("## 치명 리스크");
   });
+
+  it("adds a structured keep/revise/drop review contract for reviewer roles", () => {
+    const prompt = buildStudioRolePromptEnvelope({
+      roleId: "qa_engineer",
+      taskId: "QA-REVIEW-001",
+      request: "세 후보안의 핵심 리스크를 평가해줘.",
+    });
+
+    expect(prompt).toContain("창의성을 곧바로 허황됨으로 치부하지 말고");
+    expect(prompt).toContain("`keep`, `revise`, `drop`");
+    expect(prompt).toContain("장점 2개, 치명 단점 2개");
+  });
 });

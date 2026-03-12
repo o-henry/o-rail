@@ -27,6 +27,108 @@ export function stringifyInput(input: unknown): string {
   return formatUnknown(input);
 }
 
+function extractStructuredNodePacketText(record: Record<string, unknown>): string {
+  const question = String(record.question ?? "").trim();
+  const stage = String(record.stage ?? "").trim();
+  const parentOutputs = Array.isArray(record.parentOutputs)
+    ? record.parentOutputs
+        .map((entry, index) => {
+          if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+            return "";
+          }
+          const row = entry as Record<string, unknown>;
+          const nodeId = String(row.nodeId ?? `node-${index + 1}`).trim();
+          const roleLabel = String(row.roleLabel ?? "").trim();
+          const artifactType = String(row.artifactType ?? "none").trim();
+          const verificationStatus = String(row.verificationStatus ?? "").trim();
+          const confidenceBand = String(row.confidenceBand ?? "").trim();
+          const citations = Array.isArray(row.citations)
+            ? row.citations.map((value) => String(value ?? "").trim()).filter(Boolean).slice(0, 4)
+            : [];
+          const text = String(row.text ?? "").trim();
+          return [
+            `### upstream:${nodeId}`,
+            roleLabel ? `- role: ${roleLabel}` : "",
+            artifactType ? `- artifactType: ${artifactType}` : "",
+            verificationStatus ? `- verification: ${verificationStatus}` : "",
+            confidenceBand ? `- confidenceBand: ${confidenceBand}` : "",
+            citations.length > 0 ? `- citations: ${citations.join(" | ")}` : "",
+            text ? text : "",
+          ]
+            .filter(Boolean)
+            .join("\n");
+        })
+        .filter(Boolean)
+    : [];
+  const conflicts = Array.isArray(record.unresolvedConflicts)
+    ? record.unresolvedConflicts
+        .map((entry) => {
+          if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+            return "";
+          }
+          const row = entry as Record<string, unknown>;
+          const metricKey = String(row.metricKey ?? "").trim();
+          const values = Array.isArray(row.values)
+            ? row.values
+                .map((value) => {
+                  if (!value || typeof value !== "object" || Array.isArray(value)) {
+                    return "";
+                  }
+                  const inner = value as Record<string, unknown>;
+                  return `${String(inner.nodeId ?? "").trim()}:${String(inner.value ?? "").trim()}`;
+                })
+                .filter(Boolean)
+                .join(", ")
+            : "";
+          if (!metricKey) {
+            return "";
+          }
+          return `- ${metricKey}: ${values || "(values unavailable)"}`;
+        })
+        .filter(Boolean)
+    : [];
+  const memoryLines = Array.isArray(record.runMemory)
+    ? record.runMemory
+        .map((entry) => {
+          if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+            return "";
+          }
+          const row = entry as Record<string, unknown>;
+          const nodeId = String(row.nodeId ?? "").trim();
+          const roleLabel = String(row.roleLabel ?? "").trim();
+          const summary = String(row.decisionSummary ?? "").trim();
+          if (!nodeId) {
+            return "";
+          }
+          return `- ${nodeId}${roleLabel ? ` (${roleLabel})` : ""}: ${summary || "(no summary)"}`;
+        })
+        .filter(Boolean)
+    : [];
+  const reviewContract =
+    record.reviewContract && typeof record.reviewContract === "object" && !Array.isArray(record.reviewContract)
+      ? (record.reviewContract as Record<string, unknown>)
+      : null;
+  const contractSections = Array.isArray(reviewContract?.requiredSections)
+    ? reviewContract.requiredSections.map((value) => String(value ?? "").trim()).filter(Boolean)
+    : [];
+  const contractDecisions = Array.isArray(reviewContract?.decisionOptions)
+    ? reviewContract.decisionOptions.map((value) => String(value ?? "").trim()).filter(Boolean)
+    : [];
+
+  const sections = [
+    question ? `[QUESTION]\n${question}` : "",
+    stage ? `[STAGE]\n${stage}` : "",
+    parentOutputs.length > 0 ? `[UPSTREAM ANSWERS]\n${parentOutputs.join("\n\n")}` : "",
+    contractSections.length > 0
+      ? `[REVIEW CONTRACT]\n- required sections: ${contractSections.join(" | ")}${contractDecisions.length > 0 ? `\n- decisions: ${contractDecisions.join(" / ")}` : ""}`
+      : "",
+    conflicts.length > 0 ? `[UNRESOLVED CONFLICTS]\n${conflicts.join("\n")}` : "",
+    memoryLines.length > 0 ? `[RUN MEMORY]\n${memoryLines.join("\n")}` : "",
+  ].filter(Boolean);
+
+  return sections.join("\n\n");
+}
+
 export function extractPromptInputText(input: unknown, depth = 0): string {
   if (depth > 5 || input == null) {
     return "";
@@ -49,6 +151,9 @@ export function extractPromptInputText(input: unknown, depth = 0): string {
   }
 
   const record = input as Record<string, unknown>;
+  if (record.packetType === "structured_node_input") {
+    return extractStructuredNodePacketText(record).trim();
+  }
   const artifactPayload = getByPath(record, "artifact.payload");
   if (artifactPayload !== undefined) {
     if (typeof artifactPayload === "string" && artifactPayload.trim()) {
@@ -147,6 +252,9 @@ export function extractFinalSynthesisInputText(input: unknown): string {
     return extractPromptInputText(input);
   }
   const row = input as Record<string, unknown>;
+  if (row.packetType === "structured_node_input") {
+    return extractStructuredNodePacketText(row).trim();
+  }
   const question = String(row.question ?? "").trim();
   const packets = Array.isArray(row.evidencePackets) ? row.evidencePackets : [];
   const conflicts = Array.isArray(row.unresolvedConflicts) ? row.unresolvedConflicts : [];

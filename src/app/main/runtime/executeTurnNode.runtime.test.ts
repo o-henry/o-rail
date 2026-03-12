@@ -127,6 +127,42 @@ describe("executeTurnNodeWithContext", () => {
     expect(String(turnStartCall?.[1]?.text ?? "")).toContain("[입력 일부 생략됨: context budget 제한]");
   });
 
+  it("preserves oversized prompt input for synthesis/document nodes", async () => {
+    const node: GraphNode = {
+      id: "turn-node",
+      type: "turn",
+      position: { x: 0, y: 0 },
+      config: {
+        executor: "codex",
+        model: "GPT-5.4",
+        qualityProfile: "synthesis_final",
+        artifactType: "TaskPlanArtifact",
+        temperature: 0.3,
+        contextBudget: "tight",
+        maxInputChars: 640,
+        promptTemplate: "{{input}}",
+      },
+    };
+    const ctx = buildContext();
+    const invokeFn: ExecuteTurnNodeContext["invokeFn"] = vi.fn(async (command: string) => {
+      if (command === "thread_start") {
+        return { threadId: "thread-1", raw: {} } as never;
+      }
+      if (command === "turn_start_blocking") {
+        return { turnId: "turn-1", output_text: "done", usage: {} } as never;
+      }
+      throw new Error(`unexpected command ${command}`);
+    });
+    ctx.invokeFn = invokeFn;
+
+    const result = await executeTurnNodeWithContext(node, "x".repeat(2400), ctx);
+
+    expect(result.ok).toBe(true);
+    const turnStartCall = vi.mocked(invokeFn).mock.calls.find((row) => row[0] === "turn_start_blocking");
+    expect(String(turnStartCall?.[1]?.text ?? "")).not.toContain("[입력 일부 생략됨: context budget 제한]");
+    expect(String(turnStartCall?.[1]?.text ?? "")).toContain("x".repeat(1200));
+  });
+
   it("injects unity automation guard context for unity automation presets", async () => {
     const node: GraphNode = {
       id: "turn-node",

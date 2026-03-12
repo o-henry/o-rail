@@ -82,4 +82,29 @@ describe("buildQualityReport content validation", () => {
     expect(report.checks.find((row: { id: string }) => row.id === "content_conflicts")?.passed).toBe(false);
     expect(report.warnings.some((row: string) => row.includes("근거 충돌"))).toBe(true);
   });
+
+  it("rejects final documents that contain truncation markers instead of complete content", async () => {
+    const report = await buildQualityReport({
+      node: {
+        id: "final-node",
+        type: "turn",
+        config: {
+          executor: "codex",
+          qualityProfile: "synthesis_final",
+          artifactType: "TaskPlanArtifact",
+        },
+      } as any,
+      config: {
+        executor: "codex",
+        qualityProfile: "synthesis_final",
+        artifactType: "TaskPlanArtifact",
+      } as any,
+      output:
+        "## 결론 요약\n- 핵심 안건 정리\n## 핵심 근거\n- source: https://example.com\n## 신뢰도와 한계\n- 추가 근거 필요\n## 다음 체크포인트\n- 나머지 내용은 ...",
+      cwd: "/tmp",
+    });
+
+    expect(report.decision).toBe("REJECT");
+    expect(report.checks.find((row: { id: string }) => row.id === "no_truncation_markers")?.passed).toBe(false);
+  });
 });

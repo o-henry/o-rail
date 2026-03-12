@@ -7,6 +7,13 @@ import type {
 } from "./types";
 
 const FLOOR_DIMENSIONS: AdaptiveRubricDimension[] = ["goalFit", "feasibility", "groundedness"];
+const RUBRIC_DIMENSIONS: AdaptiveRubricDimension[] = [
+  "goalFit",
+  "feasibility",
+  "constraintFit",
+  "groundedness",
+  "differentiation",
+];
 
 const FAMILY_WEIGHTS: Record<
   ReturnType<typeof resolveAdaptiveFamilyBucket>,
@@ -92,12 +99,26 @@ function countConstraintSignals(text: string): number {
   ).length;
 }
 
-function lexicalDiversity(text: string): number {
-  const tokens = tokenize(text);
-  if (tokens.length === 0) {
-    return 0;
-  }
-  return new Set(tokens).size / tokens.length;
+function countGroundingSignals(text: string): number {
+  return countMatches(
+    text,
+    /(근거|출처|source|evidence|citation|reference|confidence|신뢰도|검증|추가 근거 필요|needs more evidence|unsupported)/gi,
+  );
+}
+
+function countNovelSignals(text: string): number {
+  return countMatches(
+    text,
+    /(대안|차별|아이디어|실험|옵션|변형|시나리오|novel|idea|variant|alternative)/gi,
+  );
+}
+
+function countUserMemoryMatches(text: string, userMemory: string[]): number {
+  const lower = text.toLowerCase();
+  return userMemory.filter((row) => {
+    const trimmed = row.trim().toLowerCase();
+    return trimmed.length >= 6 && lower.includes(trimmed.slice(0, 16));
+  }).length;
 }
 
 export function scoreAdaptiveRun(input: AdaptiveEvaluationInput): AdaptiveRubricScore {
@@ -112,47 +133,53 @@ export function scoreAdaptiveRun(input: AdaptiveEvaluationInput): AdaptiveRubric
     };
   }
 
-  const headingCount = countMatches(answer, /^#{1,3}\s/mg) + countMatches(answer, /^\d+\.\s/mg);
   const overlap = overlapRatio(input.question, answer);
   const actionSignals = countActionSignals(answer);
-  const constraintMentions =
-    countConstraintSignals(answer) +
-    input.userMemory.filter((row) => row && answer.toLowerCase().includes(row.toLowerCase().slice(0, 16))).length;
-  const evidenceSignal = countMatches(answer, /(근거|evidence|source|출처|검증|불확실성|assumption)/gi);
-  const diversity = lexicalDiversity(answer);
+  const constraintMentions = countConstraintSignals(answer);
+  const userMemoryMatches = countUserMemoryMatches(answer, input.userMemory);
+  const groundingSignals = countGroundingSignals(answer);
+  const noveltySignals = countNovelSignals(answer);
   const qualityPass = Math.max(0, Math.min(1, input.qualityPassRate));
   const qualityAvg = Math.max(0, Math.min(1, input.qualityAvgScore / 100));
-  const failPenalty = input.failedNodeCount * 0.9;
+  const failPenalty = input.failedNodeCount * 1.1;
+  const artifactSignal = Math.min(1, input.artifactTypeCount * 0.2);
 
   return {
-    goalFit: clampScore(4 + overlap * 3.6 + Math.min(1.4, headingCount * 0.3) + (answer.length > 180 ? 0.7 : 0) - failPenalty),
+    goalFit: clampScore(
+      4.1 +
+        overlap * 4.1 +
+        qualityPass * 0.6 +
+        (answer.length >= 160 ? 0.6 : 0) -
+        failPenalty,
+    ),
     feasibility: clampScore(
-      4 +
-        qualityPass * 3 +
-        qualityAvg * 1.7 +
-        Math.min(1.2, actionSignals * 0.35) +
-        Math.min(0.8, input.runMemoryCount * 0.18) -
+      3.8 +
+        qualityPass * 2.8 +
+        qualityAvg * 2 +
+        Math.min(1.6, actionSignals * 0.4) +
+        Math.min(0.8, input.runMemoryCount * 0.16) +
+        artifactSignal * 0.4 -
         failPenalty,
     ),
     constraintFit: clampScore(
-      (input.userMemory.length > 0 ? 4.8 : 6.6) +
-        Math.min(3.2, constraintMentions * 0.55) +
-        Math.min(0.8, headingCount * 0.18),
+      (input.userMemory.length > 0 ? 4.6 : 6.2) +
+        Math.min(2.8, constraintMentions * 0.6) +
+        Math.min(2.2, userMemoryMatches * 0.55),
     ),
     groundedness: clampScore(
-      3.4 +
+      3.2 +
         Math.min(2.4, input.evidenceCount * 0.4) +
         Math.min(1.6, input.knowledgeTraceCount * 0.35) +
         Math.min(0.9, input.internalMemoryTraceCount * 0.22) +
-        Math.min(1.3, evidenceSignal * 0.18) +
-        qualityPass * 0.8 -
-        input.failedNodeCount * 0.3,
+        Math.min(1.8, groundingSignals * 0.22) +
+        qualityPass * 1 -
+        input.failedNodeCount * 0.4,
     ),
     differentiation: clampScore(
-      3 +
-        diversity * 2.6 +
-        Math.min(1.4, headingCount * 0.22) +
-        Math.min(1.4, countMatches(answer, /(대안|차별|아이디어|실험|옵션|변형|시나리오|novel|idea)/gi) * 0.25),
+      3.2 +
+        Math.min(2.6, noveltySignals * 0.32) +
+        Math.min(1.4, countMatches(answer, /(keep|revise|drop|가설|실험|prototype|검증)/gi) * 0.18) +
+        (answer.length >= 220 ? 0.4 : 0),
     ),
   };
 }
@@ -170,4 +197,62 @@ export function weightedAdaptiveScore(family: AdaptiveFamilyKey, score: Adaptive
 
 export function adaptiveFloorFailures(score: AdaptiveRubricScore): AdaptiveRubricDimension[] {
   return FLOOR_DIMENSIONS.filter((key) => score[key] < 6);
+}
+
+export type AdaptivePairwiseReview = {
+  winner: "candidate" | "champion" | "tie";
+  weightedDelta: number;
+  candidateAdvantages: AdaptiveRubricDimension[];
+  championAdvantages: AdaptiveRubricDimension[];
+  rationale: string[];
+};
+
+export function compareAdaptiveScores(
+  family: AdaptiveFamilyKey,
+  candidate: AdaptiveRubricScore,
+  champion: AdaptiveRubricScore,
+): AdaptivePairwiseReview {
+  const candidateWeighted = weightedAdaptiveScore(family, candidate);
+  const championWeighted = weightedAdaptiveScore(family, champion);
+  const weightedDelta = Math.round((candidateWeighted - championWeighted) * 100) / 100;
+  const candidateAdvantages = RUBRIC_DIMENSIONS.filter(
+    (dimension) => candidate[dimension] - champion[dimension] >= 0.4,
+  );
+  const championAdvantages = RUBRIC_DIMENSIONS.filter(
+    (dimension) => champion[dimension] - candidate[dimension] >= 0.4,
+  );
+  const criticalRegression = FLOOR_DIMENSIONS.some(
+    (dimension) => champion[dimension] - candidate[dimension] > 0.25,
+  );
+  const rationale: string[] = [];
+  if (candidateAdvantages.length > 0) {
+    rationale.push(`candidate 우세: ${candidateAdvantages.join(", ")}`);
+  }
+  if (championAdvantages.length > 0) {
+    rationale.push(`champion 우세: ${championAdvantages.join(", ")}`);
+  }
+  if (criticalRegression) {
+    rationale.push("candidate가 핵심 안정성 축에서 후퇴");
+  }
+  let winner: AdaptivePairwiseReview["winner"] = "tie";
+  if (
+    weightedDelta >= 0.6 &&
+    !criticalRegression &&
+    candidateAdvantages.length >= championAdvantages.length
+  ) {
+    winner = "candidate";
+  } else if (
+    weightedDelta <= -0.4 ||
+    championAdvantages.length > candidateAdvantages.length ||
+    criticalRegression
+  ) {
+    winner = "champion";
+  }
+  return {
+    winner,
+    weightedDelta,
+    candidateAdvantages,
+    championAdvantages,
+    rationale,
+  };
 }

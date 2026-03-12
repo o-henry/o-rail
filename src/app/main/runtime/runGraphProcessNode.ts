@@ -18,10 +18,14 @@ export function createRunGraphProcessNode(params: any) {
       nodeSelectionLabelFn: params.nodeSelectionLabel,
     });
     const nodeInput = params.buildNodeInputForNode({
+      node,
+      nodeMap: params.nodeMap,
       edges: params.graph.edges,
       nodeId,
       outputs: params.outputs,
       rootInput: params.workflowQuestion,
+      normalizedEvidenceByNodeId: params.normalizedEvidenceByNodeId,
+      runMemory: params.getRunMemoryByNodeId(),
     });
     const isFinalTurnNode = node.type === "turn" && (params.adjacency.get(nodeId)?.length ?? 0) === 0;
 
@@ -157,6 +161,7 @@ export function createRunGraphProcessNode(params: any) {
           rootInput: params.workflowQuestion,
           normalizedEvidenceByNodeId: params.normalizedEvidenceByNodeId,
           runMemory: params.getRunMemoryByNodeId(),
+          nodeMap: params.nodeMap,
         })
       : nodeInput;
 

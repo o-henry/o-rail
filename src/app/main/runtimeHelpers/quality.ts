@@ -9,6 +9,10 @@ import { KNOWLEDGE_DEFAULT_MAX_CHARS, KNOWLEDGE_DEFAULT_TOP_K } from "../../main
 import { applyContentQualityChecks } from "../runtime/qualityContentValidation";
 import { buildConflictLedger, normalizeEvidenceEnvelope } from "./evidence";
 
+const DOCUMENT_TRUNCATION_MARKER_RE = /(?:\.\.\.|…|\(truncated\)|중략|생략|omitted|truncated)/i;
+const DOCUMENT_GROUNDING_SIGNAL_RE =
+  /(출처|근거|source|evidence|citation|reference|confidence|신뢰도|추가 근거 필요|검증 필요|needs more evidence|unsupported)/i;
+
 export function parseQualityCommands(input: unknown): string[] {
   const raw = String(input ?? "").trim();
   if (!raw) {
@@ -104,6 +108,8 @@ export async function buildQualityReport(params: {
   let score = 100;
 
   const fullText = extractFinalAnswer(output) || (typeof output === "string" ? output : "");
+  const artifactType = String(config.artifactType ?? "none").trim();
+  const documentLike = profile === "synthesis_final" || (artifactType && artifactType !== "none");
   const evidenceEnvelope = normalizeEvidenceEnvelope({
     nodeId: node.id,
     roleLabel: turnRoleLabel(node),
@@ -147,6 +153,17 @@ export async function buildQualityReport(params: {
     penalty: 10,
     detail: tp("120자 미만이면 요약 부족으로 감점"),
   });
+  if (documentLike) {
+    addCheck({
+      id: "no_truncation_markers",
+      label: tp("문서 중략/생략 금지"),
+      kind: "consistency",
+      required: true,
+      passed: !DOCUMENT_TRUNCATION_MARKER_RE.test(fullText),
+      penalty: 18,
+      detail: tp("문서 본문에 ..., 중략, 생략, truncated 같은 표기를 남기면 안 됩니다."),
+    });
+  }
 
   if (profile === "research_evidence") {
     addCheck({ id: "source_signal", label: tp("근거/출처 신호 포함"), kind: "evidence", required: true, passed: /(source|출처|근거|http|https|reference)/i.test(fullText), penalty: 20 });
@@ -171,6 +188,15 @@ export async function buildQualityReport(params: {
     addCheck({ id: "readability_layout", label: tp("가독성 문서 레이아웃"), kind: "structure", required: false, passed: headingCount >= 2 || listCount >= 4, penalty: 8, detail: tp("제목(##) 2개 이상 또는 목록 4개 이상 권장") });
     addCheck({ id: "trust_signal", label: tp("신뢰도/근거 표기"), kind: "evidence", required: true, passed: /(출처|근거|source|evidence|confidence|신뢰도|as of|기준|timestamp|date)/i.test(fullText), penalty: 15, detail: tp("핵심 판단에 근거와 신뢰도 표기 필요") });
     addCheck({ id: "limit_signal", label: tp("한계/불확실성 명시"), kind: "consistency", required: false, passed: /(한계|불확실|가정|제약|limit|uncertainty|assumption|constraint|制約|风险)/i.test(fullText), penalty: 8 });
+    addCheck({
+      id: "grounding_gate",
+      label: tp("최종 주장 grounding 또는 보류 표기"),
+      kind: "evidence",
+      required: true,
+      passed: DOCUMENT_GROUNDING_SIGNAL_RE.test(fullText),
+      penalty: 20,
+      detail: tp("핵심 판단에는 근거/신뢰도 또는 추가 근거 필요 표기가 있어야 합니다."),
+    });
   } else if (profile === "code_implementation") {
     addCheck({ id: "code_plan_signal", label: tp("코드/파일/테스트 계획 포함"), kind: "structure", required: true, passed: /(file|파일|test|테스트|lint|build|patch|module|class|function)/i.test(fullText), penalty: 20 });
     if (config.qualityCommandEnabled) {
@@ -208,7 +234,7 @@ export async function buildQualityReport(params: {
     profile,
     threshold,
     score: normalizedScore,
-    decision: normalizedScore >= threshold ? "PASS" : "REJECT",
+    decision: normalizedScore >= threshold && failures.length === 0 ? "PASS" : "REJECT",
     checks,
     failures,
     warnings,

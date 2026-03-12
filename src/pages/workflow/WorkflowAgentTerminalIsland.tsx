@@ -37,10 +37,7 @@ function promptPreview(node: GraphNode | null): string {
   }
   const config = node.config as Record<string, unknown>;
   const raw = cleanLine(config.promptTemplate);
-  if (!raw) {
-    return "";
-  }
-  return raw.length > 520 ? `${raw.slice(0, 520)}...` : raw;
+  return raw || "";
 }
 
 export function buildViewportText(input: {

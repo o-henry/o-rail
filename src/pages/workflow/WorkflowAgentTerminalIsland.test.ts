@@ -33,6 +33,32 @@ describe("buildViewportText", () => {
     expect(text).toContain("1. 빌드 스크립트까지 포함해줘");
   });
 
+  it("keeps the full current request text without inserting ellipsis", () => {
+    const longPrompt = "긴 요청 ".repeat(120);
+    const text = buildViewportText({
+      graphFileName: "demo",
+      paneBuffer: "",
+      paneTitle: "기획",
+      selectedNode: {
+        id: "turn-pm",
+        type: "turn",
+        position: { x: 0, y: 0 },
+        config: {
+          role: "기획 AGENT",
+          promptTemplate: longPrompt,
+        },
+      } as any,
+      selectedNodeState: {
+        status: "idle",
+        logs: [],
+      },
+      pendingRequests: [],
+    });
+
+    expect(text).toContain(longPrompt.trim());
+    expect(text).not.toContain("...");
+  });
+
   it("disables follow-up submit when the input is empty", () => {
     expect(canSubmitNodeFollowup("", true)).toBe(false);
     expect(canSubmitNodeFollowup("   ", true)).toBe(false);

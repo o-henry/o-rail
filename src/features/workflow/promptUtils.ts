@@ -19,7 +19,9 @@ export {
 export {
   buildForcedAgentRuleBlock,
   buildCodexMultiAgentDirective,
+  buildDocumentCompletenessDirective,
   buildFinalVisualizationDirective,
+  buildMultiPerspectiveReviewDirective,
   buildReadableDocumentDirective,
   buildExpertOrchestrationDirective,
   buildOutputSchemaDirective,

@@ -1,19 +1,26 @@
-import { buildConflictLedger, buildFinalSynthesisPacket } from "../../mainAppRuntimeHelpers";
 import { getWebProviderFromExecutor, getTurnExecutor, type TurnConfig, type WebProvider } from "../../../features/workflow/domain";
 import type { GraphEdge, GraphNode, NodeAnchorSide, NodeExecutionStatus } from "../../../features/workflow/types";
 import type {
   EvidenceEnvelope,
-  FinalSynthesisPacket,
   NodeResponsibilityMemory,
   RunRecord,
 } from "../types";
+import {
+  buildStructuredNodeInputPacket,
+  shouldUseStructuredNodeInputPacket,
+  type StructuredNodeInputPacket,
+} from "./nodeInputPackets";
 export const PAUSE_ERROR_TOKEN = "__PAUSED_BY_USER__";
 
 export function buildNodeInputForNode(params: {
+  node: GraphNode;
+  nodeMap: Map<string, GraphNode>;
   edges: GraphEdge[];
   nodeId: string;
   outputs: Record<string, unknown>;
   rootInput: string;
+  normalizedEvidenceByNodeId: Record<string, EvidenceEnvelope[]>;
+  runMemory: Record<string, NodeResponsibilityMemory>;
 }): unknown {
   const incoming = params.edges.filter((edge) => edge.to.nodeId === params.nodeId);
   if (incoming.length === 0) {
@@ -21,6 +28,22 @@ export function buildNodeInputForNode(params: {
   }
   if (incoming.length === 1) {
     return params.outputs[incoming[0].from.nodeId] ?? null;
+  }
+
+  if (shouldUseStructuredNodeInputPacket(params.node, incoming.length)) {
+    const packet = buildStructuredNodeInputPacket({
+      nodeId: params.nodeId,
+      stage: "multi_parent_review",
+      edges: params.edges,
+      nodeMap: params.nodeMap,
+      outputs: params.outputs,
+      rootInput: params.rootInput,
+      normalizedEvidenceByNodeId: params.normalizedEvidenceByNodeId,
+      runMemory: params.runMemory,
+    });
+    if (packet) {
+      return packet;
+    }
   }
 
   const merged: Record<string, unknown> = {};
@@ -38,35 +61,24 @@ export function buildFinalTurnInputPacket(params: {
   rootInput: string;
   normalizedEvidenceByNodeId: Record<string, EvidenceEnvelope[]>;
   runMemory: Record<string, NodeResponsibilityMemory>;
-}): FinalSynthesisPacket | unknown {
+  nodeMap: Map<string, GraphNode>;
+}): StructuredNodeInputPacket | unknown {
   const incomingEdges = params.edges.filter((edge) => edge.to.nodeId === params.nodeId);
   if (incomingEdges.length === 0) {
     return params.currentInput;
   }
-  const upstream: Record<string, unknown> = {};
-  const packets: EvidenceEnvelope[] = [];
-  for (const edge of incomingEdges) {
-    const sourceNodeId = edge.from.nodeId;
-    if (!(sourceNodeId in params.outputs)) {
-      continue;
-    }
-    upstream[sourceNodeId] = params.outputs[sourceNodeId];
-    const sourcePackets = params.normalizedEvidenceByNodeId[sourceNodeId] ?? [];
-    if (sourcePackets.length > 0) {
-      packets.push(sourcePackets[sourcePackets.length - 1]);
-    }
-  }
-
-  if (Object.keys(upstream).length === 0) {
-    return params.currentInput;
-  }
-  const unresolvedConflicts = buildConflictLedger(packets);
-  return buildFinalSynthesisPacket({
-    question: params.rootInput,
-    evidencePackets: packets,
-    conflicts: unresolvedConflicts,
-    runMemory: params.runMemory,
-  });
+  return (
+    buildStructuredNodeInputPacket({
+      nodeId: params.nodeId,
+      stage: "final_synthesis",
+      edges: params.edges,
+      nodeMap: params.nodeMap,
+      outputs: params.outputs,
+      rootInput: params.rootInput,
+      normalizedEvidenceByNodeId: params.normalizedEvidenceByNodeId,
+      runMemory: params.runMemory,
+    }) ?? params.currentInput
+  );
 }
 
 export function appendRunTransition(

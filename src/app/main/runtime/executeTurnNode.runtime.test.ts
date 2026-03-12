@@ -247,4 +247,56 @@ describe("executeTurnNodeWithContext", () => {
     expect(observedDuringRun).toBe("thread-parallel");
     expect(ctx.activeTurnThreadByNodeIdRef.current[node.id]).toBeUndefined();
   });
+
+  it("waits for terminal completion when blocking start returns in-progress without text", async () => {
+    const node: GraphNode = {
+      id: "blocking-wait-turn",
+      type: "turn",
+      position: { x: 0, y: 0 },
+      config: {
+        executor: "codex",
+        model: "GPT-5.4",
+        promptTemplate: "{{input}}",
+      },
+    };
+    const ctx = buildContext();
+    ctx.invokeFn = vi.fn(async (command: string) => {
+      if (command === "thread_start") {
+        return { threadId: "thread-blocking", raw: {} } as never;
+      }
+      if (command === "turn_start_blocking") {
+        queueMicrotask(() => {
+          ctx.activeRunDeltaRef.current[node.id] = "완성된 문서 본문";
+          ctx.turnTerminalResolverRef.current?.({
+            ok: true,
+            status: "completed",
+            params: {
+              turn: {
+                response: {
+                  output_text: "완성된 문서 본문",
+                },
+              },
+            },
+          });
+        });
+        return {
+          turnId: "turn-pending",
+          completion: {
+            turn: {
+              status: "inProgress",
+              items: [],
+            },
+          },
+          usage: {},
+        } as never;
+      }
+      throw new Error(`unexpected command ${command}`);
+    });
+
+    const result = await executeTurnNodeWithContext(node, "테스트 입력", ctx);
+
+    expect(result.ok).toBe(true);
+    expect((result.output as { text?: string } | undefined)?.text).toBe("완성된 문서 본문");
+    expect(ctx.activeRunDeltaRef.current[node.id]).toBeUndefined();
+  });
 });

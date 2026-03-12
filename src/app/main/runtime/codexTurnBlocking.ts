@@ -3,6 +3,7 @@ import { extractStringByPaths } from "../../../shared/lib/valueUtils";
 import type { TurnReasoningEffort } from "../../../features/workflow/reasoningLevels";
 import type { GraphNode } from "../../../features/workflow/types";
 import { extractCompletedStatus, extractDeltaText, extractUsageStats } from "../../mainAppUtils";
+import type { TurnTerminal } from "../../mainAppGraphHelpers";
 import type { InternalMemoryTraceEntry, KnowledgeTraceEntry, ThreadStartResult, UsageStats } from "../types";
 import { buildTurnStartArgs, type TurnRuntimeConfig } from "./turnRuntimeConfig";
 
@@ -21,6 +22,8 @@ type RunCodexTurnBlockingParams = {
   pauseErrorToken: string;
   activeTurnNodeIdRef: MutableRefObject<string>;
   activeTurnThreadByNodeIdRef: MutableRefObject<Record<string, string>>;
+  activeRunDeltaRef: MutableRefObject<Record<string, string>>;
+  turnTerminalResolverRef: MutableRefObject<((terminal: TurnTerminal) => void) | null>;
   setNodeRuntimeFields: (nodeId: string, fields: Record<string, unknown>) => void;
   invokeFn: InvokeFn;
   t: (key: string) => string;
@@ -44,6 +47,26 @@ type RunCodexTurnBlockingResult = {
 export async function runCodexTurnBlocking(
   params: RunCodexTurnBlockingParams,
 ): Promise<RunCodexTurnBlockingResult> {
+  const waitForTerminal = (timeoutMs = 180_000): Promise<TurnTerminal | null> =>
+    new Promise((resolve) => {
+      const timeoutId = globalThis.setTimeout(() => {
+        if (params.turnTerminalResolverRef.current === resolver) {
+          params.turnTerminalResolverRef.current = null;
+        }
+        resolve(null);
+      }, timeoutMs);
+
+      const resolver = (terminal: TurnTerminal) => {
+        globalThis.clearTimeout(timeoutId);
+        if (params.turnTerminalResolverRef.current === resolver) {
+          params.turnTerminalResolverRef.current = null;
+        }
+        resolve(terminal);
+      };
+
+      params.turnTerminalResolverRef.current = resolver;
+    });
+
   let activeThreadId = extractStringByPaths(params.nodeStates[params.node.id], ["threadId"]);
   if (!activeThreadId) {
     const threadStart = await params.invokeFn<ThreadStartResult>("thread_start", {
@@ -64,12 +87,14 @@ export async function runCodexTurnBlocking(
   }
 
   params.setNodeRuntimeFields(params.node.id, { threadId: activeThreadId });
+  delete params.activeRunDeltaRef.current[params.node.id];
   params.activeTurnNodeIdRef.current = params.node.id;
   params.activeTurnThreadByNodeIdRef.current = {
     ...params.activeTurnThreadByNodeIdRef.current,
     [params.node.id]: activeThreadId,
   };
 
+  const terminalPromise = waitForTerminal();
   let turnStartResponse: unknown;
   try {
     turnStartResponse = await params.invokeFn<unknown>("turn_start_blocking", buildTurnStartArgs({
@@ -79,6 +104,8 @@ export async function runCodexTurnBlocking(
       config: params.turnRuntimeConfig,
     }));
   } catch (error) {
+    params.turnTerminalResolverRef.current = null;
+    delete params.activeRunDeltaRef.current[params.node.id];
     delete params.activeTurnThreadByNodeIdRef.current[params.node.id];
     params.activeTurnNodeIdRef.current = "";
     if (params.pauseRequestedRef.current) {
@@ -122,6 +149,8 @@ export async function runCodexTurnBlocking(
   const usage = extractUsageStats(turnStartResponse);
   const completedStatus = (extractCompletedStatus(turnStartResponse) ?? "").toLowerCase();
   if (params.pauseRequestedRef.current) {
+    params.turnTerminalResolverRef.current = null;
+    delete params.activeRunDeltaRef.current[params.node.id];
     return {
       ok: false,
       error: params.pauseErrorToken,
@@ -135,6 +164,8 @@ export async function runCodexTurnBlocking(
     };
   }
   if (params.cancelRequestedRef.current) {
+    params.turnTerminalResolverRef.current = null;
+    delete params.activeRunDeltaRef.current[params.node.id];
     return {
       ok: false,
       error: params.t("run.cancelledByUserShort"),
@@ -148,6 +179,8 @@ export async function runCodexTurnBlocking(
     };
   }
   if (["failed", "error", "cancelled", "rejected"].includes(completedStatus)) {
+    params.turnTerminalResolverRef.current = null;
+    delete params.activeRunDeltaRef.current[params.node.id];
     return {
       ok: false,
       error: `턴 실행 실패 (${completedStatus || "failed"})`,
@@ -161,8 +194,9 @@ export async function runCodexTurnBlocking(
     };
   }
 
-  const completionText =
-    extractStringByPaths(turnStartResponse, [
+  let completionSource = turnStartResponse;
+  let completionText =
+    extractStringByPaths(completionSource, [
       "text",
       "output_text",
       "turn.output_text",
@@ -170,11 +204,54 @@ export async function runCodexTurnBlocking(
       "turn.response.text",
       "response.output_text",
       "response.text",
-    ]) ?? extractDeltaText(turnStartResponse);
+    ]) ?? extractDeltaText(completionSource);
+
+  const needsTerminalWait =
+    (!completedStatus || ["inprogress", "in_progress", "pending", "running", "queued", "started"].includes(completedStatus)) &&
+    !completionText.trim();
+
+  if (needsTerminalWait) {
+    const terminal = await terminalPromise;
+    if (!terminal) {
+      delete params.activeRunDeltaRef.current[params.node.id];
+      return {
+        ok: false,
+        error: "턴 완료 이벤트를 기다리다 시간 초과되었습니다.",
+        threadId: activeThreadId,
+        turnId: turnId ?? undefined,
+        usage,
+        executor: "codex",
+        provider: "codex",
+        knowledgeTrace: params.knowledgeTrace,
+        memoryTrace: params.memoryTrace,
+      };
+    }
+    completionSource = terminal;
+    completionText =
+      extractStringByPaths(completionSource, [
+        "params.text",
+        "params.output_text",
+        "params.turn.output_text",
+        "params.turn.response.output_text",
+        "params.turn.response.text",
+        "text",
+        "output_text",
+        "turn.output_text",
+        "turn.response.output_text",
+        "turn.response.text",
+        "response.output_text",
+        "response.text",
+      ]) ??
+      params.activeRunDeltaRef.current[params.node.id] ??
+      extractDeltaText(completionSource);
+  }
+
+  params.turnTerminalResolverRef.current = null;
+  delete params.activeRunDeltaRef.current[params.node.id];
 
   return {
     ok: true,
-    output: { text: completionText.trim() ? completionText : "", completion: turnStartResponse },
+    output: { text: completionText.trim() ? completionText : "", completion: completionSource },
     threadId: activeThreadId,
     turnId: turnId ?? undefined,
     usage,

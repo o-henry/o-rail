@@ -437,6 +437,8 @@ export async function executeTurnNodeWithContext(
     pauseErrorToken: ctx.pauseErrorToken,
     activeTurnNodeIdRef: ctx.activeTurnNodeIdRef,
     activeTurnThreadByNodeIdRef: ctx.activeTurnThreadByNodeIdRef,
+    activeRunDeltaRef: ctx.activeRunDeltaRef,
+    turnTerminalResolverRef: ctx.turnTerminalResolverRef,
     setNodeRuntimeFields: ctx.setNodeRuntimeFields,
     invokeFn: ctx.invokeFn,
     t: ctx.t,

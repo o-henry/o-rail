@@ -163,6 +163,19 @@
   word-break: break-word;
 }
 
-.bridge-memory-panel .settings-cwd-picker {
-  min-width: 64px;
+.settings-memory-item-remove {
+  width: 18px;
+  min-width: 18px;
+  height: 18px;
+  min-height: 18px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1;
+  display: inline-grid;
+  place-items: center;
+  align-self: start;
+  opacity: 0.78;
 }

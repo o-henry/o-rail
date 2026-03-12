@@ -168,8 +168,13 @@ export default function UserMemoryPanel() {
                 </div>
                 <p>{entry.text}</p>
               </div>
-              <button className="settings-cwd-picker" onClick={() => onDeleteMemory(entry.id)} type="button">
-                삭제
+              <button
+                aria-label={`메모리 삭제: ${entry.text}`}
+                className="settings-memory-item-remove"
+                onClick={() => onDeleteMemory(entry.id)}
+                type="button"
+              >
+                ×
               </button>
             </article>
           ))

@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import type { ReactNode } from "react";
 import { useI18n } from "../../i18n";
 
@@ -31,7 +32,7 @@ export default function ApprovalModal({
     return null;
   }
 
-  return (
+  const content = (
     <div className="modal-backdrop">
       <section className="approval-modal">
         <h2>{t("modal.approvalRequired")}</h2>
@@ -49,4 +50,10 @@ export default function ApprovalModal({
       </section>
     </div>
   );
+
+  if (typeof document === "undefined") {
+    return content;
+  }
+
+  return createPortal(content, document.body);
 }

@@ -5,7 +5,7 @@
   display: grid;
   place-items: center;
   padding: 18px;
-  z-index: 40;
+  z-index: 170;
 }
 
 .approval-modal {

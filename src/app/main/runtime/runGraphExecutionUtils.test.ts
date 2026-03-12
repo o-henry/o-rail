@@ -128,4 +128,58 @@ describe("buildNodeInputForNode", () => {
     });
     expect((input as { runMemory: unknown[] }).runMemory).toHaveLength(1);
   });
+
+  it("prefers evidence summaries over massive raw upstream payloads for review packets", () => {
+    const hugePayload = "x".repeat(10_000);
+    const input = buildNodeInputForNode({
+      node: reviewNode,
+      nodeMap: new Map([
+        [reviewNode.id, reviewNode],
+        [leftNode.id, leftNode],
+        [rightNode.id, rightNode],
+      ]),
+      edges: [
+        { from: { nodeId: "left", port: "out" }, to: { nodeId: "review", port: "in" } },
+        { from: { nodeId: "right", port: "out" }, to: { nodeId: "review", port: "in" } },
+      ],
+      nodeId: "review",
+      outputs: {
+        left: {
+          artifact: {
+            payload: {
+              text: hugePayload,
+            },
+          },
+        },
+        right: "구현 범위는 좁게 유지",
+      },
+      rootInput: "창의적인 게임 아이디어가 필요하다",
+      normalizedEvidenceByNodeId: {
+        left: [
+          {
+            nodeId: "left",
+            provider: "codex",
+            capturedAt: new Date().toISOString(),
+            verificationStatus: "verified",
+            confidence: 0.78,
+            confidenceBand: "high",
+            dataIssues: [],
+            citations: [{ source: "design-notes.md" }],
+            claims: [
+              {
+                id: "claim-1",
+                text: "첫 30초 훅과 핵심 루프가 명확하다.",
+              },
+            ],
+            rawText: hugePayload,
+          },
+        ],
+      },
+      runMemory: {},
+    }) as { parentOutputs: Array<{ text: string }> };
+
+    expect(input.parentOutputs[0]?.text).toContain("첫 30초 훅과 핵심 루프가 명확하다.");
+    expect(input.parentOutputs[0]?.text).toContain("출처: design-notes.md");
+    expect(input.parentOutputs[0]?.text.length).toBeLessThan(240);
+  });
 });

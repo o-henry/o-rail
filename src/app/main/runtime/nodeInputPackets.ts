@@ -35,6 +35,63 @@ export type StructuredNodeInputPacket = {
   };
 };
 
+const MAX_PARENT_SUMMARY_LINES = 8;
+const MAX_PARENT_FALLBACK_CHARS = 1800;
+
+function compactLines(lines: string[], maxLines: number): string {
+  return lines
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .slice(0, maxLines)
+    .join("\n");
+}
+
+function compactText(text: string, maxChars: number): string {
+  const normalized = text.trim();
+  if (!normalized) {
+    return "";
+  }
+  if (normalized.length <= maxChars) {
+    return normalized;
+  }
+  return normalized.slice(0, maxChars).trim();
+}
+
+function buildEvidenceSummaryText(evidence?: EvidenceEnvelope): string {
+  if (!evidence) {
+    return "";
+  }
+
+  const claimLines = evidence.claims
+    .map((claim) => String(claim.text ?? "").trim())
+    .filter(Boolean);
+  const issueLines = evidence.dataIssues
+    .map((issue) => String(issue ?? "").trim())
+    .filter(Boolean)
+    .map((issue) => `주의: ${issue}`);
+  const citationLines = evidence.citations
+    .map((citation) => String(citation.title ?? citation.source ?? citation.url ?? "").trim())
+    .filter(Boolean)
+    .map((citation) => `출처: ${citation}`);
+
+  const summary = compactLines(
+    [...claimLines, ...issueLines, ...citationLines],
+    MAX_PARENT_SUMMARY_LINES,
+  );
+  if (summary) {
+    return summary;
+  }
+  return compactText(String(evidence.rawText ?? ""), MAX_PARENT_FALLBACK_CHARS);
+}
+
+function buildParentOutputText(output: unknown, evidence?: EvidenceEnvelope): string {
+  const evidenceSummary = buildEvidenceSummaryText(evidence);
+  if (evidenceSummary) {
+    return evidenceSummary;
+  }
+  return compactText(extractPromptInputText(output), MAX_PARENT_FALLBACK_CHARS);
+}
+
 function buildParentOutputSummary(params: {
   node: GraphNode;
   output: unknown;
@@ -45,7 +102,7 @@ function buildParentOutputSummary(params: {
     nodeId: params.node.id,
     roleLabel: turnRoleLabel(params.node),
     artifactType: String(config.artifactType ?? "none"),
-    text: extractPromptInputText(params.output),
+    text: buildParentOutputText(params.output, params.evidence),
     verificationStatus: params.evidence?.verificationStatus,
     confidenceBand: params.evidence?.confidenceBand,
     citations:

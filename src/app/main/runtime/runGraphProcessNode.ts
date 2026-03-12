@@ -7,26 +7,45 @@ export function createRunGraphProcessNode(params: any) {
       return;
     }
 
-    const nodeInputSources = params.resolveFeedInputSourcesForNode({
-      targetNodeId: nodeId,
-      edges: params.graph.edges,
-      nodeMap: params.nodeMap,
-      workflowQuestion: params.workflowQuestion,
-      latestFeedSourceByNodeId: params.latestFeedSourceByNodeId,
-      turnRoleLabelFn: params.turnRoleLabel,
-      nodeTypeLabelFn: params.nodeTypeLabel,
-      nodeSelectionLabelFn: params.nodeSelectionLabel,
-    });
-    const nodeInput = params.buildNodeInputForNode({
-      node,
-      nodeMap: params.nodeMap,
-      edges: params.graph.edges,
-      nodeId,
-      outputs: params.outputs,
-      rootInput: params.workflowQuestion,
-      normalizedEvidenceByNodeId: params.normalizedEvidenceByNodeId,
-      runMemory: params.getRunMemoryByNodeId(),
-    });
+    let nodeInputSources: unknown[] = [];
+    let nodeInput: unknown;
+    try {
+      nodeInputSources = params.resolveFeedInputSourcesForNode({
+        targetNodeId: nodeId,
+        edges: params.graph.edges,
+        nodeMap: params.nodeMap,
+        workflowQuestion: params.workflowQuestion,
+        latestFeedSourceByNodeId: params.latestFeedSourceByNodeId,
+        turnRoleLabelFn: params.turnRoleLabel,
+        nodeTypeLabelFn: params.nodeTypeLabel,
+        nodeSelectionLabelFn: params.nodeSelectionLabel,
+      });
+      nodeInput = params.buildNodeInputForNode({
+        node,
+        nodeMap: params.nodeMap,
+        edges: params.graph.edges,
+        nodeId,
+        outputs: params.outputs,
+        rootInput: params.workflowQuestion,
+        normalizedEvidenceByNodeId: params.normalizedEvidenceByNodeId,
+        runMemory: params.getRunMemoryByNodeId(),
+      });
+    } catch (error) {
+      const finishedAtIso = new Date().toISOString();
+      const reason = `노드 입력 구성 실패: ${error instanceof Error ? error.message : String(error ?? "알 수 없는 오류")}`;
+      params.addNodeLog(nodeId, `[입력] ${reason}`);
+      params.setNodeStatus(nodeId, "failed", reason);
+      params.setNodeRuntimeFields(nodeId, {
+        status: "failed",
+        error: reason,
+        finishedAt: finishedAtIso,
+        durationMs: 0,
+      });
+      params.appendRunTransition(params.runRecord, nodeId, "failed", reason);
+      params.terminalStateByNodeId[nodeId] = "failed";
+      params.scheduleChildren(nodeId);
+      return;
+    }
     const isFinalTurnNode = node.type === "turn" && (params.adjacency.get(nodeId)?.length ?? 0) === 0;
 
     if (params.pauseRequestedRef.current) {

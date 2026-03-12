@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type 
 import { useI18n } from "../../../i18n";
 import type { PmPlanningMode } from "../../../features/studio/pmPlanningMode";
 import type { MarqueeSelection, NodeRunState, PendingWebTurn } from "../types";
-import type { GraphNode, NodeAnchorSide, NodeExecutionStatus } from "../../../features/workflow/types";
+import type { GraphNode, KnowledgeFileRef, NodeAnchorSide, NodeExecutionStatus } from "../../../features/workflow/types";
 import type { TurnExecutor } from "../../../features/workflow/domain";
 import type { WorkflowGraphViewMode } from "../../../features/workflow/viaGraph";
 import WorkflowCanvasNodesLayer from "./WorkflowCanvasNodesLayer";
@@ -106,6 +106,9 @@ type WorkflowCanvasPaneProps = {
   setWorkflowQuestion: (value: string) => void;
   workflowQuestion: string;
   questionInputRef: RefObject<HTMLTextAreaElement | null>;
+  attachedFiles: KnowledgeFileRef[];
+  onOpenKnowledgeFilePicker: () => void;
+  onRemoveKnowledgeFile: (fileId: string) => void;
 };
 
 type WorkflowConversationMessage = {
@@ -192,6 +195,9 @@ export default function WorkflowCanvasPane({
   setWorkflowQuestion,
   workflowQuestion,
   questionInputRef,
+  attachedFiles,
+  onOpenKnowledgeFilePicker,
+  onRemoveKnowledgeFile,
 }: WorkflowCanvasPaneProps) {
   const { t } = useI18n();
   const [, setConversationByNodeId] = useState<Record<string, WorkflowConversationMessage[]>>({});
@@ -465,9 +471,12 @@ export default function WorkflowCanvasPane({
 
       <div className="canvas-topbar">
         <WorkflowQuestionComposer
+          attachedFiles={attachedFiles}
           canRunGraphNow={canRunGraphNow}
           isWorkflowBusy={isWorkflowBusy}
           onApplyModelSelection={onApplyModelSelection}
+          onOpenKnowledgeFilePicker={onOpenKnowledgeFilePicker}
+          onRemoveKnowledgeFile={onRemoveKnowledgeFile}
           onRunGraph={onRunGraph}
           onSubmitMessage={(message) => {
             if (!selectedConversationNodeId) {

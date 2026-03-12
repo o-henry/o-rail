@@ -46,6 +46,7 @@ export function MainAppShell(props: any) {
     graph,
     graphCanvasRef,
     graphFileName,
+    graphKnowledge,
     graphViewMode,
     handleInjectKnowledgeToWorkflow,
     isConnectingDrag,
@@ -84,6 +85,7 @@ export function MainAppShell(props: any) {
     onNodeDragStart,
     onOpenBriefingDocumentFromData,
     onOpenFeedFromNode,
+    onOpenKnowledgeFilePicker,
     onOpenWebInputForNode,
     onOpenPendingProviderWindow,
     onOpenProviderSession,
@@ -94,6 +96,7 @@ export function MainAppShell(props: any) {
     onAddRoleReviewPassForNode,
     onRedoGraph,
     onReopenPendingWebTurn,
+    onRemoveKnowledgeFile,
     onRespondApproval,
     onRestartWebBridge,
     onRunDashboardTopicFromAgents,
@@ -250,6 +253,7 @@ export function MainAppShell(props: any) {
         {workspaceTab === "workflow" && (
           <WorkflowPage canvasFullscreen={canvasFullscreen}>
             <WorkflowCanvasPane
+              attachedFiles={graphKnowledge.files}
               boundedStageHeight={boundedStageHeight}
               boundedStageWidth={boundedStageWidth}
               canRunGraphNow={canRunGraphNow}
@@ -291,6 +295,7 @@ export function MainAppShell(props: any) {
               onNodeAnchorDrop={onNodeAnchorDrop}
               onNodeDragStart={onNodeDragStart}
               onOpenFeedFromNode={onOpenFeedFromNode}
+              onOpenKnowledgeFilePicker={onOpenKnowledgeFilePicker}
               onOpenWebInputForNode={onOpenWebInputForNode}
               onAddRolePerspectivePass={onAddRolePerspectivePassForNode}
               onAddRoleReviewPass={onAddRoleReviewPassForNode}
@@ -300,6 +305,7 @@ export function MainAppShell(props: any) {
               onClearGraph={props.onClearGraphCanvas}
               onRedoGraph={onRedoGraph}
               onReopenPendingWebTurn={onReopenPendingWebTurn}
+              onRemoveKnowledgeFile={onRemoveKnowledgeFile}
               onRunGraph={onRunGraph}
               onUndoGraph={onUndoGraph}
               panMode={panMode}

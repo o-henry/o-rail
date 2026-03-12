@@ -208,4 +208,66 @@ describe("injectKnowledgeContext role knowledge", () => {
     expect(result.prompt).toContain("1인 인디 게임 개발자");
     expect(result.prompt).toContain("창의적인 게임 아이디어를 제안해줘");
   });
+
+  it("injects attached knowledge snippets into the node prompt", async () => {
+    const invokeSpy = vi.fn();
+    const invokeFn = async <T,>(command: string, args?: Record<string, unknown>): Promise<T> => {
+      invokeSpy(command, args);
+      if (command !== "knowledge_retrieve") {
+        return { snippets: [], warnings: [] } as T;
+      }
+      return {
+        snippets: [
+          {
+            fileId: "file-1",
+            fileName: "guide.md",
+            chunkIndex: 2,
+            score: 0.91,
+            text: "핵심 루프는 30초 안에 이해되어야 한다.",
+          },
+        ],
+        warnings: [],
+      } as T;
+    };
+
+    const node: GraphNode = {
+      id: "turn-with-files",
+      type: "turn",
+      position: { x: 0, y: 0 },
+      config: {
+        knowledgeEnabled: true,
+      },
+    };
+
+    const result = await injectKnowledgeContext({
+      node,
+      prompt: "유니티 게임 아이디어를 만들어줘",
+      config: node.config,
+      workflowQuestion: "창의적인 아이디어가 필요하다",
+      activeRunPresetKind: undefined,
+      internalMemoryCorpus: [],
+      enabledKnowledgeFiles: [{ id: "file-1", name: "guide.md", enabled: true }],
+      graphKnowledge: { topK: 3, maxChars: 2400 },
+      addNodeLog: vi.fn(),
+      invokeFn,
+    });
+
+    expect(invokeSpy).toHaveBeenCalledWith(
+      "knowledge_retrieve",
+      expect.objectContaining({
+        files: [{ id: "file-1", name: "guide.md", enabled: true }],
+        topK: 3,
+        maxChars: 2400,
+      }),
+    );
+    expect(result.prompt).toContain("[첨부 참고자료]");
+    expect(result.prompt).toContain("guide.md#2");
+    expect(result.prompt).toContain("핵심 루프는 30초 안에 이해되어야 한다.");
+    expect(result.trace).toEqual([
+      expect.objectContaining({
+        fileId: "file-1",
+        fileName: "guide.md",
+      }),
+    ]);
+  });
 });

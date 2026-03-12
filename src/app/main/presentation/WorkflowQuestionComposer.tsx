@@ -1,6 +1,7 @@
-import { type ChangeEvent, type KeyboardEvent as ReactKeyboardEvent, type RefObject, useEffect, useMemo, useRef, useState } from "react";
+import { type KeyboardEvent as ReactKeyboardEvent, type RefObject, useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "../../../i18n";
 import type { TurnExecutor } from "../../../features/workflow/domain";
+import type { KnowledgeFileRef } from "../../../features/workflow/types";
 import { DEFAULT_TURN_REASONING_LEVEL, TURN_REASONING_LEVEL_OPTIONS } from "../../../features/workflow/reasoningLevels";
 import {
   DEFAULT_RUNTIME_MODEL_VALUE,
@@ -8,12 +9,8 @@ import {
   findRuntimeModelOption,
 } from "../../../features/workflow/runtimeModelOptions";
 
-type WorkflowAttachedFile = {
-  id: string;
-  name: string;
-};
-
 type WorkflowQuestionComposerProps = {
+  attachedFiles: KnowledgeFileRef[];
   canRunGraphNow: boolean;
   isWorkflowBusy: boolean;
   onRunGraph: () => Promise<void>;
@@ -27,32 +24,36 @@ type WorkflowQuestionComposerProps = {
   questionInputRef: RefObject<HTMLTextAreaElement | null>;
   setWorkflowQuestion: (value: string) => void;
   workflowQuestion: string;
+  onOpenKnowledgeFilePicker: () => void;
+  onRemoveKnowledgeFile: (fileId: string) => void;
   onSubmitMessage?: (message: string) => void;
 };
 
 export default function WorkflowQuestionComposer({
+  attachedFiles,
   canRunGraphNow,
   isWorkflowBusy,
   onRunGraph,
   onApplyModelSelection,
+  onOpenKnowledgeFilePicker,
+  onRemoveKnowledgeFile,
   questionInputRef,
   setWorkflowQuestion,
   workflowQuestion,
   onSubmitMessage,
 }: WorkflowQuestionComposerProps) {
   const { t } = useI18n();
-  const [attachedFiles, setAttachedFiles] = useState<WorkflowAttachedFile[]>([]);
   const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
   const [isReasonMenuOpen, setIsReasonMenuOpen] = useState(false);
   const [selectedModel, setSelectedModel] = useState(DEFAULT_RUNTIME_MODEL_VALUE);
   const [selectedReasonLevel, setSelectedReasonLevel] = useState(DEFAULT_TURN_REASONING_LEVEL);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const modelMenuRef = useRef<HTMLDivElement | null>(null);
   const reasonMenuRef = useRef<HTMLDivElement | null>(null);
   const modelOptions = useMemo(() => RUNTIME_MODEL_OPTIONS, []);
   const selectedModelOption = useMemo(() => findRuntimeModelOption(selectedModel), [selectedModel]);
   const isReasonLevelSelectable = selectedModelOption.allowsReasonLevel;
   const reasonLevelOptions = useMemo(() => [...TURN_REASONING_LEVEL_OPTIONS], []);
+  const hasQuestion = workflowQuestion.trim().length > 0;
 
   useEffect(() => {
     if (isReasonLevelSelectable) {
@@ -77,55 +78,12 @@ export default function WorkflowQuestionComposer({
     return () => window.removeEventListener("pointerdown", onPointerDown);
   }, [isModelMenuOpen, isReasonMenuOpen]);
 
-  const onOpenFilePicker = () => {
-    fileInputRef.current?.click();
-  };
-
-  const onAttachFiles = (event: ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
-    if (!files || files.length === 0) {
-      return;
-    }
-    const nextFiles: WorkflowAttachedFile[] = Array.from(files).map((file, index) => ({
-      id: `${file.name}-${index}-${Date.now()}`,
-      name: file.name,
-    }));
-    setAttachedFiles((prev) => {
-      const seen = new Set(prev.map((file) => file.name));
-      const merged = [...prev];
-      nextFiles.forEach((file) => {
-        if (!seen.has(file.name)) {
-          seen.add(file.name);
-          merged.push(file);
-        }
-      });
-      return merged;
-    });
-    event.target.value = "";
-  };
-
   const onSubmitWorkflowComposer = () => {
     const text = workflowQuestion.trim();
-    if (!text && attachedFiles.length === 0) {
+    if (!text) {
       return;
     }
-    if (!canRunGraphNow && attachedFiles.length === 0) {
-      return;
-    }
-    if (attachedFiles.length > 0) {
-      const attachmentHeader = `files: ${attachedFiles.map((file) => file.name).join(", ")}`;
-      const prefixed = text ? `${attachmentHeader}\n${text}` : attachmentHeader;
-      onSubmitMessage?.(prefixed);
-      const reasonTag = isReasonLevelSelectable ? selectedReasonLevel : "N/A";
-      const withConfig = `[model=${selectedModelOption.value}, reason=${reasonTag}] ${prefixed}`;
-      setWorkflowQuestion(withConfig);
-      window.setTimeout(() => {
-        void onRunGraph();
-      }, 0);
-      setAttachedFiles([]);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
+    if (!canRunGraphNow) {
       return;
     }
     onSubmitMessage?.(text);
@@ -141,7 +99,7 @@ export default function WorkflowQuestionComposer({
       return;
     }
     event.preventDefault();
-    if (!canRunGraphNow && attachedFiles.length === 0) {
+    if (!canRunGraphNow || !hasQuestion) {
       return;
     }
     onSubmitWorkflowComposer();
@@ -149,15 +107,6 @@ export default function WorkflowQuestionComposer({
 
   return (
     <div className="question-input agents-composer workflow-question-input">
-      <input
-        ref={fileInputRef}
-        type="file"
-        multiple
-        onChange={onAttachFiles}
-        className="agents-file-input"
-        tabIndex={-1}
-        aria-hidden="true"
-      />
       <textarea
         disabled={isWorkflowBusy}
         onChange={(e) => setWorkflowQuestion(e.currentTarget.value)}
@@ -171,14 +120,32 @@ export default function WorkflowQuestionComposer({
         <div className="agents-file-list" aria-label="Attached files">
           {attachedFiles.map((file) => (
             <span key={file.id} className="agents-file-chip">
-              {file.name}
+              <span
+                className={`agents-file-chip-name${file.enabled === false ? " is-disabled" : ""}`}
+                title={file.path}
+              >
+                {file.name}
+              </span>
+              <button
+                aria-label={`${file.name} ${t("common.delete")}`}
+                className="agents-file-chip-remove"
+                onClick={() => onRemoveKnowledgeFile(file.id)}
+                type="button"
+              >
+                ×
+              </button>
             </span>
           ))}
         </div>
       )}
       <div className="question-input-footer">
         <div className="agents-composer-left">
-          <button aria-label="파일 추가" className="agents-icon-button" onClick={onOpenFilePicker} type="button">
+          <button
+            aria-label={t("workflow.knowledge.addFile")}
+            className="agents-icon-button"
+            onClick={onOpenKnowledgeFilePicker}
+            type="button"
+          >
             <img alt="" aria-hidden="true" src="/plus-large-svgrepo-com.svg" />
           </button>
           <div className={`agents-model-dropdown${isModelMenuOpen ? " is-open" : ""}`} ref={modelMenuRef}>
@@ -268,7 +235,7 @@ export default function WorkflowQuestionComposer({
         </div>
         <button
           className="primary-action question-create-button agents-send-button"
-          disabled={!canRunGraphNow && attachedFiles.length === 0}
+          disabled={!canRunGraphNow || !hasQuestion}
           onClick={onSubmitWorkflowComposer}
           type="button"
         >

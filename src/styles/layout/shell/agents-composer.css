@@ -37,10 +37,10 @@
 }
 
 .agents-file-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   max-width: 240px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   border-radius: 999px;
   border: 1px solid var(--surface-strong);
   background: var(--surface-soft);
@@ -48,6 +48,33 @@
   font-size: 11px;
   line-height: 1.1;
   padding: 5px 8px;
+}
+
+.agents-file-chip-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agents-file-chip-name.is-disabled {
+  opacity: 0.56;
+}
+
+.agents-file-chip-remove {
+  width: 14px;
+  min-width: 14px;
+  height: 14px;
+  min-height: 14px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
+  line-height: 1;
+  display: inline-grid;
+  place-items: center;
+  opacity: 0.72;
 }
 
 .agents-composer-row {

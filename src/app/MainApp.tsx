@@ -2658,6 +2658,7 @@ function App() {
       graph={graph}
       graphCanvasRef={graphCanvasRef}
       graphFileName={graphFileName}
+      graphKnowledge={graphKnowledge}
       graphViewMode={workflowGraphViewMode}
       handleInjectKnowledgeToWorkflow={handleInjectKnowledgeToWorkflow}
       isConnectingDrag={isConnectingDrag}
@@ -2711,6 +2712,7 @@ function App() {
         setWorkspaceTab("knowledge");
         setStatus(`데이터베이스에서 ${nodeId} 노드 결과를 확인하세요.`);
       }}
+      onOpenKnowledgeFilePicker={onOpenKnowledgeFilePicker}
       onOpenPendingProviderWindow={onOpenPendingProviderWindow}
       onOpenProviderSession={onOpenProviderSession}
       onOpenQuickPanelAgents={onOpenQuickPanelAgents}
@@ -2719,6 +2721,7 @@ function App() {
       onOpenWebInputForNode={onOpenWebInputForNode}
       onRedoGraph={onRedoGraph}
       onReopenPendingWebTurn={onReopenPendingWebTurn}
+      onRemoveKnowledgeFile={onRemoveKnowledgeFile}
       onRespondApproval={onRespondApproval}
       onRestartWebBridge={onRestartWebBridge}
       onRunDashboardTopicFromAgents={onRunDashboardTopicFromAgents}

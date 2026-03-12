@@ -337,7 +337,7 @@ export const ZH_MESSAGES: Dictionary = {
     "label.node.transform": "数据转换",
     "label.node.gate": "决策分支",
     "label.status.idle": "待机",
-    "label.status.queued": "排队中",
+    "label.status.queued": "执行等待",
     "label.status.running": "运行中",
     "label.status.waiting_user": "等待用户输入",
     "label.status.done": "完成",

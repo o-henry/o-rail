@@ -337,7 +337,7 @@ export const KO_MESSAGES: Dictionary = {
     "label.node.transform": "데이터 변환",
     "label.node.gate": "결정 분기",
     "label.status.idle": "대기",
-    "label.status.queued": "대기열",
+    "label.status.queued": "실행 대기",
     "label.status.running": "실행 중",
     "label.status.waiting_user": "사용자 입력 대기",
     "label.status.done": "완료",

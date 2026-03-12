@@ -337,7 +337,7 @@ export const JA_MESSAGES: Dictionary = {
     "label.node.transform": "データ変換",
     "label.node.gate": "判定分岐",
     "label.status.idle": "待機",
-    "label.status.queued": "キュー",
+    "label.status.queued": "実行待ち",
     "label.status.running": "実行中",
     "label.status.waiting_user": "入力待ち",
     "label.status.done": "完了",

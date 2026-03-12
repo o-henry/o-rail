@@ -3,6 +3,7 @@ import type { GraphData } from "../../../features/workflow/types";
 import {
   findDirectInputNodeIds,
   resolveGraphDagMaxThreads,
+  scheduleChildrenWhenReady,
   scheduleRunnableGraphNodes,
 } from "./runGraphFlowUtils";
 
@@ -88,5 +89,28 @@ describe("scheduleRunnableGraphNodes", () => {
     expect(queue).toEqual([]);
     expect(activeTasks.size).toBe(2);
     expect(processNode).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("scheduleChildrenWhenReady", () => {
+  it("prioritizes internal synthesis and verification nodes at the front of the queue", () => {
+    const indegree = new Map([
+      ["review", 1],
+      ["unrelated", 1],
+    ]);
+    const queue = ["existing"];
+    const onQueued = vi.fn();
+
+    scheduleChildrenWhenReady({
+      nodeId: "research-a",
+      adjacency: new Map([["research-a", ["unrelated", "review"]]]),
+      indegree,
+      queue,
+      prioritizeNodeId: (nodeId) => nodeId === "review",
+      onQueued,
+    });
+
+    expect(queue).toEqual(["review", "existing", "unrelated"]);
+    expect(onQueued).toHaveBeenCalledTimes(2);
   });
 });

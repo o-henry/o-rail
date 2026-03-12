@@ -194,13 +194,18 @@ export function scheduleChildrenWhenReady(params: {
   indegree: Map<string, number>;
   queue: string[];
   onQueued: (nodeId: string) => void;
+  prioritizeNodeId?: (nodeId: string) => boolean;
 }) {
   const children = params.adjacency.get(params.nodeId) ?? [];
   for (const childId of children) {
     const next = (params.indegree.get(childId) ?? 0) - 1;
     params.indegree.set(childId, next);
     if (next === 0) {
-      params.queue.push(childId);
+      if (params.prioritizeNodeId?.(childId)) {
+        params.queue.unshift(childId);
+      } else {
+        params.queue.push(childId);
+      }
       params.onQueued(childId);
     }
   }

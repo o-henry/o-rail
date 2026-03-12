@@ -82,6 +82,7 @@ export const PHRASE_TO_KEY: Record<string, string> = {
   "길이를 길게 할수록 근거는 늘고, 응답 속도와 사용량은 증가할 수 있습니다.": "workflow.knowledge.length.help",
   대기: "label.status.idle",
   대기열: "label.status.queued",
+  "실행 대기": "label.status.queued",
   "실행 중": "label.status.running",
   "사용자 입력 대기": "label.status.waiting_user",
   건너뜀: "label.status.skipped",

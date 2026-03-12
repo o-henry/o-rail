@@ -170,6 +170,22 @@ export function createRunGraphRunner(params: any) {
           adjacency,
           indegree,
           queue,
+          prioritizeNodeId: (childId: string) => {
+            const childNode = nodeMap.get(childId);
+            if (!childNode) {
+              return false;
+            }
+            const config =
+              childNode.config && typeof childNode.config === "object"
+                ? (childNode.config as Record<string, unknown>)
+                : {};
+            const internalParentNodeId = String(config.internalParentNodeId ?? "").trim();
+            const internalNodeKind = String(config.internalNodeKind ?? "").trim();
+            return (
+              Boolean(internalParentNodeId) &&
+              (internalNodeKind === "synthesis" || internalNodeKind === "verification")
+            );
+          },
           onQueued: (childId: string) => {
             params.setNodeStatus(childId, "queued");
             params.appendRunTransition(runRecord, childId, "queued");

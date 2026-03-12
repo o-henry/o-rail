@@ -337,7 +337,7 @@ export const EN_MESSAGES: Dictionary = {
     "label.node.transform": "Transform",
     "label.node.gate": "Decision Gate",
     "label.status.idle": "Idle",
-    "label.status.queued": "Queued",
+    "label.status.queued": "Waiting",
     "label.status.running": "Running",
     "label.status.waiting_user": "Waiting User",
     "label.status.done": "Done",

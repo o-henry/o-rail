@@ -54,6 +54,10 @@ function edge(fromNodeId: string, toNodeId: string): GraphEdge {
   };
 }
 
+function isAutomaticInternalWebResearchLane(lane: RoleResearchLaneBlueprint): boolean {
+  return lane.executor.startsWith("web_");
+}
+
 function roleQualityProfile(roleId: StudioRoleId): QualityProfileId {
   if (roleId === "pm_feasibility_critic") {
     return "research_evidence";
@@ -253,7 +257,7 @@ export function buildRoleNodeScaffold(params: RoleNodeScaffoldParams): RoleNodeS
     };
   }
 
-  const researchLanes = research.lanes;
+  const researchLanes = research.lanes.filter((lane) => !isAutomaticInternalWebResearchLane(lane));
   const researchNodeIds: string[] = [];
   const synthesisNodeId = makeNodeId("turn");
   const verificationNodeId = makeNodeId("turn");

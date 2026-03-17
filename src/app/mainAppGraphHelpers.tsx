@@ -38,6 +38,7 @@ export type WorkspaceTab =
   | "dashboard"
   | "intelligence"
   | "workflow"
+  | "tasks"
   | "feed"
   | "agents"
   | "handoff"
@@ -212,6 +213,9 @@ export function NavIcon({ tab, active = false }: { tab: WorkspaceTab; active?: b
     return (
       <img alt="" aria-hidden="true" className="nav-workflow-image" src="/node-svgrepo-com.svg" />
     );
+  }
+  if (tab === "tasks") {
+    return <img alt="" aria-hidden="true" className="nav-workflow-image" src="/scroll.svg" />;
   }
   if (tab === "feed") {
     return (

@@ -75,6 +75,7 @@ export function useWorkflowShortcuts(params: UseWorkflowShortcutsParams) {
       intelligence: "대시보드 인텔리전스 탭으로 이동",
       agents: "에이전트 탭으로 이동",
       workflow: "워크플로우 탭으로 이동",
+      tasks: "TASKS 탭으로 이동",
       feed: "피드 탭으로 이동",
       handoff: "그래프 탭으로 이동",
       knowledge: "데이터베이스 탭으로 이동",

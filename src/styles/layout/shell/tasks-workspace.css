@@ -1,0 +1,550 @@
+@import "@xterm/xterm/css/xterm.css";
+
+.tasks-layout {
+  min-height: 0;
+  height: 100%;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.tasks-shell {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 8px;
+}
+
+.tasks-sidebar,
+.tasks-main,
+.tasks-stage,
+.tasks-detail-panel,
+.tasks-empty-state {
+  min-height: 0;
+}
+
+.tasks-sidebar {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  overflow: auto;
+  padding: 8px;
+}
+
+.tasks-sidebar-head,
+.tasks-topbar,
+.task-create-head,
+.task-create-actions,
+.tasks-topbar-actions,
+.tasks-artifact-tabs,
+.tasks-artifact-actions,
+.tasks-prompt-item-meta,
+.tasks-terminal-pane-topbar,
+.tasks-terminal-pane-meta,
+.tasks-terminal-pane-actions,
+.tasks-terminal-pane-composer,
+.tasks-stage-head,
+.tasks-composer-targets,
+.tasks-changed-files header,
+.tasks-prompt-log header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tasks-sidebar-head {
+  align-items: flex-start;
+}
+
+.tasks-sidebar-head div,
+.tasks-topbar-copy,
+.tasks-stage-copy,
+.tasks-empty-state,
+.task-create-field,
+.tasks-sidebar-group,
+.tasks-sidebar-list,
+.tasks-prompt-log,
+.tasks-changed-files {
+  display: grid;
+  gap: 6px;
+}
+
+.tasks-sidebar-head strong,
+.tasks-topbar-copy strong,
+.tasks-stage-copy strong,
+.tasks-empty-state strong,
+.tasks-terminal-pane-topbar strong,
+.tasks-detail-panel strong,
+.task-create-head strong {
+  font-family: "Galmuri11", "Noto Sans KR", sans-serif;
+  letter-spacing: 0;
+}
+
+.tasks-sidebar-head small,
+.tasks-sidebar-group > header,
+.tasks-badges span,
+.tasks-composer-hint,
+.tasks-terminal-pane-status,
+.tasks-terminal-pane-meta,
+.tasks-prompt-item-meta,
+.tasks-meta-grid span,
+.tasks-warning-copy,
+.task-create-field span {
+  font-family: "BasicallyAMono", "Noto Sans KR", monospace;
+}
+
+.tasks-sidebar-group > header,
+.tasks-sidebar-head small,
+.tasks-sidebar-item small,
+.tasks-empty-copy,
+.tasks-composer-hint,
+.tasks-meta-grid span,
+.tasks-warning-copy,
+.task-create-field span,
+.tasks-terminal-pane-status,
+.tasks-terminal-pane-meta,
+.tasks-prompt-item-meta {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.tasks-sidebar-item {
+  border: 1px solid var(--border-subtle);
+  background: color-mix(in srgb, var(--surface-panel) 92%, transparent);
+  color: var(--text-main);
+  border-radius: 10px;
+  padding: 10px;
+  text-align: left;
+  display: grid;
+  gap: 4px;
+}
+
+.tasks-sidebar-item.is-active {
+  border-color: color-mix(in srgb, var(--focus-ring) 52%, var(--border-subtle));
+  background: color-mix(in srgb, var(--focus-ring) 12%, var(--surface-panel));
+}
+
+.tasks-sidebar-item strong,
+.tasks-topbar-copy strong {
+  font-size: 12px;
+}
+
+.tasks-sidebar-item span,
+.tasks-topbar-copy p,
+.tasks-stage-copy p,
+.tasks-warning-copy,
+.tasks-empty-copy,
+.tasks-empty-state p,
+.tasks-changed-files li,
+.tasks-meta-grid strong,
+.tasks-prompt-item p,
+.task-create-head p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-main);
+}
+
+.tasks-topbar-copy p,
+.tasks-stage-copy p,
+.tasks-empty-state p,
+.task-create-head p {
+  color: var(--text-muted);
+}
+
+.tasks-main {
+  min-width: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 8px;
+}
+
+.tasks-topbar-actions,
+.tasks-artifact-tabs,
+.tasks-composer-targets,
+.task-create-actions {
+  flex-wrap: wrap;
+}
+
+.tasks-topbar-actions button,
+.tasks-artifact-tabs button,
+.tasks-artifact-actions button,
+.tasks-composer-targets button,
+.task-create-actions button,
+.task-primary-button {
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: var(--surface-elevated);
+  color: var(--text-main);
+}
+
+.task-primary-button,
+.tasks-artifact-tabs button.is-active,
+.tasks-composer-targets button.is-active {
+  border-color: color-mix(in srgb, var(--focus-ring) 52%, var(--border-subtle));
+  background: color-mix(in srgb, var(--focus-ring) 12%, var(--surface-elevated));
+}
+
+.tasks-runtime-shell {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 8px;
+}
+
+.tasks-stage,
+.tasks-detail-panel,
+.tasks-empty-state {
+  padding: 10px;
+  overflow: hidden;
+}
+
+.tasks-stage {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 8px;
+}
+
+.tasks-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.tasks-badges span {
+  min-height: 22px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-soft) 78%, transparent);
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.tasks-terminal-grid {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: minmax(0, 1fr);
+  gap: 6px;
+  overflow: hidden;
+  align-content: stretch;
+}
+
+.tasks-terminal-pane {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  gap: 8px;
+  padding: 6px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 84%, transparent);
+  background: linear-gradient(180deg, rgba(8, 11, 16, 0.98), rgba(11, 15, 21, 0.98));
+  color: #e7edf5;
+  cursor: pointer;
+}
+
+.tasks-terminal-pane.is-selected {
+  border-color: color-mix(in srgb, var(--focus-ring) 58%, rgba(255, 255, 255, 0.14));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--focus-ring) 24%, transparent);
+}
+
+.tasks-terminal-pane-topbar strong {
+  font-size: 12px;
+  color: #f6f8fb;
+}
+
+.tasks-terminal-pane-status,
+.tasks-terminal-pane-meta {
+  letter-spacing: 0.04em;
+  color: rgba(213, 223, 233, 0.68);
+}
+
+.tasks-terminal-pane-status.is-running {
+  color: #83d28e;
+}
+
+.tasks-terminal-pane-status.is-starting {
+  color: #e9d37e;
+}
+
+.tasks-terminal-pane-status.is-error,
+.tasks-terminal-pane-status.is-exited {
+  color: #ef9f9f;
+}
+
+.tasks-terminal-pane-body {
+  min-height: 0;
+  overflow: hidden;
+  padding: 0;
+  border-radius: 6px;
+  background: #06080c;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.tasks-terminal-viewport,
+.tasks-terminal-host {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+.tasks-terminal-host {
+  overflow: hidden;
+}
+
+.tasks-terminal-host .xterm {
+  height: 100%;
+}
+
+.tasks-terminal-host .xterm-screen {
+  width: 100% !important;
+}
+
+.tasks-terminal-host .xterm-viewport {
+  overflow-y: auto !important;
+  scrollbar-width: thin;
+}
+
+.tasks-terminal-host .xterm {
+  height: 100%;
+  padding: 8px;
+}
+
+.tasks-terminal-host .xterm-viewport {
+  background: transparent !important;
+}
+
+.tasks-terminal-host .xterm-screen,
+.tasks-terminal-host .xterm-helpers {
+  inset: 8px !important;
+}
+
+.tasks-terminal-host .xterm-cursor-layer,
+.tasks-terminal-host .xterm-selection-layer,
+.tasks-terminal-host .xterm-link-layer {
+  inset: 8px !important;
+}
+
+.tasks-terminal-pane-actions {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+
+.tasks-terminal-pane .mini-action-button {
+  min-height: 28px;
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: #f0f5fb;
+}
+
+.tasks-terminal-pane-composer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.tasks-terminal-pane-input,
+.tasks-artifact-editor,
+.task-create-field textarea,
+.task-create-field select,
+.tasks-composer textarea {
+  width: 100%;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface-panel) 92%, transparent);
+  color: var(--text-main);
+}
+
+.tasks-terminal-pane-input {
+  height: 34px;
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: #f5f8fc;
+  padding: 0 10px;
+}
+
+.tasks-terminal-pane-input::placeholder {
+  color: rgba(218, 227, 237, 0.44);
+}
+
+.tasks-detail-panel {
+  display: grid;
+  grid-template-rows: auto auto minmax(220px, 1fr) auto minmax(0, 160px);
+  gap: 8px;
+}
+
+.tasks-detail-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.tasks-meta-grid > div {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.tasks-artifacts-panel-shell {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.tasks-artifact-editor {
+  min-height: 220px;
+  padding: 8px;
+  resize: none;
+  font-family: "BasicallyAMono", "Galmuri11", monospace;
+  line-height: 1.55;
+}
+
+.tasks-changed-files ul,
+.tasks-prompt-list {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 6px;
+}
+
+.tasks-prompt-list {
+  padding-left: 0;
+  list-style: none;
+  min-height: 0;
+  overflow: auto;
+}
+
+.tasks-prompt-item {
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface-panel) 92%, transparent);
+  padding: 10px;
+  display: grid;
+  gap: 6px;
+}
+
+.tasks-prompt-item p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.tasks-empty-state {
+  align-content: center;
+  justify-items: start;
+}
+
+.tasks-composer {
+  position: sticky;
+  bottom: 0;
+  border-radius: 14px;
+  border: 1px solid var(--border-subtle);
+  background: color-mix(in srgb, var(--surface-panel) 94%, transparent);
+}
+
+.tasks-composer textarea {
+  min-height: 108px;
+  padding: 8px;
+  resize: vertical;
+}
+
+.task-create-modal {
+  width: min(760px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  display: grid;
+  gap: 14px;
+}
+
+.task-create-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.task-create-field textarea,
+.task-create-field select {
+  padding: 10px 12px;
+}
+
+.task-create-field textarea {
+  min-height: 140px;
+  resize: vertical;
+}
+
+@media (max-width: 1320px) {
+  .tasks-runtime-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .tasks-detail-panel {
+    grid-template-rows: auto auto minmax(200px, 1fr) auto minmax(0, 180px);
+  }
+}
+
+@media (max-width: 1180px) {
+  .tasks-shell,
+  .task-create-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .tasks-terminal-grid {
+    grid-template-columns: 1fr;
+    grid-auto-rows: minmax(260px, auto);
+  }
+}
+
+
+.tasks-topbar {
+  padding: 2px 0 6px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border-subtle) 62%, transparent);
+}
+
+.tasks-topbar-copy p {
+  font-size: 11px;
+}
+
+.tasks-stage-head {
+  padding: 0 2px 4px;
+}
+
+.tasks-stage-copy p {
+  font-family: "BasicallyAMono", "Noto Sans KR", monospace;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.tasks-detail-panel {
+  border-left: 1px solid color-mix(in srgb, var(--border-subtle) 62%, transparent);
+  background: color-mix(in srgb, var(--surface-panel) 88%, var(--surface-elevated));
+}
+
+.tasks-detail-panel strong,
+.tasks-detail-panel span,
+.tasks-detail-panel p,
+.tasks-detail-panel li,
+.tasks-detail-panel textarea,
+.tasks-detail-panel button {
+  font-size: 11px;
+}
+
+.tasks-terminal-pane-actions {
+  gap: 4px;
+}
+
+.tasks-terminal-pane .mini-action-button {
+  min-height: 24px;
+  height: 24px;
+  padding: 0 8px;
+}
+
+.tasks-terminal-pane .mini-action-button-label {
+  font-size: 10px;
+}

@@ -327,6 +327,7 @@ pub fn dashboard_snapshot_save(
     let body = serde_json::to_string_pretty(&snapshot_json)
         .map_err(|err| format!("failed to serialize snapshot: {err}"))?;
     fs::write(&file_path, body).map_err(|err| format!("failed to save snapshot: {err}"))?;
+    crate::storage::cleanup_workspace_runtime_noise(&workspace)?;
     Ok(file_path.to_string_lossy().to_string())
 }
 
@@ -815,6 +816,8 @@ pub async fn run_dashboard_crawl(
 
         topic_results.push(result);
     }
+
+    crate::storage::cleanup_workspace_runtime_noise(&workspace)?;
 
     Ok(DashboardCrawlRunResult {
         started_at,

@@ -26,7 +26,7 @@ export const KO_MESSAGES: Dictionary = {
     "settings.cwd": "작업 경로(CWD)",
     "settings.pickFolder": "폴더 선택",
     "settings.defaultModel": "기본 모델",
-    "settings.multiAgentMode": "Codex 멀티에이전트 최적화",
+    "settings.multiAgentMode": "코덱스 멀티에이전트 최적화",
     "settings.backgroundImage": "배경 이미지",
     "settings.backgroundImage.pick": "이미지 선택",
     "settings.backgroundOpacity": "배경 불투명도 (0~1)",

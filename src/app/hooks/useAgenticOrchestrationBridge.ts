@@ -158,7 +158,7 @@ export function useAgenticOrchestrationBridge(params: {
     prompt?: string;
     handoffToRole?: string;
     handoffRequest?: string;
-    sourceTab: "agents" | "workflow" | "workbench";
+    sourceTab: "agents" | "workflow" | "workbench" | "tasks";
     artifactPaths: string[];
     runStatus: "done" | "error";
     envelope?: AgenticRunEnvelope;
@@ -258,11 +258,18 @@ export function useAgenticOrchestrationBridge(params: {
       roleId: string;
       taskId: string;
       prompt?: string;
-      sourceTab?: "agents" | "workflow" | "workbench";
+      sourceTab?: "agents" | "workflow" | "workbench" | "tasks";
       handoffToRole?: string;
       handoffRequest?: string;
     }) => {
-      const sourceTab = params.sourceTab === "workflow" ? "workflow" : params.sourceTab === "workbench" ? "workbench" : "agents";
+      const sourceTab =
+        params.sourceTab === "workflow"
+          ? "workflow"
+          : params.sourceTab === "workbench"
+            ? "workbench"
+            : params.sourceTab === "tasks"
+              ? "tasks"
+              : "agents";
       const normalizedRoleId = toStudioRoleId(params.roleId);
       const result = await runRoleWithCoordinator({
         runId: params.runId,
@@ -433,18 +440,25 @@ export function useAgenticOrchestrationBridge(params: {
             ? "workflow"
             : action.payload.sourceTab === "workbench"
               ? "workbench"
-              : "agents";
+              : action.payload.sourceTab === "tasks"
+                ? "tasks"
+                : "agents";
         if (sourceTab === "workflow" && workspaceTab !== "workflow") {
           onSelectWorkspaceTab("workflow");
+        }
+        if (sourceTab === "tasks" && workspaceTab !== "tasks") {
+          onSelectWorkspaceTab("tasks");
         }
         setStatus(
           sourceTab === "workflow"
             ? `그래프 역할 실행 요청: ${action.payload.roleId} (${action.payload.taskId})`
             : sourceTab === "workbench"
               ? `워크스페이스 역할 실행 요청: ${action.payload.roleId} (${action.payload.taskId})`
-              : `역할 실행 요청: ${action.payload.roleId} (${action.payload.taskId})`,
+              : sourceTab === "tasks"
+                ? `TASK 역할 실행 요청: ${action.payload.roleId} (${action.payload.taskId})`
+                : `역할 실행 요청: ${action.payload.roleId} (${action.payload.taskId})`,
         );
-        if (sourceTab === "agents" || sourceTab === "workbench") {
+        if (sourceTab === "agents" || sourceTab === "workbench" || sourceTab === "tasks") {
           applyPreset(presetForRole(action.payload.roleId));
         }
         void runRoleDirect({ ...action.payload, sourceTab });

@@ -92,3 +92,10 @@
 .adaptation-control-row {
   justify-content: flex-start;
 }
+
+
+.adaptation-control-row .settings-account-button {
+  height: 34px;
+  min-height: 34px;
+  max-height: 34px;
+}

@@ -5,6 +5,7 @@ import FeedPage from "../../../pages/feed/FeedPage";
 import KnowledgeBasePage from "../../../pages/knowledge/KnowledgeBasePage";
 import DashboardIntelligenceSettings from "../../../pages/settings/DashboardIntelligenceSettings";
 import SettingsPage from "../../../pages/settings/SettingsPage";
+import TasksPage from "../../../pages/tasks/TasksPage";
 
 export function MainAppWorkspaceContent(props: any) {
   const handleInjectContextSources = (entries: any[]) => {
@@ -35,6 +36,16 @@ export function MainAppWorkspaceContent(props: any) {
           onFreeze={props.onFreezeAdaptiveWorkspace}
           onResume={props.onResumeAdaptiveWorkspace}
           onReset={props.onResetAdaptiveWorkspace}
+        />
+      )}
+      {props.workspaceTab === "tasks" && (
+        <TasksPage
+          appendWorkspaceEvent={props.appendWorkspaceEvent}
+          cwd={props.cwd}
+          hasTauriRuntime={props.hasTauriRuntime}
+          invokeFn={props.invokeFn}
+          publishAction={props.publishAction}
+          setStatus={props.setStatus}
         />
       )}
       {props.workspaceTab === "agents" && (

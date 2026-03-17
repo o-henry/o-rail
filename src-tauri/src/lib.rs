@@ -72,6 +72,16 @@ pub fn run() {
             storage::run_load,
             storage::run_delete,
             storage::run_directory,
+            storage::storage_cleanup_workspace,
+            storage::storage_usage_summary,
+            storage::task_list,
+            storage::task_load,
+            storage::task_create,
+            storage::task_update_artifact,
+            storage::task_send_prompt,
+            storage::task_record_role_result,
+            storage::task_mark_status,
+            storage::task_archive,
             storage::workspace_write_markdown,
             storage::workspace_write_text,
             storage::workspace_read_text,
@@ -90,6 +100,8 @@ pub fn run() {
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");
+
+    let _ = storage::cleanup_app_runtime_noise(app.handle());
 
     app.run(|app_handle, event| match event {
         tauri::RunEvent::WindowEvent { label, event, .. } => {

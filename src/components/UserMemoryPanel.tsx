@@ -180,6 +180,7 @@ export default function UserMemoryPanel() {
           ))
         )}
       </div>
+      {false ? (
       <section className="settings-memory-activity">
         <div className="settings-memory-activity-head">
           <strong>최근 메모리/RAG 활용</strong>
@@ -217,6 +218,7 @@ export default function UserMemoryPanel() {
           </div>
         )}
       </section>
+      ) : null}
     </section>
   );
 }

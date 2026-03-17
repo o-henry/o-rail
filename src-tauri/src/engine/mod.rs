@@ -849,6 +849,7 @@ async fn resolve_web_worker_dirs(app: &AppHandle) -> Result<(PathBuf, PathBuf), 
     if let Some(parent) = log_path.parent() {
         ensure_private_dir(parent, "worker log dir").await?;
     }
+    crate::storage::enforce_default_web_worker_log_limit(&log_path)?;
 
     Ok((profile_root, log_path))
 }

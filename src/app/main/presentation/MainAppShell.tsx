@@ -365,6 +365,7 @@ export function MainAppShell(props: any) {
         <MainAppWorkspaceContent
           agentLaunchRequest={agentLaunchRequest}
           agentLaunchRequestSeqRef={agentLaunchRequestSeqRef}
+          appendWorkspaceEvent={props.appendWorkspaceEvent}
           authModeText={props.authModeLabel(authMode)}
           briefingDocuments={feedPosts
             .filter((post: any) => post.status === "done" || post.status === "low_quality")
@@ -383,6 +384,7 @@ export function MainAppShell(props: any) {
           codexMultiAgentModeOptions={codexMultiAgentModeOptions}
           connectedProviderCount={webBridgeStatus.connectedProviders.length}
           cwd={props.cwd}
+          hasTauriRuntime={props.hasTauriRuntime}
           dashboardDetailTopic={dashboardDetailTopic}
           dashboardIntelligenceConfig={dashboardIntelligenceConfig}
           dashboardIntelligenceRunStateByTopic={dashboardIntelligenceRunStateByTopic}
@@ -396,6 +398,7 @@ export function MainAppShell(props: any) {
           graphFileName={graphFileName}
           graphNodes={graph.nodes}
           isGraphRunning={isGraphRunning}
+          invokeFn={props.invokeFn}
           launchRequest={agentLaunchRequest}
           loginCompleted={loginCompleted}
           missionControl={missionControl}

@@ -23,7 +23,7 @@ export default function WorkflowInspectorTools({
         <div className="workflow-handoff-actions">
           <button
             className="mini-action-button workflow-handoff-create-button"
-            onClick={() => props.addRoleNode(props.handoffFromRole, true)}
+            onClick={() => props.addRoleNode(props.handoffFromRole, false)}
             type="button"
           >
             <span className="mini-action-button-label">{tp("역할 노드 추가")}</span>
@@ -37,7 +37,7 @@ export default function WorkflowInspectorTools({
           </button>
         </div>
         <div className="inspector-empty">
-          {tp("역할 노드를 추가하면 앞단에 조사용 RAG 체인을 함께 생성합니다. 연결은 자동으로 구성되지만 이후 편집은 직접 할 수 있습니다.")}
+          {tp("역할 노드는 이제 단독으로만 추가합니다. 필요한 조사/RAG 노드는 직접 추가해서 연결합니다.")}
         </div>
       </div>
 

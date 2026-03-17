@@ -313,6 +313,7 @@ import { executeTurnNodeWithContext } from "./main/runtime/executeTurnNode";
 import type { FeedCategory, InternalMemorySnippet, WebProviderRunResult, RunRecord } from "./main";
 const HIDDEN_WORKSPACE_TABS = new Set<WorkspaceTab>(["workbench", "dashboard", "intelligence", "feed", "handoff", "agents"]);
 const WORKSPACE_TOPBAR_TABS: Array<{ tab: WorkspaceTab; label: string }> = [
+  { tab: "tasks", label: "TASKS" },
   { tab: "workflow", label: "그래프" },
   { tab: "knowledge", label: "데이터베이스" },
   { tab: "adaptation", label: "개선" },
@@ -646,6 +647,12 @@ function App() {
     () => Boolean((window as Window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__),
     [],
   );
+  useEffect(() => {
+    if (!hasTauriRuntime || !cwd) {
+      return;
+    }
+    void invoke("storage_cleanup_workspace", { cwd }).catch(() => {});
+  }, [cwd, hasTauriRuntime]);
   const adaptiveWorkspaceState = useAdaptiveWorkspaceState({
     cwd,
     hasTauriRuntime,
@@ -2620,6 +2627,7 @@ function App() {
       activeApproval={activeApproval}
       agentLaunchRequest={agentLaunchRequest}
       agentLaunchRequestSeqRef={agentLaunchRequestSeqRef}
+      appendWorkspaceEvent={appendWorkspaceEvent}
       approvalDecisionLabel={approvalDecisionLabel}
       approvalDecisions={APPROVAL_DECISIONS}
       approvalSourceLabel={approvalSourceLabel}
@@ -2662,8 +2670,10 @@ function App() {
       graphViewMode={workflowGraphViewMode}
       handleInjectKnowledgeToWorkflow={handleInjectKnowledgeToWorkflow}
       isConnectingDrag={isConnectingDrag}
+      invokeFn={invoke}
       isGraphRunning={isGraphRunning}
       isNodeDragAllowedTarget={isNodeDragAllowedTarget}
+      hasTauriRuntime={hasTauriRuntime}
       isWorkflowBusy={isWorkflowBusy}
       loginCompleted={loginCompleted}
       marqueeSelection={marqueeSelection}

@@ -18,6 +18,7 @@
 @import "./shell/agents-setup.css";
 @import "./shell/agents-workspace.css";
 @import "./shell/agents-composer.css";
+@import "./shell/tasks-workspace.css";
 @import "./shell/childviews.css";
 @import "./shell/modals.css";
 @import "./shell/bridge.css";

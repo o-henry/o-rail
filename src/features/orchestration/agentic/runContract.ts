@@ -9,6 +9,7 @@ export type AgenticRunSourceTab =
   | "workbench"
   | "agents"
   | "workflow"
+  | "tasks"
   | "intelligence"
   | "dashboard"
   | "feed"

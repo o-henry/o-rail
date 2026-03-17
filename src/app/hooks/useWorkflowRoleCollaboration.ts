@@ -7,7 +7,7 @@ import type { StudioRoleId } from "../../features/studio/handoffTypes";
 import { toStudioRoleId } from "../../features/studio/roleUtils";
 import { arrangeExpandedRoleInternalNodes } from "../../features/workflow/graph-utils";
 import { buildRoleNodeScaffold } from "../main/runtime/roleNodeScaffold";
-import type { GraphData, GraphEdge, GraphNode } from "../../features/workflow/types";
+import type { GraphData, GraphNode } from "../../features/workflow/types";
 import { GRAPH_STAGE_INSET_X, GRAPH_STAGE_INSET_Y, NODE_HEIGHT, NODE_WIDTH } from "../main";
 import { computeCanvasRevealViewport } from "../main/canvas/canvasRevealViewport";
 import { getCanvasViewportCenterLogical } from "../main/canvas/canvasViewport";
@@ -36,24 +36,6 @@ type UseWorkflowRoleCollaborationParams = {
   clampCanvasZoom: (next: number) => number;
   resolveAdaptiveRoleChampion: (family: string) => AdaptiveChampionRecord | null;
 };
-
-function cloneIncomingExternalEdges(params: {
-  graph: GraphData;
-  nodeId: string;
-  nextNodeId: string;
-}): GraphEdge[] {
-  return params.graph.edges
-    .filter((edge) => edge.to.nodeId === params.nodeId)
-    .filter((edge) => {
-      const sourceNode = params.graph.nodes.find((node) => node.id === edge.from.nodeId);
-      const sourceConfig = (sourceNode?.config ?? {}) as Record<string, unknown>;
-      return !String(sourceConfig.internalParentNodeId ?? "").trim();
-    })
-    .map((edge) => ({
-      ...edge,
-      to: { ...edge.to, nodeId: params.nextNodeId },
-    }));
-}
 
 function focusExpandedRoleNodes(params: {
   graph: GraphData;
@@ -245,28 +227,21 @@ export function useWorkflowRoleCollaboration(params: UseWorkflowRoleCollaboratio
       roleId: target.roleId,
       anchorX: Number(target.node.position?.x ?? 0) + 420,
       anchorY: Number(target.node.position?.y ?? 0) + 180,
-      includeResearch: true,
+      includeResearch: false,
       roleInstanceId: `${target.roleId}:alt-${altCount + 1}`,
       roleInstanceLabel: `${target.roleLabel} · 추가 시각 ${altCount + 1}`,
       roleMode: "perspective",
       pmPlanningMode: target.roleExecutionMode,
       reviewPrompt: "기존 기본 시각과 다른 관점에서 우선순위, 리스크, 대안, 반박 포인트를 제시합니다.",
     });
-    const clonedIncomingEdges = cloneIncomingExternalEdges({
-      graph: params.graph,
-      nodeId: target.node.id,
-      nextNodeId: scaffold.roleNodeId,
-    });
-
     params.applyGraphChange(
       (prev) => ({
         ...prev,
         nodes: [...prev.nodes, ...scaffold.nodes],
-        edges: [...prev.edges, ...clonedIncomingEdges, ...scaffold.edges],
+        edges: [...prev.edges, ...scaffold.edges],
       }),
       { autoLayout: false },
     );
-    params.setExpandedRoleNodeIds((prev) => [...new Set([...prev, scaffold.roleNodeId])]);
     params.setNodeSelection([scaffold.roleNodeId], scaffold.roleNodeId);
     params.appendWorkspaceEvent({
       source: "workflow",

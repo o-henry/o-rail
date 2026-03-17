@@ -6,6 +6,7 @@ type WorkspaceTab =
   | "dashboard"
   | "intelligence"
   | "workflow"
+  | "tasks"
   | "feed"
   | "agents"
   | "handoff"
@@ -28,6 +29,7 @@ type AppNavProps = {
 };
 
 const NAV_ITEMS: NavItem[] = [
+  { tab: "tasks", label: "TASKS", ariaLabel: "TASKS", title: "TASKS" },
   { tab: "workflow", label: "nav.workflow.short", ariaLabel: "nav.workflow.title", title: "nav.workflow.title" },
   { tab: "knowledge", label: "nav.knowledge", ariaLabel: "nav.knowledge", title: "nav.knowledge" },
   { tab: "adaptation", label: "nav.adaptation", ariaLabel: "nav.adaptation", title: "nav.adaptation" },
@@ -48,17 +50,20 @@ export default function AppNav({ activeTab, onSelectTab, renderIcon }: AppNavPro
       >
         {NAV_ITEMS.map((item) => {
           const active = activeTab === item.tab;
+          const ariaLabel = item.ariaLabel.startsWith("nav.") ? t(item.ariaLabel) : item.ariaLabel;
+          const title = item.title.startsWith("nav.") ? t(item.title) : item.title;
+          const label = item.label.startsWith("nav.") ? t(item.label) : item.label;
           return (
             <button
-              aria-label={t(item.ariaLabel)}
+              aria-label={ariaLabel}
               className={active ? "is-active" : ""}
               key={item.tab}
               onClick={() => onSelectTab(item.tab)}
-              title={t(item.title)}
+              title={title}
               type="button"
             >
               <span className="nav-icon">{renderIcon(item.tab, active)}</span>
-              <span className="nav-label">{t(item.label)}</span>
+              <span className="nav-label">{label}</span>
             </button>
           );
         })}

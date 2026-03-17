@@ -62,6 +62,22 @@ export function useRoleRunCompletionBridge(params: Params) {
     const requestText =
       String(payload.handoffRequest ?? payload.prompt ?? "").trim() ||
       (roleId ? STUDIO_ROLE_PROMPTS[roleId] : "");
+    if (payload.sourceTab === "tasks") {
+      void invokeFn("task_record_role_result", {
+        cwd,
+        taskId: payload.taskId,
+        studioRoleId: payload.roleId,
+        runId: payload.runId,
+        runStatus: payload.runStatus,
+        artifactPaths: Array.isArray(payload.artifactPaths) ? payload.artifactPaths : [],
+      })
+        .then((updated) => {
+          if (updated) {
+            window.dispatchEvent(new CustomEvent("rail:task-updated", { detail: { taskId: payload.taskId } }));
+          }
+        })
+        .catch(() => {});
+    }
     if (payload.runStatus === "done" && payload.sourceTab === "workflow" && roleId && targetRole && requestText) {
       workflowHandoffPanel.createAutoHandoff({
         runId: payload.runId,

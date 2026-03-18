@@ -16,20 +16,8 @@
   min-width: 0;
   min-height: 0;
   height: 100%;
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  display: block;
   background: transparent;
-}
-
-.shell-board-toolbar {
-  min-width: 0;
-  display: flex;
-  justify-content: flex-end;
-  padding: 6px 10px 0;
-}
-
-.shell-global-actions {
-  min-height: 24px;
 }
 
 .shell-empty-state {
@@ -114,7 +102,7 @@
 }
 
 .shell-terminal-card-head {
-  justify-content: flex-start;
+  justify-content: space-between;
   min-height: 24px;
   padding: 4px 10px;
   background: transparent;
@@ -149,8 +137,8 @@
 
 .shell-terminal-card-actions {
   flex-wrap: nowrap;
-  justify-content: flex-start;
-  margin-left: 10px;
+  justify-content: flex-end;
+  margin-left: auto;
 }
 
 .shell-terminal-card-actions span {

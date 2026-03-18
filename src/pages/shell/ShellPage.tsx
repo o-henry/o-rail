@@ -48,21 +48,6 @@ export default function ShellPage(props: ShellPageProps) {
     <section className="shell-layout workspace-tab-panel">
       <section className="shell-main-surface">
         <div className="shell-board">
-          {state.activeThread && !shellGrid.isUnsupported ? (
-            <div className="shell-board-toolbar">
-              <div className="shell-terminal-card-actions shell-global-actions">
-                <button
-                  aria-label="add terminal"
-                  className="shell-terminal-icon-button"
-                  onClick={() => void shellGrid.addPane()}
-                  type="button"
-                >
-                  <img alt="" aria-hidden="true" src="/plus-large-svgrepo-com.svg" />
-                </button>
-              </div>
-            </div>
-          ) : null}
-
           {!state.activeThread ? (
             <section className="shell-empty-state panel-card">
               <strong>스레드를 먼저 선택하세요</strong>
@@ -80,11 +65,6 @@ export default function ShellPage(props: ShellPageProps) {
             <section className="shell-empty-state panel-card">
               <strong>터미널은 Tauri 앱에서만 열 수 있습니다</strong>
               <p>브라우저 미리보기에서는 terminal session이 비활성입니다.</p>
-            </section>
-          ) : shellGrid.panes.length === 0 ? (
-            <section className="shell-empty-state panel-card">
-              <strong>{state.activeThread.thread.title || "NEW THREAD"}</strong>
-              <p>{shellGrid.cwd || state.projectPath || props.cwd}</p>
             </section>
           ) : (
             <div className={shellGridClassName}>
@@ -157,6 +137,17 @@ export default function ShellPage(props: ShellPageProps) {
                         type="button"
                       >
                         <img alt="" aria-hidden="true" src="/xmark.svg" />
+                      </button>
+                      <button
+                        aria-label="add terminal"
+                        className="shell-terminal-icon-button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void shellGrid.addPane();
+                        }}
+                        type="button"
+                      >
+                        <img alt="" aria-hidden="true" src="/plus-large-svgrepo-com.svg" />
                       </button>
                     </div>
                   </header>

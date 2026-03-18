@@ -8,7 +8,8 @@
   display: grid;
   grid-template-columns: 220px minmax(0, 1fr) minmax(260px, 300px);
   gap: 10px;
-  background: #ffffff;
+  padding: 10px;
+  background: color-mix(in srgb, var(--surface-soft) 54%, #e8edf4);
   border-radius: var(--tasks-wrapper-radius);
   overflow: hidden;
 }
@@ -22,8 +23,6 @@
 .tasks-thread-detail-panel {
   min-height: 0;
   border: 0;
-  border-radius: var(--tasks-wrapper-radius);
-  background: #ffffff;
   box-shadow: none;
 }
 
@@ -32,6 +31,8 @@
   grid-template-rows: auto auto minmax(0, 1fr);
   gap: 10px;
   padding: 10px;
+  border-radius: var(--tasks-wrapper-radius);
+  background: #ffffff;
 }
 
 .tasks-thread-nav-copy {
@@ -447,11 +448,23 @@
   min-width: 0;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  background: transparent;
   overflow: hidden;
 }
 
 .tasks-thread-main-surface.is-stage-shell-collapsed {
   grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+.tasks-thread-main-island {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  border-radius: var(--tasks-wrapper-radius);
+  background: #ffffff;
+  overflow: hidden;
 }
 
 .tasks-thread-header {
@@ -997,7 +1010,7 @@
 
 .tasks-thread-composer-shell {
   position: relative;
-  margin: 0 12px 12px;
+  margin: 0;
   border: 1px solid #d6dae1;
   box-shadow: 0 4px 16px rgba(15, 23, 42, 0.08);
   background: #ffffff;
@@ -1179,8 +1192,9 @@
 .tasks-thread-detail-panel {
   min-width: 0;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   min-height: 0;
+  background: transparent;
   overflow: visible;
 }
 
@@ -1206,6 +1220,8 @@
   align-content: start;
   align-items: stretch;
   gap: 14px;
+  border-radius: var(--tasks-wrapper-radius);
+  background: #ffffff;
   scrollbar-gutter: stable;
 }
 

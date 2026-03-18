@@ -41,12 +41,14 @@ export function useShellTerminalGrid(params: {
   const [selectedPaneId, setSelectedPaneId] = useState("");
   const [draggedPaneId, setDraggedPaneId] = useState("");
   const paneCounterRef = useRef(0);
+  const autoCreatedThreadIdRef = useRef("");
 
   useEffect(() => {
     setPanes([]);
     setSelectedPaneId("");
     setDraggedPaneId("");
     paneCounterRef.current = 0;
+    autoCreatedThreadIdRef.current = "";
   }, [threadId]);
 
   useEffect(() => {
@@ -143,6 +145,17 @@ export function useShellTerminalGrid(params: {
     setSelectedPaneId(pane.id);
     await startPane(pane);
   }, [cwd, startPane, threadId]);
+
+  useEffect(() => {
+    if (!params.hasTauriRuntime || !threadId || !cwd || panes.length > 0) {
+      return;
+    }
+    if (autoCreatedThreadIdRef.current === threadId) {
+      return;
+    }
+    autoCreatedThreadIdRef.current = threadId;
+    void addPane();
+  }, [addPane, cwd, panes.length, params.hasTauriRuntime, threadId]);
 
   const sendChars = useCallback(async (paneId: string, chars: string) => {
     if (!params.hasTauriRuntime || !chars) {

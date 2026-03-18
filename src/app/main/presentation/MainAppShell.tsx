@@ -5,7 +5,6 @@ import { NavIcon } from "../../mainAppGraphHelpers";
 import WorkflowCanvasPane from "./WorkflowCanvasPane";
 import { MainAppModals } from "./MainAppModals";
 import { MainAppWorkspaceContent } from "./MainAppWorkspaceContent";
-import { WorkspaceQuickPanel } from "./WorkspaceQuickPanel";
 
 export function MainAppShell(props: any) {
   const {
@@ -74,7 +73,6 @@ export function MainAppShell(props: any) {
     onCanvasWheel,
     onCanvasZoomIn,
     onCanvasZoomOut,
-    onCloseQuickPanel,
     onCopyPendingWebPrompt,
     onCopyWebBridgeConnectCode,
     onDismissPendingWebTurn,
@@ -89,8 +87,6 @@ export function MainAppShell(props: any) {
     onOpenWebInputForNode,
     onOpenPendingProviderWindow,
     onOpenProviderSession,
-    onOpenQuickPanelAgents,
-    onOpenQuickPanelFeed,
     onOpenRunsFolder,
     onAddRolePerspectivePassForNode,
     onAddRoleReviewPassForNode,
@@ -106,8 +102,6 @@ export function MainAppShell(props: any) {
     onSetPmPlanningMode,
     onSelectWorkspaceTab,
     onSubmitPendingWebTurn,
-    onSubmitQuickPanelQuery,
-    onToggleQuickPanel,
     onToggleNodeTerminal,
     onToggleRoleInternalExpanded,
     onUndoGraph,
@@ -119,10 +113,6 @@ export function MainAppShell(props: any) {
     pendingWebTurn,
     questionDirectInputNodeIds,
     questionInputRef,
-    quickPanelOpen,
-    quickPanelQuery,
-    quickPanelRecentPosts,
-    quickPanelWorkspaceLabel,
     ragNodeProgress,
     ragNodes,
     ragTemplateOptions,
@@ -142,7 +132,6 @@ export function MainAppShell(props: any) {
     setNodeSelection,
     setPanMode,
     setPendingWebConnectCheck,
-    setQuickPanelQuery,
     setSelectedEdgeKey,
     setStatus,
     setThemeMode,
@@ -198,21 +187,6 @@ export function MainAppShell(props: any) {
         className={`workspace ${canvasFullscreen ? "canvas-fullscreen-active" : ""} ${error ? "workspace-has-error" : ""}`.trim()}
       >
         {!canvasFullscreen && <header className="workspace-header workspace-header-spacer" />}
-        {!canvasFullscreen && workspaceTab !== "tasks" && workspaceTab !== "shell" && (
-          <WorkspaceQuickPanel
-            isOpen={quickPanelOpen}
-            onChangeQuery={setQuickPanelQuery}
-            onClose={onCloseQuickPanel}
-            onOpenAgents={onOpenQuickPanelAgents}
-            onOpenFeed={onOpenQuickPanelFeed}
-            onSubmitQuery={onSubmitQuickPanelQuery}
-            onToggle={onToggleQuickPanel}
-            query={quickPanelQuery}
-            recentPosts={quickPanelRecentPosts}
-            workspaceLabel={quickPanelWorkspaceLabel}
-          />
-        )}
-
         {error && (
           <div className="error">
             <span>{t("feed.status.failed")}: {error}</span>

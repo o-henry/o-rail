@@ -39,6 +39,7 @@ export type TaskRecord = {
   isolationRequested: TaskIsolation | string;
   isolationResolved: TaskIsolation | string;
   status: TaskStatus | string;
+  projectPath: string;
   workspacePath: string;
   worktreePath?: string | null;
   branchName?: string | null;

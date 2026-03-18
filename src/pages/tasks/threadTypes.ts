@@ -106,10 +106,14 @@ export type ThreadAgentDetail = {
   latestArtifactPath?: string | null;
   latestArtifactPreview?: string | null;
   worktreePath?: string | null;
+  codexThreadId?: string | null;
+  codexTurnId?: string | null;
+  codexThreadStatus?: string | null;
 };
 
 export type ThreadListItem = {
   thread: ThreadRecord;
+  projectPath: string;
   agentCount: number;
   pendingApprovalCount: number;
   workflowSummary: ThreadWorkflowSummary;

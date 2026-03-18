@@ -1,5 +1,6 @@
 import {
   type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
   useEffect,
   useMemo,
   useRef,
@@ -13,6 +14,9 @@ import {
   getThreadStageLabel,
   type ThreadStageId,
 } from "./taskAgentPresets";
+import { applyTaskAgentMention, getTaskAgentMentionMatch } from "./taskAgentMentions";
+import { buildThreadFileTree, type ThreadFileTreeNode } from "./threadFileTree";
+import { buildLiveAgentCards, displayArtifactName } from "./liveAgentState";
 import { useTasksThreadState } from "./useTasksThreadState";
 import { type ThreadMessage, type ThreadRoleId } from "./threadTypes";
 
@@ -58,7 +62,7 @@ function normalizeThreadTitle(input: string | null | undefined) {
 }
 
 function displayThreadTitle(input: string | null | undefined) {
-  return normalizeThreadTitle(input) === "NEW THREAD" ? "새 스레드" : normalizeThreadTitle(input);
+  return normalizeThreadTitle(input);
 }
 
 function displayThreadPath(input: string | null | undefined) {
@@ -70,10 +74,14 @@ function displayStageStatus(input: string | null | undefined) {
   const labels: Record<string, string> = {
     idle: "대기",
     active: "진행 중",
+    running: "실행 중",
+    queued: "대기열",
     blocked: "차단됨",
     ready: "준비 완료",
     done: "완료",
+    completed: "완료",
     failed: "실패",
+    error: "실패",
     thinking: "생각 중",
     awaiting_approval: "승인 대기",
   };
@@ -114,6 +122,7 @@ function resolveTimelineMessage(message: ThreadMessage, agentLabels: string[]) {
 export default function TasksPage(props: TasksPageProps) {
   const state = useTasksThreadState(props);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
+  const conversationRef = useRef<HTMLDivElement | null>(null);
   const modelMenuRef = useRef<HTMLDivElement | null>(null);
   const reasonMenuRef = useRef<HTMLDivElement | null>(null);
   const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
@@ -123,8 +132,11 @@ export default function TasksPage(props: TasksPageProps) {
   const [isEditingThreadTitle, setIsEditingThreadTitle] = useState(false);
   const [threadTitleDraft, setThreadTitleDraft] = useState("");
   const [selectedStageId, setSelectedStageId] = useState<ThreadStageId>("brief");
-  const [isAgentsCollapsed, setIsAgentsCollapsed] = useState(false);
   const [pendingDeleteThreadId, setPendingDeleteThreadId] = useState("");
+  const [collapsedDirectories, setCollapsedDirectories] = useState<Record<string, boolean>>({});
+  const [isFilesExpanded, setIsFilesExpanded] = useState(false);
+  const [composerCursor, setComposerCursor] = useState(0);
+  const [mentionIndex, setMentionIndex] = useState(0);
   const title = useMemo(() => displayThreadTitle(state.activeThread?.thread.title), [state.activeThread]);
   const headerTitle = state.activeThread ? title : "";
   const selectedModelOption = useMemo(
@@ -151,9 +163,14 @@ export default function TasksPage(props: TasksPageProps) {
   }, [state.activeThread?.thread.threadId, state.activeThread?.workflow.currentStageId]);
 
   useEffect(() => {
-    setIsAgentsCollapsed(false);
     setPendingDeleteThreadId("");
+    setCollapsedDirectories({});
+    setIsFilesExpanded(false);
   }, [state.activeThreadId]);
+
+  useEffect(() => {
+    setComposerCursor(state.composerDraft.length);
+  }, [state.composerDraft]);
 
   useEffect(() => {
     if (!isModelMenuOpen && !isReasonMenuOpen) {
@@ -195,6 +212,32 @@ export default function TasksPage(props: TasksPageProps) {
   };
 
   const onComposerKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+    const currentMentionMatch = getTaskAgentMentionMatch(
+      event.currentTarget.value,
+      event.currentTarget.selectionStart ?? event.currentTarget.value.length,
+    );
+    if (currentMentionMatch) {
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        setMentionIndex((current) => (current + 1) % currentMentionMatch.options.length);
+        return;
+      }
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        setMentionIndex((current) => (current - 1 + currentMentionMatch.options.length) % currentMentionMatch.options.length);
+        return;
+      }
+      if (event.key === "Enter" || event.key === "Tab") {
+        event.preventDefault();
+        selectMention(currentMentionMatch.options[mentionIndex]!.mention, currentMentionMatch);
+        return;
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setMentionIndex(0);
+        return;
+      }
+    }
     if (event.key !== "Enter" || event.shiftKey) {
       return;
     }
@@ -206,58 +249,153 @@ export default function TasksPage(props: TasksPageProps) {
     () => (state.activeThread?.agents ?? []).map((agent) => agent.label),
     [state.activeThread?.agents],
   );
-  const liveAgents = useMemo(
-    () => (state.activeThread?.agents ?? []).filter((agent) => agent.status !== "idle" && agent.status !== "done"),
-    [state.activeThread?.agents],
+  const liveAgents = useMemo(() => buildLiveAgentCards(state.activeThread, state.liveRoleNotes), [state.activeThread, state.liveRoleNotes]);
+  const fileTree = useMemo(() => buildThreadFileTree(state.activeThread?.files ?? []), [state.activeThread?.files]);
+  const mentionMatch = useMemo(
+    () => getTaskAgentMentionMatch(state.composerDraft, composerCursor),
+    [composerCursor, state.composerDraft],
   );
+
+  useEffect(() => {
+    setMentionIndex(0);
+  }, [mentionMatch?.query]);
+
+  const toggleDirectory = (path: string) => {
+    setCollapsedDirectories((current) => ({ ...current, [path]: !current[path] }));
+  };
+
+  const selectMention = (mention: string, matchOverride?: typeof mentionMatch) => {
+    const activeMatch = matchOverride ?? mentionMatch;
+    if (!activeMatch) {
+      return;
+    }
+    const nextValue = applyTaskAgentMention(state.composerDraft, activeMatch, mention);
+    const nextCursor = activeMatch.rangeStart + mention.length + 1;
+    state.setComposerDraft(nextValue);
+    setComposerCursor(nextCursor);
+    setMentionIndex(0);
+    requestAnimationFrame(() => {
+      composerRef.current?.focus();
+      composerRef.current?.setSelectionRange(nextCursor, nextCursor);
+    });
+  };
+
+  const renderFileTree = (nodes: ThreadFileTreeNode[], depth = 0): ReactNode =>
+    nodes.map((node) => {
+      if (node.kind === "directory") {
+        const isCollapsed = Boolean(collapsedDirectories[node.path]);
+        return (
+          <div className="tasks-thread-file-tree-branch" key={node.id}>
+            <button
+              className={`tasks-thread-file-tree-node is-directory${node.changed ? " is-changed" : ""}`}
+              onClick={() => toggleDirectory(node.path)}
+              style={{ paddingLeft: `${10 + depth * 14}px` }}
+              type="button"
+            >
+              <span className="tasks-thread-file-tree-caret">{isCollapsed ? "▸" : "▾"}</span>
+              <span className="tasks-thread-file-tree-name">{node.name}</span>
+            </button>
+            {!isCollapsed && node.children ? renderFileTree(node.children, depth + 1) : null}
+          </div>
+        );
+      }
+      return (
+        <button
+          className={`tasks-thread-file-tree-node is-file${state.selectedFilePath === node.path ? " is-active" : ""}${node.changed ? " is-changed" : ""}`}
+          key={node.id}
+          onClick={() => state.setSelectedFilePath(node.path)}
+          style={{ paddingLeft: `${28 + depth * 14}px` }}
+          type="button"
+        >
+          <span className="tasks-thread-file-tree-name">{node.name}</span>
+          <small>{node.changed ? "changed" : "tracked"}</small>
+        </button>
+      );
+    });
+
+  useEffect(() => {
+    const node = conversationRef.current;
+    if (!node) {
+      return;
+    }
+    node.scrollTop = node.scrollHeight;
+  }, [state.activeThread?.messages.length, liveAgents.length, state.pendingApprovals.length, state.selectedFileDiff]);
 
   return (
     <section className="tasks-thread-layout workspace-tab-panel">
       <aside className="tasks-thread-nav">
         <div className="tasks-thread-nav-actions">
           <button className="tasks-thread-new-button" onClick={handleNewThread} type="button">
-            새 스레드
+            NEW THREAD
           </button>
           <button className="tasks-thread-new-button" onClick={() => void state.openProjectDirectory()} type="button">
             프로젝트 열기
           </button>
+          <div className="tasks-thread-project-card">
+            <strong>프로젝트</strong>
+            <span title={state.projectPath || props.cwd}>
+              {state.projectPath || props.cwd}
+            </span>
+          </div>
         </div>
         <div className="tasks-thread-nav-copy">
-          <strong>스레드</strong>
-          <span>{state.loading ? "동기화 중" : `${state.threads.length}개`}</span>
+          <strong>프로젝트 트리</strong>
+          <span>{state.loading ? "동기화 중" : `${state.projectGroups.length}개`}</span>
         </div>
-        <div className="tasks-thread-list">
-          {state.threads.length === 0 ? (
-            <p className="tasks-thread-empty-copy">아직 스레드가 없습니다</p>
-          ) : (
-            state.threads.map((item) => {
-              return (
-                <article
-                  className={`tasks-thread-list-row${state.activeThreadId === item.thread.threadId ? " is-active" : ""}`}
-                  key={item.thread.threadId}
+        <div className="tasks-thread-project-tree">
+          {state.projectGroups.map((group) => (
+            <section className={`tasks-thread-project-node${group.isSelected ? " is-selected" : ""}`} key={group.projectPath}>
+              <div className="tasks-thread-project-node-head">
+                <button className="tasks-thread-project-node-select" onClick={() => state.selectProject(group.projectPath)} type="button">
+                  <strong>{group.label}</strong>
+                  <span>{state.loading && group.isSelected ? "동기화 중" : `${group.threads.length}개`}</span>
+                </button>
+                <button
+                  aria-label={`${group.label} remove`}
+                  className="tasks-thread-project-node-remove"
+                  onClick={() => state.removeProject(group.projectPath)}
+                  type="button"
                 >
-                  <button
-                    className={`tasks-thread-list-item${state.activeThreadId === item.thread.threadId ? " is-active" : ""}`}
-                    onClick={() => void state.selectThread(item.thread.threadId)}
-                    type="button"
-                  >
-                    <div className="tasks-thread-list-title-row">
-                      <strong>{displayThreadTitle(item.thread.title)}</strong>
-                      <span>{item.thread.updatedAt.slice(11, 16)}</span>
-                    </div>
-                    {item.workflowSummary ? (
-                      <div className="tasks-thread-list-meta-row">
-                        <span className={`tasks-thread-list-stage is-${item.workflowSummary.status}`}>
-                          {getThreadStageLabel(item.workflowSummary.currentStageId)}
-                        </span>
-                        {item.workflowSummary.blocked ? <small>차단됨</small> : null}
-                      </div>
-                    ) : null}
-                  </button>
-                </article>
-              );
-            })
-          )}
+                  <img alt="" aria-hidden="true" src="/xmark-small-svgrepo-com.svg" />
+                </button>
+              </div>
+              <small className="tasks-thread-project-node-path" title={group.projectPath}>
+                {group.projectPath}
+              </small>
+              <div className="tasks-thread-list">
+                {group.threads.length === 0 ? (
+                  <p className="tasks-thread-empty-copy">이 프로젝트에는 아직 스레드가 없습니다</p>
+                ) : (
+                  group.threads.map((item) => {
+                    return (
+                      <article
+                        className={`tasks-thread-list-row${state.activeThreadId === item.thread.threadId ? " is-active" : ""}`}
+                        key={item.thread.threadId}
+                      >
+                        <button
+                          className={`tasks-thread-list-item${state.activeThreadId === item.thread.threadId ? " is-active" : ""}`}
+                          onClick={() => void state.selectThread(item.thread.threadId)}
+                          type="button"
+                        >
+                          <div className="tasks-thread-list-title-row">
+                            <strong>{displayThreadTitle(item.thread.title)}</strong>
+                          </div>
+                          {item.workflowSummary ? (
+                            <div className="tasks-thread-list-meta-row">
+                              <span className={`tasks-thread-list-stage is-${item.workflowSummary.status}`}>
+                                {getThreadStageLabel(item.workflowSummary.currentStageId)}
+                              </span>
+                              {item.workflowSummary.blocked ? <small>차단됨</small> : null}
+                            </div>
+                          ) : null}
+                        </button>
+                      </article>
+                    );
+                  })
+                )}
+              </div>
+            </section>
+          ))}
         </div>
       </aside>
 
@@ -296,7 +434,7 @@ export default function TasksPage(props: TasksPageProps) {
               )
             ) : null}
             <p>
-              {displayThreadPath(state.activeThread?.task.worktreePath || state.activeThread?.task.workspacePath || state.projectPath || props.cwd)}
+              {displayThreadPath(state.projectPath || state.activeThread?.task.worktreePath || state.activeThread?.task.workspacePath || props.cwd)}
             </p>
           </div>
           {state.activeThread ? (
@@ -313,7 +451,7 @@ export default function TasksPage(props: TasksPageProps) {
           ) : null}
         </header>
 
-        <div className="tasks-thread-conversation-scroll">
+        <div className="tasks-thread-conversation-scroll" ref={conversationRef}>
           {!state.activeThread ? (
             <section className="tasks-thread-empty-state">
               <strong>요청부터 시작하세요</strong>
@@ -334,6 +472,13 @@ export default function TasksPage(props: TasksPageProps) {
                     );
                   })
                 )}
+                {liveAgents.map((agent) => (
+                  <article className="tasks-thread-message-row is-assistant is-live-placeholder" key={`live:${agent.agentId}`}>
+                    <span className="tasks-thread-message-label">{agent.label}</span>
+                    <div className="tasks-thread-log-line">작업 중입니다...</div>
+                    {agent.latestArtifactPath ? <small className="tasks-thread-message-artifact">{agent.latestArtifactPath}</small> : null}
+                  </article>
+                ))}
               </section>
 
               {state.pendingApprovals.length > 0 ? (
@@ -357,6 +502,16 @@ export default function TasksPage(props: TasksPageProps) {
                   ))}
                 </section>
               ) : null}
+
+              {state.activeThread && state.selectedFilePath ? (
+                <section className="tasks-thread-main-diff-panel">
+                  <div className="tasks-thread-section-head">
+                    <strong>변경 내용</strong>
+                    <span>{state.selectedFilePath}</span>
+                  </div>
+                  <pre>{state.selectedFileDiff || "선택한 파일의 변경 내용을 아직 표시할 수 없습니다."}</pre>
+                </section>
+              ) : null}
             </>
           )}
         </div>
@@ -371,20 +526,53 @@ export default function TasksPage(props: TasksPageProps) {
               {liveAgents.map((agent) => (
                 <article
                   className="tasks-thread-running-row"
-                  key={agent.id}
-                  onClick={() => void state.openAgent(agent)}
+                  key={agent.agentId}
+                  onClick={() => void state.openAgent({
+                    id: agent.agentId,
+                    threadId: state.activeThread?.thread.threadId ?? "",
+                    label: agent.label,
+                    roleId: agent.roleId,
+                    status: agent.status,
+                    summary: agent.summary,
+                    worktreePath: state.activeThread?.task.worktreePath || state.activeThread?.task.workspacePath || null,
+                    lastUpdatedAt: agent.updatedAt,
+                  })}
                   onKeyDown={(event) => {
                     if (event.key === "Enter" || event.key === " ") {
                       event.preventDefault();
-                      void state.openAgent(agent);
+                      void state.openAgent({
+                        id: agent.agentId,
+                        threadId: state.activeThread?.thread.threadId ?? "",
+                        label: agent.label,
+                        roleId: agent.roleId,
+                        status: agent.status,
+                        summary: agent.summary,
+                        worktreePath: state.activeThread?.task.worktreePath || state.activeThread?.task.workspacePath || null,
+                        lastUpdatedAt: agent.updatedAt,
+                      });
                     }
                   }}
                   role="button"
                   tabIndex={0}
                 >
                   <div className="tasks-thread-running-copy">
-                    <strong className={`role-${agent.roleId}`}>{agent.label}</strong>
-                    <span>{displayStageStatus(agent.status)}</span>
+                    <div className="tasks-thread-running-meta">
+                      <strong className={`role-${agent.roleId}`}>{agent.label}</strong>
+                      <span>{displayStageStatus(agent.status)}</span>
+                    </div>
+                    {agent.summary ? <small className="tasks-thread-running-summary">{agent.summary}</small> : null}
+                    {agent.latestArtifactPath ? (
+                      <button
+                        className="tasks-thread-running-artifact"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          state.openKnowledgeEntryForArtifact(agent.latestArtifactPath);
+                        }}
+                        type="button"
+                      >
+                        {displayArtifactName(agent.latestArtifactPath)}
+                      </button>
+                    ) : null}
                   </div>
                 </article>
               ))}
@@ -417,11 +605,35 @@ export default function TasksPage(props: TasksPageProps) {
             aria-label="Tasks composer"
             className="tasks-thread-composer-input"
             onKeyDown={onComposerKeyDown}
+            onClick={(event) => setComposerCursor(event.currentTarget.selectionStart ?? 0)}
+            onKeyUp={(event) => setComposerCursor(event.currentTarget.selectionStart ?? 0)}
             placeholder="Describe the Unity change or use @designer @architect @implementer @playtest @techart @tools @release @docs"
             rows={1}
             value={state.composerDraft}
-            onChange={(event) => state.setComposerDraft(event.target.value)}
+            onChange={(event) => {
+              setComposerCursor(event.target.selectionStart ?? event.target.value.length);
+              state.setComposerDraft(event.target.value);
+            }}
           />
+          {mentionMatch ? (
+            <div className="tasks-thread-mention-menu" role="listbox">
+              {mentionMatch.options.map((option, index) => (
+                <button
+                  aria-selected={index === mentionIndex}
+                  className={`tasks-thread-mention-option${index === mentionIndex ? " is-active" : ""}`}
+                  key={option.presetId}
+                  onMouseDown={(event) => {
+                    event.preventDefault();
+                    selectMention(option.mention);
+                  }}
+                  type="button"
+                >
+                  <strong>{option.mention}</strong>
+                  <span>{option.label}</span>
+                </button>
+              ))}
+            </div>
+          ) : null}
           <div className="question-input-footer tasks-thread-composer-toolbar">
             <div className="agents-composer-left tasks-thread-composer-controls">
               <button
@@ -575,110 +787,108 @@ export default function TasksPage(props: TasksPageProps) {
                 <div className="tasks-thread-section-head">
                   <strong>백그라운드 에이전트</strong>
                   <span>{state.activeThread.agents.length}</span>
-                  <button
-                    aria-label={isAgentsCollapsed ? "Expand background agents" : "Collapse background agents"}
-                    className="tasks-thread-section-toggle"
-                    onClick={() => setIsAgentsCollapsed((current) => !current)}
-                    type="button"
-                  >
-                    <img alt="" aria-hidden="true" src={isAgentsCollapsed ? "/down-arrow.svg" : "/up-arrow.svg"} />
-                  </button>
                 </div>
-                {!isAgentsCollapsed ? (
-                  <>
-                    <div className="tasks-thread-agent-list">
-                      {state.activeThread.agents.length === 0 ? (
-                        <p className="tasks-thread-empty-copy">아직 에이전트가 없습니다</p>
-                      ) : (
-                        state.activeThread.agents.map((agent) => (
-                          <article
-                            className={`tasks-thread-agent-row${state.selectedAgentId === agent.id ? " is-selected" : ""}`}
-                            key={agent.id}
-                            onClick={() => void state.openAgent(agent)}
-                            onKeyDown={(event) => {
-                              if (event.key === "Enter" || event.key === " ") {
-                                event.preventDefault();
-                                void state.openAgent(agent);
-                              }
-                            }}
-                            role="button"
-                            tabIndex={0}
-                          >
-                            <div className="tasks-thread-agent-main">
-                              <div className="tasks-thread-agent-name-slot">
-                                {editingAgentId === agent.id ? (
-                                  <input
-                                    autoFocus
-                                    className={`tasks-thread-agent-inline-input role-${agent.roleId}`}
-                                    onBlur={() => commitAgentLabel(agent.id, agent.label)}
-                                    onChange={(event) => handleAgentLabelChange(agent.id, event.target.value)}
-                                    onClick={(event) => event.stopPropagation()}
-                                    onKeyDown={(event) => {
-                                      if (event.key === "Enter") {
-                                        event.preventDefault();
-                                        commitAgentLabel(agent.id, agent.label);
-                                      }
-                                      if (event.key === "Escape") {
-                                        event.preventDefault();
-                                        setAgentDraftLabels((current) => ({ ...current, [agent.id]: agent.label }));
-                                        setEditingAgentId("");
-                                      }
-                                    }}
-                                    value={agentDraftLabels[agent.id] ?? agent.label}
-                                  />
-                                ) : (
-                                  <button
-                                    className={`tasks-thread-agent-label-button role-${agent.roleId}`}
-                                    onClick={(event) => {
-                                      event.stopPropagation();
-                                      setAgentDraftLabels((current) => ({ ...current, [agent.id]: current[agent.id] ?? agent.label }));
-                                      setEditingAgentId(agent.id);
-                                    }}
-                                    type="button"
-                                  >
-                                    {agent.label}
-                                  </button>
-                                )}
-                              </div>
-                              <span className="tasks-thread-agent-meta">
-                                {agent.worktreePath || state.activeThread?.task.workspacePath || "로컬"}
-                              </span>
-                            </div>
-                            <div className="tasks-thread-agent-side">
-                              <span className={`tasks-thread-agent-status is-${agent.status}`}>{displayStageStatus(agent.status)}</span>
-                              <div className="tasks-thread-agent-actions">
-                                <button
-                                  aria-label={`Remove ${agent.label}`}
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    void state.removeAgent(agent.id);
-                                  }}
-                                  type="button"
-                                >
-                                  <img alt="" aria-hidden="true" className="tasks-thread-agent-action-icon" src="/xmark.svg" />
-                                </button>
-                              </div>
-                            </div>
-                          </article>
-                        ))
-                      )}
-                    </div>
-                    <div className="tasks-thread-agent-add-row">
-                      {(UNITY_TASK_AGENT_ORDER as ThreadRoleId[])
-                        .filter((roleId) => !(state.activeThread?.agents ?? []).some((agent) => agent.roleId === roleId))
-                        .map((roleId) => (
-                          <button key={roleId} onClick={() => void state.addAgent(roleId, getTaskAgentLabel(roleId))} type="button">
-                            {`+ ${getTaskAgentLabel(roleId)}`}
-                          </button>
-                        ))}
-                    </div>
-                  </>
-                ) : null}
+                <div className="tasks-thread-agent-list">
+                  {state.activeThread.agents.length === 0 ? (
+                    <p className="tasks-thread-empty-copy">아직 에이전트가 없습니다</p>
+                  ) : (
+                    state.activeThread.agents.map((agent) => (
+                      <article
+                        className={`tasks-thread-agent-row${state.selectedAgentId === agent.id ? " is-selected" : ""}`}
+                        key={agent.id}
+                        onClick={() => void state.openAgent(agent)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            void state.openAgent(agent);
+                          }
+                        }}
+                        role="button"
+                        tabIndex={0}
+                      >
+                        <div className="tasks-thread-agent-main">
+                          <div className="tasks-thread-agent-name-slot">
+                            {editingAgentId === agent.id ? (
+                              <input
+                                autoFocus
+                                className={`tasks-thread-agent-inline-input role-${agent.roleId}`}
+                                onBlur={() => commitAgentLabel(agent.id, agent.label)}
+                                onChange={(event) => handleAgentLabelChange(agent.id, event.target.value)}
+                                onClick={(event) => event.stopPropagation()}
+                                onKeyDown={(event) => {
+                                  if (event.key === "Enter") {
+                                    event.preventDefault();
+                                    commitAgentLabel(agent.id, agent.label);
+                                  }
+                                  if (event.key === "Escape") {
+                                    event.preventDefault();
+                                    setAgentDraftLabels((current) => ({ ...current, [agent.id]: agent.label }));
+                                    setEditingAgentId("");
+                                  }
+                                }}
+                                value={agentDraftLabels[agent.id] ?? agent.label}
+                              />
+                            ) : (
+                              <button
+                                className={`tasks-thread-agent-label-button role-${agent.roleId}`}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  setAgentDraftLabels((current) => ({ ...current, [agent.id]: current[agent.id] ?? agent.label }));
+                                  setEditingAgentId(agent.id);
+                                }}
+                                type="button"
+                              >
+                                {agent.label}
+                              </button>
+                            )}
+                          </div>
+                          <span className="tasks-thread-agent-meta">
+                            {agent.worktreePath || state.activeThread?.task.workspacePath || "로컬"}
+                          </span>
+                        </div>
+                        <div className="tasks-thread-agent-side">
+                          <span className={`tasks-thread-agent-status is-${agent.status}`}>{displayStageStatus(agent.status)}</span>
+                          <div className="tasks-thread-agent-actions">
+                            <button
+                              aria-label={`Remove ${agent.label}`}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                void state.removeAgent(agent.id);
+                              }}
+                              type="button"
+                            >
+                              <img alt="" aria-hidden="true" className="tasks-thread-agent-action-icon" src="/xmark.svg" />
+                            </button>
+                          </div>
+                        </div>
+                      </article>
+                    ))
+                  )}
+                </div>
+                <div className="tasks-thread-agent-add-row">
+                  {(UNITY_TASK_AGENT_ORDER as ThreadRoleId[])
+                    .filter((roleId) => !(state.activeThread?.agents ?? []).some((agent) => agent.roleId === roleId))
+                    .map((roleId) => (
+                      <button key={roleId} onClick={() => void state.addAgent(roleId, getTaskAgentLabel(roleId))} type="button">
+                        {`+ ${getTaskAgentLabel(roleId)}`}
+                      </button>
+                    ))}
+                </div>
               </section>
-              <section className={`tasks-thread-files-panel${(state.activeThread?.files.length ?? 0) === 0 ? " is-empty" : ""}`}>
-                <div className="tasks-thread-section-head">
+              <section className={`tasks-thread-files-panel${(state.activeThread?.files.length ?? 0) === 0 ? " is-empty" : ""}${isFilesExpanded ? " is-expanded" : ""}`}>
+                <div className="tasks-thread-section-head tasks-thread-section-head-with-tools">
                   <strong>파일</strong>
-                  <span>{state.activeThread?.files.length ?? 0}</span>
+                  <div className="tasks-thread-section-tools">
+                    <span className="tasks-thread-section-count">{state.activeThread?.files.length ?? 0}</span>
+                    <button
+                      aria-label={isFilesExpanded ? "Collapse files" : "Expand files"}
+                      className="tasks-thread-section-toggle"
+                      onClick={() => setIsFilesExpanded((current) => !current)}
+                      type="button"
+                    >
+                      <img alt="" aria-hidden="true" src={isFilesExpanded ? "/up-arrow.svg" : "/down-arrow.svg"} />
+                    </button>
+                  </div>
                 </div>
                 {state.activeThread?.changedFiles.length ? (
                   <div className="tasks-thread-changed-files-strip">
@@ -696,31 +906,12 @@ export default function TasksPage(props: TasksPageProps) {
                   </div>
                 ) : null}
                 {(state.activeThread?.files.length ?? 0) > 0 ? (
-                  <div className="tasks-thread-file-list">
-                    {(state.activeThread?.files ?? []).map((file) => (
-                      <button
-                        className={state.selectedFilePath === file.path ? "is-active" : ""}
-                        key={file.path}
-                        onClick={() => state.setSelectedFilePath(file.path)}
-                        type="button"
-                      >
-                        <span>{file.path}</span>
-                        <small>{file.changed ? "changed" : "tracked"}</small>
-                      </button>
-                    ))}
+                  <div className="tasks-thread-file-tree">
+                    {renderFileTree(fileTree)}
                   </div>
                 ) : (
                   <div className="tasks-thread-files-empty">연결된 파일이 아직 없습니다.</div>
                 )}
-                {state.selectedFilePath ? (
-                  <div className="tasks-thread-file-preview">
-                    <div className="tasks-thread-section-head">
-                      <strong>{state.selectedFilePath}</strong>
-                      <span>미리보기</span>
-                    </div>
-                    <pre>{state.selectedFileContent || ""}</pre>
-                  </div>
-                ) : null}
               </section>
             </section>
           ) : null}
@@ -793,16 +984,6 @@ export default function TasksPage(props: TasksPageProps) {
           ) : null}
 
           {state.activeThread ? (
-            <section className="tasks-thread-detail-text-panel">
-              <div className="tasks-thread-section-head">
-                <strong>변경 내용</strong>
-                <span>{state.selectedFilePath || "선택된 파일 없음"}</span>
-              </div>
-              <pre>{state.selectedFileDiff || "선택한 파일의 변경 내용을 아직 표시할 수 없습니다."}</pre>
-            </section>
-          ) : null}
-
-          {state.activeThread ? (
             <section className="tasks-thread-agent-detail-panel">
               {state.selectedAgentDetail ? (
                 <>
@@ -828,6 +1009,32 @@ export default function TasksPage(props: TasksPageProps) {
                       <strong>{state.selectedAgentDetail.worktreePath || state.activeThread?.task.workspacePath || "-"}</strong>
                     </div>
                   </div>
+                  <section className="tasks-thread-detail-text-panel is-inline">
+                    <div className="tasks-thread-section-head">
+                      <strong>Codex 세션</strong>
+                      <div className="tasks-thread-section-actions">
+                        <span>{displayStageStatus(state.selectedAgentDetail.codexThreadStatus || "idle")}</span>
+                        <button
+                          className="tasks-thread-section-action-button"
+                          disabled={!state.selectedAgentDetail.codexThreadId}
+                          onClick={() => void state.compactSelectedAgentCodexThread()}
+                          type="button"
+                        >
+                          COMPACT
+                        </button>
+                      </div>
+                    </div>
+                    <div className="tasks-thread-workflow-meta tasks-thread-agent-detail-grid">
+                      <div>
+                        <span>스레드</span>
+                        <strong>{state.selectedAgentDetail.codexThreadId || "-"}</strong>
+                      </div>
+                      <div>
+                        <span>턴</span>
+                        <strong>{state.selectedAgentDetail.codexTurnId || "-"}</strong>
+                      </div>
+                    </div>
+                  </section>
                   <p className="tasks-thread-agent-summary">{state.selectedAgentDetail.agent.summary || "아직 요약이 없습니다."}</p>
                   <section className={`tasks-thread-detail-text-panel is-inline${state.selectedAgentDetail.lastPrompt ? "" : " is-empty"}`}>
                     <div className="tasks-thread-section-head">
@@ -846,20 +1053,19 @@ export default function TasksPage(props: TasksPageProps) {
                     ) : (
                       <ul>
                         {state.selectedAgentDetail.artifactPaths.map((path) => (
-                          <li key={path}>{path}</li>
+                          <li key={path}>
+                            <button
+                              className="tasks-thread-artifact-link"
+                              onClick={() => state.openKnowledgeEntryForArtifact(path)}
+                              type="button"
+                            >
+                              {path}
+                            </button>
+                          </li>
                         ))}
                       </ul>
                     )}
                   </section>
-                  {state.selectedAgentDetail.latestArtifactPath ? (
-                    <section className="tasks-thread-detail-text-panel is-inline">
-                      <div className="tasks-thread-section-head">
-                        <strong>최신 문서</strong>
-                        <span>{state.selectedAgentDetail.latestArtifactPath}</span>
-                      </div>
-                      <pre>{state.selectedAgentDetail.latestArtifactPreview || "최신 산출물의 텍스트 미리보기를 표시할 수 없습니다."}</pre>
-                    </section>
-                  ) : null}
                 </>
               ) : (
                 <p className="tasks-thread-empty-copy">백그라운드 에이전트를 선택하면 상세 정보를 볼 수 있습니다.</p>

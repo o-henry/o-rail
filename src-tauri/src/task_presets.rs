@@ -12,73 +12,73 @@ pub const UNITY_TASK_AGENT_PRESETS: [TaskAgentPreset; 9] = [
         id: "game_designer",
         label: "GAME DESIGNER",
         studio_role_id: "pm_planner",
-        default_summary: "플레이어 목표, 작업 범위, 핵심 메커닉 의도를 정리하고 있습니다.",
-        default_instruction: "집중할 점: 대상 Unity 기능, 플레이어 목표, 범위, 제약 조건을 한국어로 명확히 정리하세요.",
-        discussion_line: "GAME DESIGNER: 기능 목표, 플레이 판타지, 구현 범위를 한국어로 정리하고 있습니다.",
+        default_summary: "플레이어 목표, 작업 범위, 핵심 메커닉 의도와 기능 명세를 정리하고 있습니다.",
+        default_instruction: "집중할 점: 대상 Unity 기능, 플레이어 목표, 범위, 제약 조건, 기능 명세와 open question을 한국어로 명확히 정리하세요.",
+        discussion_line: "GAME DESIGNER: 기능 목표, 플레이 판타지, 구현 범위와 기능 명세를 한국어로 정리하고 있습니다.",
     },
     TaskAgentPreset {
         id: "level_designer",
         label: "LEVEL DESIGNER",
         studio_role_id: "pm_creative_director",
-        default_summary: "레벨 흐름, 전투 템포, 공간 연출 의도를 정리하고 있습니다.",
-        default_instruction: "집중할 점: 씬 흐름, 전투 템포, 레벨별 설계 메모를 한국어로 정리하세요.",
-        discussion_line: "LEVEL DESIGNER: 씬 흐름, 템포, 전투 가독성을 한국어로 정리하고 있습니다.",
+        default_summary: "레벨 흐름, 전투 템포, 공간 연출, 플레이 동선을 정리하고 있습니다.",
+        default_instruction: "집중할 점: 씬 흐름, 전투 템포, 레벨별 설계 메모, encounter와 pacing 문제를 한국어로 정리하세요.",
+        discussion_line: "LEVEL DESIGNER: 씬 흐름, 템포, 동선, 전투 가독성을 한국어로 정리하고 있습니다.",
     },
     TaskAgentPreset {
         id: "unity_architect",
         label: "UNITY ARCHITECT",
         studio_role_id: "system_programmer",
-        default_summary: "Unity 아키텍처, 데이터 흐름, 통합 리스크를 검토하고 있습니다.",
-        default_instruction: "집중할 점: 아키텍처, 시스템 경계, 데이터 흐름, Unity 통합 리스크를 한국어로 검토하세요.",
-        discussion_line: "UNITY ARCHITECT: 아키텍처 경계, 의존성, 통합 리스크를 한국어로 점검하고 있습니다.",
+        default_summary: "Unity 아키텍처, 코드맵, 데이터 흐름, 성능과 통합 리스크를 검토하고 있습니다.",
+        default_instruction: "집중할 점: 아키텍처, 시스템 경계, 코드맵, 데이터 흐름, 성능 병목, Unity 통합 리스크와 리뷰 포인트를 한국어로 검토하세요.",
+        discussion_line: "UNITY ARCHITECT: 아키텍처 경계, 코드 구조, 성능 병목, 통합 리스크를 한국어로 점검하고 있습니다.",
     },
     TaskAgentPreset {
         id: "unity_implementer",
         label: "UNITY IMPLEMENTER",
         studio_role_id: "client_programmer",
-        default_summary: "Unity 게임플레이, UI, 콘텐츠 구현 작업을 준비하고 있습니다.",
-        default_instruction: "집중할 점: 요청된 Unity 변경을 안전하게 구현하고, 수정 파일과 결과를 한국어로 요약하세요.",
-        discussion_line: "UNITY IMPLEMENTER: 구현 경로와 수정 가능성이 높은 파일을 한국어로 정리하고 있습니다.",
+        default_summary: "Unity 게임플레이, UI, C# 구현과 디버깅 작업을 준비하고 있습니다.",
+        default_instruction: "집중할 점: 요청된 Unity 변경을 안전하게 구현하고, C# 코드 수정, 버그 디버깅, UI 수정 결과와 핵심 diff를 한국어로 요약하세요.",
+        discussion_line: "UNITY IMPLEMENTER: 구현 경로, 디버깅 포인트, 수정 가능성이 높은 파일을 한국어로 정리하고 있습니다.",
     },
     TaskAgentPreset {
         id: "technical_artist",
         label: "TECHNICAL ARTIST",
         studio_role_id: "art_pipeline",
-        default_summary: "아트 파이프라인, 셰이더, 프리팹, 에셋 연결 제약을 확인하고 있습니다.",
-        default_instruction: "집중할 점: Unity 통합을 위한 프리팹, 셰이더, VFX, 콘텐츠 연결 제약을 한국어로 검토하세요.",
-        discussion_line: "TECHNICAL ARTIST: 에셋 연결, 프리팹 안전성, 렌더링 제약을 한국어로 점검하고 있습니다.",
+        default_summary: "아트 파이프라인, 셰이더, 프리팹, VFX, 에셋 연결 제약을 확인하고 있습니다.",
+        default_instruction: "집중할 점: Unity 통합을 위한 프리팹, 셰이더, VFX, 렌더링, 콘텐츠 연결 제약과 시각 품질 리스크를 한국어로 검토하세요.",
+        discussion_line: "TECHNICAL ARTIST: 에셋 연결, 프리팹 안전성, 셰이더/VFX 제약을 한국어로 점검하고 있습니다.",
     },
     TaskAgentPreset {
         id: "unity_editor_tools",
         label: "UNITY EDITOR TOOLS",
         studio_role_id: "tooling_engineer",
-        default_summary: "에디터 툴링, 자동화, 검증 보조 도구를 설계하고 있습니다.",
-        default_instruction: "집중할 점: Unity 에디터 툴, 자동화, 검증 보조 기능을 한국어로 설계하거나 개선하세요.",
-        discussion_line: "UNITY EDITOR TOOLS: 이 작업에 필요한 에디터 자동화와 툴 지원을 한국어로 검토하고 있습니다.",
+        default_summary: "에디터 툴링, 자동화, 검증 보조 도구와 생산성 개선을 설계하고 있습니다.",
+        default_instruction: "집중할 점: Unity 에디터 툴, 자동화, 검증 보조 기능, 개발 생산성 개선 도구를 한국어로 설계하거나 개선하세요.",
+        discussion_line: "UNITY EDITOR TOOLS: 이 작업에 필요한 에디터 자동화, validator, 툴 지원을 한국어로 검토하고 있습니다.",
     },
     TaskAgentPreset {
         id: "qa_playtester",
         label: "QA PLAYTESTER",
         studio_role_id: "qa_engineer",
-        default_summary: "Unity 검증 절차, 재현 케이스, 플레이테스트 항목을 준비하고 있습니다.",
-        default_instruction: "집중할 점: Unity 변경에 대한 플레이테스트 절차, 검증 항목, 회귀 체크를 한국어로 정리하세요.",
-        discussion_line: "QA PLAYTESTER: 검증 범위, 재현 절차, 회귀 체크를 한국어로 정리하고 있습니다.",
+        default_summary: "Unity 검증 절차, 재현 케이스, 테스트 작성과 플레이테스트 항목을 준비하고 있습니다.",
+        default_instruction: "집중할 점: Unity 변경에 대한 플레이테스트 절차, 검증 항목, 회귀 체크, 테스트 시나리오 작성을 한국어로 정리하세요.",
+        discussion_line: "QA PLAYTESTER: 검증 범위, 테스트 시나리오, 재현 절차, 회귀 체크를 한국어로 정리하고 있습니다.",
     },
     TaskAgentPreset {
         id: "release_steward",
         label: "RELEASE STEWARD",
         studio_role_id: "build_release",
-        default_summary: "빌드 상태, 릴리즈 막힘 요소, 최종 통합 준비 상태를 검토하고 있습니다.",
-        default_instruction: "집중할 점: 마감 전에 릴리즈 준비 상태, 빌드 정상 여부, 통합 막힘 요소를 한국어로 확인하세요.",
-        discussion_line: "RELEASE STEWARD: 빌드 상태, 승인 현황, 릴리즈 준비 정도를 한국어로 점검하고 있습니다.",
+        default_summary: "빌드 상태, 릴리즈 막힘 요소, CI와 최종 통합 준비 상태를 검토하고 있습니다.",
+        default_instruction: "집중할 점: 마감 전에 릴리즈 준비 상태, 빌드/CI 정상 여부, 통합 막힘 요소를 한국어로 확인하세요.",
+        discussion_line: "RELEASE STEWARD: 빌드 상태, CI 현황, 승인 상태, 릴리즈 준비 정도를 한국어로 점검하고 있습니다.",
     },
     TaskAgentPreset {
         id: "handoff_writer",
         label: "HANDOFF WRITER",
         studio_role_id: "technical_writer",
-        default_summary: "최종 인계 메모, 알려진 이슈, 다음 단계 문서를 정리하고 있습니다.",
-        default_instruction: "집중할 점: Unity 작업의 최종 인계 내용, 변경 영역, 후속 메모를 한국어로 정리하세요.",
-        discussion_line: "HANDOFF WRITER: 다음 담당자를 위한 인계 문서와 정리 내용을 한국어로 작성하고 있습니다.",
+        default_summary: "최종 인계 메모, 알려진 이슈, 문서화와 다음 단계 문서를 정리하고 있습니다.",
+        default_instruction: "집중할 점: Unity 작업의 최종 인계 내용, 변경 영역, 후속 메모, 문서화를 한국어로 정리하세요.",
+        discussion_line: "HANDOFF WRITER: 다음 담당자를 위한 인계 문서, 문서화, 정리 내용을 한국어로 작성하고 있습니다.",
     },
 ];
 
@@ -115,15 +115,15 @@ pub fn task_team_preset_ids(team: &str) -> Vec<&'static str> {
 
 pub fn canonical_task_agent_id(raw: &str) -> Option<&'static str> {
     match raw.trim().to_lowercase().as_str() {
-        "game_designer" | "designer" | "explorer" => Some("game_designer"),
-        "level_designer" | "level" => Some("level_designer"),
-        "unity_architect" | "architect" | "reviewer" => Some("unity_architect"),
-        "unity_implementer" | "implementer" | "worker" => Some("unity_implementer"),
-        "technical_artist" | "techart" => Some("technical_artist"),
-        "unity_editor_tools" | "tools" => Some("unity_editor_tools"),
-        "qa_playtester" | "playtest" | "qa" => Some("qa_playtester"),
-        "release_steward" | "release" => Some("release_steward"),
-        "handoff_writer" | "docs" => Some("handoff_writer"),
+        "game_designer" | "designer" | "explorer" | "planner" | "spec" | "brief" => Some("game_designer"),
+        "level_designer" | "level" | "encounter" | "pacing" => Some("level_designer"),
+        "unity_architect" | "architect" | "reviewer" | "review" | "codemap" | "code_mapper" | "mapper" | "performance" | "perf" => Some("unity_architect"),
+        "unity_implementer" | "implementer" | "worker" | "csharp" | "csharp_developer" | "debug" | "debugger" | "fixer" | "ui" | "ui_fixer" => Some("unity_implementer"),
+        "technical_artist" | "techart" | "shader" | "vfx" | "prefab" => Some("technical_artist"),
+        "unity_editor_tools" | "tools" | "automation" | "editor" | "validator" => Some("unity_editor_tools"),
+        "qa_playtester" | "playtest" | "qa" | "tester" | "test" | "regression" => Some("qa_playtester"),
+        "release_steward" | "release" | "build" | "ci" => Some("release_steward"),
+        "handoff_writer" | "docs" | "documentation" | "handoff" => Some("handoff_writer"),
         _ => None,
     }
 }
@@ -204,4 +204,20 @@ pub fn next_task_agent_id(current: &str, enabled: &[String]) -> Option<String> {
 
 pub fn is_validation_task_agent(raw: &str) -> bool {
     canonical_task_agent_id(raw) == Some("qa_playtester")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn maps_extended_aliases_to_existing_unity_roles() {
+        assert_eq!(canonical_task_agent_id("codemap"), Some("unity_architect"));
+        assert_eq!(canonical_task_agent_id("performance"), Some("unity_architect"));
+        assert_eq!(canonical_task_agent_id("csharp"), Some("unity_implementer"));
+        assert_eq!(canonical_task_agent_id("debug"), Some("unity_implementer"));
+        assert_eq!(canonical_task_agent_id("validator"), Some("unity_editor_tools"));
+        assert_eq!(canonical_task_agent_id("build"), Some("release_steward"));
+        assert_eq!(canonical_task_agent_id("documentation"), Some("handoff_writer"));
+    }
 }

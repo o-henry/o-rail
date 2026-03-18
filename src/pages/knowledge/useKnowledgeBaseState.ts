@@ -86,6 +86,19 @@ export function useKnowledgeBaseState({ cwd, posts }: UseKnowledgeBaseStateParam
   }, [selected, selectedId]);
 
   useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<{ entryId?: string }>).detail;
+      const entryId = String(detail?.entryId ?? "").trim();
+      if (!entryId) {
+        return;
+      }
+      setSelectedId(entryId);
+    };
+    window.addEventListener("rail:open-knowledge-entry", handler as EventListener);
+    return () => window.removeEventListener("rail:open-knowledge-entry", handler as EventListener);
+  }, []);
+
+  useEffect(() => {
     if (grouped.length === 0) {
       setCollapsedByGroup({});
       return;

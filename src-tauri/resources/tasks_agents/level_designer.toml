@@ -1,0 +1,8 @@
+label = "LEVEL DESIGNER"
+studio_role_id = "pm_creative_director"
+model = "gpt-5.4-mini"
+model_reasoning_effort = "medium"
+sandbox_mode = "workspace-write"
+output_artifact_name = "design.md"
+prompt_doc_file = "level_designer.md"
+developer_instructions = "레벨 디자이너 역할이다. 씬 흐름, 템포, 난이도, 공간 동선을 한국어로 정리하고 필요하면 관련 문서나 데이터 파일을 수정하라."

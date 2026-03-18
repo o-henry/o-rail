@@ -105,6 +105,8 @@ pub struct TaskRecord {
     isolation_requested: String,
     isolation_resolved: String,
     status: String,
+    #[serde(default)]
+    project_path: String,
     workspace_path: String,
     worktree_path: Option<String>,
     branch_name: Option<String>,
@@ -1062,6 +1064,20 @@ pub fn task_create(
     let isolation_requested = normalize_isolation(isolation);
     let task_id = build_task_id(normalized_goal);
     let workspace_resolution = resolve_task_workspace(&project_root, &task_id, &isolation_requested);
+    if isolation_requested == "worktree" && workspace_resolution.isolation_resolved != "worktree" {
+        return Err(
+            workspace_resolution
+                .fallback_reason
+                .unwrap_or_else(|| "failed to create dedicated worktree for task".to_string()),
+        );
+    }
+    if isolation_requested == "branch" && workspace_resolution.isolation_resolved != "branch" {
+        return Err(
+            workspace_resolution
+                .fallback_reason
+                .unwrap_or_else(|| "failed to create dedicated branch for task".to_string()),
+        );
+    }
     let record = TaskRecord {
         task_id: task_id.clone(),
         goal: normalized_goal.to_string(),
@@ -1070,6 +1086,7 @@ pub fn task_create(
         isolation_requested,
         isolation_resolved: workspace_resolution.isolation_resolved,
         status: "active".to_string(),
+        project_path: project_root.to_string_lossy().to_string(),
         workspace_path: workspace_resolution.workspace_path.to_string_lossy().to_string(),
         worktree_path: workspace_resolution.worktree_path.map(|path| path.to_string_lossy().to_string()),
         branch_name: workspace_resolution.branch_name,
@@ -1371,6 +1388,10 @@ mod tests {
         )
         .unwrap();
         assert_eq!(detail.record.team, "duo");
+        assert_eq!(
+            detail.record.project_path,
+            fs::canonicalize(&workspace).unwrap().to_string_lossy().to_string()
+        );
         assert!(detail.artifacts.contains_key("brief"));
         assert!(task_dir(&workspace, &detail.record.task_id).join("task.json").exists());
         let _ = fs::remove_dir_all(workspace);

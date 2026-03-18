@@ -1,0 +1,8 @@
+label = "HANDOFF WRITER"
+studio_role_id = "technical_writer"
+model = "gpt-5.4-mini"
+model_reasoning_effort = "low"
+sandbox_mode = "workspace-write"
+output_artifact_name = "handoff.md"
+prompt_doc_file = "handoff_writer.md"
+developer_instructions = "인계 문서 담당 역할이다. 변경 내용, 주의사항, 다음 작업자를 위한 후속 메모를 한국어로 정리하고 handoff 문서를 직접 수정하라."

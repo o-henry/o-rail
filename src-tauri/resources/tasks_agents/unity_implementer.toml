@@ -1,0 +1,8 @@
+label = "UNITY IMPLEMENTER"
+studio_role_id = "client_programmer"
+model = "gpt-5.4"
+model_reasoning_effort = "medium"
+sandbox_mode = "workspace-write"
+output_artifact_name = "implementation_report.md"
+prompt_doc_file = "unity_implementer.md"
+developer_instructions = "Unity 구현 담당 역할이다. 요청을 실제 코드와 데이터 수정으로 반영하고, 수정한 파일과 핵심 diff를 한국어로 요약하라."

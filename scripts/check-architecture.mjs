@@ -96,17 +96,17 @@ const TEMP_LINE_ALLOWLIST = new Map([
   [
     "src/pages/tasks/TasksPage.tsx",
     {
-      maxLines: 760,
+      maxLines: 920,
       expiresOn: "2026-05-31",
-      reason: "Unity Tasks shell decomposition pending (thread nav/detail panel extraction)",
+      reason: "Unity Tasks shell decomposition pending (detail dock and thread conversation extraction)",
     },
   ],
   [
     "src/pages/tasks/useTasksThreadState.ts",
     {
-      maxLines: 1250,
+      maxLines: 1400,
       expiresOn: "2026-05-31",
-      reason: "Unity Tasks thread state split pending (browser store/actions extraction)",
+      reason: "Unity Tasks thread state split pending (Codex runtime dispatch and browser store/actions extraction)",
     },
   ],
 ]);

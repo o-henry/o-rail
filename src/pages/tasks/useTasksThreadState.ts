@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { KnowledgeFileRef } from "../../features/workflow/types";
 import type { AgenticAction } from "../../features/orchestration/agentic/actionBus";
+import { readKnowledgeEntries } from "../../features/studio/knowledgeIndex";
 import {
   UNITY_DEFAULT_THREAD_PRESET_IDS,
   buildTaskAgentPrompt,
   getDefaultRunPresetIds,
   getTaskAgentDiscussionLine,
   getTaskAgentLabel,
+  getTaskAgentPresetIdByStudioRoleId,
   getTaskAgentStudioRoleId,
   getTaskAgentSummary,
   parseTaskAgentTags,
@@ -23,7 +25,9 @@ import type {
   ThreadRoleId,
 } from "./threadTypes";
 import { THREAD_DETAIL_TABS } from "./threadTypes";
+import { buildProjectThreadGroups, filterBrowserThreadIdsByProject, filterThreadListByProject } from "./threadTree";
 import { deriveThreadWorkflow, deriveThreadWorkflowSummary } from "./threadWorkflow";
+import { extractCodexThreadStatus, extractTaskCodexThreadRuntime } from "./taskCodexThreadRuntime";
 
 type InvokeFn = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
 
@@ -61,6 +65,8 @@ type KnowledgeRetrieveResult = {
 
 const BROWSER_STORE_KEY = "rail.tasks.browser-state.v4";
 const TASKS_PROJECT_PATH_KEY = "rail.tasks.project-path.v1";
+const TASKS_PROJECT_LIST_KEY = "rail.tasks.project-list.v1";
+const TASKS_HIDDEN_PROJECT_LIST_KEY = "rail.tasks.hidden-project-list.v1";
 
 function truncateTitle(input: string): string {
   const trimmed = String(input ?? "").trim();
@@ -169,6 +175,51 @@ function persistTasksProjectPath(path: string) {
   window.localStorage.setItem(TASKS_PROJECT_PATH_KEY, normalized);
 }
 
+function loadTasksProjectList(defaultValue: string): string[] {
+  if (typeof window === "undefined") {
+    return defaultValue.trim() ? [defaultValue.trim()] : [];
+  }
+  try {
+    const raw = window.localStorage.getItem(TASKS_PROJECT_LIST_KEY);
+    const parsed = raw ? (JSON.parse(raw) as unknown) : [];
+    const values = Array.isArray(parsed) ? parsed : [];
+    const normalized = values
+      .map((value) => String(value ?? "").trim())
+      .filter(Boolean);
+    if (defaultValue.trim() && !normalized.includes(defaultValue.trim())) {
+      normalized.push(defaultValue.trim());
+    }
+    return normalized;
+  } catch {
+    return defaultValue.trim() ? [defaultValue.trim()] : [];
+  }
+}
+
+function persistTasksProjectList(paths: string[]) {
+  if (typeof window === "undefined") return;
+  const normalized = [...new Set(paths.map((path) => String(path ?? "").trim()).filter(Boolean))];
+  window.localStorage.setItem(TASKS_PROJECT_LIST_KEY, JSON.stringify(normalized));
+}
+
+function loadHiddenTasksProjectList(): string[] {
+  if (typeof window === "undefined") {
+    return [];
+  }
+  try {
+    const raw = window.localStorage.getItem(TASKS_HIDDEN_PROJECT_LIST_KEY);
+    const parsed = raw ? (JSON.parse(raw) as unknown) : [];
+    return Array.isArray(parsed) ? parsed.map((value) => String(value ?? "").trim()).filter(Boolean) : [];
+  } catch {
+    return [];
+  }
+}
+
+function persistHiddenTasksProjectList(paths: string[]) {
+  if (typeof window === "undefined") return;
+  const normalized = [...new Set(paths.map((path) => String(path ?? "").trim()).filter(Boolean))];
+  window.localStorage.setItem(TASKS_HIDDEN_PROJECT_LIST_KEY, JSON.stringify(normalized));
+}
+
 function withDerivedWorkflow(detail: ThreadDetail): ThreadDetail {
   return {
     ...detail,
@@ -180,6 +231,7 @@ function toThreadListItem(detail: ThreadDetail): ThreadListItem {
   const workflow = detail.workflow ?? deriveThreadWorkflow(detail);
   return {
     thread: detail.thread,
+    projectPath: detail.task.projectPath || detail.task.workspacePath,
     agentCount: detail.agents.length,
     pendingApprovalCount: detail.approvals.filter((approval) => approval.status === "pending").length,
     workflowSummary: deriveThreadWorkflowSummary({ ...detail, workflow }),
@@ -300,6 +352,7 @@ function buildBrowserThread(
       isolationRequested: "auto",
       isolationResolved: "current-repo",
       status: "active",
+      projectPath,
       workspacePath: projectPath,
       worktreePath: projectPath,
       branchName: "main",
@@ -342,8 +395,10 @@ function buildBrowserAgentDetail(detail: ThreadDetail, agent: BackgroundAgentRec
   };
 }
 
-function browserPreviewContent(path: string): string {
-  return ["// Browser preview", `// ${path}`, "", "This preview is generated for TASKS browser verification."].join("\n");
+function findLatestCodexResponseJsonPath(paths: string[]): string {
+  return [...paths]
+    .reverse()
+    .find((path) => /(?:^|[\\/])response\.json$/i.test(String(path ?? "").trim())) ?? "";
 }
 
 function browserDiffContent(path: string): string {
@@ -359,7 +414,9 @@ function browserDiffContent(path: string): string {
 
 export function useTasksThreadState(params: Params) {
   const initialProjectPath = useMemo(() => loadTasksProjectPath(params.cwd), [params.cwd]);
-  const [threads, setThreads] = useState<ThreadListItem[]>([]);
+  const initialProjectList = useMemo(() => loadTasksProjectList(params.cwd), [params.cwd]);
+  const initialHiddenProjectList = useMemo(() => loadHiddenTasksProjectList(), []);
+  const [threadItems, setThreadItems] = useState<ThreadListItem[]>([]);
   const [activeThreadId, setActiveThreadId] = useState("");
   const [activeThread, setActiveThread] = useState<ThreadDetail | null>(null);
   const [loading, setLoading] = useState(false);
@@ -371,11 +428,35 @@ export function useTasksThreadState(params: Params) {
   const [selectedAgentId, setSelectedAgentId] = useState("");
   const [selectedAgentDetail, setSelectedAgentDetail] = useState<ThreadAgentDetail | null>(null);
   const [selectedFilePath, setSelectedFilePath] = useState("");
-  const [selectedFileContent, setSelectedFileContent] = useState("");
   const [selectedFileDiff, setSelectedFileDiff] = useState("");
   const [attachedFiles, setAttachedFiles] = useState<KnowledgeFileRef[]>([]);
   const [projectPath, setProjectPath] = useState(initialProjectPath);
+  const [projectPaths, setProjectPaths] = useState<string[]>(initialProjectList);
+  const [hiddenProjectPaths, setHiddenProjectPaths] = useState<string[]>(initialHiddenProjectList);
+  const [liveRoleNotes, setLiveRoleNotes] = useState<Partial<Record<ThreadRoleId, { message: string; updatedAt: string }>>>({});
   const browserStoreRef = useRef<BrowserStore>(loadBrowserStore());
+  const visibleThreadItems = useMemo(
+    () => threadItems.filter((item) => !hiddenProjectPaths.includes(String(item.projectPath || item.thread.cwd || "").trim())),
+    [hiddenProjectPaths, threadItems],
+  );
+  const visibleProjectPaths = useMemo(
+    () => projectPaths.filter((path) => !hiddenProjectPaths.includes(String(path ?? "").trim())),
+    [hiddenProjectPaths, projectPaths],
+  );
+  const threads = useMemo(() => filterThreadListByProject(visibleThreadItems, projectPath || params.cwd), [params.cwd, projectPath, visibleThreadItems]);
+  const projectGroups = useMemo(
+    () => buildProjectThreadGroups(visibleThreadItems, projectPath || params.cwd, visibleProjectPaths, params.cwd),
+    [params.cwd, projectPath, visibleProjectPaths, visibleThreadItems],
+  );
+
+  const rememberProjectPath = useCallback((nextPath: string) => {
+    const normalized = String(nextPath ?? "").trim();
+    if (!normalized) {
+      return;
+    }
+    setHiddenProjectPaths((current) => current.filter((path) => path !== normalized));
+    setProjectPaths((current) => (current.includes(normalized) ? current : [...current, normalized]));
+  }, []);
 
   useEffect(() => {
     setProjectPath((current) => current || initialProjectPath);
@@ -385,6 +466,46 @@ export function useTasksThreadState(params: Params) {
     persistTasksProjectPath(projectPath);
   }, [projectPath]);
 
+  useEffect(() => {
+    persistTasksProjectList(projectPaths);
+  }, [projectPaths]);
+
+  useEffect(() => {
+    persistHiddenTasksProjectList(hiddenProjectPaths);
+  }, [hiddenProjectPaths]);
+
+  useEffect(() => {
+    const discoveredPaths = threadItems
+      .map((item) => String(item.projectPath || item.thread.cwd || "").trim())
+      .filter(Boolean);
+    if (discoveredPaths.length === 0) {
+      return;
+    }
+    setProjectPaths((current) => {
+      const next = [...new Set([...current, ...discoveredPaths])];
+      return next.length === current.length && next.every((value, index) => value === current[index]) ? current : next;
+    });
+  }, [threadItems]);
+
+  const removeProject = useCallback((targetProjectPath: string) => {
+    const normalized = String(targetProjectPath ?? "").trim();
+    if (!normalized) {
+      return;
+    }
+    setHiddenProjectPaths((current) => (current.includes(normalized) ? current : [...current, normalized]));
+    setProjectPaths((current) => current.filter((path) => path !== normalized));
+    if (projectPath === normalized) {
+      const fallbackProject = visibleProjectPaths.find((path) => path !== normalized) || "";
+      setProjectPath(fallbackProject);
+      setActiveThread(null);
+      setActiveThreadId("");
+      setSelectedAgentId("");
+      setSelectedAgentDetail(null);
+      setSelectedFilePath("");
+      setSelectedFileDiff("");
+    }
+  }, [projectPath, visibleProjectPaths]);
+
   const applyBrowserStore = useCallback(
     (store: BrowserStore, preferredThreadId?: string) => {
       browserStoreRef.current = store;
@@ -393,12 +514,13 @@ export function useTasksThreadState(params: Params) {
         Object.entries(store.details).map(([threadId, detail]) => [threadId, withDerivedWorkflow(detail)]),
       ) as Record<string, ThreadDetail>;
       store.details = normalizedDetails;
-      const items = store.order.map((threadId) => store.details[threadId]).filter(Boolean).map(toThreadListItem);
-      setThreads(items);
+      const allItems = store.order.map((threadId) => store.details[threadId]).filter(Boolean).map(toThreadListItem);
+      setThreadItems(allItems);
+      const visibleOrder = filterBrowserThreadIdsByProject(store.details, store.order, projectPath || params.cwd);
       const nextId =
-        (preferredThreadId && store.details[preferredThreadId] ? preferredThreadId : "") ||
-        (activeThreadId && store.details[activeThreadId] ? activeThreadId : "") ||
-        store.order[0] ||
+        (preferredThreadId && visibleOrder.includes(preferredThreadId) ? preferredThreadId : "") ||
+        (activeThreadId && visibleOrder.includes(activeThreadId) ? activeThreadId : "") ||
+        visibleOrder[0] ||
         "";
       if (!nextId) {
         setActiveThread(null);
@@ -406,19 +528,17 @@ export function useTasksThreadState(params: Params) {
         setSelectedAgentId("");
         setSelectedAgentDetail(null);
         setSelectedFilePath("");
-        setSelectedFileContent("");
         setSelectedFileDiff("");
         return null;
       }
       const detail = withDerivedWorkflow(store.details[nextId]);
       setActiveThread(detail);
       setActiveThreadId(nextId);
-      setProjectPath((current) => String(detail.task.workspacePath ?? "").trim() || current);
       setSelectedAgentId((current) => (current && detail.agents.some((agent) => agent.id === current) ? current : defaultSelectedAgent(detail)));
       setSelectedFilePath((current) => (current && detail.files.some((file) => file.path === current) ? current : defaultSelectedFile(detail)));
       return detail;
     },
-    [activeThreadId],
+    [activeThreadId, params.cwd, projectPath],
   );
 
   const loadThread = useCallback(
@@ -428,7 +548,6 @@ export function useTasksThreadState(params: Params) {
         setSelectedAgentId("");
         setSelectedAgentDetail(null);
         setSelectedFilePath("");
-        setSelectedFileContent("");
         setSelectedFileDiff("");
         return null;
       }
@@ -437,18 +556,22 @@ export function useTasksThreadState(params: Params) {
         if (!detail) {
           return applyBrowserStore(browserStoreRef.current);
         }
+        const nextProjectPath = String(detail.task.projectPath || detail.task.workspacePath || projectPath || params.cwd).trim() || params.cwd;
+        rememberProjectPath(nextProjectPath);
+        setProjectPath(nextProjectPath);
         setActiveThread(detail);
         setActiveThreadId(detail.thread.threadId);
-        setProjectPath((current) => String(detail.task.workspacePath ?? "").trim() || current);
         setSelectedAgentId((current) => (current && detail.agents.some((agent) => agent.id === current) ? current : defaultSelectedAgent(detail)));
         setSelectedFilePath((current) => (current && detail.files.some((file) => file.path === current) ? current : defaultSelectedFile(detail)));
         return detail;
       }
       try {
         const detail = withDerivedWorkflow(await params.invokeFn<ThreadDetail>("thread_load", { cwd: params.cwd, threadId }));
+        const nextProjectPath = String(detail.task.projectPath || detail.task.workspacePath || projectPath || params.cwd).trim() || params.cwd;
+        rememberProjectPath(nextProjectPath);
+        setProjectPath(nextProjectPath);
         setActiveThread(detail);
         setActiveThreadId(detail.thread.threadId);
-        setProjectPath((current) => String(detail.task.workspacePath ?? "").trim() || current);
         setSelectedAgentId((current) => current || defaultSelectedAgent(detail));
         setSelectedFilePath((current) => current || defaultSelectedFile(detail));
         return detail;
@@ -475,11 +598,12 @@ export function useTasksThreadState(params: Params) {
       setLoading(true);
       try {
         const items = await params.invokeFn<ThreadListItem[]>("thread_list", { cwd: params.cwd });
-        setThreads(items);
+        setThreadItems(items);
+        const visibleItems = filterThreadListByProject(items, projectPath || params.cwd);
         const nextId =
-          (preferredThreadId && items.some((item) => item.thread.threadId === preferredThreadId) ? preferredThreadId : "") ||
-          (activeThreadId && items.some((item) => item.thread.threadId === activeThreadId) ? activeThreadId : "") ||
-          items[0]?.thread.threadId ||
+          (preferredThreadId && visibleItems.some((item) => item.thread.threadId === preferredThreadId) ? preferredThreadId : "") ||
+          (activeThreadId && visibleItems.some((item) => item.thread.threadId === activeThreadId) ? activeThreadId : "") ||
+          visibleItems[0]?.thread.threadId ||
           "";
         if (nextId) {
           await loadThread(nextId);
@@ -489,7 +613,6 @@ export function useTasksThreadState(params: Params) {
           setSelectedAgentId("");
           setSelectedAgentDetail(null);
           setSelectedFilePath("");
-          setSelectedFileContent("");
           setSelectedFileDiff("");
         }
       } catch (error) {
@@ -498,7 +621,88 @@ export function useTasksThreadState(params: Params) {
         setLoading(false);
       }
     },
-    [activeThreadId, applyBrowserStore, loadThread, params],
+    [activeThreadId, applyBrowserStore, loadThread, params, projectPath],
+  );
+
+  const refreshCurrentThreadSilently = useCallback(
+    async (threadId: string) => {
+      const normalizedThreadId = String(threadId ?? "").trim();
+      if (!normalizedThreadId || !params.hasTauriRuntime || !params.cwd) {
+        return;
+      }
+      try {
+        const [items, detail] = await Promise.all([
+          params.invokeFn<ThreadListItem[]>("thread_list", { cwd: params.cwd }),
+          params.invokeFn<ThreadDetail>("thread_load", { cwd: params.cwd, threadId: normalizedThreadId }),
+        ]);
+        const nextDetail = withDerivedWorkflow(detail);
+        setThreadItems(items);
+        setActiveThread(nextDetail);
+        setActiveThreadId(nextDetail.thread.threadId);
+        setSelectedAgentId((current) =>
+          current && nextDetail.agents.some((agent) => agent.id === current) ? current : defaultSelectedAgent(nextDetail),
+        );
+        setSelectedFilePath((current) =>
+          current && nextDetail.files.some((file) => file.path === current) ? current : defaultSelectedFile(nextDetail),
+        );
+      } catch {
+        // Keep silent polling failures from interrupting the Tasks UI.
+      }
+    },
+    [params, projectPath],
+  );
+
+  const hydrateAgentDetailWithCodexRuntime = useCallback(
+    async (detail: ThreadAgentDetail): Promise<ThreadAgentDetail> => {
+      if (!params.hasTauriRuntime || !params.cwd) {
+        return detail;
+      }
+      const responseJsonPath = findLatestCodexResponseJsonPath(detail.artifactPaths);
+      if (!responseJsonPath) {
+        return detail;
+      }
+      try {
+        const responseJson = await params.invokeFn<string>("workspace_read_text", { path: responseJsonPath });
+        const runtime = extractTaskCodexThreadRuntime(responseJson);
+        if (!runtime?.codexThreadId) {
+          return detail;
+        }
+        let codexThreadStatus = runtime.codexThreadStatus ?? null;
+        try {
+          const threadState = await params.invokeFn<unknown>("codex_thread_read", {
+            threadId: runtime.codexThreadId,
+            includeTurns: false,
+          });
+          codexThreadStatus = extractCodexThreadStatus(threadState) || codexThreadStatus;
+        } catch {
+          // Keep the last known status from response.json if live read is unavailable.
+        }
+        return {
+          ...detail,
+          codexThreadId: runtime.codexThreadId,
+          codexTurnId: runtime.codexTurnId ?? null,
+          codexThreadStatus,
+        };
+      } catch {
+        return detail;
+      }
+    },
+    [params],
+  );
+
+  const loadAgentDetail = useCallback(
+    async (threadId: string, agentId: string): Promise<ThreadAgentDetail | null> => {
+      if (!threadId || !agentId || !params.hasTauriRuntime || !params.cwd) {
+        return null;
+      }
+      const detail = await params.invokeFn<ThreadAgentDetail>("thread_open_agent_detail", {
+        cwd: params.cwd,
+        threadId,
+        agentId,
+      });
+      return hydrateAgentDetailWithCodexRuntime(detail);
+    },
+    [hydrateAgentDetailWithCodexRuntime, params],
   );
 
   useEffect(() => {
@@ -515,6 +719,69 @@ export function useTasksThreadState(params: Params) {
   }, [reloadThreads]);
 
   useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<{
+        taskId?: string;
+        studioRoleId?: string;
+        type?: string;
+        stage?: string | null;
+        message?: string;
+        at?: string;
+      }>).detail;
+      if (!detail || String(detail.taskId ?? "").trim() !== String(activeThreadId ?? "").trim()) {
+        return;
+      }
+      const roleId = getTaskAgentPresetIdByStudioRoleId(detail.studioRoleId);
+      if (!roleId) {
+        return;
+      }
+      const eventType = String(detail.type ?? "").trim();
+      if (eventType === "run_done" || eventType === "run_error") {
+        setLiveRoleNotes((current) => {
+          const next = { ...current };
+          delete next[roleId];
+          return next;
+        });
+        return;
+      }
+      const stageLabel = String(detail.stage ?? "").trim();
+      const message = String(detail.message ?? "").trim() || (stageLabel ? `${stageLabel} 진행 중` : "작업 중");
+      setLiveRoleNotes((current) => ({
+        ...current,
+        [roleId]: {
+          message,
+          updatedAt: String(detail.at ?? "").trim() || nowIso(),
+        },
+      }));
+    };
+    window.addEventListener("rail:tasks-role-event", handler as EventListener);
+    return () => window.removeEventListener("rail:tasks-role-event", handler as EventListener);
+  }, [activeThreadId]);
+
+  useEffect(() => {
+    const liveRoleIds = new Set((activeThread?.agents ?? []).filter((agent) => agent.status !== "idle" && agent.status !== "done").map((agent) => agent.roleId));
+    setLiveRoleNotes((current) => {
+      const next = Object.fromEntries(
+        Object.entries(current).filter(([roleId]) => liveRoleIds.has(roleId as ThreadRoleId)),
+      ) as Partial<Record<ThreadRoleId, { message: string; updatedAt: string }>>;
+      const unchanged = Object.keys(next).length === Object.keys(current).length
+        && Object.keys(next).every((key) => next[key as ThreadRoleId]?.message === current[key as ThreadRoleId]?.message);
+      return unchanged ? current : next;
+    });
+  }, [activeThread?.agents]);
+
+  useEffect(() => {
+    const hasLiveAgents = (activeThread?.agents ?? []).some((agent) => agent.status !== "idle" && agent.status !== "done");
+    if (!hasLiveAgents || !activeThreadId || !params.hasTauriRuntime || !params.cwd) {
+      return;
+    }
+    const intervalId = window.setInterval(() => {
+      void refreshCurrentThreadSilently(activeThreadId);
+    }, 2000);
+    return () => window.clearInterval(intervalId);
+  }, [activeThread?.agents, activeThreadId, params, refreshCurrentThreadSilently]);
+
+  useEffect(() => {
     if (!activeThread || !selectedAgentId) {
       setSelectedAgentDetail(null);
       return;
@@ -524,33 +791,23 @@ export function useTasksThreadState(params: Params) {
       setSelectedAgentDetail(agent ? buildBrowserAgentDetail(activeThread, agent) : null);
       return;
     }
-    void params
-      .invokeFn<ThreadAgentDetail>("thread_open_agent_detail", {
-        cwd: params.cwd,
-        threadId: activeThread.thread.threadId,
-        agentId: selectedAgentId,
-      })
+    void loadAgentDetail(activeThread.thread.threadId, selectedAgentId)
       .then(setSelectedAgentDetail)
       .catch((error) => {
         setSelectedAgentDetail(null);
         params.setStatus(`Failed to load agent detail: ${formatError(error)}`);
       });
-  }, [activeThread, params, selectedAgentId]);
+  }, [activeThread, loadAgentDetail, params, selectedAgentId]);
 
   useEffect(() => {
     if (!activeThread || !selectedFilePath) {
-      setSelectedFileContent("");
       setSelectedFileDiff("");
       return;
     }
     if (!params.hasTauriRuntime || !params.cwd) {
-      setSelectedFileContent(browserPreviewContent(selectedFilePath));
       setSelectedFileDiff(browserDiffContent(selectedFilePath));
       return;
     }
-    const base = String(activeThread.task.workspacePath ?? "").trim().replace(/[\/]+$/, "");
-    const fullPath = `${base}/${selectedFilePath}`;
-    void params.invokeFn<string>("workspace_read_text", { path: fullPath }).then(setSelectedFileContent).catch(() => setSelectedFileContent(""));
     void params
       .invokeFn<string>("thread_file_diff", {
         cwd: params.cwd,
@@ -609,11 +866,55 @@ export function useTasksThreadState(params: Params) {
       if (!selectedPath) {
         return;
       }
+      setActiveThread(null);
+      setActiveThreadId("");
+      setSelectedAgentId("");
+      setSelectedAgentDetail(null);
+      setSelectedFilePath("");
+      setSelectedFileDiff("");
+      rememberProjectPath(selectedPath);
       setProjectPath(selectedPath);
       params.setStatus(`Tasks project selected: ${selectedPath}`);
     } catch (error) {
       params.setStatus(`Failed to open project: ${formatError(error)}`);
     }
+  }, [params, rememberProjectPath]);
+
+  const selectProject = useCallback((nextProjectPath: string) => {
+    const normalized = String(nextProjectPath ?? "").trim();
+    if (!normalized || normalized === projectPath) {
+      return;
+    }
+    rememberProjectPath(normalized);
+    setActiveThread(null);
+    setActiveThreadId("");
+    setSelectedAgentId("");
+    setSelectedAgentDetail(null);
+    setSelectedFilePath("");
+    setSelectedFileDiff("");
+    setProjectPath(normalized);
+  }, [projectPath, rememberProjectPath]);
+
+  const openKnowledgeEntryForArtifact = useCallback((artifactPath: string) => {
+    const normalizedPath = String(artifactPath ?? "").trim();
+    if (!normalizedPath) {
+      return;
+    }
+    const matched = readKnowledgeEntries().find((entry) =>
+      String(entry.markdownPath ?? "").trim() === normalizedPath ||
+      String(entry.jsonPath ?? "").trim() === normalizedPath ||
+      String(entry.sourceFile ?? "").trim() === normalizedPath,
+    );
+    if (!matched) {
+      params.setStatus("데이터베이스에서 연결된 문서를 찾지 못했습니다.");
+      return;
+    }
+    params.publishAction({
+      type: "open_knowledge_doc",
+      payload: {
+        entryId: matched.id,
+      },
+    });
   }, [params]);
 
   const buildPromptWithAttachments = useCallback(async (prompt: string) => {
@@ -657,7 +958,6 @@ export function useTasksThreadState(params: Params) {
     setSelectedAgentId("");
     setSelectedAgentDetail(null);
     setSelectedFilePath("");
-    setSelectedFileContent("");
     setSelectedFileDiff("");
     setDetailTab("files");
     const selectedProjectPath = String(projectPath || params.cwd || "/workspace").trim();
@@ -677,7 +977,7 @@ export function useTasksThreadState(params: Params) {
         prompt: "NEW THREAD",
         mode: "balanced",
         team: "full-squad",
-        isolation: "auto",
+        isolation: "worktree",
         model,
         reasoning,
         accessMode,
@@ -879,7 +1179,7 @@ export function useTasksThreadState(params: Params) {
           prompt: promptWithAttachments,
           mode: "balanced",
           team: "full-squad",
-          isolation: "auto",
+          isolation: "worktree",
           model,
           reasoning,
           accessMode,
@@ -957,18 +1257,34 @@ export function useTasksThreadState(params: Params) {
         return;
       }
       try {
-        const detail = await params.invokeFn<ThreadAgentDetail>("thread_open_agent_detail", {
-          cwd: params.cwd,
-          threadId: activeThread.thread.threadId,
-          agentId: agent.id,
-        });
+        const detail = await loadAgentDetail(activeThread.thread.threadId, agent.id);
         setSelectedAgentDetail(detail);
       } catch (error) {
         params.setStatus(`Failed to open agent: ${formatError(error)}`);
       }
     },
-    [activeThread, params],
+    [activeThread, loadAgentDetail, params],
   );
+
+  const compactSelectedAgentCodexThread = useCallback(async () => {
+    if (!activeThread || !selectedAgentDetail?.codexThreadId || !params.hasTauriRuntime || !params.cwd) {
+      params.setStatus("압축할 Codex 세션이 없습니다.");
+      return;
+    }
+    try {
+      await params.invokeFn("codex_thread_compact_start", {
+        threadId: selectedAgentDetail.codexThreadId,
+      });
+      const refreshedDetail = await loadAgentDetail(activeThread.thread.threadId, selectedAgentDetail.agent.id);
+      if (refreshedDetail) {
+        setSelectedAgentDetail(refreshedDetail);
+      }
+      void refreshCurrentThreadSilently(activeThread.thread.threadId);
+      params.setStatus(`Codex 세션을 압축했습니다: ${selectedAgentDetail.agent.label}`);
+    } catch (error) {
+      params.setStatus(`Codex 세션 압축 실패: ${formatError(error)}`);
+    }
+  }, [activeThread, loadAgentDetail, params, refreshCurrentThreadSilently, selectedAgentDetail]);
 
   const resolveApproval = useCallback(
     async (approval: ApprovalRecord, decision: ApprovalDecision) => {
@@ -1072,7 +1388,6 @@ export function useTasksThreadState(params: Params) {
           setSelectedAgentId("");
           setSelectedAgentDetail(null);
           setSelectedFilePath("");
-          setSelectedFileContent("");
           setSelectedFileDiff("");
           setComposerDraft("");
         }
@@ -1290,6 +1605,7 @@ export function useTasksThreadState(params: Params) {
   return {
     loading,
     threads,
+    projectGroups,
     activeThread,
     activeThreadId,
     projectPath,
@@ -1308,18 +1624,22 @@ export function useTasksThreadState(params: Params) {
     selectedAgentId,
     selectedAgentDetail,
     selectedFilePath,
-    selectedFileContent,
     selectedFileDiff,
+    liveRoleNotes,
     attachedFiles,
     setSelectedFilePath,
     openProjectDirectory,
+    removeProject,
+    openKnowledgeEntryForArtifact,
     openAttachmentPicker,
     removeAttachedFile,
     openNewThread,
+    selectProject,
     selectThread,
     submitComposer,
     openAgent,
     resolveApproval,
+    compactSelectedAgentCodexThread,
     deleteThread,
     addAgent,
     renameThread,

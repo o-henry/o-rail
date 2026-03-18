@@ -5,6 +5,7 @@ mod quality;
 mod storage;
 mod system;
 mod task_presets;
+mod task_prompt_packs;
 mod threads;
 mod unity_automation;
 mod unity_automation_batch;
@@ -27,6 +28,8 @@ pub fn run() {
             engine::agent_rules_read,
             engine::usage_check,
             engine::thread_start,
+            engine::codex_thread_read,
+            engine::codex_thread_compact_start,
             engine::turn_start,
             engine::turn_start_blocking,
             engine::turn_interrupt,
@@ -84,6 +87,7 @@ pub fn run() {
             storage::task_record_role_result,
             storage::task_mark_status,
             storage::task_archive,
+            task_prompt_packs::task_agent_pack_read,
             threads::thread_list,
             threads::thread_delete,
             threads::thread_add_agent,

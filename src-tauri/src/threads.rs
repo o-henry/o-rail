@@ -113,6 +113,8 @@ pub struct TaskRecordView {
     isolation_requested: String,
     isolation_resolved: String,
     status: String,
+    #[serde(default)]
+    project_path: String,
     workspace_path: String,
     worktree_path: Option<String>,
     branch_name: Option<String>,
@@ -217,6 +219,7 @@ pub struct ThreadAgentDetail {
 #[serde(rename_all = "camelCase")]
 pub struct ThreadListItem {
     thread: ThreadRecord,
+    project_path: String,
     agent_count: usize,
     pending_approval_count: usize,
     workflow_summary: ThreadWorkflowSummary,
@@ -959,6 +962,37 @@ fn workflow_summary(workflow: &ThreadWorkflow, pending_approval_count: usize) ->
     }
 }
 
+fn normalize_project_path(input: &str) -> String {
+    let trimmed = input.trim();
+    if trimmed.is_empty() {
+        return String::new();
+    }
+    let candidate = PathBuf::from(trimmed);
+    let resolved = if candidate.exists() {
+        fs::canonicalize(&candidate).unwrap_or(candidate)
+    } else {
+        candidate
+    };
+    resolved
+        .to_string_lossy()
+        .trim()
+        .trim_end_matches(['/', '\\'])
+        .to_string()
+}
+
+fn task_matches_project(task: &TaskRecordView, project_path: Option<&str>) -> bool {
+    let Some(project_path) = project_path.map(normalize_project_path).filter(|value| !value.is_empty()) else {
+        return true;
+    };
+    let task_project_path = normalize_project_path(&task.project_path);
+    if !task_project_path.is_empty() && task_project_path == project_path {
+        return true;
+    }
+    let workspace_path = normalize_project_path(&task.workspace_path);
+    let worktree_path = task.worktree_path.as_deref().map(normalize_project_path);
+    workspace_path == project_path || worktree_path.as_deref() == Some(project_path.as_str())
+}
+
 fn default_run_roles(task: &TaskRecordView, requested_roles: &[String]) -> Vec<String> {
     let enabled = enabled_roles(task);
     task_presets::default_run_task_agent_ids(&enabled, requested_roles)
@@ -991,16 +1025,22 @@ fn create_approval_record(thread_id: &str, agent_id: &str, kind: &str, summary: 
 }
 
 #[tauri::command]
-pub fn thread_list(cwd: String) -> Result<Vec<ThreadListItem>, String> {
+pub fn thread_list(cwd: String, project_path: Option<String>) -> Result<Vec<ThreadListItem>, String> {
     let workspace = normalize_workspace_root(&cwd)?;
     let task_records = task_list_view(storage::task_list(cwd.clone())?)?
         .into_iter()
         .filter(|task| task.status != "archived")
+        .filter(|task| task_matches_project(task, project_path.as_deref()))
         .collect::<Vec<_>>();
     let mut threads = Vec::new();
     for task in task_records {
         let detail = build_thread_detail(&task_dir(&workspace, &task.task_id), task_detail_view(storage::task_load(cwd.clone(), task.task_id.clone())?)?, "5.4", "중간", "Local")?;
         threads.push(ThreadListItem {
+            project_path: if detail.task.project_path.trim().is_empty() {
+                detail.task.workspace_path.clone()
+            } else {
+                detail.task.project_path.clone()
+            },
             pending_approval_count: detail.approvals.iter().filter(|approval| approval.status == "pending").count(),
             agent_count: detail.agents.len(),
             workflow_summary: workflow_summary(&detail.workflow, detail.approvals.iter().filter(|approval| approval.status == "pending").count()),
@@ -1548,6 +1588,16 @@ pub fn thread_record_role_result(
     if run_status.trim().eq_ignore_ascii_case("done") {
         let mut created_handoff = false;
         if let Some(target_role) = next_handoff_target(&task.record, &task_role.id) {
+            let target_already_started = task
+                .record
+                .roles
+                .iter()
+                .find(|role| role.id == target_role)
+                .map(|role| {
+                    !matches!(role.status.trim().to_lowercase().as_str(), "" | "idle")
+                        || role.last_run_id.as_ref().is_some_and(|value| !value.trim().is_empty())
+                })
+                .unwrap_or(false);
             let already_pending = approvals.iter().any(|approval| {
                 approval.status == "pending"
                     && approval
@@ -1557,7 +1607,7 @@ pub fn thread_record_role_result(
                         .and_then(Value::as_str)
                         == Some(target_role.as_str())
             });
-            if !already_pending {
+            if !already_pending && !target_already_started {
                 let target_label = role_label_for(&task.record, &target_role);
                 let payload = json!({
                     "fromRole": task_role.id,
@@ -1902,5 +1952,47 @@ mod tests {
             .as_deref()
             .unwrap_or_default()
             .contains("Investigated systems."));
+    }
+
+    #[test]
+    fn thread_list_filters_by_project_path() {
+        let workspace = temp_workspace("project-scope");
+        let cwd = workspace.to_string_lossy().to_string();
+        let project_a = workspace.join("project-a");
+        let project_b = workspace.join("project-b");
+        fs::create_dir_all(&project_a).unwrap();
+        fs::create_dir_all(&project_b).unwrap();
+
+        let thread_a = thread_create(
+            cwd.clone(),
+            Some(project_a.to_string_lossy().to_string()),
+            "task a".to_string(),
+            None,
+            Some("full-squad".to_string()),
+            Some("current-repo".to_string()),
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        let _thread_b = thread_create(
+            cwd.clone(),
+            Some(project_b.to_string_lossy().to_string()),
+            "task b".to_string(),
+            None,
+            Some("full-squad".to_string()),
+            Some("current-repo".to_string()),
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+
+        let project_a_items = thread_list(cwd.clone(), Some(project_a.to_string_lossy().to_string())).unwrap();
+        assert_eq!(project_a_items.len(), 1);
+        assert_eq!(project_a_items[0].thread.thread_id, thread_a.thread.thread_id);
+
+        let project_b_items = thread_list(cwd, Some(project_b.to_string_lossy().to_string())).unwrap();
+        assert_eq!(project_b_items.len(), 1);
     }
 }

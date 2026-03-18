@@ -31,3 +31,4 @@ zip = { version = "2", default-features = false, features = ["deflate"] }
 roxmltree = "0.21"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 url = "2"
+toml = "0.8"

@@ -86,7 +86,7 @@ export function useRoleRunCompletionBridge(params: Params) {
         runId: payload.runId,
         runStatus: payload.runStatus,
         artifactPaths: Array.isArray(payload.artifactPaths) ? payload.artifactPaths : [],
-        summary: payload.envelope?.record?.summary ?? null,
+        summary: payload.summary ?? payload.envelope?.record?.summary ?? null,
       })
         .then((updated) => {
           if (updated) {

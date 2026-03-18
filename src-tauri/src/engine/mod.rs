@@ -22,6 +22,8 @@ use tokio::{
     time::{timeout, Duration},
 };
 
+use crate::task_prompt_packs;
+
 const EVENT_ENGINE_NOTIFICATION: &str = "engine://notification";
 const EVENT_ENGINE_LIFECYCLE: &str = "engine://lifecycle";
 const EVENT_ENGINE_APPROVAL_REQUEST: &str = "engine://approval_request";
@@ -231,6 +233,32 @@ pub struct LoginChatgptResult {
 pub struct ThreadStartResult {
     thread_id: String,
     raw: Value,
+}
+
+#[derive(Debug, Deserialize, Clone, Copy)]
+#[serde(rename_all = "kebab-case")]
+pub enum SandboxMode {
+    ReadOnly,
+    WorkspaceWrite,
+    DangerFullAccess,
+}
+
+impl SandboxMode {
+    fn thread_start_value(self) -> &'static str {
+        match self {
+            SandboxMode::ReadOnly => "read-only",
+            SandboxMode::WorkspaceWrite => "workspace-write",
+            SandboxMode::DangerFullAccess => "danger-full-access",
+        }
+    }
+
+    fn turn_policy_value(self) -> &'static str {
+        match self {
+            SandboxMode::ReadOnly => "readOnly",
+            SandboxMode::WorkspaceWrite => "workspaceWrite",
+            SandboxMode::DangerFullAccess => "dangerFullAccess",
+        }
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -983,10 +1011,6 @@ fn sync_global_codex_runtime_config(codex_home: &Path) -> Result<(), String> {
     let runtime_config = codex_home.join("config.toml");
     copy_if_newer(&global_config, &runtime_config)?;
 
-    let global_agents_dir = global_codex_home.join("agents");
-    if !global_agents_dir.is_dir() {
-        return Ok(());
-    }
     let runtime_agents_dir = codex_home.join("agents");
     fs::create_dir_all(&runtime_agents_dir).map_err(|error| {
         format!(
@@ -995,30 +1019,35 @@ fn sync_global_codex_runtime_config(codex_home: &Path) -> Result<(), String> {
         )
     })?;
 
-    let entries = fs::read_dir(&global_agents_dir).map_err(|error| {
-        format!(
-            "failed to read global agents directory {}: {error}",
-            global_agents_dir.display()
-        )
-    })?;
+    let global_agents_dir = global_codex_home.join("agents");
+    if global_agents_dir.is_dir() {
+        let entries = fs::read_dir(&global_agents_dir).map_err(|error| {
+            format!(
+                "failed to read global agents directory {}: {error}",
+                global_agents_dir.display()
+            )
+        })?;
 
-    for entry in entries {
-        let Ok(entry) = entry else {
-            continue;
-        };
-        let source_path = entry.path();
-        if !source_path.is_file() {
-            continue;
+        for entry in entries {
+            let Ok(entry) = entry else {
+                continue;
+            };
+            let source_path = entry.path();
+            if !source_path.is_file() {
+                continue;
+            }
+            let Some(file_name) = source_path.file_name().and_then(|name| name.to_str()) else {
+                continue;
+            };
+            if !file_name.ends_with(".toml") {
+                continue;
+            }
+            let destination_path = runtime_agents_dir.join(file_name);
+            copy_if_newer(&source_path, &destination_path)?;
         }
-        let Some(file_name) = source_path.file_name().and_then(|name| name.to_str()) else {
-            continue;
-        };
-        if !file_name.ends_with(".toml") {
-            continue;
-        }
-        let destination_path = runtime_agents_dir.join(file_name);
-        copy_if_newer(&source_path, &destination_path)?;
     }
+
+    task_prompt_packs::sync_builtin_task_agent_prompt_packs(&runtime_agents_dir)?;
 
     Ok(())
 }
@@ -1889,15 +1918,17 @@ pub async fn thread_start(
     state: State<'_, EngineManager>,
     model: String,
     cwd: String,
+    sandbox_mode: Option<SandboxMode>,
 ) -> Result<ThreadStartResult, String> {
     let runtime = current_runtime(&state).await?;
+    let sandbox_mode = sandbox_mode.unwrap_or(SandboxMode::ReadOnly);
     let raw = runtime
         .request(
             "thread/start",
             json!({
               "model": model,
               "cwd": cwd,
-              "sandbox": "read-only"
+              "sandbox": sandbox_mode.thread_start_value()
             }),
         )
         .await?;
@@ -1919,6 +1950,40 @@ pub async fn thread_start(
 }
 
 #[tauri::command]
+pub async fn codex_thread_read(
+    state: State<'_, EngineManager>,
+    thread_id: String,
+    include_turns: Option<bool>,
+) -> Result<Value, String> {
+    let runtime = current_runtime(&state).await?;
+    runtime
+        .request(
+            "thread/read",
+            json!({
+              "threadId": thread_id,
+              "includeTurns": include_turns.unwrap_or(false)
+            }),
+        )
+        .await
+}
+
+#[tauri::command]
+pub async fn codex_thread_compact_start(
+    state: State<'_, EngineManager>,
+    thread_id: String,
+) -> Result<Value, String> {
+    let runtime = current_runtime(&state).await?;
+    runtime
+        .request(
+            "thread/compact/start",
+            json!({
+              "threadId": thread_id
+            }),
+        )
+        .await
+}
+
+#[tauri::command]
 pub async fn turn_start(
     state: State<'_, EngineManager>,
     thread_id: String,
@@ -1927,8 +1992,10 @@ pub async fn turn_start(
     temperature: Option<f64>,
     context_budget: Option<String>,
     max_input_chars: Option<u32>,
+    sandbox_mode: Option<SandboxMode>,
 ) -> Result<Value, String> {
     let runtime = current_runtime(&state).await?;
+    let sandbox_mode = sandbox_mode.unwrap_or(SandboxMode::ReadOnly);
     let mut payload = json!({
       "threadId": thread_id,
       "text": text,
@@ -1939,7 +2006,7 @@ pub async fn turn_start(
         }
       ],
       "sandboxPolicy": {
-        "type": "readOnly"
+        "type": sandbox_mode.turn_policy_value()
       }
     });
 
@@ -1985,8 +2052,10 @@ pub async fn turn_start_blocking(
     temperature: Option<f64>,
     context_budget: Option<String>,
     max_input_chars: Option<u32>,
+    sandbox_mode: Option<SandboxMode>,
 ) -> Result<Value, String> {
     let runtime = current_runtime(&state).await?;
+    let sandbox_mode = sandbox_mode.unwrap_or(SandboxMode::ReadOnly);
     let mut payload = json!({
       "threadId": thread_id,
       "text": text,
@@ -1997,7 +2066,7 @@ pub async fn turn_start_blocking(
         }
       ],
       "sandboxPolicy": {
-        "type": "readOnly"
+        "type": sandbox_mode.turn_policy_value()
       },
       "stream": false
     });

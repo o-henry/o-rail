@@ -1,12 +1,13 @@
 import { useCallback, useEffect, type MutableRefObject } from "react";
 import type { DashboardTopicId } from "../../features/dashboard/intelligence";
 import type { AgenticAction, AgenticActionSubscriber } from "../../features/orchestration/agentic/actionBus";
-import type { AgenticRunEnvelope } from "../../features/orchestration/agentic/runContract";
+import type { AgenticRunEnvelope, AgenticRunEvent } from "../../features/orchestration/agentic/runContract";
 import { toStudioRoleId } from "../../features/studio/roleUtils";
 import type { PresetKind } from "../../features/workflow/domain";
 import type { WorkspaceTab } from "../mainAppGraphHelpers";
 import { runGraphWithCoordinator, runTopicWithCoordinator } from "../main/runtime/agenticCoordinator";
 import { runRoleWithCoordinator } from "../main/runtime/agenticRoleCoordinator";
+import { runTaskRoleWithCodex } from "../main/runtime/runTaskRoleWithCodex";
 import type { AgenticQueue } from "../main/runtime/agenticQueue";
 import {
   bootstrapRoleKnowledgeProfile,
@@ -151,14 +152,15 @@ export function useAgenticOrchestrationBridge(params: {
   setNodeSelection: (nodeIds: string[], selectedNodeId?: string) => void;
   setStatus: (message: string) => void;
   applyPreset: (presetKind: PresetKind) => void;
-  onRoleRunCompleted?: (payload: {
-    runId: string;
-    roleId: string;
-    taskId: string;
-    prompt?: string;
-    handoffToRole?: string;
-    handoffRequest?: string;
-    sourceTab: "agents" | "workflow" | "workbench" | "tasks" | "tasks-thread";
+    onRoleRunCompleted?: (payload: {
+      runId: string;
+      roleId: string;
+      taskId: string;
+      prompt?: string;
+      summary?: string;
+      handoffToRole?: string;
+      handoffRequest?: string;
+      sourceTab: "agents" | "workflow" | "workbench" | "tasks" | "tasks-thread";
     artifactPaths: string[];
     runStatus: "done" | "error";
     envelope?: AgenticRunEnvelope;
@@ -273,6 +275,8 @@ export function useAgenticOrchestrationBridge(params: {
                 ? "tasks-thread"
                 : "agents";
       const normalizedRoleId = toStudioRoleId(params.roleId);
+      let taskCodexArtifactPaths: string[] = [];
+      let taskCodexSummary: string | undefined;
       const result = await runRoleWithCoordinator({
         runId: params.runId,
         cwd,
@@ -282,14 +286,44 @@ export function useAgenticOrchestrationBridge(params: {
         prompt: params.prompt,
         queue,
         invokeFn,
-        execute: async ({ prompt }) => {
+        execute: async ({ runId, prompt }) => {
           const promptText = String(prompt ?? "").trim();
           if (promptText) {
             setStatus(`역할 요청: ${promptText.slice(0, 72)}`);
           }
+          if (sourceTab === "tasks" || sourceTab === "tasks-thread") {
+            const codexTaskRun = await runTaskRoleWithCodex({
+              invokeFn,
+              storageCwd: cwd,
+              taskId: params.taskId,
+              studioRoleId: params.roleId,
+              prompt: promptText || undefined,
+              sourceTab,
+              runId,
+            });
+            taskCodexArtifactPaths = [...codexTaskRun.artifactPaths];
+            taskCodexSummary = codexTaskRun.summary;
+            return;
+          }
           await runGraphWithAgenticCoordinator(false, promptText || undefined);
         },
         appendWorkspaceEvent,
+        onEvent: (event: AgenticRunEvent) => {
+          if ((sourceTab === "tasks" || sourceTab === "tasks-thread") && typeof window !== "undefined") {
+            window.dispatchEvent(new CustomEvent("rail:tasks-role-event", {
+              detail: {
+                sourceTab,
+                taskId: params.taskId,
+                studioRoleId: params.roleId,
+                runId: event.runId,
+                type: event.type,
+                stage: event.stage ?? null,
+                message: event.message ?? "",
+                at: event.at,
+              },
+            }));
+          }
+        },
         roleKnowledgePipeline: normalizedRoleId
           ? {
               bootstrap: async ({ runId, taskId, prompt }) => {
@@ -339,7 +373,10 @@ export function useAgenticOrchestrationBridge(params: {
             }
           : undefined,
       });
-      const baseArtifactPaths = result.envelope.artifacts.map((row) => String(row.path ?? "").trim()).filter(Boolean);
+      const baseArtifactPaths = [
+        ...result.envelope.artifacts.map((row) => String(row.path ?? "").trim()).filter(Boolean),
+        ...taskCodexArtifactPaths,
+      ];
       let roleSummaryArtifactPath = "";
       try {
         const artifactDir = `${String(cwd ?? "").trim().replace(/[\\/]+$/, "")}/.rail/studio_runs/${result.runId}/artifacts`;
@@ -370,6 +407,7 @@ export function useAgenticOrchestrationBridge(params: {
         roleId: params.roleId,
         taskId: params.taskId,
         prompt: params.prompt,
+        summary: taskCodexSummary,
         handoffToRole: params.handoffToRole,
         handoffRequest: params.handoffRequest,
         sourceTab,
@@ -428,6 +466,9 @@ export function useAgenticOrchestrationBridge(params: {
       }
       if (action.type === "open_knowledge_doc") {
         onSelectWorkspaceTab("knowledge");
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("rail:open-knowledge-entry", { detail: { entryId: action.payload.entryId } }));
+        }
         setStatus(`데이터베이스 문서 열기: ${action.payload.entryId}`);
         return;
       }

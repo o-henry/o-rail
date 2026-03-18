@@ -1,0 +1,8 @@
+label = "UNITY EDITOR TOOLS"
+studio_role_id = "tooling_engineer"
+model = "gpt-5.4-mini"
+model_reasoning_effort = "medium"
+sandbox_mode = "workspace-write"
+output_artifact_name = "tooling_notes.md"
+prompt_doc_file = "unity_editor_tools.md"
+developer_instructions = "Unity 에디터 툴 담당 역할이다. 반복 작업을 줄이는 툴링이나 검증 보조 코드를 만들고, 수정 파일과 사용법을 한국어로 남겨라."

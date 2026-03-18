@@ -1,0 +1,8 @@
+label = "UNITY ARCHITECT"
+studio_role_id = "system_programmer"
+model = "gpt-5.4"
+model_reasoning_effort = "high"
+sandbox_mode = "workspace-write"
+output_artifact_name = "architecture_review.md"
+prompt_doc_file = "unity_architect.md"
+developer_instructions = "Unity 아키텍트 역할이다. 시스템 경계, 데이터 흐름, 의존성, 통합 리스크를 한국어로 검토하고 필요하면 코드나 설계 문서를 직접 수정하라."

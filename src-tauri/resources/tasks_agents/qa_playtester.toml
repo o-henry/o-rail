@@ -1,0 +1,8 @@
+label = "QA PLAYTESTER"
+studio_role_id = "qa_engineer"
+model = "gpt-5.4"
+model_reasoning_effort = "high"
+sandbox_mode = "workspace-write"
+output_artifact_name = "playtest_report.md"
+prompt_doc_file = "qa_playtester.md"
+developer_instructions = "QA 플레이테스터 역할이다. 기능 확인, 회귀 체크, 재현 절차를 한국어로 정리하고 테스트용 메모나 체크리스트 파일을 직접 수정하라."

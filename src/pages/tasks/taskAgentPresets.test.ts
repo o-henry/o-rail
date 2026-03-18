@@ -13,13 +13,18 @@ describe("taskAgentPresets", () => {
     expect(resolveTaskAgentPresetId("reviewer")).toBe("unity_architect");
     expect(resolveTaskAgentPresetId("worker")).toBe("unity_implementer");
     expect(resolveTaskAgentPresetId("qa")).toBe("qa_playtester");
+    expect(resolveTaskAgentPresetId("codemap")).toBe("unity_architect");
+    expect(resolveTaskAgentPresetId("csharp")).toBe("unity_implementer");
+    expect(resolveTaskAgentPresetId("debug")).toBe("unity_implementer");
+    expect(resolveTaskAgentPresetId("build")).toBe("release_steward");
   });
 
   it("parses Unity tag aliases and removes duplicates", () => {
-    expect(parseTaskAgentTags("@designer @worker @playtest @worker @unknown")).toEqual([
+    expect(parseTaskAgentTags("@designer @csharp @playtest @debug @unknown @codemap")).toEqual([
       "game_designer",
       "unity_implementer",
       "qa_playtester",
+      "unity_architect",
     ]);
   });
 

@@ -34,9 +34,119 @@
   padding: 10px;
 }
 
+.tasks-thread-nav-copy {
+  margin-top: 8px;
+}
+
 .tasks-thread-nav-actions {
   display: grid;
   gap: 8px;
+}
+
+.tasks-thread-project-tree {
+  min-height: 0;
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.tasks-thread-project-node {
+  display: grid;
+  gap: 8px;
+  min-height: 0;
+  margin-top: 0;
+  padding: 8px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--surface-soft) 34%, #ffffff);
+}
+
+.tasks-thread-project-node.is-selected {
+  background: color-mix(in srgb, var(--surface-soft) 64%, #ffffff);
+}
+
+.tasks-thread-project-node-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tasks-thread-project-node-select {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.tasks-thread-project-node-remove {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.tasks-thread-project-node-remove img {
+  width: 10px;
+  height: 10px;
+  opacity: 0.72;
+}
+
+.tasks-thread-project-node-path {
+  display: none;
+  min-width: 0;
+  padding: 4px 6px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--surface-soft) 72%, #ffffff);
+  font-size: 10px;
+  line-height: 1.4;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tasks-thread-project-tree .tasks-thread-empty-copy {
+  font-size: 10px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.tasks-thread-project-card {
+  display: grid;
+  gap: 4px;
+  padding: 8px 10px;
+  border-radius: var(--tasks-radius);
+  background: color-mix(in srgb, var(--surface-soft) 58%, #ffffff);
+}
+
+.tasks-thread-project-card strong {
+  font-size: 11px;
+  color: var(--text-main);
+}
+
+.tasks-thread-project-card span {
+  min-width: 0;
+  font-size: 10px;
+  line-height: 1.4;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .tasks-thread-new-button,
@@ -74,13 +184,17 @@
   color: var(--text-main);
 }
 
+.tasks-thread-list-item.is-active {
+  gap: 0;
+}
+
 .tasks-thread-nav-copy,
 .tasks-thread-list-item,
 .tasks-thread-header-copy,
 .tasks-thread-log-line,
 .tasks-thread-agent-copy,
 .tasks-thread-approval-card,
-.tasks-thread-file-preview,
+.tasks-thread-main-diff-panel,
 .tasks-thread-detail-text-panel,
 .tasks-thread-agent-detail-panel,
 .tasks-thread-workflow-panel,
@@ -88,6 +202,12 @@
 .tasks-thread-agents-card {
   display: grid;
   gap: 8px;
+}
+
+.tasks-thread-agent-detail-panel,
+.tasks-thread-workflow-panel,
+.tasks-thread-main-diff-panel {
+  gap: 12px;
 }
 
 .tasks-thread-nav-copy strong,
@@ -154,6 +274,7 @@
   padding: 10px;
   align-content: start;
   overflow: hidden;
+  background: #eef1f4;
 }
 
 .tasks-thread-list-title-row {
@@ -251,6 +372,14 @@
   justify-content: space-between;
 }
 
+.tasks-thread-approval-actions button {
+  background: #e5e7eb;
+}
+
+.tasks-thread-approval-actions .tasks-thread-primary {
+  background: #d1d5db;
+}
+
 .tasks-thread-section-head {
   justify-content: flex-start;
   align-items: center;
@@ -325,7 +454,7 @@
 .tasks-thread-list-stage {
   display: inline-flex;
   align-items: center;
-  border-radius: 999px;
+  border-radius: 4px;
   padding: 2px 6px;
   background: color-mix(in srgb, var(--surface-soft) 78%, var(--surface-elevated));
   color: var(--text-main);
@@ -348,8 +477,8 @@
 .tasks-thread-list-stage.is-active,
 .tasks-thread-stage-chip.is-active,
 .tasks-thread-stage-chip.is-selected {
-  background: color-mix(in srgb, #d9e4f5 66%, var(--surface-elevated));
-  color: #21405f;
+  background: color-mix(in srgb, #c7d3e6 82%, #c4cfdf);
+  color: #1f344c;
 }
 
 .tasks-thread-stage-shell {
@@ -404,7 +533,7 @@
   min-height: 42px;
   padding: 8px 10px;
   border: 0;
-  border-radius: 8px;
+  border-radius: 4px;
   background: color-mix(in srgb, var(--surface-soft) 78%, var(--surface-elevated));
   color: var(--text-main);
   display: grid;
@@ -514,10 +643,14 @@
   gap: 10px;
 }
 
+.tasks-thread-artifact-list {
+  margin-top: 6px;
+}
+
 .tasks-thread-agents-card,
 .tasks-thread-approval-card,
 .tasks-thread-files-panel,
-.tasks-thread-file-preview,
+.tasks-thread-main-diff-panel,
 .tasks-thread-detail-text-panel,
 .tasks-thread-workflow-panel,
 .tasks-thread-agent-detail-panel {
@@ -533,6 +666,10 @@
   padding: 10px 12px;
   border-radius: 10px;
   background: color-mix(in srgb, var(--surface-soft) 46%, #ffffff);
+}
+
+.tasks-thread-running-strip .tasks-thread-section-head {
+  padding-bottom: 4px;
 }
 
 .tasks-thread-running-list {
@@ -554,7 +691,16 @@
 .tasks-thread-running-copy {
   min-width: 0;
   display: grid;
-  gap: 2px;
+  gap: 4px;
+  width: 100%;
+}
+
+.tasks-thread-running-meta {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .tasks-thread-running-copy strong,
@@ -569,6 +715,33 @@
   letter-spacing: 0.04em;
 }
 
+.tasks-thread-running-summary {
+  margin: 0;
+  padding-bottom: 2px;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tasks-thread-running-artifact {
+  width: fit-content;
+  max-width: 100%;
+  min-height: 24px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-soft) 78%, #ffffff);
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .tasks-thread-log-line {
   max-width: min(820px, 96%);
   padding: 0;
@@ -580,6 +753,10 @@
   display: grid;
   gap: 4px;
   justify-items: start;
+}
+
+.tasks-thread-message-row.is-live-placeholder {
+  opacity: 0.8;
 }
 
 .tasks-thread-message-row.is-user {
@@ -617,7 +794,7 @@
   padding: 8px 12px;
   min-height: 48px;
   background: #ffffff;
-  border-radius: 10px;
+  border-radius: 4px;
   cursor: pointer;
 }
 
@@ -696,9 +873,10 @@
 .tasks-thread-agent-inline-input {
   font: inherit;
   font-family: "DepartureMonoRail", "Galmuri11", monospace;
-  font-size: 13px;
+  font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.01em;
+  color: var(--text-main);
   border: 0;
   background: transparent;
   padding: 0;
@@ -717,6 +895,12 @@
 .tasks-thread-agent-inline-input {
   width: 100%;
   max-width: 100%;
+}
+
+.tasks-thread-agent-name-slot .tasks-thread-agent-label-button,
+.tasks-thread-agent-name-slot .tasks-thread-agent-inline-input {
+  font-size: 10px;
+  color: var(--text-main);
 }
 
 .tasks-thread-agent-actions {
@@ -768,6 +952,44 @@
 
 .tasks-thread-composer-input {
   min-height: 42px;
+}
+
+.tasks-thread-mention-menu {
+  display: grid;
+  gap: 4px;
+  margin-top: 6px;
+  padding: 6px;
+  border-radius: 8px;
+  background: #f2f4f7;
+}
+
+.tasks-thread-mention-option {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-main);
+  text-align: left;
+}
+
+.tasks-thread-mention-option strong {
+  font-size: 11px;
+}
+
+.tasks-thread-mention-option span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tasks-thread-mention-option.is-active {
+  background: #d8dde6;
 }
 
 .tasks-thread-composer-input:focus,
@@ -870,7 +1092,7 @@
   display: grid;
   align-content: start;
   align-items: stretch;
-  gap: 10px;
+  gap: 14px;
   scrollbar-gutter: stable;
 }
 
@@ -894,6 +1116,11 @@
 .tasks-thread-files-panel.is-empty {
   min-height: 132px;
   grid-template-rows: auto 1fr;
+}
+
+.tasks-thread-files-panel.is-expanded .tasks-thread-file-tree {
+  max-height: none;
+  overflow: visible;
 }
 
 .tasks-thread-file-list {
@@ -952,7 +1179,72 @@
   justify-self: start;
 }
 
-.tasks-thread-file-preview pre,
+.tasks-thread-file-tree {
+  display: grid;
+  gap: 4px;
+  max-height: 260px;
+  min-width: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.tasks-thread-file-tree-branch {
+  display: grid;
+  gap: 4px;
+}
+
+.tasks-thread-file-tree-node {
+  width: 100%;
+  min-width: 0;
+  min-height: 28px;
+  padding-top: 6px;
+  padding-bottom: 6px;
+  border: 0;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--surface-soft) 72%, #ffffff);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  text-align: left;
+  font: inherit;
+}
+
+.tasks-thread-file-tree-node.is-directory {
+  background: color-mix(in srgb, var(--surface-soft) 58%, #ffffff);
+}
+
+.tasks-thread-file-tree-node.is-active {
+  background: color-mix(in srgb, var(--focus-ring) 16%, var(--surface-soft));
+}
+
+.tasks-thread-file-tree-node.is-changed {
+  color: var(--text-main);
+}
+
+.tasks-thread-file-tree-caret {
+  flex: 0 0 auto;
+  width: 10px;
+  color: var(--text-muted);
+}
+
+.tasks-thread-file-tree-name {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tasks-thread-file-tree-node small {
+  flex: 0 0 auto;
+  font-size: 10px;
+  line-height: 1.2;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.tasks-thread-main-diff-panel pre,
 .tasks-thread-detail-text-panel pre {
   margin: 0;
   max-width: 100%;
@@ -968,22 +1260,6 @@
   font-size: 11px;
   line-height: 1.55;
   color: var(--text-main);
-}
-
-.tasks-thread-file-preview .tasks-thread-section-head {
-  display: grid;
-  gap: 4px;
-  align-items: start;
-  justify-content: stretch;
-}
-
-.tasks-thread-file-preview .tasks-thread-section-head strong,
-.tasks-thread-file-preview .tasks-thread-section-head span {
-  width: 100%;
-}
-
-.tasks-thread-file-preview .tasks-thread-section-head span {
-  text-align: left;
 }
 
 .tasks-thread-workflow-meta {
@@ -1002,7 +1278,7 @@
 .tasks-thread-workflow-meta strong,
 .tasks-thread-section-head strong,
 .tasks-thread-section-head span,
-.tasks-thread-file-preview strong,
+.tasks-thread-main-diff-panel strong,
 .tasks-thread-detail-text-panel strong,
 .tasks-thread-artifact-list li {
   min-width: 0;
@@ -1015,17 +1291,64 @@
   align-items: center;
 }
 
+.tasks-thread-section-actions {
+  margin-left: auto;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tasks-thread-section-action-button {
+  min-height: 22px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 4px;
+  background: #e5e7eb;
+  font-family: "DepartureMonoRail", "Galmuri11", monospace;
+  font-size: 10px;
+  color: var(--text-main);
+  cursor: pointer;
+}
+
+.tasks-thread-section-action-button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
 .tasks-thread-artifact-list ul {
   margin: 0;
-  padding-left: 18px;
+  padding: 0;
+  list-style: none;
   display: grid;
   gap: 6px;
+}
+
+.tasks-thread-artifact-link {
+  width: 100%;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--surface-soft) 78%, #ffffff);
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tasks-thread-artifact-link.is-primary {
+  width: fit-content;
 }
 
 .tasks-thread-detail-text-panel.is-inline {
   padding: 0;
   border: 0;
   background: transparent;
+}
+
+.tasks-thread-agent-detail-panel > .tasks-thread-detail-text-panel.is-inline {
+  margin-top: 6px;
 }
 
 .tasks-thread-detail-text-panel.is-inline.is-empty {
@@ -1183,6 +1506,11 @@
   gap: 6px;
 }
 
+.tasks-thread-files-panel.is-expanded .tasks-thread-changed-file-tags {
+  max-height: none;
+  overflow: visible;
+}
+
 .tasks-thread-changed-file-tags button,
 .tasks-thread-agent-session-tabs button,
 .tasks-thread-agent-session-actions button,
@@ -1322,6 +1650,10 @@
 .tasks-thread-layout input:focus-visible,
 .tasks-thread-layout textarea:focus,
 .tasks-thread-layout textarea:focus-visible,
+.tasks-thread-layout article:focus,
+.tasks-thread-layout article:focus-visible,
+.tasks-thread-layout [tabindex]:focus,
+.tasks-thread-layout [tabindex]:focus-visible,
 .tasks-thread-layout [role="option"]:focus,
 .tasks-thread-layout [role="option"]:focus-visible {
   outline: none;

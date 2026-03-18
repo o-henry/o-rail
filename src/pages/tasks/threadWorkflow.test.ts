@@ -28,6 +28,7 @@ function buildDetail(overrides: Partial<ThreadDetail> = {}): ThreadDetail {
       isolationRequested: "auto",
       isolationResolved: "auto",
       status: "active",
+      projectPath: "/tmp/project",
       workspacePath: "/tmp/project",
       worktreePath: null,
       branchName: null,

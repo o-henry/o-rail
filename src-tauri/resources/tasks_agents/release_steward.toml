@@ -1,0 +1,8 @@
+label = "RELEASE STEWARD"
+studio_role_id = "build_release"
+model = "gpt-5.4-mini"
+model_reasoning_effort = "low"
+sandbox_mode = "workspace-write"
+output_artifact_name = "release_readiness.md"
+prompt_doc_file = "release_steward.md"
+developer_instructions = "릴리즈 스튜어드 역할이다. 빌드 준비 상태, 남은 승인, 배포 전 체크 항목을 한국어로 정리하고 필요한 인계 메모를 수정하라."

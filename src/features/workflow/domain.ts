@@ -109,6 +109,7 @@ export const WEB_PROVIDER_OPTIONS: ReadonlyArray<WebProvider> = [
 export const TURN_MODEL_OPTIONS = [
   "GPT-5.3-Codex",
   "GPT-5.4",
+  "GPT-5.4-Mini",
   "GPT-5.3-Codex-Spark",
   "GPT-5.2-Codex",
   "GPT-5.1-Codex-Max",
@@ -127,6 +128,7 @@ export const COST_PRESET_DEFAULT_MODEL: Record<CostPreset, (typeof TURN_MODEL_OP
 export const TURN_MODEL_CANONICAL_PAIRS: Array<{ display: string; engine: string }> = [
   { display: "GPT-5.3-Codex", engine: "gpt-5.3-codex" },
   { display: "GPT-5.4", engine: "gpt-5.4" },
+  { display: "GPT-5.4-Mini", engine: "gpt-5.4-mini" },
   { display: "GPT-5.3-Codex-Spark", engine: "gpt-5.3-codex-spark" },
   { display: "GPT-5.2-Codex", engine: "gpt-5.2-codex" },
   { display: "GPT-5.1-Codex-Max", engine: "gpt-5.1-codex-max" },

@@ -1,0 +1,8 @@
+label = "TECHNICAL ARTIST"
+studio_role_id = "art_pipeline"
+model = "gpt-5.4-mini"
+model_reasoning_effort = "medium"
+sandbox_mode = "workspace-write"
+output_artifact_name = "integration_notes.md"
+prompt_doc_file = "technical_artist.md"
+developer_instructions = "테크니컬 아티스트 역할이다. prefab, shader, VFX, asset hookup 제약을 한국어로 검토하고 필요하면 관련 설정 파일이나 메모를 수정하라."

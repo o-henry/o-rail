@@ -48,7 +48,7 @@ export type AgenticAction =
         taskId: string;
         prompt?: string;
         runId?: string;
-        sourceTab?: "agents" | "workflow" | "workbench" | "tasks";
+        sourceTab?: "agents" | "workflow" | "workbench" | "tasks" | "tasks-thread";
         handoffToRole?: string;
         handoffRequest?: string;
       };

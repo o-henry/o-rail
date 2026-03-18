@@ -330,7 +330,7 @@ function App() {
   const defaultAuthMode = useMemo(() => loadPersistedAuthMode(), []);
   const defaultCodexMultiAgentMode = useMemo(() => loadPersistedCodexMultiAgentMode(), []);
   const themeModeOptions = useMemo(() => [{ value: "light", label: t("settings.theme.light") }, { value: "dark", label: t("settings.theme.dark") }], [t]);
-  const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>("workflow");
+  const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>("tasks");
   const [workflowRoleId, setWorkflowRoleId] = useState<StudioRoleId>("pm_planner");
   const [, setWorkflowRoleTaskId] = useState("TASK-001");
   const [workflowRolePrompt, setWorkflowRolePrompt] = useState("");

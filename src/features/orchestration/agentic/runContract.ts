@@ -10,6 +10,7 @@ export type AgenticRunSourceTab =
   | "agents"
   | "workflow"
   | "tasks"
+  | "tasks-thread"
   | "intelligence"
   | "dashboard"
   | "feed"

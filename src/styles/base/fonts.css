@@ -76,3 +76,12 @@
   font-display: swap;
   unicode-range: U+3000-30FF, U+31F0-31FF, U+4E00-9FFF, U+FF00-FFEF;
 }
+
+@font-face {
+  font-family: "DepartureMonoRail";
+  src: url("/fonts/departure-mono-regular.otf") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0000-00FF, U+0100-024F, U+1E00-1EFF;
+}

@@ -184,7 +184,6 @@ export function MainAppShell(props: any) {
     workflowUnityAutomationIslandElement,
     workspaceEvents,
     workspaceTab,
-    workspaceTopbarTabs,
   } = props;
 
   return (
@@ -199,41 +198,19 @@ export function MainAppShell(props: any) {
         className={`workspace ${canvasFullscreen ? "canvas-fullscreen-active" : ""} ${error ? "workspace-has-error" : ""}`.trim()}
       >
         {!canvasFullscreen && <header className="workspace-header workspace-header-spacer" />}
-        {!canvasFullscreen && (
-          <div className="workspace-topbar">
-            <nav aria-label="Workspace top navigation" className="workspace-topbar-nav">
-              {workspaceTopbarTabs.map((item: any) => {
-                const active = workspaceTab === item.tab;
-                return (
-                  <button
-                    className={active ? "workspace-topbar-tab is-active" : "workspace-topbar-tab"}
-                    key={item.tab}
-                    onClick={() => onSelectWorkspaceTab(item.tab)}
-                    type="button"
-                  >
-                    <span aria-hidden="true" className="workspace-topbar-tab-icon">
-                      <NavIcon active={active} tab={item.tab} />
-                    </span>
-                    <span>{item.label}</span>
-                  </button>
-                );
-              })}
-            </nav>
-            <div className="workspace-topbar-actions">
-              <WorkspaceQuickPanel
-                isOpen={quickPanelOpen}
-                onChangeQuery={setQuickPanelQuery}
-                onClose={onCloseQuickPanel}
-                onOpenAgents={onOpenQuickPanelAgents}
-                onOpenFeed={onOpenQuickPanelFeed}
-                onSubmitQuery={onSubmitQuickPanelQuery}
-                onToggle={onToggleQuickPanel}
-                query={quickPanelQuery}
-                recentPosts={quickPanelRecentPosts}
-                workspaceLabel={quickPanelWorkspaceLabel}
-              />
-            </div>
-          </div>
+        {!canvasFullscreen && workspaceTab !== "tasks" && (
+          <WorkspaceQuickPanel
+            isOpen={quickPanelOpen}
+            onChangeQuery={setQuickPanelQuery}
+            onClose={onCloseQuickPanel}
+            onOpenAgents={onOpenQuickPanelAgents}
+            onOpenFeed={onOpenQuickPanelFeed}
+            onSubmitQuery={onSubmitQuickPanelQuery}
+            onToggle={onToggleQuickPanel}
+            query={quickPanelQuery}
+            recentPosts={quickPanelRecentPosts}
+            workspaceLabel={quickPanelWorkspaceLabel}
+          />
         )}
 
         {error && (

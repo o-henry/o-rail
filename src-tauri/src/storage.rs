@@ -265,10 +265,11 @@ fn normalize_mode(raw: Option<String>) -> String {
 }
 
 fn normalize_team(raw: Option<String>) -> String {
-    match raw.unwrap_or_else(|| "full-squad".to_string()).trim().to_lowercase().as_str() {
+    match raw.unwrap_or_else(|| "custom".to_string()).trim().to_lowercase().as_str() {
         "solo" => "solo".to_string(),
         "duo" => "duo".to_string(),
-        _ => "full-squad".to_string(),
+        "full-squad" => "full-squad".to_string(),
+        _ => "custom".to_string(),
     }
 }
 
@@ -286,7 +287,8 @@ fn build_task_roles(team: &str) -> Vec<TaskRoleState> {
     let enabled = match team {
         "solo" => BTreeSet::from(["worker"]),
         "duo" => BTreeSet::from(["explorer", "worker"]),
-        _ => BTreeSet::from(["explorer", "reviewer", "worker", "qa"]),
+        "full-squad" => BTreeSet::from(["explorer", "reviewer", "worker", "qa"]),
+        _ => BTreeSet::new(),
     };
     [
         ("explorer", "EXPLORER", "pm_planner"),

@@ -207,7 +207,7 @@ export function NavIcon({ tab, active = false }: { tab: WorkspaceTab; active?: b
     return <img alt="" aria-hidden="true" className="nav-workflow-image" src="/home.svg" />;
   }
   if (tab === "intelligence") {
-    return <img alt="" aria-hidden="true" className="nav-workflow-image" src="/data-service-svgrepo-com.svg" />;
+    return <img alt="" aria-hidden="true" className="nav-workflow-image nav-database-image" src="/data-service-svgrepo-com.svg" />;
   }
   if (tab === "workflow") {
     return (
@@ -242,7 +242,7 @@ export function NavIcon({ tab, active = false }: { tab: WorkspaceTab; active?: b
     return <img alt="" aria-hidden="true" className="nav-workflow-image" src="/scroll.svg" />;
   }
   if (tab === "knowledge") {
-    return <img alt="" aria-hidden="true" className="nav-workflow-image" src="/data-service-svgrepo-com.svg" />;
+    return <img alt="" aria-hidden="true" className="nav-workflow-image nav-database-image" src="/data-service-svgrepo-com.svg" />;
   }
   if (tab === "bridge") {
     return <img alt="" aria-hidden="true" className="nav-workflow-image" src="/scroll.svg" />;

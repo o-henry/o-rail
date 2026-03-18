@@ -1,550 +1,876 @@
-@import "@xterm/xterm/css/xterm.css";
-
-.tasks-layout {
+.tasks-thread-layout {
+  font-family: "DepartureMonoRail", "Galmuri11", monospace;
+  --tasks-radius: 4px;
+  --tasks-wrapper-radius: 10px;
+  --tasks-control-height: 34px;
   min-height: 0;
   height: 100%;
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
-  gap: 8px;
+  grid-template-columns: 220px minmax(0, 1fr) minmax(260px, 300px);
+  gap: 10px;
+  background: #ffffff;
+  border-radius: var(--tasks-wrapper-radius);
+  overflow: hidden;
 }
 
-.tasks-shell {
+.tasks-thread-layout.workspace-tab-panel {
+  border-radius: 10px;
+}
+
+.tasks-thread-nav,
+.tasks-thread-main-surface,
+.tasks-thread-detail-panel {
   min-height: 0;
+  border: 0;
+  border-radius: var(--tasks-wrapper-radius);
+  background: #ffffff;
+  box-shadow: none;
+}
+
+.tasks-thread-nav {
   display: grid;
-  grid-template-columns: 220px minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: 10px;
+  padding: 10px;
+}
+
+.tasks-thread-new-button,
+.tasks-thread-list-item,
+.tasks-thread-agent-actions button,
+.tasks-thread-detail-tabs button,
+.tasks-thread-approval-actions button,
+.tasks-thread-primary,
+.tasks-thread-file-list button,
+.tasks-thread-header-meta span {
+  font: inherit;
+  min-height: var(--tasks-control-height);
+  height: var(--tasks-control-height);
+  border: 0;
+  background: color-mix(in srgb, var(--surface-soft) 74%, var(--surface-elevated));
+  color: var(--text-main);
+  border-radius: var(--tasks-radius);
+  box-sizing: border-box;
+}
+
+.tasks-thread-new-button,
+.tasks-thread-primary,
+.tasks-thread-agent-actions button,
+.tasks-thread-detail-tabs button,
+.tasks-thread-approval-actions button,
+.tasks-thread-file-list button {
+  padding: 0 12px;
+}
+
+.tasks-thread-primary,
+.tasks-thread-detail-tabs button.is-active,
+.tasks-thread-file-list button.is-active,
+.tasks-thread-list-item.is-active {
+  background: color-mix(in srgb, var(--focus-ring) 18%, var(--surface-soft));
+  color: var(--text-main);
+}
+
+.tasks-thread-nav-copy,
+.tasks-thread-list-item,
+.tasks-thread-header-copy,
+.tasks-thread-message,
+.tasks-thread-agent-copy,
+.tasks-thread-approval-card,
+.tasks-thread-file-preview,
+.tasks-thread-detail-text-panel,
+.tasks-thread-agent-detail-panel,
+.tasks-thread-workflow-panel,
+.tasks-thread-empty-state,
+.tasks-thread-agents-card {
+  display: grid;
   gap: 8px;
 }
 
-.tasks-sidebar,
-.tasks-main,
-.tasks-stage,
-.tasks-detail-panel,
-.tasks-empty-state {
+.tasks-thread-nav-copy strong,
+.tasks-thread-header-copy strong,
+.tasks-thread-section-head strong,
+.tasks-thread-list-item strong {
+  font-size: 13px;
+  color: var(--text-main);
+}
+
+.tasks-thread-section-head strong,
+.tasks-thread-section-head span {
+  font-family: "DepartureMonoRail", "Galmuri11", monospace;
+}
+
+.tasks-thread-nav-copy span,
+.tasks-thread-list-item span,
+.tasks-thread-list-item small,
+.tasks-thread-message-meta,
+.tasks-thread-agent-status,
+.tasks-thread-section-head span,
+.tasks-thread-workflow-meta span,
+.tasks-thread-file-list button small,
+.tasks-thread-branch-indicator {
+  font-family: "DepartureMonoRail", "Galmuri11", monospace;
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.tasks-thread-list {
   min-height: 0;
-}
-
-.tasks-sidebar {
-  display: grid;
-  align-content: start;
-  gap: 8px;
   overflow: auto;
-  padding: 8px;
+  display: grid;
+  gap: 6px;
+  padding-right: 4px;
 }
 
-.tasks-sidebar-head,
-.tasks-topbar,
-.task-create-head,
-.task-create-actions,
-.tasks-topbar-actions,
-.tasks-artifact-tabs,
-.tasks-artifact-actions,
-.tasks-prompt-item-meta,
-.tasks-terminal-pane-topbar,
-.tasks-terminal-pane-meta,
-.tasks-terminal-pane-actions,
-.tasks-terminal-pane-composer,
-.tasks-stage-head,
-.tasks-composer-targets,
-.tasks-changed-files header,
-.tasks-prompt-log header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+.tasks-thread-empty-copy,
+.tasks-thread-header-copy p,
+.tasks-thread-list-item p,
+.tasks-thread-message-body,
+.tasks-thread-agent-copy p,
+.tasks-thread-empty-state p,
+.tasks-thread-approval-card p,
+.tasks-thread-agent-summary,
+.tasks-thread-workflow-list p,
+.tasks-thread-artifact-list li {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-muted);
 }
 
-.tasks-sidebar-head {
+.tasks-thread-list-item {
+  width: 100%;
+  min-height: 34px;
+  height: auto;
+  text-align: left;
+  padding: 10px;
+  padding-right: 30px;
+  align-content: start;
+}
+
+.tasks-thread-list-row {
+  position: relative;
   align-items: flex-start;
 }
 
-.tasks-sidebar-head div,
-.tasks-topbar-copy,
-.tasks-stage-copy,
-.tasks-empty-state,
-.task-create-field,
-.tasks-sidebar-group,
-.tasks-sidebar-list,
-.tasks-prompt-log,
-.tasks-changed-files {
-  display: grid;
-  gap: 6px;
-}
-
-.tasks-sidebar-head strong,
-.tasks-topbar-copy strong,
-.tasks-stage-copy strong,
-.tasks-empty-state strong,
-.tasks-terminal-pane-topbar strong,
-.tasks-detail-panel strong,
-.task-create-head strong {
-  font-family: "Galmuri11", "Noto Sans KR", sans-serif;
-  letter-spacing: 0;
-}
-
-.tasks-sidebar-head small,
-.tasks-sidebar-group > header,
-.tasks-badges span,
-.tasks-composer-hint,
-.tasks-terminal-pane-status,
-.tasks-terminal-pane-meta,
-.tasks-prompt-item-meta,
-.tasks-meta-grid span,
-.tasks-warning-copy,
-.task-create-field span {
-  font-family: "BasicallyAMono", "Noto Sans KR", monospace;
-}
-
-.tasks-sidebar-group > header,
-.tasks-sidebar-head small,
-.tasks-sidebar-item small,
-.tasks-empty-copy,
-.tasks-composer-hint,
-.tasks-meta-grid span,
-.tasks-warning-copy,
-.task-create-field span,
-.tasks-terminal-pane-status,
-.tasks-terminal-pane-meta,
-.tasks-prompt-item-meta {
-  font-size: 10px;
+.tasks-thread-list-delete {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 18px;
+  min-width: 18px;
+  height: 18px;
+  min-height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
   color: var(--text-muted);
+  display: inline-grid;
+  place-items: center;
+  font: inherit;
+  font-size: 11px;
+  line-height: 1;
 }
 
-.tasks-sidebar-item {
-  border: 1px solid var(--border-subtle);
-  background: color-mix(in srgb, var(--surface-panel) 92%, transparent);
-  color: var(--text-main);
-  border-radius: 10px;
-  padding: 10px;
-  text-align: left;
-  display: grid;
-  gap: 4px;
-}
-
-.tasks-sidebar-item.is-active {
-  border-color: color-mix(in srgb, var(--focus-ring) 52%, var(--border-subtle));
-  background: color-mix(in srgb, var(--focus-ring) 12%, var(--surface-panel));
-}
-
-.tasks-sidebar-item strong,
-.tasks-topbar-copy strong {
-  font-size: 12px;
-}
-
-.tasks-sidebar-item span,
-.tasks-topbar-copy p,
-.tasks-stage-copy p,
-.tasks-warning-copy,
-.tasks-empty-copy,
-.tasks-empty-state p,
-.tasks-changed-files li,
-.tasks-meta-grid strong,
-.tasks-prompt-item p,
-.task-create-head p {
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.45;
+.tasks-thread-list-row:hover .tasks-thread-list-delete,
+.tasks-thread-list-delete:hover {
+  background: color-mix(in srgb, var(--surface-soft) 74%, var(--surface-elevated));
   color: var(--text-main);
 }
 
-.tasks-topbar-copy p,
-.tasks-stage-copy p,
-.tasks-empty-state p,
-.task-create-head p {
-  color: var(--text-muted);
+.tasks-thread-list-row,
+.tasks-thread-list-title-row,
+.tasks-thread-list-meta,
+.tasks-thread-section-head,
+.tasks-thread-agent-row,
+.tasks-thread-agent-actions,
+.tasks-thread-composer-toolbar,
+.tasks-thread-composer-controls,
+.tasks-thread-composer-actions,
+.tasks-thread-header,
+.tasks-thread-header-meta,
+.tasks-thread-message-meta,
+.tasks-thread-approval-actions,
+.tasks-thread-detail-tabs,
+.tasks-thread-workflow-meta,
+.tasks-thread-section-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.tasks-main {
+.tasks-thread-list-row,
+.tasks-thread-list-title-row,
+.tasks-thread-section-head,
+.tasks-thread-agent-row,
+.tasks-thread-composer-toolbar,
+.tasks-thread-header,
+.tasks-thread-workflow-meta {
+  justify-content: space-between;
+}
+
+.tasks-thread-main-surface {
   min-width: 0;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  gap: 8px;
-}
-
-.tasks-topbar-actions,
-.tasks-artifact-tabs,
-.tasks-composer-targets,
-.task-create-actions {
-  flex-wrap: wrap;
-}
-
-.tasks-topbar-actions button,
-.tasks-artifact-tabs button,
-.tasks-artifact-actions button,
-.tasks-composer-targets button,
-.task-create-actions button,
-.task-primary-button {
-  min-height: 32px;
-  padding: 0 12px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 10px;
-  background: var(--surface-elevated);
-  color: var(--text-main);
-}
-
-.task-primary-button,
-.tasks-artifact-tabs button.is-active,
-.tasks-composer-targets button.is-active {
-  border-color: color-mix(in srgb, var(--focus-ring) 52%, var(--border-subtle));
-  background: color-mix(in srgb, var(--focus-ring) 12%, var(--surface-elevated));
-}
-
-.tasks-runtime-shell {
-  min-height: 0;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 280px;
-  gap: 8px;
-}
-
-.tasks-stage,
-.tasks-detail-panel,
-.tasks-empty-state {
-  padding: 10px;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   overflow: hidden;
 }
 
-.tasks-stage {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  gap: 8px;
+.tasks-thread-header {
+  padding: 12px;
 }
 
-.tasks-badges {
-  display: flex;
+.tasks-thread-header-copy p {
+  color: var(--text-muted);
+}
+
+.tasks-thread-header-meta,
+.tasks-thread-composer-actions {
   flex-wrap: wrap;
-  gap: 8px;
   justify-content: flex-end;
 }
 
-.tasks-badges span {
-  min-height: 22px;
+.tasks-thread-header-meta {
+  min-height: 26px;
+}
+
+.tasks-thread-header-meta span,
+.tasks-thread-branch-indicator,
+.tasks-thread-header-action {
+  padding: 0 10px;
+  background: color-mix(in srgb, var(--surface-soft) 72%, var(--surface-elevated));
+  border-radius: 999px;
+  min-height: 26px;
+  height: 26px;
   display: inline-flex;
   align-items: center;
-  padding: 0 6px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--surface-soft) 78%, transparent);
-  color: var(--text-muted);
-  font-size: 10px;
+  border: 0;
+  box-sizing: border-box;
 }
 
-.tasks-terminal-grid {
+.tasks-thread-conversation-scroll {
   min-height: 0;
+  overflow: auto;
+  padding: 12px;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-auto-rows: minmax(0, 1fr);
+  align-content: start;
+  gap: 12px;
+  background: transparent;
+}
+
+.tasks-thread-empty-state {
+  min-height: 100%;
+  align-content: center;
+  justify-items: center;
+  text-align: center;
+  padding: 24px;
+  background: color-mix(in srgb, var(--surface-soft) 46%, #ffffff);
+  border-radius: var(--tasks-wrapper-radius);
+}
+
+.tasks-thread-timeline,
+.tasks-thread-agent-list,
+.tasks-thread-approvals-stack,
+.tasks-thread-workflow-list,
+.tasks-thread-artifact-list {
+  display: grid;
+  gap: 10px;
+}
+
+.tasks-thread-message,
+.tasks-thread-agents-card,
+.tasks-thread-approval-card,
+.tasks-thread-file-preview,
+.tasks-thread-detail-text-panel,
+.tasks-thread-workflow-panel,
+.tasks-thread-agent-detail-panel {
+  border: 0;
+  border-radius: var(--tasks-wrapper-radius);
+  background: color-mix(in srgb, var(--surface-soft) 40%, #ffffff);
+  padding: 12px;
+}
+
+.tasks-thread-message {
+  max-width: min(720px, 92%);
+  background: #ffffff;
+}
+
+.tasks-thread-message.is-user,
+.tasks-thread-message.is-system {
+  background: color-mix(in srgb, var(--surface-soft) 60%, #ffffff);
+}
+
+.tasks-thread-message.is-user {
+  justify-self: end;
+}
+
+.tasks-thread-agent-list {
   gap: 6px;
-  overflow: hidden;
-  align-content: stretch;
 }
 
-.tasks-terminal-pane {
-  min-height: 0;
+.tasks-thread-agent-row {
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
-  gap: 8px;
-  padding: 6px;
-  border-radius: 8px;
-  border: 1px solid color-mix(in srgb, var(--border-subtle) 84%, transparent);
-  background: linear-gradient(180deg, rgba(8, 11, 16, 0.98), rgba(11, 15, 21, 0.98));
-  color: #e7edf5;
-  cursor: pointer;
-}
-
-.tasks-terminal-pane.is-selected {
-  border-color: color-mix(in srgb, var(--focus-ring) 58%, rgba(255, 255, 255, 0.14));
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--focus-ring) 24%, transparent);
-}
-
-.tasks-terminal-pane-topbar strong {
-  font-size: 12px;
-  color: #f6f8fb;
-}
-
-.tasks-terminal-pane-status,
-.tasks-terminal-pane-meta {
-  letter-spacing: 0.04em;
-  color: rgba(213, 223, 233, 0.68);
-}
-
-.tasks-terminal-pane-status.is-running {
-  color: #83d28e;
-}
-
-.tasks-terminal-pane-status.is-starting {
-  color: #e9d37e;
-}
-
-.tasks-terminal-pane-status.is-error,
-.tasks-terminal-pane-status.is-exited {
-  color: #ef9f9f;
-}
-
-.tasks-terminal-pane-body {
-  min-height: 0;
-  overflow: hidden;
-  padding: 0;
-  border-radius: 6px;
-  background: #06080c;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.tasks-terminal-viewport,
-.tasks-terminal-host {
-  width: 100%;
-  height: 100%;
-  min-height: 0;
-}
-
-.tasks-terminal-host {
-  overflow: hidden;
-}
-
-.tasks-terminal-host .xterm {
-  height: 100%;
-}
-
-.tasks-terminal-host .xterm-screen {
-  width: 100% !important;
-}
-
-.tasks-terminal-host .xterm-viewport {
-  overflow-y: auto !important;
-  scrollbar-width: thin;
-}
-
-.tasks-terminal-host .xterm {
-  height: 100%;
-  padding: 8px;
-}
-
-.tasks-terminal-host .xterm-viewport {
-  background: transparent !important;
-}
-
-.tasks-terminal-host .xterm-screen,
-.tasks-terminal-host .xterm-helpers {
-  inset: 8px !important;
-}
-
-.tasks-terminal-host .xterm-cursor-layer,
-.tasks-terminal-host .xterm-selection-layer,
-.tasks-terminal-host .xterm-link-layer {
-  inset: 8px !important;
-}
-
-.tasks-terminal-pane-actions {
-  justify-content: flex-start;
-  flex-wrap: wrap;
-}
-
-.tasks-terminal-pane .mini-action-button {
-  min-height: 28px;
-  border-color: rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.06);
-  color: #f0f5fb;
-}
-
-.tasks-terminal-pane-composer {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px;
-}
-
-.tasks-terminal-pane-input,
-.tasks-artifact-editor,
-.task-create-field textarea,
-.task-create-field select,
-.tasks-composer textarea {
-  width: 100%;
-  border: 1px solid var(--border-subtle);
+  grid-template-columns: minmax(0, 1fr) 84px auto;
+  grid-template-rows: auto auto;
+  align-items: start;
+  column-gap: 12px;
+  row-gap: 4px;
+  padding: 10px 12px 12px;
+  background: #ffffff;
   border-radius: 10px;
-  background: color-mix(in srgb, var(--surface-panel) 92%, transparent);
-  color: var(--text-main);
 }
 
-.tasks-terminal-pane-input {
-  height: 34px;
-  border-color: rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.04);
-  color: #f5f8fc;
+.tasks-thread-agent-name-slot {
+  min-width: 0;
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.tasks-thread-agent-status {
+  min-width: 0;
+  width: 84px;
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: start;
+  text-align: left;
+}
+
+.tasks-thread-agent-status.is-thinking,
+.tasks-thread-agent-label-button.role-explorer,
+.tasks-thread-agent-inline-input.role-explorer {
+  color: #8a6f53;
+}
+
+.tasks-thread-agent-label-button.role-reviewer,
+.tasks-thread-agent-inline-input.role-reviewer {
+  color: #5f7668;
+}
+
+.tasks-thread-agent-label-button.role-worker,
+.tasks-thread-agent-inline-input.role-worker {
+  color: #5d6d86;
+}
+
+.tasks-thread-agent-label-button.role-qa,
+.tasks-thread-agent-inline-input.role-qa {
+  color: #746381;
+}
+
+.tasks-thread-agent-label-button,
+.tasks-thread-agent-inline-input {
+  font: inherit;
+  font-family: "DepartureMonoRail", "Galmuri11", monospace;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  min-width: 0;
+}
+
+.tasks-thread-agent-label-button {
+  cursor: text;
+}
+
+.tasks-thread-agent-inline-input {
+  width: 100%;
+  max-width: 220px;
+}
+
+.tasks-thread-agent-row-summary {
+  grid-column: 1 / 3;
+  grid-row: 2;
+}
+
+.tasks-thread-agent-actions {
+  grid-column: 3;
+  grid-row: 1 / span 2;
+  justify-self: end;
+  align-self: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+
+.tasks-thread-agent-row:hover .tasks-thread-agent-actions,
+.tasks-thread-agent-row:focus-within .tasks-thread-agent-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.tasks-thread-agent-label-button:focus,
+.tasks-thread-agent-label-button:focus-visible,
+.tasks-thread-agent-inline-input:focus,
+.tasks-thread-agent-inline-input:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+.tasks-thread-composer-shell {
+  margin: 0 12px 12px;
+  border: 0;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+  background: #ffffff;
+}
+
+.tasks-thread-composer-input {
+  min-height: 42px;
+}
+
+.tasks-thread-composer-input:focus,
+.tasks-thread-composer-input:focus-visible,
+.tasks-thread-new-button:focus,
+.tasks-thread-new-button:focus-visible,
+.tasks-thread-primary:focus,
+.tasks-thread-primary:focus-visible,
+.tasks-thread-agent-actions button:focus,
+.tasks-thread-agent-actions button:focus-visible,
+.tasks-thread-detail-tabs button:focus,
+.tasks-thread-detail-tabs button:focus-visible,
+.tasks-thread-file-list button:focus,
+.tasks-thread-file-list button:focus-visible,
+.tasks-thread-list-item:focus,
+.tasks-thread-list-item:focus-visible,
+.tasks-thread-composer-shell .agents-model-button:focus,
+.tasks-thread-composer-shell .agents-model-button:focus-visible,
+.tasks-thread-composer-shell .agents-reason-button:focus,
+.tasks-thread-composer-shell .agents-reason-button:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+.tasks-thread-composer-toolbar {
+  margin-top: 6px;
+}
+
+.tasks-thread-composer-controls {
+  flex-wrap: wrap;
+  min-width: 0;
+  overflow: visible;
+}
+
+.tasks-thread-composer-shell .agents-model-dropdown,
+.tasks-thread-composer-shell .agents-reason-dropdown {
+  width: 160px;
+}
+
+.tasks-thread-composer-shell .tasks-thread-composer-controls {
+  flex-wrap: nowrap;
+}
+
+.tasks-thread-composer-shell .agents-model-button,
+.tasks-thread-composer-shell .agents-reason-button,
+.tasks-thread-composer-shell .agents-send-button,
+.tasks-thread-composer-shell .agents-model-menu,
+.tasks-thread-composer-shell .agents-reason-menu {
+  border: 0;
+  box-shadow: none;
+}
+
+.tasks-thread-composer-shell .agents-model-button,
+.tasks-thread-composer-shell .agents-reason-button {
+  background: color-mix(in srgb, var(--surface-soft) 74%, var(--surface-elevated));
+}
+
+.tasks-thread-composer-shell .agents-model-menu,
+.tasks-thread-composer-shell .agents-reason-menu {
+  background: #ffffff;
+  box-shadow: 0 12px 30px rgba(12, 18, 28, 0.12);
+}
+
+.tasks-thread-composer-shell .agents-model-menu button,
+.tasks-thread-composer-shell .agents-reason-menu button {
+  border: 0;
+  border-radius: 4px;
+}
+
+.tasks-thread-composer-shell .agents-send-button {
+  flex: 0 0 auto;
+}
+
+.tasks-thread-detail-panel {
+  min-width: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.tasks-thread-detail-tabs {
+  padding: 10px;
+  flex-wrap: wrap;
+  min-height: 26px;
+}
+
+.tasks-thread-detail-tabs button {
+  min-height: 26px;
+  height: 26px;
   padding: 0 10px;
 }
 
-.tasks-terminal-pane-input::placeholder {
-  color: rgba(218, 227, 237, 0.44);
-}
-
-.tasks-detail-panel {
+.tasks-thread-detail-body {
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 10px;
   display: grid;
-  grid-template-rows: auto auto minmax(220px, 1fr) auto minmax(0, 160px);
-  gap: 8px;
+  align-content: start;
+  gap: 10px;
 }
 
-.tasks-detail-meta-grid {
+.tasks-thread-files-panel,
+.tasks-thread-workflow-panel,
+.tasks-thread-agent-detail-panel {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.tasks-meta-grid > div {
+  gap: 10px;
   min-width: 0;
+  overflow-x: hidden;
+}
+
+.tasks-thread-file-list {
+  display: grid;
+  gap: 6px;
+  max-height: 240px;
+  min-width: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.tasks-thread-file-list button {
+  width: 100%;
+  min-width: 0;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  overflow: hidden;
+}
+
+.tasks-thread-file-list button span,
+.tasks-thread-file-list button small,
+.tasks-thread-changed-file-tags button {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tasks-thread-file-preview pre,
+.tasks-thread-detail-text-panel pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: "DepartureMonoRail", "Galmuri11", monospace;
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--text-main);
+}
+
+.tasks-thread-workflow-meta {
+  flex-wrap: wrap;
+}
+
+.tasks-thread-workflow-meta div {
+  min-width: 140px;
   display: grid;
   gap: 4px;
 }
 
-.tasks-artifacts-panel-shell {
-  min-height: 0;
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
-  gap: 8px;
-}
-
-.tasks-artifact-editor {
-  min-height: 220px;
-  padding: 8px;
-  resize: none;
-  font-family: "BasicallyAMono", "Galmuri11", monospace;
-  line-height: 1.55;
-}
-
-.tasks-changed-files ul,
-.tasks-prompt-list {
+.tasks-thread-artifact-list ul {
   margin: 0;
   padding-left: 18px;
   display: grid;
   gap: 6px;
 }
 
-.tasks-prompt-list {
-  padding-left: 0;
-  list-style: none;
-  min-height: 0;
-  overflow: auto;
+.tasks-thread-detail-text-panel.is-inline {
+  padding: 0;
+  border: 0;
+  background: transparent;
 }
 
-.tasks-prompt-item {
-  border: 1px solid var(--border-subtle);
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--surface-panel) 92%, transparent);
-  padding: 10px;
+@media (max-width: 1400px) {
+  .tasks-thread-layout {
+  font-family: "DepartureMonoRail", "Galmuri11", monospace;
+    grid-template-columns: 200px minmax(0, 1fr) 300px;
+  }
+}
+
+@media (max-width: 1120px) {
+  .tasks-thread-layout {
+  font-family: "DepartureMonoRail", "Galmuri11", monospace;
+    grid-template-columns: 200px minmax(0, 1fr);
+  }
+
+  .tasks-thread-detail-panel {
+    display: none;
+  }
+}
+
+.tasks-thread-files-panel .tasks-thread-section-head > span {
+  font-size: 14px;
+  line-height: 1;
+  color: var(--text-main);
+}
+
+.tasks-thread-section-head-with-tools {
+  align-items: center;
+}
+
+.tasks-thread-section-tools {
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.tasks-thread-section-count {
+  font-size: 14px;
+  line-height: 1;
+  color: var(--text-main);
+}
+
+.tasks-thread-inline-select,
+.tasks-thread-inline-input,
+.tasks-thread-inline-button,
+.tasks-thread-header-action {
+  font: inherit;
+}
+
+.tasks-thread-inline-select,
+.tasks-thread-inline-input,
+.tasks-thread-inline-button {
+  min-height: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--surface-soft) 74%, var(--surface-elevated));
+  color: var(--text-main);
+  padding: 0 10px;
+  box-sizing: border-box;
+}
+
+.tasks-thread-inline-select {
+  min-width: 126px;
+}
+
+.tasks-thread-inline-input {
+  width: 156px;
+}
+
+.tasks-thread-inline-button {
+  white-space: nowrap;
+}
+
+.tasks-thread-layout button,
+.tasks-thread-layout input,
+.tasks-thread-layout textarea,
+.tasks-thread-layout select,
+.tasks-thread-layout pre,
+.tasks-thread-layout strong,
+.tasks-thread-layout span,
+.tasks-thread-layout p,
+.tasks-thread-layout small,
+.tasks-thread-layout li,
+.tasks-thread-layout article,
+.tasks-thread-layout div {
+  font-family: inherit;
+}
+
+.tasks-thread-list-row {
+  display: block;
+}
+
+.tasks-thread-list-delete {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 18px !important;
+  min-width: 18px !important;
+  height: 18px !important;
+  min-height: 18px !important;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+  line-height: 1;
+}
+
+.tasks-thread-list-row.is-active .tasks-thread-list-delete {
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.tasks-thread-header-meta {
+  display: none !important;
+}
+
+
+.tasks-thread-changed-files-strip {
   display: grid;
-  gap: 6px;
-}
-
-.tasks-prompt-item p {
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
-.tasks-empty-state {
-  align-content: center;
-  justify-items: start;
-}
-
-.tasks-composer {
-  position: sticky;
-  bottom: 0;
-  border-radius: 14px;
-  border: 1px solid var(--border-subtle);
-  background: color-mix(in srgb, var(--surface-panel) 94%, transparent);
-}
-
-.tasks-composer textarea {
-  min-height: 108px;
-  padding: 8px;
-  resize: vertical;
-}
-
-.task-create-modal {
-  width: min(760px, calc(100vw - 32px));
-  max-height: calc(100vh - 48px);
-  overflow: auto;
-  display: grid;
-  gap: 14px;
-}
-
-.task-create-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
 }
 
-.task-create-field textarea,
-.task-create-field select {
-  padding: 10px 12px;
+.tasks-thread-changed-file-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
-.task-create-field textarea {
-  min-height: 140px;
-  resize: vertical;
+.tasks-thread-changed-file-tags button,
+.tasks-thread-agent-session-tabs button,
+.tasks-thread-agent-session-actions button,
+.tasks-thread-agent-session-input button {
+  border: 0;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--surface-soft) 74%, var(--surface-elevated));
+  color: var(--text-main);
+  min-height: 26px;
+  height: 26px;
+  padding: 0 10px;
+  font: inherit;
 }
 
-@media (max-width: 1320px) {
-  .tasks-runtime-shell {
-    grid-template-columns: 1fr;
-  }
-
-  .tasks-detail-panel {
-    grid-template-rows: auto auto minmax(200px, 1fr) auto minmax(0, 180px);
-  }
+.tasks-thread-agent-session-shell {
+  display: grid;
+  gap: 10px;
 }
 
-@media (max-width: 1180px) {
-  .tasks-shell,
-  .task-create-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .tasks-terminal-grid {
-    grid-template-columns: 1fr;
-    grid-auto-rows: minmax(260px, auto);
-  }
+.tasks-thread-agent-session-toolbar,
+.tasks-thread-agent-session-actions,
+.tasks-thread-agent-session-tabs,
+.tasks-thread-agent-session-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-
-.tasks-topbar {
-  padding: 2px 0 6px;
-  border-bottom: 1px solid color-mix(in srgb, var(--border-subtle) 62%, transparent);
+.tasks-thread-agent-session-toolbar {
+  justify-content: space-between;
 }
 
-.tasks-topbar-copy p {
-  font-size: 11px;
+.tasks-thread-agent-session-tabs {
+  flex-wrap: wrap;
 }
 
-.tasks-stage-head {
-  padding: 0 2px 4px;
+.tasks-thread-agent-session-tabs button.is-active {
+  background: color-mix(in srgb, var(--focus-ring) 18%, var(--surface-soft));
 }
 
-.tasks-stage-copy p {
-  font-family: "BasicallyAMono", "Noto Sans KR", monospace;
+.tasks-thread-agent-session-actions span {
   font-size: 10px;
-  letter-spacing: 0.04em;
   text-transform: uppercase;
+  color: var(--text-muted);
 }
 
-.tasks-detail-panel {
-  border-left: 1px solid color-mix(in srgb, var(--border-subtle) 62%, transparent);
-  background: color-mix(in srgb, var(--surface-panel) 88%, var(--surface-elevated));
+.tasks-thread-agent-session-input input {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 4px;
+  background: #ffffff;
+  padding: 0 10px;
+  font: inherit;
+  color: var(--text-main);
 }
 
-.tasks-detail-panel strong,
-.tasks-detail-panel span,
-.tasks-detail-panel p,
-.tasks-detail-panel li,
-.tasks-detail-panel textarea,
-.tasks-detail-panel button {
-  font-size: 11px;
+.tasks-terminal-viewport {
+  min-height: 260px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #0f1520;
 }
 
-.tasks-terminal-pane-actions {
+.tasks-terminal-host {
+  min-height: 260px;
+  height: 260px;
+  padding: 8px;
+}
+
+
+.tasks-thread-agent-label-input {
+  width: 100%;
+  min-height: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 4px;
+  background: #ffffff;
+  color: var(--text-main);
+  padding: 0 10px;
+  font: inherit;
+  box-sizing: border-box;
+}
+
+.tasks-thread-agent-add-row {
+  display: grid;
   gap: 4px;
 }
 
-.tasks-terminal-pane .mini-action-button {
-  min-height: 24px;
-  height: 24px;
-  padding: 0 8px;
+.tasks-thread-agent-add-row button {
+  border: 0;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--surface-soft) 62%, #ffffff);
+  color: var(--text-main);
+  min-height: 26px;
+  height: 26px;
+  padding: 0 10px;
+  font: inherit;
+  justify-content: flex-start;
+  width: 100%;
 }
 
-.tasks-terminal-pane .mini-action-button-label {
-  font-size: 10px;
+.tasks-thread-detail-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tasks-thread-detail-tab-icon {
+  width: 12px;
+  height: 12px;
+  flex: 0 0 auto;
+}
+
+
+.tasks-thread-layout,
+.tasks-thread-layout * {
+  font-family: "DepartureMonoRail", "Galmuri11", monospace !important;
+}
+
+.tasks-thread-layout button:focus,
+.tasks-thread-layout button:focus-visible,
+.tasks-thread-layout input:focus,
+.tasks-thread-layout input:focus-visible,
+.tasks-thread-layout textarea:focus,
+.tasks-thread-layout textarea:focus-visible,
+.tasks-thread-layout [role="option"]:focus,
+.tasks-thread-layout [role="option"]:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+  border-color: transparent !important;
+}
+
+.tasks-thread-detail-tabs {
+  justify-content: flex-end;
+}
+
+.tasks-thread-detail-tabs button {
+  width: 34px;
+  min-width: 34px;
+  padding: 0;
+  justify-content: center;
+}
+
+.tasks-thread-detail-tab-icon {
+  width: 14px;
+  height: 14px;
+}
+
+.tasks-thread-agent-detail-grid {
+  justify-content: flex-start;
+}
+
+.tasks-thread-agent-detail-grid div {
+  min-width: 120px;
 }

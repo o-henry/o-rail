@@ -64,10 +64,11 @@ export function useWorkflowShortcuts(params: UseWorkflowShortcutsParams) {
 
   useEffect(() => {
     const tabHotkeys: Record<string, WorkspaceTab> = {
-      "1": "workflow",
-      "2": "knowledge",
-      "3": "adaptation",
-      "4": "settings",
+      "1": "tasks",
+      "2": "workflow",
+      "3": "knowledge",
+      "4": "adaptation",
+      "5": "settings",
     };
     const tabStatusByKey: Record<WorkspaceTab, string> = {
       workbench: "그래프 탭으로 이동",

@@ -4,6 +4,7 @@ mod knowledge;
 mod quality;
 mod storage;
 mod system;
+mod threads;
 mod unity_automation;
 mod unity_automation_batch;
 mod via_bridge;
@@ -82,6 +83,21 @@ pub fn run() {
             storage::task_record_role_result,
             storage::task_mark_status,
             storage::task_archive,
+            threads::thread_list,
+            threads::thread_delete,
+            threads::thread_add_agent,
+            threads::thread_update_agent,
+            threads::thread_remove_agent,
+            threads::thread_create,
+            threads::thread_load,
+            threads::thread_append_message,
+            threads::thread_spawn_agents,
+            threads::thread_list_agents,
+            threads::thread_open_agent_detail,
+            threads::thread_create_approval,
+            threads::thread_resolve_approval,
+            threads::thread_record_role_result,
+            threads::thread_file_diff,
             storage::workspace_write_markdown,
             storage::workspace_write_text,
             storage::workspace_read_text,

@@ -78,6 +78,23 @@ export function useRoleRunCompletionBridge(params: Params) {
         })
         .catch(() => {});
     }
+    if (payload.sourceTab === "tasks-thread") {
+      void invokeFn("thread_record_role_result", {
+        cwd,
+        threadId: payload.taskId,
+        studioRoleId: payload.roleId,
+        runId: payload.runId,
+        runStatus: payload.runStatus,
+        artifactPaths: Array.isArray(payload.artifactPaths) ? payload.artifactPaths : [],
+        summary: payload.envelope?.record?.summary ?? null,
+      })
+        .then((updated) => {
+          if (updated) {
+            window.dispatchEvent(new CustomEvent("rail:thread-updated", { detail: { threadId: payload.taskId } }));
+          }
+        })
+        .catch(() => {});
+    }
     if (payload.runStatus === "done" && payload.sourceTab === "workflow" && roleId && targetRole && requestText) {
       workflowHandoffPanel.createAutoHandoff({
         runId: payload.runId,

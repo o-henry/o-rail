@@ -27,7 +27,7 @@ export function TaskTerminalViewport(props: TaskTerminalViewportProps) {
       convertEol: false,
       cursorBlink: true,
       cursorStyle: "block",
-      fontFamily: '"BasicallyAMono", "Galmuri11", monospace',
+      fontFamily: '"DepartureMonoRail", "Galmuri11", monospace',
       fontSize: 12,
       lineHeight: 1.28,
       scrollback: 6000,

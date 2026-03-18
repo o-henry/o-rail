@@ -1,9 +1,13 @@
 .workspace.workspace-has-error .workspace-quick-panel {
-  top: 122px;
+  top: 64px;
 }
 
 .workspace-quick-toggle {
-  display: none;
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 9;
+  display: inline-flex;
   width: 36px;
   min-width: 36px;
   min-height: 36px;
@@ -39,7 +43,7 @@
 
 .workspace-quick-panel {
   position: absolute;
-  top: 82px;
+  top: 52px;
   right: 10px;
   bottom: 10px;
   width: min(380px, calc(100vw - 112px));
@@ -235,23 +239,11 @@
 
 @media (max-width: 900px) {
   .workspace.workspace-has-error .workspace-quick-panel {
-    top: 112px;
-  }
-
-  .workspace-topbar {
-    padding: 0 8px;
-  }
-
-  .workspace-topbar-tab {
-    min-height: 32px;
-    height: 32px;
-    padding: 0 8px;
-    gap: 6px;
-    font-size: 12px;
+    top: 60px;
   }
 
   .workspace-quick-panel {
-    top: 76px;
+    top: 48px;
     right: 8px;
     bottom: 8px;
     width: min(320px, calc(100vw - 82px));
@@ -335,8 +327,8 @@
   right: 8px;
 }
 
-.workspace > :not(.workspace-header):not(.workspace-topbar):not(.error):not(.workspace-quick-toggle):not(.workspace-quick-panel) {
-  grid-row: 4;
+.workspace > :not(.workspace-header):not(.error):not(.workspace-quick-toggle):not(.workspace-quick-panel) {
+  grid-row: 3;
   min-height: 0;
 }
 

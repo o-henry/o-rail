@@ -44,6 +44,7 @@ export function MainAppWorkspaceContent(props: any) {
           cwd={props.cwd}
           hasTauriRuntime={props.hasTauriRuntime}
           invokeFn={props.invokeFn}
+          onOpenSettings={() => props.onSelectWorkspaceTab("settings")}
           publishAction={props.publishAction}
           setStatus={props.setStatus}
         />

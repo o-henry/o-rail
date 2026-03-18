@@ -39,20 +39,14 @@ const SHOW_LANGUAGE_SWITCH = false;
 
 export default function AppNav({ activeTab, onSelectTab, renderIcon }: AppNavProps) {
   const { locale, cycleLocale, t } = useI18n();
+
   return (
     <aside className="left-nav">
-      <nav
-        className="nav-list"
-        style={{
-          height: "100%",
-          display: "grid",
-        }}
-      >
+      <nav className="nav-list">
         {NAV_ITEMS.map((item) => {
           const active = activeTab === item.tab;
           const ariaLabel = item.ariaLabel.startsWith("nav.") ? t(item.ariaLabel) : item.ariaLabel;
           const title = item.title.startsWith("nav.") ? t(item.title) : item.title;
-          const label = item.label.startsWith("nav.") ? t(item.label) : item.label;
           return (
             <button
               aria-label={ariaLabel}
@@ -63,7 +57,6 @@ export default function AppNav({ activeTab, onSelectTab, renderIcon }: AppNavPro
               type="button"
             >
               <span className="nav-icon">{renderIcon(item.tab, active)}</span>
-              <span className="nav-label">{label}</span>
             </button>
           );
         })}

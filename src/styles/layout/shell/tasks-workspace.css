@@ -733,6 +733,12 @@
   background: color-mix(in srgb, var(--surface-soft) 46%, #ffffff);
 }
 
+.tasks-thread-conversation-scroll + .tasks-thread-running-strip,
+.tasks-thread-conversation-scroll + .tasks-thread-composer-shell,
+.tasks-thread-running-strip + .tasks-thread-composer-shell {
+  margin-top: 10px;
+}
+
 .tasks-thread-running-strip .tasks-thread-section-head {
   padding-bottom: 4px;
 }

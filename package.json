@@ -4,8 +4,8 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "./scripts/with-modern-node.sh vite",
-    "dev:isolated": "RAIL_CODEX_HOME_MODE=isolated ./scripts/with-modern-node.sh vite",
+    "dev": "./scripts/run-vite-dev.sh",
+    "dev:isolated": "RAIL_CODEX_HOME_MODE=isolated ./scripts/run-vite-dev.sh",
     "build": "./scripts/with-modern-node.sh sh -c 'tsc && vite build'",
     "check:arch": "./scripts/with-modern-node.sh node scripts/check-architecture.mjs",
     "check:cycles": "./scripts/with-modern-node.sh node scripts/check-cycles.mjs",

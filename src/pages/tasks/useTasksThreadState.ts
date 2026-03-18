@@ -1,5 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { KnowledgeFileRef } from "../../features/workflow/types";
 import type { AgenticAction } from "../../features/orchestration/agentic/actionBus";
+import {
+  UNITY_DEFAULT_THREAD_PRESET_IDS,
+  buildTaskAgentPrompt,
+  getDefaultRunPresetIds,
+  getTaskAgentDiscussionLine,
+  getTaskAgentLabel,
+  getTaskAgentStudioRoleId,
+  getTaskAgentSummary,
+  parseTaskAgentTags,
+} from "./taskAgentPresets";
 import type {
   ApprovalDecision,
   ApprovalRecord,
@@ -8,9 +19,11 @@ import type {
   ThreadDetail,
   ThreadDetailTab,
   ThreadListItem,
+  ThreadMessage,
   ThreadRoleId,
 } from "./threadTypes";
-import { THREAD_DETAIL_TABS, THREAD_ROLE_LABELS } from "./threadTypes";
+import { THREAD_DETAIL_TABS } from "./threadTypes";
+import { deriveThreadWorkflow, deriveThreadWorkflowSummary } from "./threadWorkflow";
 
 type InvokeFn = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
 
@@ -35,19 +48,19 @@ type BrowserStore = {
   details: Record<string, ThreadDetail>;
 };
 
-const ROLE_STUDIO_ID: Record<ThreadRoleId, string> = {
-  explorer: "pm_planner",
-  reviewer: "pm_feasibility_critic",
-  worker: "client_programmer",
-  qa: "qa_engineer",
+type KnowledgeRetrieveResult = {
+  snippets: Array<{
+    fileId: string;
+    fileName: string;
+    chunkIndex: number;
+    text: string;
+    score: number;
+  }>;
+  warnings: string[];
 };
 
 const BROWSER_STORE_KEY = "rail.tasks.browser-state.v4";
-
-function parseTaggedRoles(input: string): ThreadRoleId[] {
-  const matches = String(input ?? "").toLowerCase().match(/@(explorer|reviewer|worker|qa)\b/g) ?? [];
-  return [...new Set(matches.map((entry) => entry.replace(/^@/, "") as ThreadRoleId))];
-}
+const TASKS_PROJECT_PATH_KEY = "rail.tasks.project-path.v1";
 
 function truncateTitle(input: string): string {
   const trimmed = String(input ?? "").trim();
@@ -55,26 +68,28 @@ function truncateTitle(input: string): string {
   return trimmed.length > 52 ? `${trimmed.slice(0, 52)}…` : trimmed;
 }
 
-function defaultRunRoles(detail: ThreadDetail, taggedRoles: ThreadRoleId[]): ThreadRoleId[] {
-  if (taggedRoles.length > 0) {
-    return taggedRoles.filter((roleId) => detail.agents.some((agent) => agent.roleId === roleId));
+function isPlaceholderTitle(input: string): boolean {
+  const normalized = String(input ?? "").trim().toLowerCase();
+  return !normalized || normalized === "new thread" || normalized === "새 thread" || normalized === "새 스레드";
+}
+
+function shouldAutoReplaceTitle(currentTitle: string, currentPrompt: string): boolean {
+  const title = String(currentTitle ?? "").trim();
+  if (!title || isPlaceholderTitle(title)) {
+    return true;
   }
-  return detail.agents.length > 0 ? detail.agents.map((agent) => agent.roleId) : ["worker"];
+  const prompt = String(currentPrompt ?? "").trim();
+  return Boolean(prompt) && title === truncateTitle(prompt);
+}
+
+function defaultRunRoles(detail: ThreadDetail, taggedRoles: ThreadRoleId[]): ThreadRoleId[] {
+  return getDefaultRunPresetIds(detail.agents.map((agent) => agent.roleId), taggedRoles);
 }
 
 function rolePrompt(detail: ThreadDetail, roleId: ThreadRoleId, prompt: string): string {
   const goal = String(detail.task.goal ?? "").trim();
   const userPrompt = String(prompt ?? "").trim() || goal;
-  if (roleId === "explorer") {
-    return `${userPrompt}\n\nFocus: inspect the repo, locate relevant files, and summarize root cause and constraints.`;
-  }
-  if (roleId === "reviewer") {
-    return `${userPrompt}\n\nFocus: review risks, edge cases, architecture impact, and likely regressions.`;
-  }
-  if (roleId === "qa") {
-    return `${userPrompt}\n\nFocus: define validation steps, regression checks, and test coverage gaps.`;
-  }
-  return `${userPrompt}\n\nFocus: implement the requested change safely and summarize modified files.`;
+  return buildTaskAgentPrompt(roleId, userPrompt);
 }
 
 function defaultSelectedFile(detail: ThreadDetail | null): string {
@@ -131,11 +146,43 @@ function persistBrowserStore(store: BrowserStore) {
   window.localStorage.setItem(BROWSER_STORE_KEY, JSON.stringify(store));
 }
 
+function loadTasksProjectPath(defaultValue: string): string {
+  if (typeof window === "undefined") {
+    return defaultValue;
+  }
+  try {
+    const raw = window.localStorage.getItem(TASKS_PROJECT_PATH_KEY);
+    const value = String(raw ?? "").trim();
+    return value || defaultValue;
+  } catch {
+    return defaultValue;
+  }
+}
+
+function persistTasksProjectPath(path: string) {
+  if (typeof window === "undefined") return;
+  const normalized = String(path ?? "").trim();
+  if (!normalized) {
+    window.localStorage.removeItem(TASKS_PROJECT_PATH_KEY);
+    return;
+  }
+  window.localStorage.setItem(TASKS_PROJECT_PATH_KEY, normalized);
+}
+
+function withDerivedWorkflow(detail: ThreadDetail): ThreadDetail {
+  return {
+    ...detail,
+    workflow: deriveThreadWorkflow(detail),
+  };
+}
+
 function toThreadListItem(detail: ThreadDetail): ThreadListItem {
+  const workflow = detail.workflow ?? deriveThreadWorkflow(detail);
   return {
     thread: detail.thread,
     agentCount: detail.agents.length,
     pendingApprovalCount: detail.approvals.filter((approval) => approval.status === "pending").length,
+    workflowSummary: deriveThreadWorkflowSummary({ ...detail, workflow }),
   };
 }
 
@@ -152,26 +199,92 @@ function buildBrowserArtifacts(taskId: string, prompt: string): Record<string, s
   const brief = prompt || "Start by describing the change you want to make.";
   return {
     brief,
-    findings: "Repo scan pending.",
-    plan: "1. Create or select the right agents\n2. Gather repo context\n3. Review changed files and diff\n4. Synthesize the answer",
+    findings: "Design pass pending.",
+    plan: "1. Brief the Unity task\n2. Capture design notes\n3. Implement and integrate\n4. Playtest and lock",
     patch: "No patch yet.",
     validation: "Validation pending.",
     handoff: `Artifacts live under .rail/tasks/${taskId}/...`,
   };
 }
 
-function buildBrowserThread(cwd: string, prompt: string, model: string, reasoning: string, accessMode: string): ThreadDetail {
+function buildBrowserAgents(threadId: string, workspacePath: string, createdAt: string): BackgroundAgentRecord[] {
+  return UNITY_DEFAULT_THREAD_PRESET_IDS.map((roleId) => ({
+    id: `${threadId}:${roleId}`,
+    threadId,
+    label: getTaskAgentLabel(roleId),
+    roleId,
+    status: "idle",
+    summary: getTaskAgentSummary(roleId),
+    worktreePath: workspacePath,
+    lastUpdatedAt: createdAt,
+  }));
+}
+
+function latestBrowserArtifact(detail: ThreadDetail) {
+  const artifactEntries = Object.entries(detail.artifacts).filter(([, content]) => String(content ?? "").trim());
+  const latestEntry = artifactEntries[artifactEntries.length - 1];
+  if (!latestEntry) {
+    return { path: null, preview: null };
+  }
+  const [artifactKey, artifactContent] = latestEntry;
+  return {
+    path: `.rail/tasks/${detail.task.taskId}/${artifactKey}.md`,
+    preview: artifactContent,
+  };
+}
+
+function createBrowserMessage(
+  threadId: string,
+  role: ThreadMessage["role"],
+  content: string,
+  createdAt: string,
+  options?: Partial<Pick<ThreadMessage, "agentId" | "agentLabel" | "sourceRoleId" | "eventKind" | "artifactPath">>,
+): ThreadMessage {
+  return {
+    id: nextId("msg"),
+    threadId,
+    role,
+    content,
+    agentId: options?.agentId ?? null,
+    agentLabel: options?.agentLabel ?? null,
+    sourceRoleId: options?.sourceRoleId ?? null,
+    eventKind: options?.eventKind ?? null,
+    artifactPath: options?.artifactPath ?? null,
+    createdAt,
+  };
+}
+
+function buildBrowserThread(
+  storageRoot: string,
+  projectPath: string,
+  prompt: string,
+  model: string,
+  reasoning: string,
+  accessMode: string,
+): ThreadDetail {
   const createdAt = nowIso();
   const threadId = nextId("thread");
   const taskId = nextId("task");
-  return {
+  const roles = UNITY_DEFAULT_THREAD_PRESET_IDS.map((roleId) => ({
+    id: roleId,
+    label: getTaskAgentLabel(roleId),
+    studioRoleId: getTaskAgentStudioRoleId(roleId) || "",
+    enabled: true,
+    status: "ready",
+    lastPrompt: null,
+    lastPromptAt: null,
+    lastRunId: null,
+    artifactPaths: [],
+    updatedAt: createdAt,
+  }));
+  const detail = {
     thread: {
       threadId,
       taskId,
       title: truncateTitle(prompt),
       userPrompt: prompt,
       status: "idle",
-      cwd,
+      cwd: projectPath,
       branchLabel: "main",
       accessMode,
       model,
@@ -183,40 +296,48 @@ function buildBrowserThread(cwd: string, prompt: string, model: string, reasonin
       taskId,
       goal: prompt || "NEW THREAD",
       mode: "balanced",
-      team: "custom",
+      team: "full-squad",
       isolationRequested: "auto",
       isolationResolved: "current-repo",
       status: "active",
-      workspacePath: cwd,
-      worktreePath: cwd,
+      workspacePath: projectPath,
+      worktreePath: projectPath,
       branchName: "main",
       fallbackReason: null,
       createdAt,
       updatedAt: createdAt,
-      roles: [],
+      roles,
       prompts: [],
     },
     messages: [],
-    agents: [],
+    agents: buildBrowserAgents(threadId, projectPath, createdAt),
     approvals: [],
     agentDetail: null,
-    artifacts: buildBrowserArtifacts(taskId, prompt),
+    artifacts: {
+      ...buildBrowserArtifacts(taskId, prompt),
+      handoff: `Artifacts live under ${storageRoot.replace(/[\/]+$/, "")}/.rail/tasks/${taskId}/...`,
+    },
     changedFiles: [],
     validationState: "pending",
     riskLevel: "medium",
     files: buildBrowserFiles(),
-  };
+  } as unknown as ThreadDetail;
+  detail.workflow = deriveThreadWorkflow(detail);
+  return detail;
 }
 
 function buildBrowserAgentDetail(detail: ThreadDetail, agent: BackgroundAgentRecord): ThreadAgentDetail {
   const lastUserMessage = [...detail.messages].reverse().find((message) => message.role === "user");
+  const latestArtifact = latestBrowserArtifact(detail);
   return {
     agent,
-    studioRoleId: ROLE_STUDIO_ID[agent.roleId],
+    studioRoleId: getTaskAgentStudioRoleId(agent.roleId),
     lastPrompt: lastUserMessage?.content ?? null,
     lastPromptAt: lastUserMessage?.createdAt ?? null,
     lastRunId: `${detail.thread.threadId}:${agent.roleId}`,
     artifactPaths: Object.keys(detail.artifacts).map((key) => `.rail/tasks/${detail.task.taskId}/${key}.md`),
+    latestArtifactPath: latestArtifact.path,
+    latestArtifactPreview: latestArtifact.preview,
     worktreePath: detail.task.worktreePath || detail.task.workspacePath,
   };
 }
@@ -236,21 +357,8 @@ function browserDiffContent(path: string): string {
   ].join("\n");
 }
 
-function roleSummary(roleId: ThreadRoleId): string {
-  if (roleId === "explorer") return "Mapping the repo and identifying relevant files.";
-  if (roleId === "reviewer") return "Reviewing risks, tradeoffs, and likely regressions.";
-  if (roleId === "qa") return "Preparing validation steps and regression checks.";
-  return "Preparing an implementation plan and likely code changes.";
-}
-
-function roleDiscussionLine(roleId: ThreadRoleId): string {
-  if (roleId === "explorer") return "EXPLORER: I am exploring the repo structure and tracing entry points.";
-  if (roleId === "reviewer") return "REVIEWER: I am comparing options and highlighting architectural risks.";
-  if (roleId === "qa") return "QA: I am drafting validation coverage and regression checks.";
-  return "WORKER: I am mapping the implementation path and likely file edits.";
-}
-
 export function useTasksThreadState(params: Params) {
+  const initialProjectPath = useMemo(() => loadTasksProjectPath(params.cwd), [params.cwd]);
   const [threads, setThreads] = useState<ThreadListItem[]>([]);
   const [activeThreadId, setActiveThreadId] = useState("");
   const [activeThread, setActiveThread] = useState<ThreadDetail | null>(null);
@@ -265,12 +373,26 @@ export function useTasksThreadState(params: Params) {
   const [selectedFilePath, setSelectedFilePath] = useState("");
   const [selectedFileContent, setSelectedFileContent] = useState("");
   const [selectedFileDiff, setSelectedFileDiff] = useState("");
+  const [attachedFiles, setAttachedFiles] = useState<KnowledgeFileRef[]>([]);
+  const [projectPath, setProjectPath] = useState(initialProjectPath);
   const browserStoreRef = useRef<BrowserStore>(loadBrowserStore());
+
+  useEffect(() => {
+    setProjectPath((current) => current || initialProjectPath);
+  }, [initialProjectPath]);
+
+  useEffect(() => {
+    persistTasksProjectPath(projectPath);
+  }, [projectPath]);
 
   const applyBrowserStore = useCallback(
     (store: BrowserStore, preferredThreadId?: string) => {
       browserStoreRef.current = store;
       persistBrowserStore(store);
+      const normalizedDetails = Object.fromEntries(
+        Object.entries(store.details).map(([threadId, detail]) => [threadId, withDerivedWorkflow(detail)]),
+      ) as Record<string, ThreadDetail>;
+      store.details = normalizedDetails;
       const items = store.order.map((threadId) => store.details[threadId]).filter(Boolean).map(toThreadListItem);
       setThreads(items);
       const nextId =
@@ -288,9 +410,10 @@ export function useTasksThreadState(params: Params) {
         setSelectedFileDiff("");
         return null;
       }
-      const detail = store.details[nextId];
+      const detail = withDerivedWorkflow(store.details[nextId]);
       setActiveThread(detail);
       setActiveThreadId(nextId);
+      setProjectPath((current) => String(detail.task.workspacePath ?? "").trim() || current);
       setSelectedAgentId((current) => (current && detail.agents.some((agent) => agent.id === current) ? current : defaultSelectedAgent(detail)));
       setSelectedFilePath((current) => (current && detail.files.some((file) => file.path === current) ? current : defaultSelectedFile(detail)));
       return detail;
@@ -310,20 +433,22 @@ export function useTasksThreadState(params: Params) {
         return null;
       }
       if (!params.hasTauriRuntime || !params.cwd) {
-        const detail = browserStoreRef.current.details[threadId] ?? null;
+        const detail = browserStoreRef.current.details[threadId] ? withDerivedWorkflow(browserStoreRef.current.details[threadId]!) : null;
         if (!detail) {
           return applyBrowserStore(browserStoreRef.current);
         }
         setActiveThread(detail);
         setActiveThreadId(detail.thread.threadId);
+        setProjectPath((current) => String(detail.task.workspacePath ?? "").trim() || current);
         setSelectedAgentId((current) => (current && detail.agents.some((agent) => agent.id === current) ? current : defaultSelectedAgent(detail)));
         setSelectedFilePath((current) => (current && detail.files.some((file) => file.path === current) ? current : defaultSelectedFile(detail)));
         return detail;
       }
       try {
-        const detail = await params.invokeFn<ThreadDetail>("thread_load", { cwd: params.cwd, threadId });
+        const detail = withDerivedWorkflow(await params.invokeFn<ThreadDetail>("thread_load", { cwd: params.cwd, threadId }));
         setActiveThread(detail);
         setActiveThreadId(detail.thread.threadId);
+        setProjectPath((current) => String(detail.task.workspacePath ?? "").trim() || current);
         setSelectedAgentId((current) => current || defaultSelectedAgent(detail));
         setSelectedFilePath((current) => current || defaultSelectedFile(detail));
         return detail;
@@ -438,17 +563,107 @@ export function useTasksThreadState(params: Params) {
 
   const pendingApprovals = useMemo(() => activeThread?.approvals.filter((approval) => approval.status === "pending") ?? [], [activeThread]);
 
+  const openAttachmentPicker = useCallback(async () => {
+    if (!params.hasTauriRuntime || !params.cwd) {
+      params.setStatus("Tasks file attachments are available in the desktop runtime only.");
+      return;
+    }
+    try {
+      const paths = await params.invokeFn<string[]>("dialog_pick_knowledge_files");
+      if (!paths.length) {
+        return;
+      }
+      const probed = await params.invokeFn<KnowledgeFileRef[]>("knowledge_probe", { paths });
+      setAttachedFiles((current) => {
+        const seen = new Set(current.map((file) => file.path));
+        const next = [...current];
+        for (const file of probed) {
+          if (!seen.has(file.path)) {
+            seen.add(file.path);
+            next.push(file);
+          }
+        }
+        return next;
+      });
+    } catch (error) {
+      params.setStatus(`Failed to attach files: ${formatError(error)}`);
+    }
+  }, [params]);
+
+  const removeAttachedFile = useCallback((fileId: string) => {
+    setAttachedFiles((current) => current.filter((file) => file.id !== fileId));
+  }, []);
+
+  const clearAttachedFiles = useCallback(() => {
+    setAttachedFiles([]);
+  }, []);
+
+  const openProjectDirectory = useCallback(async () => {
+    if (!params.hasTauriRuntime) {
+      params.setStatus("Project selection is available in the desktop runtime only.");
+      return;
+    }
+    try {
+      const selected = await params.invokeFn<string | null>("dialog_pick_directory");
+      const selectedPath = String(selected ?? "").trim();
+      if (!selectedPath) {
+        return;
+      }
+      setProjectPath(selectedPath);
+      params.setStatus(`Tasks project selected: ${selectedPath}`);
+    } catch (error) {
+      params.setStatus(`Failed to open project: ${formatError(error)}`);
+    }
+  }, [params]);
+
+  const buildPromptWithAttachments = useCallback(async (prompt: string) => {
+    const normalizedPrompt = String(prompt ?? "").trim();
+    if (!normalizedPrompt || attachedFiles.length === 0 || !params.hasTauriRuntime || !params.cwd) {
+      return normalizedPrompt;
+    }
+    try {
+      const retrieved = await params.invokeFn<KnowledgeRetrieveResult>("knowledge_retrieve", {
+        files: attachedFiles,
+        query: normalizedPrompt,
+        topK: 4,
+        maxChars: 3600,
+      });
+      const fileList = attachedFiles.map((file) => `- ${file.path}`).join("\n");
+      const snippetBlock = retrieved.snippets
+        .map((snippet, index) => `## ${index + 1}. ${snippet.fileName}\n${snippet.text}`)
+        .join("\n\n");
+      const warningBlock = retrieved.warnings.length > 0
+        ? `\n\nWarnings:\n${retrieved.warnings.map((warning) => `- ${warning}`).join("\n")}`
+        : "";
+      return [
+        normalizedPrompt,
+        "",
+        "Attached project files:",
+        fileList,
+        snippetBlock ? `\nRelevant snippets:\n\n${snippetBlock}` : "",
+        warningBlock,
+      ]
+        .filter(Boolean)
+        .join("\n");
+    } catch (error) {
+      params.setStatus(`Failed to read attached files: ${formatError(error)}`);
+      return normalizedPrompt;
+    }
+  }, [attachedFiles, params]);
+
   const openNewThread = useCallback(async () => {
     setComposerDraft("");
+    clearAttachedFiles();
     setSelectedAgentId("");
     setSelectedAgentDetail(null);
     setSelectedFilePath("");
     setSelectedFileContent("");
     setSelectedFileDiff("");
     setDetailTab("files");
+    const selectedProjectPath = String(projectPath || params.cwd || "/workspace").trim();
     if (!params.hasTauriRuntime || !params.cwd) {
       const store = cloneStore(browserStoreRef.current);
-      const detail = buildBrowserThread(params.cwd || "/workspace", "", model, reasoning, accessMode);
+      const detail = buildBrowserThread(params.cwd || "/workspace", selectedProjectPath, "", model, reasoning, accessMode);
       store.details[detail.thread.threadId] = detail;
       store.order = [detail.thread.threadId, ...store.order.filter((id) => id !== detail.thread.threadId)];
       applyBrowserStore(store, detail.thread.threadId);
@@ -456,16 +671,17 @@ export function useTasksThreadState(params: Params) {
       return;
     }
     try {
-      const detail = await params.invokeFn<ThreadDetail>("thread_create", {
+      const detail = withDerivedWorkflow(await params.invokeFn<ThreadDetail>("thread_create", {
         cwd: params.cwd,
+        projectPath: selectedProjectPath,
         prompt: "NEW THREAD",
         mode: "balanced",
-        team: "custom",
+        team: "full-squad",
         isolation: "auto",
         model,
         reasoning,
         accessMode,
-      });
+      }));
       setActiveThread(detail);
       setActiveThreadId(detail.thread.threadId);
       setSelectedAgentId(defaultSelectedAgent(detail));
@@ -483,7 +699,7 @@ export function useTasksThreadState(params: Params) {
         message: `Thread create failed: ${formatError(error)}`,
       });
     }
-  }, [accessMode, applyBrowserStore, model, params, reasoning, reloadThreads]);
+  }, [accessMode, applyBrowserStore, clearAttachedFiles, model, params, projectPath, reasoning, reloadThreads]);
 
   const selectThread = useCallback(async (threadId: string) => {
     setSelectedAgentId("");
@@ -494,10 +710,14 @@ export function useTasksThreadState(params: Params) {
   const dispatchRunRoles = useCallback(
     async (detail: ThreadDetail, prompt: string, roles: ThreadRoleId[]) => {
       for (const roleId of roles) {
+        const studioRoleId = getTaskAgentStudioRoleId(roleId);
+        if (!studioRoleId) {
+          continue;
+        }
         params.publishAction({
           type: "run_role",
           payload: {
-            roleId: ROLE_STUDIO_ID[roleId],
+            roleId: studioRoleId,
             taskId: detail.task.taskId,
             prompt: rolePrompt(detail, roleId, prompt),
             sourceTab: "tasks-thread",
@@ -513,17 +733,22 @@ export function useTasksThreadState(params: Params) {
     if (!prompt) {
       return;
     }
+    const selectedProjectPath = String(projectPath || params.cwd || "/workspace").trim();
+    const promptWithAttachments = await buildPromptWithAttachments(prompt);
 
     if (!params.hasTauriRuntime || !params.cwd) {
       const store = cloneStore(browserStoreRef.current);
       const existingDetail = activeThread ? store.details[activeThread.thread.threadId] : undefined;
-      const detail: ThreadDetail = existingDetail ?? buildBrowserThread(params.cwd || "/workspace", prompt, model, reasoning, accessMode);
+      const detail: ThreadDetail = existingDetail
+        ?? buildBrowserThread(params.cwd || "/workspace", selectedProjectPath, prompt, model, reasoning, accessMode);
       if (!existingDetail) {
         store.details[detail.thread.threadId] = detail;
         store.order = [detail.thread.threadId, ...store.order.filter((id) => id !== detail.thread.threadId)];
       }
       const timestamp = nowIso();
-      detail.thread.title = truncateTitle(detail.thread.userPrompt ? detail.thread.title : prompt);
+      detail.thread.title = shouldAutoReplaceTitle(detail.thread.title, detail.thread.userPrompt)
+        ? truncateTitle(prompt)
+        : detail.thread.title;
       detail.thread.userPrompt = detail.thread.userPrompt || prompt;
       detail.thread.status = "running";
       detail.thread.updatedAt = timestamp;
@@ -532,56 +757,62 @@ export function useTasksThreadState(params: Params) {
       detail.thread.accessMode = accessMode;
       detail.task.goal = detail.task.goal === "NEW THREAD" ? prompt : detail.task.goal;
       detail.task.updatedAt = timestamp;
-      detail.messages.push({
-        id: nextId("msg"),
-        threadId: detail.thread.threadId,
-        role: "user",
-        content: prompt,
-        createdAt: timestamp,
-      });
-      const taggedRoles = parseTaggedRoles(prompt);
-      const rolesToRun = taggedRoles.length > 0 ? taggedRoles : detail.agents.map((agent) => agent.roleId);
-      const finalRoles: ThreadRoleId[] = rolesToRun.length > 0 ? rolesToRun : ["worker"];
+      detail.messages.push(
+        createBrowserMessage(detail.thread.threadId, "user", prompt, timestamp, {
+          eventKind: "user_prompt",
+        }),
+      );
+      const taggedRoles = parseTaskAgentTags(prompt);
+      const finalRoles = defaultRunRoles(detail, taggedRoles);
       for (const roleId of finalRoles) {
         if (!detail.agents.some((agent) => agent.roleId === roleId)) {
           detail.agents.push({
             id: `${detail.thread.threadId}:${roleId}`,
             threadId: detail.thread.threadId,
-            label: THREAD_ROLE_LABELS[roleId],
+            label: getTaskAgentLabel(roleId),
             roleId,
             status: "idle",
-            summary: roleSummary(roleId),
+            summary: getTaskAgentSummary(roleId),
             worktreePath: detail.task.worktreePath || detail.task.workspacePath,
             lastUpdatedAt: timestamp,
           });
-          detail.messages.push({
-            id: nextId("msg"),
-            threadId: detail.thread.threadId,
-            role: "assistant",
-            content: `Created ${THREAD_ROLE_LABELS[roleId]} with instructions: ${rolePrompt(detail, roleId, prompt)}`,
-            createdAt: timestamp,
-          });
+          detail.messages.push(
+            createBrowserMessage(
+              detail.thread.threadId,
+              "assistant",
+              `Created ${getTaskAgentLabel(roleId)} with instructions: ${rolePrompt(detail, roleId, promptWithAttachments)}`,
+              timestamp,
+              {
+                agentId: `${detail.thread.threadId}:${roleId}`,
+                agentLabel: getTaskAgentLabel(roleId),
+                sourceRoleId: roleId,
+                eventKind: "agent_created",
+              },
+            ),
+          );
         }
       }
-      detail.agents = detail.agents.map((agent, index) => {
+      detail.agents = detail.agents.map((agent) => {
+        const activeIndex = finalRoles.indexOf(agent.roleId);
         if (!finalRoles.includes(agent.roleId)) {
           return { ...agent, status: "idle", lastUpdatedAt: timestamp };
         }
         return {
           ...agent,
-          status: index === 0 ? "thinking" : "awaiting_approval",
-          summary: roleSummary(agent.roleId),
+          status: activeIndex === 0 ? "thinking" : "awaiting_approval",
+          summary: getTaskAgentSummary(agent.roleId),
           lastUpdatedAt: timestamp,
         };
       });
       for (const roleId of finalRoles) {
-        detail.messages.push({
-          id: nextId("msg"),
-          threadId: detail.thread.threadId,
-          role: "assistant",
-          content: roleDiscussionLine(roleId),
-          createdAt: timestamp,
-        });
+        detail.messages.push(
+          createBrowserMessage(detail.thread.threadId, "assistant", getTaskAgentDiscussionLine(roleId), timestamp, {
+            agentId: `${detail.thread.threadId}:${roleId}`,
+            agentLabel: getTaskAgentLabel(roleId),
+            sourceRoleId: roleId,
+            eventKind: "agent_status",
+          }),
+        );
       }
       if (finalRoles.length > 1) {
         const sourceRole = finalRoles[0];
@@ -592,10 +823,10 @@ export function useTasksThreadState(params: Params) {
             threadId: detail.thread.threadId,
             agentId: `${detail.thread.threadId}:${sourceRole}`,
             kind: "handoff",
-            summary: `Approve handoff from ${THREAD_ROLE_LABELS[sourceRole]} to ${THREAD_ROLE_LABELS[targetRole]}.`,
+            summary: `Approve handoff from ${getTaskAgentLabel(sourceRole)} to ${getTaskAgentLabel(targetRole)}.`,
             payload: {
               targetRole,
-              prompt: `Continue the thread based on ${THREAD_ROLE_LABELS[sourceRole]}'s findings: ${prompt}`,
+              prompt: `Continue the thread based on ${getTaskAgentLabel(sourceRole)} findings: ${promptWithAttachments}`,
             },
             status: "pending",
             createdAt: timestamp,
@@ -603,33 +834,37 @@ export function useTasksThreadState(params: Params) {
           },
         ];
       }
-      detail.messages.push({
-        id: nextId("msg"),
-        threadId: detail.thread.threadId,
-        role: "assistant",
-        content: `${finalRoles.length} background agents are running now. I will wait for their updates and then synthesize the answer into one response.`,
-        createdAt: timestamp,
-      });
+      detail.messages.push(
+        createBrowserMessage(
+          detail.thread.threadId,
+          "assistant",
+          `${finalRoles.length} background agents are running now. I will wait for their updates and then synthesize the answer into one response.`,
+          timestamp,
+          { eventKind: "agent_batch_running" },
+        ),
+      );
       detail.changedFiles = ["src/pages/tasks/TasksPage.tsx", "src/pages/tasks/useTasksThreadState.ts"];
       detail.files = buildBrowserFiles();
-      detail.validationState = finalRoles.includes("qa") ? "in review" : "pending";
-      detail.riskLevel = finalRoles.includes("reviewer") ? "reviewing" : "medium";
+      detail.validationState = finalRoles.includes("qa_playtester") ? "in review" : "pending";
+      detail.riskLevel = finalRoles.includes("unity_architect") ? "reviewing" : "medium";
       detail.artifacts = {
         ...detail.artifacts,
         brief: prompt,
-        findings: finalRoles.map((roleId) => `${THREAD_ROLE_LABELS[roleId]}: ${roleSummary(roleId)}`).join("\n"),
-        plan: `1. Run ${finalRoles.map((roleId) => THREAD_ROLE_LABELS[roleId]).join(", ")}\n2. Review files\n3. Confirm approval\n4. Synthesize answer`,
+        findings: finalRoles.map((roleId) => `${getTaskAgentLabel(roleId)}: ${getTaskAgentSummary(roleId)}`).join("\n"),
+        plan: `1. Run ${finalRoles.map((roleId) => getTaskAgentLabel(roleId)).join(", ")}\n2. Review files\n3. Confirm approval\n4. Synthesize answer`,
       };
+      detail.workflow = deriveThreadWorkflow(detail);
       store.details[detail.thread.threadId] = detail;
       applyBrowserStore(store, detail.thread.threadId);
       setSelectedAgentId(`${detail.thread.threadId}:${finalRoles[0]}`);
       setSelectedFilePath(detail.changedFiles[0] ?? defaultSelectedFile(detail));
       setComposerDraft("");
+      clearAttachedFiles();
       params.appendWorkspaceEvent({
         source: "tasks-thread",
         actor: "user",
         level: "info",
-        message: `Thread ${detail.thread.threadId} · ${finalRoles.map((roleId) => THREAD_ROLE_LABELS[roleId]).join(", ")} dispatched`,
+        message: `Thread ${detail.thread.threadId} · ${finalRoles.map((roleId) => getTaskAgentLabel(roleId)).join(", ")} dispatched`,
       });
       params.setStatus(`Thread updated: ${truncateTitle(detail.thread.title)}`);
       return;
@@ -638,67 +873,69 @@ export function useTasksThreadState(params: Params) {
     try {
       let detail = activeThread;
       if (!detail) {
-        detail = await params.invokeFn<ThreadDetail>("thread_create", {
+        detail = withDerivedWorkflow(await params.invokeFn<ThreadDetail>("thread_create", {
           cwd: params.cwd,
-          prompt,
+          projectPath: selectedProjectPath,
+          prompt: promptWithAttachments,
           mode: "balanced",
-          team: "custom",
+          team: "full-squad",
           isolation: "auto",
           model,
           reasoning,
           accessMode,
-        });
+        }));
         setActiveThread(detail);
         setActiveThreadId(detail.thread.threadId);
         await reloadThreads(detail.thread.threadId);
       } else {
-        detail = await params.invokeFn<ThreadDetail>("thread_append_message", {
+        detail = withDerivedWorkflow(await params.invokeFn<ThreadDetail>("thread_append_message", {
           cwd: params.cwd,
           threadId: detail.thread.threadId,
           role: "user",
           content: prompt,
-        });
+        }));
         setActiveThread(detail);
       }
 
-      const taggedRoles = parseTaggedRoles(prompt);
+      const taggedRoles = parseTaskAgentTags(prompt);
       for (const roleId of taggedRoles) {
         if (!detail.agents.some((agent) => agent.roleId === roleId)) {
-          detail = await params.invokeFn<ThreadDetail>("thread_add_agent", {
+          detail = withDerivedWorkflow(await params.invokeFn<ThreadDetail>("thread_add_agent", {
             cwd: params.cwd,
             threadId: detail.thread.threadId,
             roleId,
-            label: THREAD_ROLE_LABELS[roleId],
-          });
+            label: getTaskAgentLabel(roleId),
+          }));
         }
       }
       const rolesToRun = defaultRunRoles(detail, taggedRoles);
       if (rolesToRun.length === 0) {
         setActiveThread(detail);
         await reloadThreads(detail.thread.threadId);
-        params.setStatus("No agents selected. Add an agent or use @explorer, @reviewer, @worker, or @qa.");
+        params.setStatus("No Unity agents selected. Add an agent or use @designer, @architect, @implementer, @playtest, and related tags.");
         return;
       }
-      const spawned = await params.invokeFn<ThreadDetail>("thread_spawn_agents", {
+      const spawned = withDerivedWorkflow(await params.invokeFn<ThreadDetail>("thread_spawn_agents", {
         cwd: params.cwd,
         threadId: detail.thread.threadId,
-        prompt,
+        prompt: promptWithAttachments,
         roles: rolesToRun,
-      });
+      }));
       setActiveThread(spawned);
       setActiveThreadId(spawned.thread.threadId);
       setSelectedAgentId((current) => current || defaultSelectedAgent(spawned));
       setSelectedFilePath((current) => current || defaultSelectedFile(spawned));
       await reloadThreads(spawned.thread.threadId);
-      await dispatchRunRoles(spawned, prompt, rolesToRun);
+      await dispatchRunRoles(spawned, promptWithAttachments, rolesToRun);
       params.appendWorkspaceEvent({
         source: "tasks-thread",
         actor: "user",
         level: "info",
-        message: `Thread ${spawned.thread.threadId} · ${rolesToRun.map((roleId) => THREAD_ROLE_LABELS[roleId]).join(", ")} dispatched`,
+        message: `Thread ${spawned.thread.threadId} · ${rolesToRun.map((roleId) => getTaskAgentLabel(roleId)).join(", ")} dispatched`,
       });
       params.setStatus(`Thread updated: ${truncateTitle(spawned.thread.title)}`);
       setComposerDraft("");
+      clearAttachedFiles();
     } catch (error) {
       params.setStatus(`Thread submit failed: ${formatError(error)}`);
       params.appendWorkspaceEvent({
@@ -708,7 +945,7 @@ export function useTasksThreadState(params: Params) {
         message: `Thread submit failed: ${formatError(error)}`,
       });
     }
-  }, [accessMode, activeThread, applyBrowserStore, composerDraft, dispatchRunRoles, model, params, reasoning, reloadThreads]);
+  }, [accessMode, activeThread, applyBrowserStore, buildPromptWithAttachments, clearAttachedFiles, composerDraft, dispatchRunRoles, model, params, projectPath, reasoning, reloadThreads]);
 
   const openAgent = useCallback(
     async (agent: BackgroundAgentRecord) => {
@@ -749,34 +986,44 @@ export function useTasksThreadState(params: Params) {
           detail.agents = detail.agents.map((agent) =>
             agent.roleId === targetRole ? { ...agent, status: "thinking", lastUpdatedAt: timestamp } : agent,
           );
-          detail.messages.push({
-            id: nextId("msg"),
-            threadId: detail.thread.threadId,
-            role: "assistant",
-            content: `Approval granted. ${THREAD_ROLE_LABELS[targetRole]} is continuing the work.`,
-            createdAt: timestamp,
-          });
+          detail.messages.push(
+            createBrowserMessage(
+              detail.thread.threadId,
+              "assistant",
+              `Approval granted. ${getTaskAgentLabel(targetRole)} is continuing the work.`,
+              timestamp,
+              {
+                agentId: `${detail.thread.threadId}:${targetRole}`,
+                agentLabel: getTaskAgentLabel(targetRole),
+                sourceRoleId: targetRole,
+                eventKind: "approval_approved",
+              },
+            ),
+          );
         } else {
-          detail.messages.push({
-            id: nextId("msg"),
-            threadId: detail.thread.threadId,
-            role: "assistant",
-            content: "Approval rejected. Waiting for a new direction.",
-            createdAt: timestamp,
-          });
+          detail.messages.push(
+            createBrowserMessage(
+              detail.thread.threadId,
+              "assistant",
+              "Approval rejected. Waiting for a new direction.",
+              timestamp,
+              { eventKind: "approval_rejected" },
+            ),
+          );
         }
         detail.thread.updatedAt = timestamp;
+        detail.workflow = deriveThreadWorkflow(detail);
         store.details[detail.thread.threadId] = detail;
         applyBrowserStore(store, detail.thread.threadId);
         return;
       }
       try {
-        let detail = await params.invokeFn<ThreadDetail>("thread_resolve_approval", {
+        let detail = withDerivedWorkflow(await params.invokeFn<ThreadDetail>("thread_resolve_approval", {
           cwd: params.cwd,
           threadId: activeThread.thread.threadId,
           approvalId: approval.id,
           decision,
-        });
+        }));
         setActiveThread(detail);
         await reloadThreads(detail.thread.threadId);
         if (decision === "approved") {
@@ -784,12 +1031,12 @@ export function useTasksThreadState(params: Params) {
           const targetRole = String(payload.targetRole ?? "").trim() as ThreadRoleId;
           const followupPrompt = String(payload.prompt ?? "").trim();
           if (targetRole && followupPrompt) {
-            detail = await params.invokeFn<ThreadDetail>("thread_spawn_agents", {
+            detail = withDerivedWorkflow(await params.invokeFn<ThreadDetail>("thread_spawn_agents", {
               cwd: params.cwd,
               threadId: detail.thread.threadId,
               prompt: followupPrompt,
               roles: [targetRole],
-            });
+            }));
             setActiveThread(detail);
             await reloadThreads(detail.thread.threadId);
             await dispatchRunRoles(detail, followupPrompt, [targetRole]);
@@ -848,23 +1095,62 @@ export function useTasksThreadState(params: Params) {
         const detail = store.details[activeThread.thread.threadId];
         if (!detail) return;
         detail.agents = detail.agents.map((agent) => (agent.id === agentId ? { ...agent, label, lastUpdatedAt: nowIso() } : agent));
+        detail.task.roles = detail.task.roles.map((role) => {
+          const normalizedAgentId = `${detail.thread.threadId}:${role.id}`;
+          return normalizedAgentId === agentId ? { ...role, label, updatedAt: nowIso() } : role;
+        });
+        detail.workflow = deriveThreadWorkflow(detail);
         store.details[detail.thread.threadId] = detail;
         applyBrowserStore(store, detail.thread.threadId);
         params.setStatus("Agent updated");
         return;
       }
       try {
-        const detail = await params.invokeFn<ThreadDetail>("thread_update_agent", {
+        const detail = withDerivedWorkflow(await params.invokeFn<ThreadDetail>("thread_update_agent", {
           cwd: params.cwd,
           threadId: activeThread.thread.threadId,
           agentId,
           label,
-        });
+        }));
         setActiveThread(detail);
         await reloadThreads(detail.thread.threadId);
         params.setStatus("Agent updated");
       } catch (error) {
         params.setStatus(`Failed to update agent: ${formatError(error)}`);
+      }
+    },
+    [activeThread, applyBrowserStore, params, reloadThreads],
+  );
+
+  const renameThread = useCallback(
+    async (title: string) => {
+      if (!activeThread) {
+        return;
+      }
+      const nextTitle = truncateTitle(title);
+      if (!params.hasTauriRuntime || !params.cwd) {
+        const store = cloneStore(browserStoreRef.current);
+        const detail = store.details[activeThread.thread.threadId];
+        if (!detail) return;
+        detail.thread.title = nextTitle;
+        detail.thread.updatedAt = nowIso();
+        detail.workflow = deriveThreadWorkflow(detail);
+        store.details[detail.thread.threadId] = detail;
+        applyBrowserStore(store, detail.thread.threadId);
+        params.setStatus(`Thread renamed: ${nextTitle}`);
+        return;
+      }
+      try {
+        const detail = withDerivedWorkflow(await params.invokeFn<ThreadDetail>("thread_rename", {
+          cwd: params.cwd,
+          threadId: activeThread.thread.threadId,
+          title: nextTitle,
+        }));
+        setActiveThread(detail);
+        await reloadThreads(detail.thread.threadId);
+        params.setStatus(`Thread renamed: ${detail.thread.title}`);
+      } catch (error) {
+        params.setStatus(`Failed to rename thread: ${formatError(error)}`);
       }
     },
     [activeThread, applyBrowserStore, params, reloadThreads],
@@ -879,22 +1165,27 @@ export function useTasksThreadState(params: Params) {
         const store = cloneStore(browserStoreRef.current);
         const detail = store.details[activeThread.thread.threadId];
         if (!detail) return;
+        const removedRoleId = String(agentId.split(":").pop() ?? "").trim() as ThreadRoleId;
         detail.agents = detail.agents.filter((agent) => agent.id !== agentId);
         if (selectedAgentId === agentId) {
           setSelectedAgentId("");
           setSelectedAgentDetail(null);
         }
+        detail.task.roles = detail.task.roles.map((role) =>
+          role.id === removedRoleId ? { ...role, enabled: false, status: "disabled", updatedAt: nowIso() } : role,
+        );
+        detail.workflow = deriveThreadWorkflow(detail);
         store.details[detail.thread.threadId] = detail;
         applyBrowserStore(store, detail.thread.threadId);
         params.setStatus("Agent removed");
         return;
       }
       try {
-        const detail = await params.invokeFn<ThreadDetail>("thread_remove_agent", {
+        const detail = withDerivedWorkflow(await params.invokeFn<ThreadDetail>("thread_remove_agent", {
           cwd: params.cwd,
           threadId: activeThread.thread.threadId,
           agentId,
-        });
+        }));
         setActiveThread(detail);
         setSelectedAgentId((current) => (current === agentId ? "" : current));
         setSelectedAgentDetail((current) => (current?.agent.id === agentId ? null : current));
@@ -923,37 +1214,72 @@ export function useTasksThreadState(params: Params) {
             label,
             roleId,
             status: "idle",
-            summary: roleSummary(roleId),
+            summary: getTaskAgentSummary(roleId),
             worktreePath: detail.task.worktreePath || detail.task.workspacePath,
             lastUpdatedAt: nowIso(),
           });
-          detail.messages.push({
-            id: nextId("msg"),
-            threadId: detail.thread.threadId,
-            role: "assistant",
-            content: `Added ${THREAD_ROLE_LABELS[roleId]} to this thread.`,
-            createdAt: nowIso(),
-          });
+          if (detail.task.roles.some((role) => role.id === roleId)) {
+            detail.task.roles = detail.task.roles.map((role) =>
+              role.id === roleId
+                ? {
+                    ...role,
+                    label,
+                    studioRoleId: getTaskAgentStudioRoleId(roleId) || "",
+                    enabled: true,
+                    status: "idle",
+                    updatedAt: nowIso(),
+                  }
+                : role,
+            );
+          } else {
+            detail.task.roles.push({
+              id: roleId,
+              label,
+              studioRoleId: getTaskAgentStudioRoleId(roleId) || "",
+              enabled: true,
+              status: "idle",
+              lastPrompt: null,
+              lastPromptAt: null,
+              lastRunId: null,
+              artifactPaths: [],
+              updatedAt: nowIso(),
+            });
+          }
+          detail.messages.push(
+            createBrowserMessage(
+              detail.thread.threadId,
+              "assistant",
+              `Added ${getTaskAgentLabel(roleId)} to this thread.`,
+              nowIso(),
+              {
+                agentId: `${detail.thread.threadId}:${roleId}`,
+                agentLabel: getTaskAgentLabel(roleId),
+                sourceRoleId: roleId,
+                eventKind: "agent_added",
+              },
+            ),
+          );
         }
+        detail.workflow = deriveThreadWorkflow(detail);
         store.details[detail.thread.threadId] = detail;
         applyBrowserStore(store, detail.thread.threadId);
         setSelectedAgentId(`${detail.thread.threadId}:${roleId}`);
         setDetailTab("agent");
-        params.setStatus(`Agent added: ${THREAD_ROLE_LABELS[roleId]}`);
+        params.setStatus(`Agent added: ${getTaskAgentLabel(roleId)}`);
         return;
       }
       try {
-        const detail = await params.invokeFn<ThreadDetail>("thread_add_agent", {
+        const detail = withDerivedWorkflow(await params.invokeFn<ThreadDetail>("thread_add_agent", {
           cwd: params.cwd,
           threadId: activeThread.thread.threadId,
           roleId,
           label,
-        });
+        }));
         setActiveThread(detail);
         setSelectedAgentId(`${detail.thread.threadId}:${roleId}`);
         setDetailTab("agent");
         await reloadThreads(detail.thread.threadId);
-        params.setStatus(`Agent added: ${THREAD_ROLE_LABELS[roleId]}`);
+        params.setStatus(`Agent added: ${getTaskAgentLabel(roleId)}`);
       } catch (error) {
         params.setStatus(`Failed to add agent: ${formatError(error)}`);
       }
@@ -966,6 +1292,7 @@ export function useTasksThreadState(params: Params) {
     threads,
     activeThread,
     activeThreadId,
+    projectPath,
     composerDraft,
     setComposerDraft,
     model,
@@ -983,7 +1310,11 @@ export function useTasksThreadState(params: Params) {
     selectedFilePath,
     selectedFileContent,
     selectedFileDiff,
+    attachedFiles,
     setSelectedFilePath,
+    openProjectDirectory,
+    openAttachmentPicker,
+    removeAttachedFile,
     openNewThread,
     selectThread,
     submitComposer,
@@ -991,6 +1322,7 @@ export function useTasksThreadState(params: Params) {
     resolveApproval,
     deleteThread,
     addAgent,
+    renameThread,
     updateAgent,
     removeAgent,
   };

@@ -1,11 +1,44 @@
 import type { TaskRecord } from "./taskTypes";
+import {
+  UNITY_TASK_AGENT_ORDER,
+  UNITY_THREAD_STAGE_DEFINITIONS,
+  type TaskAgentPresetId,
+  type ThreadStageId,
+  type ThreadStageStatus,
+} from "./taskAgentPresets";
 
-export type ThreadRoleId = "explorer" | "reviewer" | "worker" | "qa";
+export type ThreadRoleId = TaskAgentPresetId;
 export type ThreadMessageRole = "user" | "assistant" | "system";
 export type BackgroundAgentStatus = "thinking" | "awaiting_approval" | "done" | "failed" | "idle";
 export type ApprovalDecision = "approved" | "rejected";
 export type ApprovalStatus = "pending" | "approved" | "rejected";
 export type ThreadDetailTab = "files" | "diff" | "workflow" | "agent";
+
+export type ThreadWorkflowStage = {
+  id: ThreadStageId;
+  label: string;
+  status: ThreadStageStatus;
+  ownerPresetIds: ThreadRoleId[];
+  summary: string;
+  artifactKeys: string[];
+  blockerCount: number;
+  startedAt?: string | null;
+  completedAt?: string | null;
+};
+
+export type ThreadWorkflow = {
+  currentStageId: ThreadStageId;
+  stages: ThreadWorkflowStage[];
+  nextAction: string;
+  readinessSummary: string;
+};
+
+export type ThreadWorkflowSummary = {
+  currentStageId: ThreadStageId;
+  status: ThreadStageStatus;
+  blocked: boolean;
+  pendingApprovalCount: number;
+};
 
 export type ThreadRecord = {
   threadId: string;
@@ -27,6 +60,11 @@ export type ThreadMessage = {
   threadId: string;
   role: ThreadMessageRole;
   content: string;
+  agentId?: string | null;
+  agentLabel?: string | null;
+  sourceRoleId?: ThreadRoleId | null;
+  eventKind?: string | null;
+  artifactPath?: string | null;
   createdAt: string;
 };
 
@@ -65,6 +103,8 @@ export type ThreadAgentDetail = {
   lastPromptAt?: string | null;
   lastRunId?: string | null;
   artifactPaths: string[];
+  latestArtifactPath?: string | null;
+  latestArtifactPreview?: string | null;
   worktreePath?: string | null;
 };
 
@@ -72,6 +112,7 @@ export type ThreadListItem = {
   thread: ThreadRecord;
   agentCount: number;
   pendingApprovalCount: number;
+  workflowSummary: ThreadWorkflowSummary;
 };
 
 export type ThreadDetail = {
@@ -86,16 +127,15 @@ export type ThreadDetail = {
   validationState: string;
   riskLevel: string;
   files: ThreadFileEntry[];
+  workflow: ThreadWorkflow;
 };
 
-export const THREAD_ROLE_LABELS: Record<ThreadRoleId, string> = {
-  explorer: "EXPLORER",
-  reviewer: "REVIEWER",
-  worker: "WORKER",
-  qa: "QA",
-};
+export const THREAD_ROLE_LABELS: Record<ThreadRoleId, string> = Object.fromEntries(
+  UNITY_TASK_AGENT_ORDER.map((roleId) => [roleId, roleId.replace(/_/g, " ").toUpperCase()]),
+) as Record<ThreadRoleId, string>;
 
 export const THREAD_MODEL_OPTIONS = ["5.4", "5.3-Codex", "5.1-Codex-Max"] as const;
 export const THREAD_REASONING_OPTIONS = ["낮음", "중간", "높음"] as const;
 export const THREAD_ACCESS_OPTIONS = ["Local"] as const;
 export const THREAD_DETAIL_TABS: ThreadDetailTab[] = ["files", "diff", "workflow", "agent"];
+export const THREAD_STAGE_IDS = UNITY_THREAD_STAGE_DEFINITIONS.map((stage) => stage.id);

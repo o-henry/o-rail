@@ -1,0 +1,6 @@
+[build]
+target-dir = "/tmp/rail-cargo-target"
+
+[profile.dev]
+debug = 0
+incremental = false

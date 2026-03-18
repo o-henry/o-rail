@@ -1,8 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { AgenticAction } from "../../features/orchestration/agentic/actionBus";
 import {
-  TASK_ROLE_LABELS,
-  TASK_ROLE_ORDER,
+  buildTaskAgentPrompt,
+  getTaskAgentLabel,
+  getTaskAgentStudioRoleId,
+  orderedTaskAgentPresetIds,
+} from "./taskAgentPresets";
+import {
   type TaskArtifactKey,
   type TaskComposerTarget,
   type TaskDetail,
@@ -39,31 +43,15 @@ type CreateTaskInput = {
   isolation: TaskIsolation;
 };
 
-const ROLE_STUDIO_ID: Record<TaskRoleId, string> = {
-  explorer: "pm_planner",
-  reviewer: "pm_feasibility_critic",
-  worker: "client_programmer",
-  qa: "qa_engineer",
-};
-
 function activeRoles(task: TaskRecord): TaskRoleId[] {
-  return TASK_ROLE_ORDER.filter((roleId) => task.roles.find((role) => role.id === roleId)?.enabled);
+  return orderedTaskAgentPresetIds(task.roles.filter((role) => role.enabled).map((role) => role.id));
 }
 
 function rolePrompt(task: TaskRecord, roleId: TaskRoleId, prompt?: string): string {
   const goal = String(task.goal ?? "").trim();
   const extra = String(prompt ?? "").trim();
   const base = extra || goal;
-  if (roleId === "explorer") {
-    return `${base}\n\nFocus: inspect the repo, locate the relevant files, and summarize root cause and constraints.`;
-  }
-  if (roleId === "reviewer") {
-    return `${base}\n\nFocus: review risks, edge cases, architecture impact, and likely regressions.`;
-  }
-  if (roleId === "qa") {
-    return `${base}\n\nFocus: define validation steps, regression checks, and test coverage gaps.`;
-  }
-  return `${base}\n\nFocus: implement the requested change safely and summarize modified files.`;
+  return buildTaskAgentPrompt(roleId, base);
 }
 
 function defaultArtifactDraft(detail: TaskDetail | null, key: TaskArtifactKey): string {
@@ -161,10 +149,14 @@ export function useTasksPageState(params: Params) {
       target: roleId,
       prompt: promptText,
     });
+    const studioRoleId = getTaskAgentStudioRoleId(roleId);
+    if (!studioRoleId) {
+      return;
+    }
     params.publishAction({
       type: "run_role",
       payload: {
-        roleId: ROLE_STUDIO_ID[roleId],
+        roleId: studioRoleId,
         taskId: task.taskId,
         prompt: promptText,
         sourceTab: "tasks",
@@ -174,7 +166,7 @@ export function useTasksPageState(params: Params) {
       source: "tasks",
       actor: "user",
       level: "info",
-      message: `TASK ${task.taskId} · ${TASK_ROLE_LABELS[roleId]} 실행`,
+      message: `TASK ${task.taskId} · ${getTaskAgentLabel(roleId)} 실행`,
     });
   }, [params]);
 

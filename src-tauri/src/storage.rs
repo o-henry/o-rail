@@ -1,3 +1,4 @@
+use crate::task_presets;
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -265,11 +266,11 @@ fn normalize_mode(raw: Option<String>) -> String {
 }
 
 fn normalize_team(raw: Option<String>) -> String {
-    match raw.unwrap_or_else(|| "custom".to_string()).trim().to_lowercase().as_str() {
+    match raw.unwrap_or_else(|| "full-squad".to_string()).trim().to_lowercase().as_str() {
         "solo" => "solo".to_string(),
         "duo" => "duo".to_string(),
         "full-squad" => "full-squad".to_string(),
-        _ => "custom".to_string(),
+        _ => "full-squad".to_string(),
     }
 }
 
@@ -284,25 +285,18 @@ fn normalize_isolation(raw: Option<String>) -> String {
 
 fn build_task_roles(team: &str) -> Vec<TaskRoleState> {
     let now = now_iso();
-    let enabled = match team {
-        "solo" => BTreeSet::from(["worker"]),
-        "duo" => BTreeSet::from(["explorer", "worker"]),
-        "full-squad" => BTreeSet::from(["explorer", "reviewer", "worker", "qa"]),
-        _ => BTreeSet::new(),
-    };
-    [
-        ("explorer", "EXPLORER", "pm_planner"),
-        ("reviewer", "REVIEWER", "pm_feasibility_critic"),
-        ("worker", "WORKER", "client_programmer"),
-        ("qa", "QA", "qa_engineer"),
-    ]
-    .into_iter()
-    .map(|(id, label, studio_role_id)| TaskRoleState {
-        id: id.to_string(),
-        label: label.to_string(),
-        studio_role_id: studio_role_id.to_string(),
-        enabled: enabled.contains(id),
-        status: if enabled.contains(id) { "ready".to_string() } else { "disabled".to_string() },
+    let enabled = task_presets::task_team_preset_ids(team)
+        .into_iter()
+        .map(str::to_string)
+        .collect::<BTreeSet<_>>();
+    task_presets::unity_task_agent_presets()
+    .iter()
+    .map(|preset| TaskRoleState {
+        id: preset.id.to_string(),
+        label: preset.label.to_string(),
+        studio_role_id: preset.studio_role_id.to_string(),
+        enabled: enabled.contains(preset.id),
+        status: if enabled.contains(preset.id) { "ready".to_string() } else { "disabled".to_string() },
         last_prompt: None,
         last_prompt_at: None,
         last_run_id: None,
@@ -359,7 +353,55 @@ fn write_task_artifacts(task_dir: &Path, artifacts: &BTreeMap<String, String>) -
 fn read_task_record_file(task_dir: &Path) -> Result<TaskRecord, String> {
     let raw = fs::read_to_string(task_record_path(task_dir))
         .map_err(|error| format!("failed to read task record {}: {error}", task_dir.display()))?;
-    serde_json::from_str(&raw).map_err(|error| format!("invalid task record {}: {error}", task_dir.display()))
+    let mut record: TaskRecord =
+        serde_json::from_str(&raw).map_err(|error| format!("invalid task record {}: {error}", task_dir.display()))?;
+    normalize_task_record_roles(&mut record);
+    Ok(record)
+}
+
+fn normalize_task_record_roles(record: &mut TaskRecord) {
+    if record.roles.is_empty() {
+        record.roles = build_task_roles(&record.team);
+        return;
+    }
+    let mut normalized = Vec::<TaskRoleState>::new();
+    for role in record.roles.clone() {
+        let canonical = task_presets::canonical_task_agent_id(&role.id).unwrap_or(role.id.trim());
+        if let Some(existing) = normalized.iter_mut().find(|entry| entry.id == canonical) {
+            existing.enabled = existing.enabled || role.enabled;
+            if existing.last_prompt.is_none() {
+                existing.last_prompt = role.last_prompt.clone();
+            }
+            if existing.last_prompt_at.is_none() {
+                existing.last_prompt_at = role.last_prompt_at.clone();
+            }
+            if existing.last_run_id.is_none() {
+                existing.last_run_id = role.last_run_id.clone();
+            }
+            if existing.artifact_paths.is_empty() {
+                existing.artifact_paths = role.artifact_paths.clone();
+            }
+            if existing.status == "disabled" && role.status != "disabled" {
+                existing.status = role.status.clone();
+            }
+            existing.updated_at = existing.updated_at.clone().max(role.updated_at.clone());
+            continue;
+        }
+        normalized.push(TaskRoleState {
+            id: canonical.to_string(),
+            label: task_presets::task_agent_label(canonical),
+            studio_role_id: task_presets::task_agent_studio_role_id(canonical)
+                .unwrap_or_else(|| role.studio_role_id.clone()),
+            enabled: role.enabled,
+            status: role.status,
+            last_prompt: role.last_prompt,
+            last_prompt_at: role.last_prompt_at,
+            last_run_id: role.last_run_id,
+            artifact_paths: role.artifact_paths,
+            updated_at: role.updated_at,
+        });
+    }
+    record.roles = normalized;
 }
 
 fn load_task_artifacts(task_dir: &Path) -> BTreeMap<String, String> {
@@ -386,7 +428,11 @@ fn artifact_has_user_content(content: &str) -> bool {
 }
 
 fn validation_state(record: &TaskRecord, artifacts: &BTreeMap<String, String>) -> String {
-    if let Some(role) = record.roles.iter().find(|role| role.id == "qa" && role.enabled) {
+    if let Some(role) = record
+        .roles
+        .iter()
+        .find(|role| task_presets::is_validation_task_agent(&role.id) && role.enabled)
+    {
         if role.status == "error" {
             return "failed".to_string();
         }
@@ -996,12 +1042,17 @@ pub fn task_load(cwd: String, task_id: String) -> Result<TaskDetail, String> {
 #[tauri::command]
 pub fn task_create(
     cwd: String,
+    project_path: Option<String>,
     goal: String,
     mode: Option<String>,
     team: Option<String>,
     isolation: Option<String>,
 ) -> Result<TaskDetail, String> {
     let workspace = normalize_workspace_root(&cwd)?;
+    let project_root = match project_path.map(|value| value.trim().to_string()) {
+        Some(value) if !value.is_empty() => normalize_workspace_root(&value)?,
+        _ => workspace.clone(),
+    };
     let normalized_goal = goal.trim();
     if normalized_goal.is_empty() {
         return Err("goal is required".to_string());
@@ -1010,7 +1061,7 @@ pub fn task_create(
     let team = normalize_team(team);
     let isolation_requested = normalize_isolation(isolation);
     let task_id = build_task_id(normalized_goal);
-    let workspace_resolution = resolve_task_workspace(&workspace, &task_id, &isolation_requested);
+    let workspace_resolution = resolve_task_workspace(&project_root, &task_id, &isolation_requested);
     let record = TaskRecord {
         task_id: task_id.clone(),
         goal: normalized_goal.to_string(),
@@ -1312,6 +1363,7 @@ mod tests {
         let workspace = temp_workspace("task-create");
         let detail = task_create(
             workspace.to_string_lossy().to_string(),
+            None,
             "jump bug fix".to_string(),
             Some("balanced".to_string()),
             Some("duo".to_string()),
@@ -1321,6 +1373,101 @@ mod tests {
         assert_eq!(detail.record.team, "duo");
         assert!(detail.artifacts.contains_key("brief"));
         assert!(task_dir(&workspace, &detail.record.task_id).join("task.json").exists());
+        let _ = fs::remove_dir_all(workspace);
+    }
+
+    #[test]
+    fn task_load_normalizes_legacy_unity_role_aliases() {
+        let workspace = temp_workspace("task-normalize-roles");
+        let detail = task_create(
+            workspace.to_string_lossy().to_string(),
+            None,
+            "boss arena".to_string(),
+            Some("balanced".to_string()),
+            Some("full-squad".to_string()),
+            Some("current-repo".to_string()),
+        )
+        .unwrap();
+        let task_path = task_dir(&workspace, &detail.record.task_id);
+        let now = now_iso();
+        let mut record = detail.record.clone();
+        record.roles = vec![
+            TaskRoleState {
+                id: "explorer".to_string(),
+                label: "EXPLORER".to_string(),
+                studio_role_id: "pm_planner".to_string(),
+                enabled: true,
+                status: "running".to_string(),
+                last_prompt: Some("Scope the feature".to_string()),
+                last_prompt_at: Some(now.clone()),
+                last_run_id: None,
+                artifact_paths: Vec::new(),
+                updated_at: now.clone(),
+            },
+            TaskRoleState {
+                id: "reviewer".to_string(),
+                label: "REVIEWER".to_string(),
+                studio_role_id: "system_programmer".to_string(),
+                enabled: true,
+                status: "ready".to_string(),
+                last_prompt: None,
+                last_prompt_at: None,
+                last_run_id: None,
+                artifact_paths: Vec::new(),
+                updated_at: now.clone(),
+            },
+            TaskRoleState {
+                id: "worker".to_string(),
+                label: "WORKER".to_string(),
+                studio_role_id: "client_programmer".to_string(),
+                enabled: true,
+                status: "done".to_string(),
+                last_prompt: None,
+                last_prompt_at: None,
+                last_run_id: Some("run-1".to_string()),
+                artifact_paths: vec!["patch.md".to_string()],
+                updated_at: now.clone(),
+            },
+            TaskRoleState {
+                id: "qa".to_string(),
+                label: "QA".to_string(),
+                studio_role_id: "qa_engineer".to_string(),
+                enabled: true,
+                status: "ready".to_string(),
+                last_prompt: None,
+                last_prompt_at: None,
+                last_run_id: None,
+                artifact_paths: Vec::new(),
+                updated_at: now,
+            },
+        ];
+        write_task_record_file(&task_path, &record).unwrap();
+
+        let loaded = task_load(
+            workspace.to_string_lossy().to_string(),
+            detail.record.task_id.clone(),
+        )
+        .unwrap();
+        let ids = loaded
+            .record
+            .roles
+            .iter()
+            .map(|role| role.id.as_str())
+            .collect::<Vec<_>>();
+
+        assert!(ids.contains(&"game_designer"));
+        assert!(ids.contains(&"unity_architect"));
+        assert!(ids.contains(&"unity_implementer"));
+        assert!(ids.contains(&"qa_playtester"));
+        assert_eq!(
+            loaded
+                .record
+                .roles
+                .iter()
+                .find(|role| role.id == "game_designer")
+                .map(|role| role.label.as_str()),
+            Some("GAME DESIGNER")
+        );
         let _ = fs::remove_dir_all(workspace);
     }
 }

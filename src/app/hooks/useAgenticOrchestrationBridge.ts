@@ -464,7 +464,7 @@ export function useAgenticOrchestrationBridge(params: {
                   ? `THREAD 역할 실행 요청: ${action.payload.roleId} (${action.payload.taskId})`
                   : `역할 실행 요청: ${action.payload.roleId} (${action.payload.taskId})`,
         );
-        if (sourceTab === "agents" || sourceTab === "workbench" || sourceTab === "tasks" || sourceTab === "tasks-thread") {
+        if (sourceTab === "agents" || sourceTab === "workbench") {
           applyPreset(presetForRole(action.payload.roleId));
         }
         void runRoleDirect({ ...action.payload, sourceTab });

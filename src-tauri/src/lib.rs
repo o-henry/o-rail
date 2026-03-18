@@ -4,6 +4,7 @@ mod knowledge;
 mod quality;
 mod storage;
 mod system;
+mod task_presets;
 mod threads;
 mod unity_automation;
 mod unity_automation_batch;
@@ -91,6 +92,7 @@ pub fn run() {
             threads::thread_create,
             threads::thread_load,
             threads::thread_append_message,
+            threads::thread_rename,
             threads::thread_spawn_agents,
             threads::thread_list_agents,
             threads::thread_open_agent_detail,

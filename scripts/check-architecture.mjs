@@ -85,6 +85,30 @@ const TEMP_LINE_ALLOWLIST = new Map([
       reason: "Dashboard intelligence test suite split pending",
     },
   ],
+  [
+    "src/app/hooks/useAgenticOrchestrationBridge.ts",
+    {
+      maxLines: 560,
+      expiresOn: "2026-05-31",
+      reason: "Agentic orchestration bridge split pending (workflow/runtime dispatch extraction)",
+    },
+  ],
+  [
+    "src/pages/tasks/TasksPage.tsx",
+    {
+      maxLines: 760,
+      expiresOn: "2026-05-31",
+      reason: "Unity Tasks shell decomposition pending (thread nav/detail panel extraction)",
+    },
+  ],
+  [
+    "src/pages/tasks/useTasksThreadState.ts",
+    {
+      maxLines: 1250,
+      expiresOn: "2026-05-31",
+      reason: "Unity Tasks thread state split pending (browser store/actions extraction)",
+    },
+  ],
 ]);
 
 const LEGACY_IMPORT_EXCEPTIONS = new Set([

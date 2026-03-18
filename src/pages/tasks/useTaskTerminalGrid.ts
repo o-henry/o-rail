@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { invoke, listen } from "../../shared/tauri";
-import { TASK_ROLE_LABELS, type TaskDetail, type TaskRoleId } from "./taskTypes";
+import { getTaskAgentLabel, orderedTaskAgentPresetIds } from "./taskAgentPresets";
+import type { TaskDetail, TaskRoleId } from "./taskTypes";
 
 export type TaskTerminalPaneStatus = "idle" | "starting" | "running" | "stopped" | "error" | "exited";
 
@@ -42,7 +43,7 @@ function makePane(task: TaskDetail, roleId: TaskRoleId): TaskTerminalPane {
   return {
     id: `task-${task.record.taskId}-${roleId}`,
     roleId,
-    title: TASK_ROLE_LABELS[roleId],
+    title: getTaskAgentLabel(roleId),
     subtitle: role.studioRoleId,
     startupCommand: "codex",
     buffer: "",
@@ -63,7 +64,7 @@ export function taskTerminalStatusLabel(status: TaskTerminalPaneStatus, exitCode
 
 export function useTaskTerminalGrid(task: TaskDetail | null) {
   const enabledRoleIds = useMemo<TaskRoleId[]>(
-    () => (task ? task.record.roles.filter((role) => role.enabled).map((role) => role.id) : []),
+    () => (task ? orderedTaskAgentPresetIds(task.record.roles.filter((role) => role.enabled).map((role) => role.id)) : []),
     [task],
   );
   const basePanes = useMemo(

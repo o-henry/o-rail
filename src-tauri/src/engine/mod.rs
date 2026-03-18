@@ -882,13 +882,30 @@ async fn resolve_codex_home_dir(app: &AppHandle) -> Result<PathBuf, String> {
         }
     }
 
-    let app_data_dir = app
+    let app_cache_dir = app
         .path()
-        .app_data_dir()
-        .map_err(|e| format!("failed to resolve app data dir: {e}"))?;
-    ensure_private_dir(&app_data_dir, "app data dir").await?;
+        .app_cache_dir()
+        .map_err(|e| format!("failed to resolve app cache dir: {e}"))?;
+    ensure_private_dir(&app_cache_dir, "app cache dir").await?;
 
-    let codex_home = app_data_dir.join("codex-home");
+    let codex_home = app_cache_dir.join("codex-home");
+    if !codex_home.exists() {
+        if let Ok(app_data_dir) = app.path().app_data_dir() {
+            let legacy_codex_home = app_data_dir.join("codex-home");
+            if legacy_codex_home.is_dir() {
+                if let Some(parent) = codex_home.parent() {
+                    ensure_private_dir(parent, "codex cache parent dir").await?;
+                }
+                if let Err(error) = fs::rename(&legacy_codex_home, &codex_home) {
+                    eprintln!(
+                        "failed to move legacy codex-home from {} to {}: {error}",
+                        legacy_codex_home.display(),
+                        codex_home.display()
+                    );
+                }
+            }
+        }
+    }
     ensure_private_dir(&codex_home, "codex home dir").await?;
     if let Err(error) = sync_global_codex_runtime_config(&codex_home) {
         eprintln!("failed to sync global codex config into app codex-home: {error}");

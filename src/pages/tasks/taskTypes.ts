@@ -1,8 +1,14 @@
+import {
+  UNITY_TASK_AGENT_ORDER,
+  getTaskAgentLabel,
+  type TaskAgentPresetId,
+} from "./taskAgentPresets";
+
 export type TaskMode = "safe" | "balanced" | "fast" | "yolo";
 export type TaskTeam = "solo" | "duo" | "full-squad";
 export type TaskIsolation = "auto" | "current-repo" | "branch" | "worktree";
 export type TaskStatus = "active" | "queued" | "completed" | "archived";
-export type TaskRoleId = "explorer" | "reviewer" | "worker" | "qa";
+export type TaskRoleId = TaskAgentPresetId;
 export type TaskComposerTarget = TaskRoleId | "all";
 
 export type TaskPromptRecord = {
@@ -82,14 +88,11 @@ export const TASK_ISOLATION_OPTIONS: Array<{ value: TaskIsolation; label: string
 export const TASK_ARTIFACT_KEYS = ["brief", "findings", "plan", "patch", "validation", "handoff"] as const;
 export type TaskArtifactKey = (typeof TASK_ARTIFACT_KEYS)[number];
 
-export const TASK_ROLE_ORDER: TaskRoleId[] = ["explorer", "reviewer", "worker", "qa"];
+export const TASK_ROLE_ORDER: TaskRoleId[] = [...UNITY_TASK_AGENT_ORDER];
 
-export const TASK_ROLE_LABELS: Record<TaskRoleId, string> = {
-  explorer: "EXPLORER",
-  reviewer: "REVIEWER",
-  worker: "WORKER",
-  qa: "QA",
-};
+export const TASK_ROLE_LABELS: Record<TaskRoleId, string> = Object.fromEntries(
+  UNITY_TASK_AGENT_ORDER.map((roleId) => [roleId, getTaskAgentLabel(roleId)]),
+) as Record<TaskRoleId, string>;
 
 export const TASK_STATUS_GROUPS = ["active", "queued", "completed"] as const;
 export type TaskStatusGroup = (typeof TASK_STATUS_GROUPS)[number];

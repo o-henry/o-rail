@@ -34,6 +34,11 @@
   padding: 10px;
 }
 
+.tasks-thread-nav-actions {
+  display: grid;
+  gap: 8px;
+}
+
 .tasks-thread-new-button,
 .tasks-thread-list-item,
 .tasks-thread-agent-actions button,
@@ -72,7 +77,7 @@
 .tasks-thread-nav-copy,
 .tasks-thread-list-item,
 .tasks-thread-header-copy,
-.tasks-thread-message,
+.tasks-thread-log-line,
 .tasks-thread-agent-copy,
 .tasks-thread-approval-card,
 .tasks-thread-file-preview,
@@ -96,12 +101,12 @@
 .tasks-thread-section-head strong,
 .tasks-thread-section-head span {
   font-family: "DepartureMonoRail", "Galmuri11", monospace;
+  line-height: 1.2;
 }
 
 .tasks-thread-nav-copy span,
 .tasks-thread-list-item span,
 .tasks-thread-list-item small,
-.tasks-thread-message-meta,
 .tasks-thread-agent-status,
 .tasks-thread-section-head span,
 .tasks-thread-workflow-meta span,
@@ -118,6 +123,7 @@
   min-height: 0;
   overflow: auto;
   display: grid;
+  align-content: start;
   gap: 6px;
   padding-right: 4px;
 }
@@ -125,7 +131,7 @@
 .tasks-thread-empty-copy,
 .tasks-thread-header-copy p,
 .tasks-thread-list-item p,
-.tasks-thread-message-body,
+.tasks-thread-log-line,
 .tasks-thread-agent-copy p,
 .tasks-thread-empty-state p,
 .tasks-thread-approval-card p,
@@ -140,23 +146,50 @@
 
 .tasks-thread-list-item {
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
   min-height: 34px;
   height: auto;
   text-align: left;
   padding: 10px;
-  padding-right: 30px;
   align-content: start;
+  overflow: hidden;
+}
+
+.tasks-thread-list-title-row {
+  min-width: 0;
+  width: 100%;
+}
+
+.tasks-thread-list-title-row span {
+  flex: 0 0 auto;
+}
+
+.tasks-thread-list-item p {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tasks-thread-list-title-row strong {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tasks-thread-list-row {
   position: relative;
   align-items: flex-start;
+  align-self: start;
 }
 
 .tasks-thread-list-delete {
   position: absolute;
-  top: 8px;
+  top: 50%;
   right: 8px;
+  transform: translateY(-50%);
   width: 18px;
   min-width: 18px;
   height: 18px;
@@ -168,9 +201,13 @@
   color: var(--text-muted);
   display: inline-grid;
   place-items: center;
-  font: inherit;
-  font-size: 11px;
-  line-height: 1;
+}
+
+.tasks-thread-list-delete-icon {
+  width: 10px;
+  height: 10px;
+  display: block;
+  opacity: 0.72;
 }
 
 .tasks-thread-list-row:hover .tasks-thread-list-delete,
@@ -179,8 +216,14 @@
   color: var(--text-main);
 }
 
+.tasks-thread-list-row:hover .tasks-thread-list-delete-icon,
+.tasks-thread-list-delete:hover .tasks-thread-list-delete-icon {
+  opacity: 1;
+}
+
 .tasks-thread-list-row,
 .tasks-thread-list-title-row,
+.tasks-thread-list-meta-row,
 .tasks-thread-list-meta,
 .tasks-thread-section-head,
 .tasks-thread-agent-row,
@@ -190,7 +233,6 @@
 .tasks-thread-composer-actions,
 .tasks-thread-header,
 .tasks-thread-header-meta,
-.tasks-thread-message-meta,
 .tasks-thread-approval-actions,
 .tasks-thread-detail-tabs,
 .tasks-thread-workflow-meta,
@@ -202,12 +244,22 @@
 
 .tasks-thread-list-row,
 .tasks-thread-list-title-row,
-.tasks-thread-section-head,
 .tasks-thread-agent-row,
 .tasks-thread-composer-toolbar,
 .tasks-thread-header,
 .tasks-thread-workflow-meta {
   justify-content: space-between;
+}
+
+.tasks-thread-section-head {
+  justify-content: flex-start;
+  align-items: center;
+}
+
+.tasks-thread-section-head > strong,
+.tasks-thread-section-head > span {
+  display: inline-flex;
+  align-items: center;
 }
 
 .tasks-thread-main-surface {
@@ -217,12 +269,196 @@
   overflow: hidden;
 }
 
+.tasks-thread-main-surface.is-stage-shell-collapsed {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
 .tasks-thread-header {
   padding: 12px;
 }
 
+.tasks-thread-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.tasks-thread-header-delete-button,
+.tasks-thread-section-toggle {
+  width: 26px;
+  min-width: 26px;
+  height: 26px;
+  min-height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--surface-soft) 72%, var(--surface-elevated));
+  display: inline-grid;
+  place-items: center;
+}
+
+.tasks-thread-header-delete-button img,
+.tasks-thread-section-toggle img {
+  width: 12px;
+  height: 12px;
+  display: block;
+}
+
 .tasks-thread-header-copy p {
   color: var(--text-muted);
+}
+
+.tasks-thread-list-meta-row {
+  justify-content: flex-start;
+  margin-top: 6px;
+  gap: 6px;
+}
+
+.tasks-thread-list-meta-row small {
+  margin: 0;
+  font-size: 10px;
+  line-height: 1.2;
+  color: var(--text-muted);
+}
+
+.tasks-thread-list-stage {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 2px 6px;
+  background: color-mix(in srgb, var(--surface-soft) 78%, var(--surface-elevated));
+  color: var(--text-main);
+  font-size: 10px;
+  line-height: 1.2;
+}
+
+.tasks-thread-list-stage.is-blocked,
+.tasks-thread-stage-chip.is-blocked {
+  background: color-mix(in srgb, #f1c6c6 52%, var(--surface-elevated));
+  color: #8a2323;
+}
+
+.tasks-thread-list-stage.is-ready,
+.tasks-thread-stage-chip.is-ready {
+  background: color-mix(in srgb, #caeccf 58%, var(--surface-elevated));
+  color: #1b6e2e;
+}
+
+.tasks-thread-list-stage.is-active,
+.tasks-thread-stage-chip.is-active,
+.tasks-thread-stage-chip.is-selected {
+  background: color-mix(in srgb, #d9e4f5 66%, var(--surface-elevated));
+  color: #21405f;
+}
+
+.tasks-thread-stage-shell {
+  display: grid;
+  gap: 10px;
+  padding: 0;
+}
+
+.tasks-thread-stage-shell-dock {
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  align-content: start;
+  overflow: visible;
+}
+
+.tasks-thread-stage-shell-head {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border-radius: var(--tasks-wrapper-radius);
+  background: color-mix(in srgb, var(--surface-soft) 40%, #ffffff);
+}
+
+.tasks-thread-stage-shell-head-text {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.tasks-thread-stage-shell-head-text span {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.tasks-thread-stage-rail {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.tasks-thread-stage-rail.is-dock {
+  grid-template-columns: 1fr;
+  margin-top: 2px;
+}
+
+.tasks-thread-stage-chip {
+  width: 100%;
+  min-width: 0;
+  min-height: 42px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface-soft) 78%, var(--surface-elevated));
+  color: var(--text-main);
+  display: grid;
+  justify-items: start;
+  gap: 4px;
+  text-align: left;
+}
+
+.tasks-thread-stage-chip small {
+  font-size: 10px;
+  line-height: 1.2;
+  color: var(--text-muted);
+}
+
+.tasks-thread-readiness-card {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface-soft) 40%, #ffffff);
+}
+
+.tasks-thread-readiness-card p,
+.tasks-thread-readiness-card small {
+  margin: 0;
+}
+
+.tasks-thread-title-button,
+.tasks-thread-title-input {
+  font: inherit;
+  font-family: "DepartureMonoRail", "Galmuri11", monospace;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-main);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+}
+
+.tasks-thread-title-button {
+  cursor: text;
+}
+
+.tasks-thread-title-input {
+  width: min(100%, 440px);
+}
+
+.tasks-thread-title-button:focus,
+.tasks-thread-title-button:focus-visible,
+.tasks-thread-title-input:focus,
+.tasks-thread-title-input:focus-visible {
+  outline: none;
+  box-shadow: none;
 }
 
 .tasks-thread-header-meta,
@@ -278,9 +514,9 @@
   gap: 10px;
 }
 
-.tasks-thread-message,
 .tasks-thread-agents-card,
 .tasks-thread-approval-card,
+.tasks-thread-files-panel,
 .tasks-thread-file-preview,
 .tasks-thread-detail-text-panel,
 .tasks-thread-workflow-panel,
@@ -291,18 +527,82 @@
   padding: 12px;
 }
 
-.tasks-thread-message {
-  max-width: min(720px, 92%);
+.tasks-thread-running-strip {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface-soft) 46%, #ffffff);
+}
+
+.tasks-thread-running-list {
+  display: grid;
+  gap: 6px;
+}
+
+.tasks-thread-running-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
   background: #ffffff;
+  cursor: pointer;
 }
 
-.tasks-thread-message.is-user,
-.tasks-thread-message.is-system {
-  background: color-mix(in srgb, var(--surface-soft) 60%, #ffffff);
+.tasks-thread-running-copy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
 }
 
-.tasks-thread-message.is-user {
-  justify-self: end;
+.tasks-thread-running-copy strong,
+.tasks-thread-running-copy span {
+  font-family: "DepartureMonoRail", "Galmuri11", monospace;
+}
+
+.tasks-thread-running-copy span {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.tasks-thread-log-line {
+  max-width: min(820px, 96%);
+  padding: 0;
+  background: transparent;
+  color: var(--text-main);
+}
+
+.tasks-thread-message-row {
+  display: grid;
+  gap: 4px;
+  justify-items: start;
+}
+
+.tasks-thread-message-row.is-user {
+  justify-items: end;
+}
+
+.tasks-thread-message-row.is-user .tasks-thread-log-line {
+  background: rgb(238, 238, 238);
+  padding: 1rem;
+  border-radius: 12px 0 12px 12px;
+}
+
+.tasks-thread-message-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.tasks-thread-message-artifact {
+  font-size: 10px;
+  color: var(--text-muted);
+  word-break: break-all;
 }
 
 .tasks-thread-agent-list {
@@ -311,49 +611,84 @@
 
 .tasks-thread-agent-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 84px auto;
-  grid-template-rows: auto auto;
-  align-items: start;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
   column-gap: 12px;
-  row-gap: 4px;
-  padding: 10px 12px 12px;
+  padding: 8px 12px;
+  min-height: 48px;
   background: #ffffff;
   border-radius: 10px;
+  cursor: pointer;
+}
+
+.tasks-thread-agent-row.is-selected {
+  background: color-mix(in srgb, var(--focus-ring) 14%, #ffffff);
+}
+
+.tasks-thread-agent-main {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
 }
 
 .tasks-thread-agent-name-slot {
   min-width: 0;
-  grid-column: 1;
-  grid-row: 1;
+}
+
+.tasks-thread-agent-meta {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.tasks-thread-agent-side {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .tasks-thread-agent-status {
-  min-width: 0;
-  width: 84px;
-  grid-column: 2;
-  grid-row: 1;
-  justify-self: start;
-  text-align: left;
+  min-width: max-content;
+  width: auto;
+  justify-self: auto;
+  text-align: right;
+  white-space: nowrap;
 }
 
 .tasks-thread-agent-status.is-thinking,
-.tasks-thread-agent-label-button.role-explorer,
-.tasks-thread-agent-inline-input.role-explorer {
+.tasks-thread-agent-label-button.role-game_designer,
+.tasks-thread-agent-inline-input.role-game_designer {
   color: #8a6f53;
 }
 
-.tasks-thread-agent-label-button.role-reviewer,
-.tasks-thread-agent-inline-input.role-reviewer {
+.tasks-thread-agent-label-button.role-level_designer,
+.tasks-thread-agent-inline-input.role-level_designer,
+.tasks-thread-agent-label-button.role-unity_architect,
+.tasks-thread-agent-inline-input.role-unity_architect {
   color: #5f7668;
 }
 
-.tasks-thread-agent-label-button.role-worker,
-.tasks-thread-agent-inline-input.role-worker {
+.tasks-thread-agent-label-button.role-unity_implementer,
+.tasks-thread-agent-inline-input.role-unity_implementer,
+.tasks-thread-agent-label-button.role-unity_editor_tools,
+.tasks-thread-agent-inline-input.role-unity_editor_tools {
   color: #5d6d86;
 }
 
-.tasks-thread-agent-label-button.role-qa,
-.tasks-thread-agent-inline-input.role-qa {
+.tasks-thread-agent-label-button.role-qa_playtester,
+.tasks-thread-agent-inline-input.role-qa_playtester,
+.tasks-thread-agent-label-button.role-technical_artist,
+.tasks-thread-agent-inline-input.role-technical_artist,
+.tasks-thread-agent-label-button.role-release_steward,
+.tasks-thread-agent-inline-input.role-release_steward,
+.tasks-thread-agent-label-button.role-handoff_writer,
+.tasks-thread-agent-inline-input.role-handoff_writer {
   color: #746381;
 }
 
@@ -372,32 +707,42 @@
 
 .tasks-thread-agent-label-button {
   cursor: text;
+  width: 100%;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tasks-thread-agent-inline-input {
   width: 100%;
-  max-width: 220px;
-}
-
-.tasks-thread-agent-row-summary {
-  grid-column: 1 / 3;
-  grid-row: 2;
+  max-width: 100%;
 }
 
 .tasks-thread-agent-actions {
-  grid-column: 3;
-  grid-row: 1 / span 2;
-  justify-self: end;
-  align-self: center;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 120ms ease;
-}
-
-.tasks-thread-agent-row:hover .tasks-thread-agent-actions,
-.tasks-thread-agent-row:focus-within .tasks-thread-agent-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  position: relative;
+  z-index: 1;
   opacity: 1;
   pointer-events: auto;
+}
+
+.tasks-thread-agent-actions button {
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  min-height: 24px;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+}
+
+.tasks-thread-agent-action-icon {
+  width: 12px;
+  height: 12px;
+  display: block;
 }
 
 .tasks-thread-agent-label-button:focus,
@@ -410,9 +755,15 @@
 
 .tasks-thread-composer-shell {
   margin: 0 12px 12px;
-  border: 0;
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+  border: 1px solid gray;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.08);
   background: #ffffff;
+  gap: 10px;
+  align-self: end;
+}
+
+.tasks-thread-composer-shell.workflow-question-input {
+  margin-bottom: 12px;
 }
 
 .tasks-thread-composer-input {
@@ -494,7 +845,8 @@
   min-width: 0;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-  overflow: hidden;
+  min-height: 0;
+  overflow: visible;
 }
 
 .tasks-thread-detail-tabs {
@@ -511,12 +863,23 @@
 
 .tasks-thread-detail-body {
   min-height: 0;
+  min-width: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 10px;
+  padding: 10px 10px 18px;
   display: grid;
   align-content: start;
+  align-items: stretch;
   gap: 10px;
+  scrollbar-gutter: stable;
+}
+
+.tasks-thread-detail-body > * {
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+  justify-self: stretch;
+  box-sizing: border-box;
 }
 
 .tasks-thread-files-panel,
@@ -525,7 +888,12 @@
   display: grid;
   gap: 10px;
   min-width: 0;
-  overflow-x: hidden;
+  overflow: visible;
+}
+
+.tasks-thread-files-panel.is-empty {
+  min-height: 132px;
+  grid-template-rows: auto 1fr;
 }
 
 .tasks-thread-file-list {
@@ -537,19 +905,32 @@
   overflow-x: hidden;
 }
 
+.tasks-thread-files-empty {
+  align-self: center;
+  justify-self: stretch;
+  display: grid;
+  place-items: center;
+  min-height: 72px;
+  padding: 0 8px 4px;
+  color: var(--text-subtle);
+  text-align: center;
+}
+
 .tasks-thread-file-list button {
   width: 100%;
   min-width: 0;
+  min-height: 48px;
+  height: auto;
   text-align: left;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  overflow: hidden;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 4px;
+  padding: 8px 10px;
+  overflow: visible;
 }
 
 .tasks-thread-file-list button span,
-.tasks-thread-file-list button small,
 .tasks-thread-changed-file-tags button {
   min-width: 0;
   overflow: hidden;
@@ -557,25 +938,81 @@
   white-space: nowrap;
 }
 
+.tasks-thread-file-list button span {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.tasks-thread-file-list button small {
+  min-width: 0;
+  white-space: nowrap;
+  justify-self: start;
+}
+
 .tasks-thread-file-preview pre,
 .tasks-thread-detail-text-panel pre {
   margin: 0;
+  max-width: 100%;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--surface-soft) 82%, #d9dde3);
   white-space: pre-wrap;
   word-break: break-word;
+  overflow-wrap: anywhere;
+  overflow-x: hidden;
+  overflow-y: auto;
   font-family: "DepartureMonoRail", "Galmuri11", monospace;
   font-size: 11px;
   line-height: 1.55;
   color: var(--text-main);
 }
 
+.tasks-thread-file-preview .tasks-thread-section-head {
+  display: grid;
+  gap: 4px;
+  align-items: start;
+  justify-content: stretch;
+}
+
+.tasks-thread-file-preview .tasks-thread-section-head strong,
+.tasks-thread-file-preview .tasks-thread-section-head span {
+  width: 100%;
+}
+
+.tasks-thread-file-preview .tasks-thread-section-head span {
+  text-align: left;
+}
+
 .tasks-thread-workflow-meta {
-  flex-wrap: wrap;
+  display: grid;
+  justify-content: stretch;
+  gap: 8px;
 }
 
 .tasks-thread-workflow-meta div {
-  min-width: 140px;
+  min-width: 0;
+  width: 100%;
   display: grid;
   gap: 4px;
+}
+
+.tasks-thread-workflow-meta strong,
+.tasks-thread-section-head strong,
+.tasks-thread-section-head span,
+.tasks-thread-file-preview strong,
+.tasks-thread-detail-text-panel strong,
+.tasks-thread-artifact-list li {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.tasks-thread-section-head {
+  flex-wrap: wrap;
+  align-items: center;
 }
 
 .tasks-thread-artifact-list ul {
@@ -591,10 +1028,33 @@
   background: transparent;
 }
 
+.tasks-thread-detail-text-panel.is-inline.is-empty {
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.tasks-thread-detail-text-panel.is-inline.is-empty pre {
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--surface-soft) 82%, #d9dde3);
+  color: var(--text-muted);
+}
+
+.tasks-thread-confirm-modal {
+  width: min(360px, calc(100vw - 32px));
+  display: grid;
+  gap: 12px;
+}
+
 @media (max-width: 1400px) {
   .tasks-thread-layout {
   font-family: "DepartureMonoRail", "Galmuri11", monospace;
     grid-template-columns: 200px minmax(0, 1fr) 300px;
+  }
+
+  .tasks-thread-stage-rail {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
@@ -607,11 +1067,14 @@
   .tasks-thread-detail-panel {
     display: none;
   }
+
+  .tasks-thread-stage-rail {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .tasks-thread-files-panel .tasks-thread-section-head > span {
   font-size: 14px;
-  line-height: 1;
   color: var(--text-main);
 }
 
@@ -683,12 +1146,13 @@
 
 .tasks-thread-list-delete {
   position: absolute;
-  top: 8px;
+  top: 50%;
   right: 8px;
-  width: 18px !important;
-  min-width: 18px !important;
-  height: 18px !important;
-  min-height: 18px !important;
+  transform: translateY(-50%);
+  width: 18px;
+  min-width: 18px;
+  height: 18px;
+  min-height: 18px;
   border-radius: 4px;
   background: transparent;
   color: var(--text-muted);
@@ -700,8 +1164,12 @@
   color: var(--text-muted);
 }
 
-.tasks-thread-header-meta {
-  display: none !important;
+.tasks-thread-header .tasks-thread-header-meta {
+  display: none;
+}
+
+.tasks-thread-section-toggle {
+  margin-left: auto;
 }
 
 
@@ -711,8 +1179,7 @@
 }
 
 .tasks-thread-changed-file-tags {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
   gap: 6px;
 }
 
@@ -724,10 +1191,20 @@
   border-radius: 4px;
   background: color-mix(in srgb, var(--surface-soft) 74%, var(--surface-elevated));
   color: var(--text-main);
-  min-height: 26px;
-  height: 26px;
-  padding: 0 10px;
+  min-height: 34px;
+  height: auto;
+  padding: 8px 10px;
   font: inherit;
+}
+
+.tasks-thread-changed-file-tags button {
+  width: 100%;
+  text-align: left;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .tasks-thread-agent-session-shell {
@@ -818,6 +1295,7 @@
   font: inherit;
   justify-content: flex-start;
   width: 100%;
+  text-align: left;
 }
 
 .tasks-thread-detail-tabs button {
@@ -835,7 +1313,7 @@
 
 .tasks-thread-layout,
 .tasks-thread-layout * {
-  font-family: "DepartureMonoRail", "Galmuri11", monospace !important;
+  font-family: "DepartureMonoRail", "Galmuri11", monospace;
 }
 
 .tasks-thread-layout button:focus,
@@ -846,9 +1324,9 @@
 .tasks-thread-layout textarea:focus-visible,
 .tasks-thread-layout [role="option"]:focus,
 .tasks-thread-layout [role="option"]:focus-visible {
-  outline: none !important;
-  box-shadow: none !important;
-  border-color: transparent !important;
+  outline: none;
+  box-shadow: none;
+  border-color: transparent;
 }
 
 .tasks-thread-detail-tabs {
@@ -868,9 +1346,11 @@
 }
 
 .tasks-thread-agent-detail-grid {
-  justify-content: flex-start;
+  display: grid;
+  gap: 8px;
 }
 
 .tasks-thread-agent-detail-grid div {
-  min-width: 120px;
+  min-width: 0;
+  width: 100%;
 }

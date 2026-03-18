@@ -1,4 +1,4 @@
-use crate::storage;
+use crate::{storage, task_presets};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -157,6 +157,11 @@ pub struct ThreadMessage {
     thread_id: String,
     role: String,
     content: String,
+    agent_id: Option<String>,
+    agent_label: Option<String>,
+    source_role_id: Option<String>,
+    event_kind: Option<String>,
+    artifact_path: Option<String>,
     created_at: String,
 }
 
@@ -203,6 +208,8 @@ pub struct ThreadAgentDetail {
     last_prompt_at: Option<String>,
     last_run_id: Option<String>,
     artifact_paths: Vec<String>,
+    latest_artifact_path: Option<String>,
+    latest_artifact_preview: Option<String>,
     worktree_path: Option<String>,
 }
 
@@ -211,6 +218,39 @@ pub struct ThreadAgentDetail {
 pub struct ThreadListItem {
     thread: ThreadRecord,
     agent_count: usize,
+    pending_approval_count: usize,
+    workflow_summary: ThreadWorkflowSummary,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ThreadWorkflowStage {
+    id: String,
+    label: String,
+    status: String,
+    owner_preset_ids: Vec<String>,
+    summary: String,
+    artifact_keys: Vec<String>,
+    blocker_count: usize,
+    started_at: Option<String>,
+    completed_at: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ThreadWorkflow {
+    current_stage_id: String,
+    stages: Vec<ThreadWorkflowStage>,
+    next_action: String,
+    readiness_summary: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ThreadWorkflowSummary {
+    current_stage_id: String,
+    status: String,
+    blocked: bool,
     pending_approval_count: usize,
 }
 
@@ -227,6 +267,7 @@ pub struct ThreadDetail {
     validation_state: String,
     risk_level: String,
     files: Vec<ThreadFileEntry>,
+    workflow: ThreadWorkflow,
 }
 
 fn task_detail_view(value: storage::TaskDetail) -> Result<TaskDetailView, String> {
@@ -259,6 +300,28 @@ fn truncate_text(input: &str, max_len: usize) -> String {
     format!("{out}…")
 }
 
+fn is_placeholder_thread_title(input: &str) -> bool {
+    let normalized = input.trim().to_lowercase();
+    normalized.is_empty() || normalized == "new thread" || normalized == "새 thread" || normalized == "새 스레드"
+}
+
+fn normalize_thread_title(input: &str) -> String {
+    let trimmed = input.trim();
+    if trimmed.is_empty() {
+        return "NEW THREAD".to_string();
+    }
+    truncate_text(trimmed, 56)
+}
+
+fn should_replace_thread_title(current_title: &str, current_prompt: &str) -> bool {
+    let title = current_title.trim();
+    if title.is_empty() || is_placeholder_thread_title(title) {
+        return true;
+    }
+    let prompt = current_prompt.trim();
+    !prompt.is_empty() && title == truncate_text(prompt, 56)
+}
+
 fn default_thread_record(task: &TaskRecordView, model: &str, reasoning: &str, access_mode: &str) -> ThreadRecord {
     ThreadRecord {
         thread_id: task.task_id.clone(),
@@ -283,6 +346,11 @@ fn default_messages(thread: &ThreadRecord) -> Vec<ThreadMessage> {
             thread_id: thread.thread_id.clone(),
             role: "user".to_string(),
             content: thread.user_prompt.clone(),
+            agent_id: None,
+            agent_label: None,
+            source_role_id: None,
+            event_kind: Some("user_prompt".to_string()),
+            artifact_path: None,
             created_at: thread.created_at.clone(),
         },
         ThreadMessage {
@@ -290,6 +358,11 @@ fn default_messages(thread: &ThreadRecord) -> Vec<ThreadMessage> {
             thread_id: thread.thread_id.clone(),
             role: "assistant".to_string(),
             content: "Thread created. Ask for a follow-up and tag any agents you want to involve.".to_string(),
+            agent_id: None,
+            agent_label: None,
+            source_role_id: None,
+            event_kind: Some("thread_created".to_string()),
+            artifact_path: None,
             created_at: thread.created_at.clone(),
         },
     ]
@@ -313,109 +386,78 @@ fn default_agents(thread: &ThreadRecord, task: &TaskRecordView) -> Vec<Backgroun
 }
 
 fn default_role_label(role_id: &str) -> String {
-    match role_id {
-        "explorer" => "EXPLORER".to_string(),
-        "reviewer" => "REVIEWER".to_string(),
-        "worker" => "WORKER".to_string(),
-        "qa" => "QA".to_string(),
-        _ => role_id.trim().to_uppercase(),
-    }
+    task_presets::task_agent_label(role_id)
 }
 
 fn default_studio_role_id(role_id: &str) -> Option<String> {
-    match role_id {
-        "explorer" => Some("pm_planner".to_string()),
-        "reviewer" => Some("pm_feasibility_critic".to_string()),
-        "worker" => Some("client_programmer".to_string()),
-        "qa" => Some("qa_engineer".to_string()),
-        _ => None,
-    }
+    task_presets::task_agent_studio_role_id(role_id)
 }
 
 fn role_label_for(task: &TaskRecordView, role_id: &str) -> String {
+    let canonical = task_presets::canonical_task_agent_id(role_id).unwrap_or(role_id);
     task.roles
         .iter()
-        .find(|role| role.id == role_id)
+        .find(|role| role.id == canonical)
         .map(|role| role.label.clone())
-        .unwrap_or_else(|| default_role_label(role_id))
+        .unwrap_or_else(|| default_role_label(canonical))
 }
 
 fn role_instruction(_task: &TaskRecordView, role_id: &str, prompt: &str) -> String {
-    let user_prompt = prompt.trim();
-    match role_id {
-        "explorer" => format!(
-            "{user_prompt} Focus: inspect the repo, locate relevant files, and summarize root cause and constraints."
-        ),
-        "reviewer" => format!(
-            "{user_prompt} Focus: review risks, edge cases, architecture impact, and likely regressions."
-        ),
-        "qa" => format!(
-            "{user_prompt} Focus: define validation steps, regression checks, and test coverage gaps."
-        ),
-        _ => format!(
-            "{user_prompt} Focus: implement the requested change safely and summarize modified files."
-        ),
-    }
+    task_presets::task_agent_instruction(role_id, prompt)
 }
 
 fn role_summary(role_id: &str) -> String {
-    match role_id {
-        "explorer" => "Mapping the repo and identifying relevant files.".to_string(),
-        "reviewer" => "Reviewing risks, tradeoffs, and likely regressions.".to_string(),
-        "qa" => "Preparing validation steps and regression checks.".to_string(),
-        _ => "Preparing an implementation plan and likely code changes.".to_string(),
-    }
+    task_presets::task_agent_summary(role_id)
 }
 
 fn role_discussion_line(role_id: &str) -> String {
-    match role_id {
-        "explorer" => "EXPLORER: I am exploring the repo structure and tracing entry points.".to_string(),
-        "reviewer" => "REVIEWER: I am comparing options and highlighting architectural risks.".to_string(),
-        "qa" => "QA: I am drafting validation coverage and regression checks.".to_string(),
-        _ => "WORKER: I am mapping the implementation path and likely file edits.".to_string(),
-    }
+    task_presets::task_agent_discussion_line(role_id)
 }
 
 fn write_task_record_view(task_dir: &Path, record: &TaskRecordView) -> Result<(), String> {
     write_json_pretty(&task_record_file_path(task_dir), record)
 }
 
-fn append_message(messages: &mut Vec<ThreadMessage>, thread_id: &str, role: &str, content: &str) {
+fn append_message_with_meta(
+    messages: &mut Vec<ThreadMessage>,
+    thread_id: &str,
+    role: &str,
+    content: &str,
+    agent_id: Option<&str>,
+    agent_label: Option<&str>,
+    source_role_id: Option<&str>,
+    event_kind: Option<&str>,
+    artifact_path: Option<&str>,
+) {
     let next = messages.len() + 1;
     messages.push(ThreadMessage {
         id: format!("{thread_id}:message:{next}"),
         thread_id: thread_id.to_string(),
         role: role.to_string(),
         content: content.to_string(),
+        agent_id: agent_id.map(|value| value.to_string()),
+        agent_label: agent_label.map(|value| value.to_string()),
+        source_role_id: source_role_id.map(|value| value.to_string()),
+        event_kind: event_kind.map(|value| value.to_string()),
+        artifact_path: artifact_path.map(|value| value.to_string()),
         created_at: now_iso(),
     });
 }
 
+fn append_message(messages: &mut Vec<ThreadMessage>, thread_id: &str, role: &str, content: &str) {
+    append_message_with_meta(messages, thread_id, role, content, None, None, None, None, None);
+}
+
 fn enabled_roles(task: &TaskRecordView) -> Vec<String> {
-    task.roles
+    task_presets::ordered_task_agent_ids(task.roles
         .iter()
         .filter(|role| role.enabled)
-        .map(|role| role.id.clone())
-        .collect()
+        .map(|role| role.id.as_str()))
 }
 
 fn next_handoff_target(task: &TaskRecordView, role_id: &str) -> Option<String> {
     let enabled = enabled_roles(task);
-    if role_id == "explorer" {
-        if enabled.iter().any(|value| value == "reviewer") {
-            return Some("reviewer".to_string());
-        }
-        if enabled.iter().any(|value| value == "worker") {
-            return Some("worker".to_string());
-        }
-    }
-    if role_id == "reviewer" && enabled.iter().any(|value| value == "worker") {
-        return Some("worker".to_string());
-    }
-    if role_id == "worker" && enabled.iter().any(|value| value == "qa") {
-        return Some("qa".to_string());
-    }
-    None
+    task_presets::next_task_agent_id(role_id, &enabled)
 }
 
 fn role_prompt_for_handoff(task: &TaskRecordView, from_role: &str, to_role: &str) -> String {
@@ -423,6 +465,56 @@ fn role_prompt_for_handoff(task: &TaskRecordView, from_role: &str, to_role: &str
         "Continue the task from {from_role} output.\n\nGoal: {}\n\nFocus for {to_role}: proceed using the latest findings and artifacts.",
         task.goal
     )
+}
+
+fn is_previewable_artifact(path: &Path) -> bool {
+    matches!(
+        path.extension().and_then(|value| value.to_str()).map(|value| value.to_ascii_lowercase()),
+        Some(extension)
+            if matches!(
+                extension.as_str(),
+                "md" | "txt" | "json" | "yml" | "yaml" | "toml" | "log" | "cs" | "ts" | "tsx" | "js" | "jsx" | "rs"
+            )
+    )
+}
+
+fn truncate_preview_content(input: String) -> String {
+    const LIMIT: usize = 4000;
+    if input.chars().count() <= LIMIT {
+        return input;
+    }
+    let truncated = input.chars().take(LIMIT).collect::<String>();
+    format!("{truncated}\n\n...[truncated]")
+}
+
+fn resolve_artifact_preview(
+    workspace: &Path,
+    artifacts: &BTreeMap<String, String>,
+    artifact_paths: &[String],
+) -> (Option<String>, Option<String>) {
+    let Some(latest_artifact_path) = artifact_paths.iter().rev().find(|path| !path.trim().is_empty()) else {
+        return (None, None);
+    };
+    let latest_artifact_path = latest_artifact_path.trim().to_string();
+    let candidate = PathBuf::from(&latest_artifact_path);
+    let resolved_path = if candidate.is_absolute() {
+        candidate
+    } else {
+        workspace.join(&latest_artifact_path)
+    };
+
+    let preview = if resolved_path.is_file() && is_previewable_artifact(&resolved_path) {
+        fs::read_to_string(&resolved_path).ok().map(truncate_preview_content)
+    } else {
+        resolved_path
+            .file_stem()
+            .and_then(|value| value.to_str())
+            .and_then(|key| artifacts.get(key))
+            .cloned()
+            .map(truncate_preview_content)
+    };
+
+    (Some(latest_artifact_path), preview)
 }
 
 fn git_stdout(cwd: &Path, args: &[&str]) -> Option<String> {
@@ -507,11 +599,26 @@ fn ensure_thread_state(
     let messages = read_json_or_default(&thread_messages_path(task_dir), default_messages(&thread))?;
     let mut agents = read_json_or_default(&thread_agents_path(task_dir), default_agents(&thread, task))?;
     let approvals = read_json_or_default(&thread_approvals_path(task_dir), Vec::<ApprovalRecord>::new())?;
+    let enabled_role_ids = enabled_roles(task);
+    agents = agents
+        .into_iter()
+        .filter_map(|mut agent| {
+            let canonical = task_presets::canonical_task_agent_id(&agent.role_id)?;
+            agent.role_id = canonical.to_string();
+            agent.label = task_presets::task_agent_label(canonical);
+            if agent.summary.is_none() {
+                agent.summary = Some(role_summary(canonical));
+            }
+            Some(agent)
+        })
+        .collect();
+    agents.retain(|agent| enabled_role_ids.iter().any(|role_id| role_id == &agent.role_id));
 
     for role in task.roles.iter().filter(|role| role.enabled) {
         if let Some(agent) = agents.iter_mut().find(|agent| agent.role_id == role.id) {
             agent.label = role.label.clone();
             agent.worktree_path = task.worktree_path.clone().or_else(|| Some(task.workspace_path.clone()));
+            agent.summary = Some(role_summary(&role.id));
         } else {
             agents.push(BackgroundAgentRecord {
                 id: format!("{}:{}", thread.thread_id, role.id),
@@ -519,7 +626,7 @@ fn ensure_thread_state(
                 label: role.label.clone(),
                 role_id: role.id.clone(),
                 status: "idle".to_string(),
-                summary: None,
+                summary: Some(role_summary(&role.id)),
                 worktree_path: task.worktree_path.clone().or_else(|| Some(task.workspace_path.clone())),
                 last_updated_at: now_iso(),
             });
@@ -541,8 +648,10 @@ fn build_thread_detail(
     access_mode: &str,
 ) -> Result<ThreadDetail, String> {
     let (thread, messages, agents, approvals) = ensure_thread_state(task_dir, &task.record, model, reasoning, access_mode)?;
+    let files = thread_files_for_task(&task);
+    let workflow = derive_thread_workflow(&thread, &task.record, &agents, &approvals, &task.artifacts, &task.changed_files, &task.validation_state);
     Ok(ThreadDetail {
-        files: thread_files_for_task(&task),
+        files,
         thread,
         task: task.record,
         messages,
@@ -552,26 +661,307 @@ fn build_thread_detail(
         changed_files: task.changed_files,
         validation_state: task.validation_state,
         risk_level: task.risk_level,
+        workflow,
     })
+}
+
+fn artifact_has_user_content(content: &str) -> bool {
+    content
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .any(|line| !line.starts_with('#') && line != "- pending")
+}
+
+fn has_stage_activity(task: &TaskRecordView, agents: &[BackgroundAgentRecord], owners: &[&str]) -> bool {
+    owners.iter().any(|owner| {
+        task.roles.iter().any(|role| role.id == *owner && role.enabled && (role.last_prompt.is_some() || role.last_run_id.is_some()))
+            || agents.iter().any(|agent| agent.role_id == *owner && agent.status != "idle" && agent.status != "failed")
+    })
+}
+
+fn has_active_stage_activity(task: &TaskRecordView, agents: &[BackgroundAgentRecord], owners: &[&str]) -> bool {
+    owners.iter().any(|owner| {
+        task.roles.iter().any(|role| role.id == *owner && role.enabled && role.status == "running")
+            || agents
+                .iter()
+                .any(|agent| agent.role_id == *owner && matches!(agent.status.as_str(), "thinking" | "awaiting_approval"))
+    })
+}
+
+fn latest_stage_event_at(task: &TaskRecordView, owners: &[&str]) -> Option<String> {
+    task.roles
+        .iter()
+        .filter(|role| owners.iter().any(|owner| *owner == role.id))
+        .filter(|role| role.last_prompt_at.is_some() || role.last_run_id.is_some())
+        .filter_map(|role| role.last_prompt_at.clone().or_else(|| Some(role.updated_at.clone())))
+        .max()
+}
+
+fn stage_evidence_at(thread: &ThreadRecord, task: &TaskRecordView, owners: &[&str], has_evidence: bool) -> Option<String> {
+    latest_stage_event_at(task, owners).or_else(|| has_evidence.then(|| thread.updated_at.clone()))
+}
+
+fn validation_satisfied(validation_state: &str) -> bool {
+    matches!(
+        validation_state.trim().to_lowercase().as_str(),
+        "validated" | "done" | "passed" | "ready"
+    )
+}
+
+fn build_workflow_stage(
+    id: &str,
+    label: &str,
+    status: &str,
+    owners: &[&str],
+    summary: String,
+    artifact_keys: &[&str],
+    blocker_count: usize,
+    thread: &ThreadRecord,
+    started_at: Option<String>,
+) -> ThreadWorkflowStage {
+    ThreadWorkflowStage {
+        id: id.to_string(),
+        label: label.to_string(),
+        status: status.to_string(),
+        owner_preset_ids: owners.iter().map(|owner| owner.to_string()).collect(),
+        summary,
+        artifact_keys: artifact_keys.iter().map(|key| key.to_string()).collect(),
+        blocker_count,
+        started_at,
+        completed_at: if status == "done" || status == "ready" {
+            Some(thread.updated_at.clone())
+        } else {
+            None
+        },
+    }
+}
+
+fn derive_thread_workflow(
+    thread: &ThreadRecord,
+    task: &TaskRecordView,
+    agents: &[BackgroundAgentRecord],
+    approvals: &[ApprovalRecord],
+    artifacts: &BTreeMap<String, String>,
+    changed_files: &[String],
+    validation_state: &str,
+) -> ThreadWorkflow {
+    let approvals_pending = approvals.iter().filter(|approval| approval.status == "pending").count();
+    let brief_done = !is_placeholder_thread_title(&thread.user_prompt) || !is_placeholder_thread_title(&task.goal);
+    let design_done = artifact_has_user_content(artifacts.get("findings").map(String::as_str).unwrap_or(""))
+        || artifact_has_user_content(artifacts.get("plan").map(String::as_str).unwrap_or(""))
+        || has_stage_activity(task, agents, &["game_designer", "level_designer", "unity_architect"]);
+    let implement_done = !changed_files.is_empty()
+        || artifact_has_user_content(artifacts.get("patch").map(String::as_str).unwrap_or(""))
+        || has_stage_activity(task, agents, &["unity_implementer", "unity_editor_tools"]);
+    let integrate_evidence = !approvals.is_empty()
+        || artifact_has_user_content(artifacts.get("handoff").map(String::as_str).unwrap_or(""))
+        || has_stage_activity(task, agents, &["unity_architect", "technical_artist", "release_steward"]);
+    let integrate_done = integrate_evidence && approvals_pending == 0;
+    let playtest_done = validation_satisfied(validation_state)
+        || artifact_has_user_content(artifacts.get("validation").map(String::as_str).unwrap_or(""))
+        || has_stage_activity(task, agents, &["qa_playtester"]);
+    let handoff_ready = artifact_has_user_content(artifacts.get("handoff").map(String::as_str).unwrap_or(""));
+    let design_active = has_active_stage_activity(task, agents, &["game_designer", "level_designer", "unity_architect"]);
+    let implement_active = has_active_stage_activity(task, agents, &["unity_implementer", "unity_editor_tools"]);
+    let integrate_active = has_active_stage_activity(task, agents, &["unity_architect", "technical_artist", "release_steward"]);
+    let playtest_active = has_active_stage_activity(task, agents, &["qa_playtester"]);
+    let readiness_checks = [implement_done, playtest_done, handoff_ready]
+        .into_iter()
+        .filter(|value| *value)
+        .count();
+    let lock_ready = approvals_pending == 0 && readiness_checks == 3;
+
+    let latest_evidence_stage_id = [
+        ("brief", if brief_done { Some(thread.updated_at.clone()) } else { None }),
+        ("design", stage_evidence_at(thread, task, &["game_designer", "level_designer", "unity_architect"], design_done)),
+        ("implement", stage_evidence_at(thread, task, &["unity_implementer", "unity_editor_tools"], implement_done)),
+        ("integrate", stage_evidence_at(thread, task, &["unity_architect", "technical_artist", "release_steward"], integrate_evidence)),
+        ("playtest", stage_evidence_at(thread, task, &["qa_playtester"], playtest_done)),
+        ("lock", if lock_ready { Some(thread.updated_at.clone()) } else { None }),
+    ]
+    .into_iter()
+    .enumerate()
+    .filter_map(|(index, (stage_id, timestamp))| timestamp.map(|value| (stage_id, value, index)))
+    .max_by(|left, right| left.1.cmp(&right.1).then(left.2.cmp(&right.2)))
+    .map(|(stage_id, _, _)| stage_id);
+
+    let current_stage_id = if approvals_pending > 0 {
+        "integrate"
+    } else if !brief_done {
+        "brief"
+    } else if design_active {
+        "design"
+    } else if implement_active {
+        "implement"
+    } else if integrate_active {
+        "integrate"
+    } else if playtest_active {
+        "playtest"
+    } else if lock_ready {
+        "lock"
+    } else {
+        latest_evidence_stage_id.unwrap_or("brief")
+    };
+
+    let stages = vec![
+        build_workflow_stage(
+            "brief",
+            "BRIEF",
+            if current_stage_id == "brief" && !brief_done {
+                "active"
+            } else if brief_done {
+                "done"
+            } else {
+                "idle"
+            },
+            &["game_designer"],
+            if brief_done {
+                thread.user_prompt.clone()
+            } else {
+                "Define the Unity task scope and target system.".to_string()
+            },
+            &["brief"],
+            0,
+            thread,
+            if brief_done { Some(thread.updated_at.clone()) } else { None },
+        ),
+        build_workflow_stage(
+            "design",
+            "DESIGN",
+            if design_active {
+                "active"
+            } else if design_done {
+                "done"
+            } else {
+                "idle"
+            },
+            &["game_designer", "level_designer", "unity_architect"],
+            if design_done {
+                "Design notes and findings captured.".to_string()
+            } else {
+                "Capture system flow, scene intent, and open design questions.".to_string()
+            },
+            &["findings", "plan"],
+            0,
+            thread,
+            stage_evidence_at(thread, task, &["game_designer", "level_designer", "unity_architect"], design_done),
+        ),
+        build_workflow_stage(
+            "implement",
+            "IMPLEMENT",
+            if implement_active {
+                "active"
+            } else if implement_done {
+                "done"
+            } else {
+                "idle"
+            },
+            &["unity_implementer", "unity_editor_tools"],
+            if !changed_files.is_empty() {
+                format!("{} changed files ready for inspection.", changed_files.len())
+            } else if artifact_has_user_content(artifacts.get("patch").map(String::as_str).unwrap_or("")) {
+                "Implementation artifacts captured for review.".to_string()
+            } else {
+                "No implementation artifacts yet.".to_string()
+            },
+            &["patch"],
+            0,
+            thread,
+            stage_evidence_at(thread, task, &["unity_implementer", "unity_editor_tools"], implement_done),
+        ),
+        build_workflow_stage(
+            "integrate",
+            "INTEGRATE",
+            if approvals_pending > 0 {
+                "blocked"
+            } else if integrate_active {
+                "active"
+            } else if integrate_done {
+                "done"
+            } else {
+                "idle"
+            },
+            &["unity_architect", "technical_artist", "release_steward"],
+            if approvals_pending > 0 {
+                format!("{approvals_pending} approvals are blocking integration.")
+            } else {
+                "Integration, handoff, and release checks are clear so far.".to_string()
+            },
+            &["handoff"],
+            approvals_pending,
+            thread,
+            stage_evidence_at(thread, task, &["unity_architect", "technical_artist", "release_steward"], integrate_evidence),
+        ),
+        build_workflow_stage(
+            "playtest",
+            "PLAYTEST",
+            if playtest_active {
+                "active"
+            } else if playtest_done {
+                "done"
+            } else {
+                "idle"
+            },
+            &["qa_playtester"],
+            format!("Validation is {}.", validation_state.to_uppercase()),
+            &["validation"],
+            0,
+            thread,
+            stage_evidence_at(thread, task, &["qa_playtester"], playtest_done),
+        ),
+        build_workflow_stage(
+            "lock",
+            "LOCK",
+            if lock_ready {
+                "ready"
+            } else {
+                "idle"
+            },
+            &["handoff_writer", "release_steward"],
+            format!("{readiness_checks}/3 readiness checks satisfied."),
+            &["handoff", "validation"],
+            0,
+            thread,
+            if lock_ready { Some(thread.updated_at.clone()) } else { None },
+        ),
+    ];
+
+    ThreadWorkflow {
+        current_stage_id: current_stage_id.to_string(),
+        stages,
+        next_action: match current_stage_id {
+            "brief" => "Clarify the Unity feature, target scene, and constraints.".to_string(),
+            "design" => "Capture design notes, system boundaries, and open questions.".to_string(),
+            "implement" => "Ship the code, data, prefab, or editor changes for review.".to_string(),
+            "integrate" if approvals_pending > 0 => "Resolve approvals to unblock integration.".to_string(),
+            "integrate" => "Tie together assets, systems, and handoff notes.".to_string(),
+            "playtest" => "Run validation and playtest checks before lock.".to_string(),
+            "lock" if lock_ready => "Task is ready to hand off or merge.".to_string(),
+            _ => "Complete validation and handoff notes to reach lock.".to_string(),
+        },
+        readiness_summary: format!("LOCK {} · {readiness_checks}/3 checks", if lock_ready { "READY" } else { "PENDING" }),
+    }
+}
+
+fn workflow_summary(workflow: &ThreadWorkflow, pending_approval_count: usize) -> ThreadWorkflowSummary {
+    let current_stage = workflow
+        .stages
+        .iter()
+        .find(|stage| stage.id == workflow.current_stage_id)
+        .cloned()
+        .unwrap_or_else(|| workflow.stages[0].clone());
+    ThreadWorkflowSummary {
+        current_stage_id: workflow.current_stage_id.clone(),
+        status: current_stage.status,
+        blocked: workflow.stages.iter().any(|stage| stage.status == "blocked"),
+        pending_approval_count,
+    }
 }
 
 fn default_run_roles(task: &TaskRecordView, requested_roles: &[String]) -> Vec<String> {
     let enabled = enabled_roles(task);
-    let filtered = requested_roles
-        .iter()
-        .map(|value| value.trim().to_lowercase())
-        .filter(|value| enabled.iter().any(|row| row == value))
-        .collect::<Vec<_>>();
-    if !filtered.is_empty() {
-        return filtered;
-    }
-    if enabled.iter().any(|value| value == "explorer") {
-        return vec!["explorer".to_string()];
-    }
-    if enabled.iter().any(|value| value == "worker") {
-        return vec!["worker".to_string()];
-    }
-    enabled.into_iter().take(1).collect()
+    task_presets::default_run_task_agent_ids(&enabled, requested_roles)
 }
 
 fn update_agent_statuses(agents: &mut [BackgroundAgentRecord], selected_roles: &[String], workspace_path: &str) {
@@ -613,6 +1003,7 @@ pub fn thread_list(cwd: String) -> Result<Vec<ThreadListItem>, String> {
         threads.push(ThreadListItem {
             pending_approval_count: detail.approvals.iter().filter(|approval| approval.status == "pending").count(),
             agent_count: detail.agents.len(),
+            workflow_summary: workflow_summary(&detail.workflow, detail.approvals.iter().filter(|approval| approval.status == "pending").count()),
             thread: detail.thread,
         });
     }
@@ -639,7 +1030,9 @@ pub fn thread_add_agent(
 ) -> Result<ThreadDetail, String> {
     let workspace = normalize_workspace_root(&cwd)?;
     let thread_id = thread_id.trim().to_string();
-    let normalized_role_id = role_id.trim().to_lowercase();
+    let normalized_role_id = task_presets::canonical_task_agent_id(&role_id)
+        .ok_or_else(|| format!("unsupported role id: {role_id}"))?
+        .to_string();
     if thread_id.is_empty() {
         return Err("threadId is required".to_string());
     }
@@ -697,8 +1090,10 @@ pub fn thread_update_agent(
         .split(':')
         .next_back()
         .unwrap_or_default()
-        .trim()
-        .to_lowercase();
+        .trim();
+    let normalized_role_id = task_presets::canonical_task_agent_id(normalized_role_id)
+        .ok_or_else(|| format!("unknown agent id: {agent_id}"))?
+        .to_string();
     let task_path = task_dir(&workspace, &thread_id);
     let mut task = task_detail_view(storage::task_load(cwd, thread_id.clone())?)?;
     let desired_label = label
@@ -730,8 +1125,10 @@ pub fn thread_remove_agent(cwd: String, thread_id: String, agent_id: String) -> 
         .split(':')
         .next_back()
         .unwrap_or_default()
-        .trim()
-        .to_lowercase();
+        .trim();
+    let normalized_role_id = task_presets::canonical_task_agent_id(normalized_role_id)
+        .ok_or_else(|| format!("unknown agent id: {agent_id}"))?
+        .to_string();
     let task_path = task_dir(&workspace, &thread_id);
     let mut task = task_detail_view(storage::task_load(cwd, thread_id.clone())?)?;
     let Some(role) = task.record.roles.iter_mut().find(|role| role.id == normalized_role_id) else {
@@ -748,6 +1145,7 @@ pub fn thread_remove_agent(cwd: String, thread_id: String, agent_id: String) -> 
 #[tauri::command]
 pub fn thread_create(
     cwd: String,
+    project_path: Option<String>,
     prompt: String,
     mode: Option<String>,
     team: Option<String>,
@@ -761,7 +1159,7 @@ pub fn thread_create(
         return Err("prompt is required".to_string());
     }
     let workspace = normalize_workspace_root(&cwd)?;
-    let task = task_detail_view(storage::task_create(cwd.clone(), prompt.to_string(), mode, team, isolation)?)?;
+    let task = task_detail_view(storage::task_create(cwd.clone(), project_path, prompt.to_string(), mode, team, isolation)?)?;
     let task_path = task_dir(&workspace, &task.record.task_id);
     let thread = default_thread_record(
         &task.record,
@@ -799,9 +1197,31 @@ pub fn thread_append_message(cwd: String, thread_id: String, role: String, conte
     append_message(&mut messages, &thread.thread_id, role.trim(), content);
     thread.updated_at = now_iso();
     if role.trim().eq_ignore_ascii_case("user") {
+        let should_update_title = should_replace_thread_title(&thread.title, &thread.user_prompt);
         thread.user_prompt = content.to_string();
-        thread.title = truncate_text(content, 56);
+        if should_update_title {
+            thread.title = normalize_thread_title(content);
+        }
     }
+    write_json_pretty(&thread_record_path(&task_path), &thread)?;
+    write_json_pretty(&thread_messages_path(&task_path), &messages)?;
+    write_json_pretty(&thread_agents_path(&task_path), &agents)?;
+    write_json_pretty(&thread_approvals_path(&task_path), &approvals)?;
+    build_thread_detail(&task_path, task, &thread.model, &thread.reasoning, &thread.access_mode)
+}
+
+#[tauri::command]
+pub fn thread_rename(cwd: String, thread_id: String, title: String) -> Result<ThreadDetail, String> {
+    let workspace = normalize_workspace_root(&cwd)?;
+    let thread_id = thread_id.trim().to_string();
+    if thread_id.is_empty() {
+        return Err("threadId is required".to_string());
+    }
+    let task = task_detail_view(storage::task_load(cwd.clone(), thread_id.clone())?)?;
+    let task_path = task_dir(&workspace, &thread_id);
+    let (mut thread, messages, agents, approvals) = ensure_thread_state(&task_path, &task.record, "5.4", "MEDIUM", "Local")?;
+    thread.title = normalize_thread_title(&title);
+    thread.updated_at = now_iso();
     write_json_pretty(&thread_record_path(&task_path), &thread)?;
     write_json_pretty(&thread_messages_path(&task_path), &messages)?;
     write_json_pretty(&thread_agents_path(&task_path), &agents)?;
@@ -829,15 +1249,33 @@ pub fn thread_spawn_agents(cwd: String, thread_id: String, prompt: String, roles
 
     for role_id in &selected_roles {
         let label = role_label_for(&task.record, role_id);
-        append_message(
+        let agent_id = format!("{}:{}", thread.thread_id, role_id);
+        append_message_with_meta(
             &mut messages,
             &thread.thread_id,
             "assistant",
             &format!("Created {label} with instructions: {}", role_instruction(&task.record, role_id, prompt)),
+            Some(agent_id.as_str()),
+            Some(label.as_str()),
+            Some(role_id.as_str()),
+            Some("agent_created"),
+            None,
         );
     }
     for role_id in &selected_roles {
-        append_message(&mut messages, &thread.thread_id, "assistant", &role_discussion_line(role_id));
+        let label = role_label_for(&task.record, role_id);
+        let agent_id = format!("{}:{}", thread.thread_id, role_id);
+        append_message_with_meta(
+            &mut messages,
+            &thread.thread_id,
+            "assistant",
+            &role_discussion_line(role_id),
+            Some(agent_id.as_str()),
+            Some(label.as_str()),
+            Some(role_id.as_str()),
+            Some("agent_status"),
+            None,
+        );
     }
 
     if selected_roles.len() >= 2 {
@@ -876,7 +1314,7 @@ pub fn thread_spawn_agents(cwd: String, thread_id: String, prompt: String, roles
         }
     }
 
-    append_message(
+    append_message_with_meta(
         &mut messages,
         &thread.thread_id,
         "assistant",
@@ -884,6 +1322,11 @@ pub fn thread_spawn_agents(cwd: String, thread_id: String, prompt: String, roles
             "{} background agents are running now. I will wait for their updates and then synthesize the answer into one response.",
             selected_roles.len()
         ),
+        None,
+        None,
+        None,
+        Some("agent_batch_running"),
+        None,
     );
     thread.status = "active".to_string();
     thread.updated_at = now_iso();
@@ -902,6 +1345,7 @@ pub fn thread_list_agents(cwd: String, thread_id: String) -> Result<Vec<Backgrou
 
 #[tauri::command]
 pub fn thread_open_agent_detail(cwd: String, thread_id: String, agent_id: String) -> Result<ThreadAgentDetail, String> {
+    let workspace = normalize_workspace_root(&cwd)?;
     let detail = thread_load(cwd, thread_id)?;
     let agent = detail
         .agents
@@ -915,13 +1359,18 @@ pub fn thread_open_agent_detail(cwd: String, thread_id: String, agent_id: String
         .iter()
         .find(|row| row.id == agent.role_id)
         .cloned();
+    let artifact_paths = task_role.as_ref().map(|row| row.artifact_paths.clone()).unwrap_or_default();
+    let (latest_artifact_path, latest_artifact_preview) =
+        resolve_artifact_preview(&workspace, &detail.artifacts, &artifact_paths);
     Ok(ThreadAgentDetail {
         agent,
         studio_role_id: task_role.as_ref().map(|row| row.studio_role_id.clone()),
         last_prompt: task_role.as_ref().and_then(|row| row.last_prompt.clone()),
         last_prompt_at: task_role.as_ref().and_then(|row| row.last_prompt_at.clone()),
         last_run_id: task_role.as_ref().and_then(|row| row.last_run_id.clone()),
-        artifact_paths: task_role.map(|row| row.artifact_paths).unwrap_or_default(),
+        artifact_paths,
+        latest_artifact_path,
+        latest_artifact_preview,
         worktree_path: detail.task.worktree_path.clone().or_else(|| Some(detail.task.workspace_path.clone())),
     })
 }
@@ -981,6 +1430,9 @@ pub fn thread_resolve_approval(cwd: String, thread_id: String, approval_id: Stri
                 .to_string();
         }
     }
+    if let Some(canonical_target_role) = task_presets::canonical_task_agent_id(&target_role) {
+        target_role = canonical_target_role.to_string();
+    }
     if !target_role.is_empty() {
         for agent in agents.iter_mut() {
             if agent.role_id == target_role {
@@ -994,11 +1446,16 @@ pub fn thread_resolve_approval(cwd: String, thread_id: String, approval_id: Stri
     } else {
         "Approval rejected. Waiting for a new direction.".to_string()
     };
-    append_message(
+    append_message_with_meta(
         &mut messages,
         &thread.thread_id,
         "assistant",
         &approval_message,
+        (!target_role.is_empty()).then_some(format!("{}:{}", thread.thread_id, target_role)).as_deref(),
+        (!target_role.is_empty()).then_some(role_label_for(&task.record, &target_role)).as_deref(),
+        (!target_role.is_empty()).then_some(target_role.as_str()),
+        Some(if normalized == "approved" { "approval_approved" } else { "approval_rejected" }),
+        None,
     );
     thread.updated_at = now_iso();
     write_json_pretty(&thread_record_path(&task_path), &thread)?;
@@ -1057,7 +1514,12 @@ pub fn thread_record_role_result(
         }
     }
 
-    append_message(
+    let latest_artifact_path = artifact_paths
+        .iter()
+        .rev()
+        .find(|path| !path.trim().is_empty())
+        .map(|path| path.trim().to_string());
+    append_message_with_meta(
         &mut messages,
         &thread.thread_id,
         "assistant",
@@ -1072,6 +1534,15 @@ pub fn thread_record_role_result(
                 }
             )
         }),
+        Some(agent_id.as_str()),
+        Some(task_role.label.as_str()),
+        Some(task_role.id.as_str()),
+        Some(if run_status.trim().eq_ignore_ascii_case("done") {
+            "agent_result"
+        } else {
+            "agent_failed"
+        }),
+        latest_artifact_path.as_deref(),
     );
 
     if run_status.trim().eq_ignore_ascii_case("done") {
@@ -1087,16 +1558,17 @@ pub fn thread_record_role_result(
                         == Some(target_role.as_str())
             });
             if !already_pending {
+                let target_label = role_label_for(&task.record, &target_role);
                 let payload = json!({
                     "fromRole": task_role.id,
                     "targetRole": target_role,
-                    "prompt": role_prompt_for_handoff(&task.record, &task_role.label, &target_role.to_uppercase()),
+                    "prompt": role_prompt_for_handoff(&task.record, &task_role.label, &target_label),
                 });
                 approvals.push(create_approval_record(
                     &thread.thread_id,
                     &agent_id,
                     "handoff",
-                    &format!("Approve handoff from {} to {}.", task_role.label, role_label_for(&task.record, &target_role)),
+                    &format!("Approve handoff from {} to {}.", task_role.label, target_label),
                     payload,
                     approvals.len(),
                 ));
@@ -1106,21 +1578,31 @@ pub fn thread_record_role_result(
                         agent.last_updated_at = now_iso();
                     }
                 }
-                append_message(
+                append_message_with_meta(
                     &mut messages,
                     &thread.thread_id,
                     "system",
-                    &format!("Approval required to hand off from {} to {}.", task_role.label, target_role.to_uppercase()),
+                    &format!("Approval required to hand off from {} to {}.", task_role.label, target_label),
+                    Some(agent_id.as_str()),
+                    Some(task_role.label.as_str()),
+                    Some(task_role.id.as_str()),
+                    Some("handoff_required"),
+                    latest_artifact_path.as_deref(),
                 );
                 created_handoff = true;
             }
         }
         if !created_handoff {
-            append_message(
+            append_message_with_meta(
                 &mut messages,
                 &thread.thread_id,
                 "assistant",
                 "I have consolidated the latest background agent output into this thread. Review the artifacts and changed files for the next step.",
+                Some(agent_id.as_str()),
+                Some(task_role.label.as_str()),
+                Some(task_role.id.as_str()),
+                Some("thread_synthesis_ready"),
+                latest_artifact_path.as_deref(),
             );
         }
     }
@@ -1172,9 +1654,10 @@ mod tests {
         let workspace = temp_workspace("create");
         let detail = thread_create(
             workspace.to_string_lossy().to_string(),
+            None,
             "spawn 3 fast subagents".to_string(),
             None,
-            None,
+            Some("full-squad".to_string()),
             None,
             None,
             None,
@@ -1186,6 +1669,10 @@ mod tests {
         assert!(thread_messages_path(&dir).exists());
         assert!(thread_agents_path(&dir).exists());
         assert!(thread_approvals_path(&dir).exists());
+        assert_eq!(detail.agents.len(), 9);
+        assert!(detail.agents.iter().any(|agent| agent.role_id == "game_designer"));
+        assert!(detail.agents.iter().any(|agent| agent.role_id == "handoff_writer"));
+        assert_eq!(detail.workflow.stages.len(), 6);
     }
 
     #[test]
@@ -1193,9 +1680,10 @@ mod tests {
         let workspace = temp_workspace("approval");
         let detail = thread_create(
             workspace.to_string_lossy().to_string(),
+            None,
             "explore repo".to_string(),
             None,
-            None,
+            Some("full-squad".to_string()),
             None,
             None,
             None,
@@ -1205,10 +1693,10 @@ mod tests {
         let created = thread_create_approval(
             workspace.to_string_lossy().to_string(),
             detail.thread.thread_id.clone(),
-            format!("{}:explorer", detail.thread.thread_id),
+            format!("{}:game_designer", detail.thread.thread_id),
             "handoff".to_string(),
             "Allow handoff".to_string(),
-            Some(json!({ "targetRole": "worker", "prompt": "continue" })),
+            Some(json!({ "targetRole": "unity_implementer", "prompt": "continue" })),
         )
         .unwrap();
         let approval_id = created.approvals.last().unwrap().id.clone();
@@ -1220,6 +1708,10 @@ mod tests {
         )
         .unwrap();
         assert!(resolved.approvals.iter().any(|approval| approval.status == "approved"));
+        assert!(resolved
+            .agents
+            .iter()
+            .any(|agent| agent.role_id == "unity_implementer" && agent.status == "thinking"));
     }
 
     #[test]
@@ -1227,41 +1719,188 @@ mod tests {
         let workspace = temp_workspace("spawn");
         let detail = thread_create(
             workspace.to_string_lossy().to_string(),
+            None,
             "inspect repo".to_string(),
             None,
-            Some("custom".to_string()),
+            Some("full-squad".to_string()),
             None,
             None,
             None,
             None,
         )
         .unwrap();
-        let with_explorer = thread_add_agent(
+        let with_tools = thread_add_agent(
             workspace.to_string_lossy().to_string(),
             detail.thread.thread_id.clone(),
-            "explorer".to_string(),
-            Some("EXPLORER".to_string()),
-        )
-        .unwrap();
-        let with_worker = thread_add_agent(
-            workspace.to_string_lossy().to_string(),
-            with_explorer.thread.thread_id.clone(),
-            "worker".to_string(),
-            Some("WORKER".to_string()),
+            "tools".to_string(),
+            None,
         )
         .unwrap();
         let spawned = thread_spawn_agents(
             workspace.to_string_lossy().to_string(),
-            with_worker.thread.thread_id.clone(),
-            "@explorer @worker inspect repo".to_string(),
-            vec!["explorer".to_string(), "worker".to_string()],
+            with_tools.thread.thread_id.clone(),
+            "@designer @implementer inspect repo".to_string(),
+            vec!["game_designer".to_string(), "unity_implementer".to_string()],
         )
         .unwrap();
-        assert!(spawned.messages.iter().any(|message| message.content.contains("Created EXPLORER")));
-        assert!(spawned.messages.iter().any(|message| message.content.contains("Created WORKER")));
+        assert!(spawned.messages.iter().any(|message| message.content.contains("Created GAME DESIGNER")));
+        assert!(spawned.messages.iter().any(|message| message.content.contains("Created UNITY IMPLEMENTER")));
         assert!(spawned.messages.iter().any(|message| message.content.contains("background agents are running now")));
         assert!(spawned.approvals.iter().any(|approval| approval.status == "pending"));
-        assert!(spawned.agents.iter().any(|agent| agent.role_id == "explorer" && agent.status == "thinking"));
-        assert!(spawned.agents.iter().any(|agent| agent.role_id == "worker" && agent.status == "awaiting_approval"));
+        assert!(spawned.agents.iter().any(|agent| agent.role_id == "game_designer" && agent.status == "thinking"));
+        assert!(spawned.agents.iter().any(|agent| agent.role_id == "unity_implementer" && agent.status == "awaiting_approval"));
+        assert_eq!(spawned.workflow.current_stage_id, "integrate");
+        assert_eq!(
+            spawned
+                .workflow
+                .stages
+                .iter()
+                .find(|stage| stage.id == "integrate")
+                .map(|stage| stage.status.as_str()),
+            Some("blocked")
+        );
+    }
+
+    #[test]
+    fn thread_load_marks_lock_ready_when_patch_validation_and_handoff_exist() {
+        let workspace = temp_workspace("lock-ready");
+        let detail = thread_create(
+            workspace.to_string_lossy().to_string(),
+            None,
+            "finish the boss arena".to_string(),
+            None,
+            Some("full-squad".to_string()),
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        let cwd = workspace.to_string_lossy().to_string();
+        storage::task_update_artifact(
+            cwd.clone(),
+            detail.thread.thread_id.clone(),
+            "patch".to_string(),
+            "# PATCH\n\nImplemented the arena controller.".to_string(),
+        )
+        .unwrap();
+        storage::task_update_artifact(
+            cwd.clone(),
+            detail.thread.thread_id.clone(),
+            "validation".to_string(),
+            "# VALIDATION\n\nPlaytest passed.".to_string(),
+        )
+        .unwrap();
+        storage::task_update_artifact(
+            cwd.clone(),
+            detail.thread.thread_id.clone(),
+            "handoff".to_string(),
+            "# HANDOFF\n\nReady for merge.".to_string(),
+        )
+        .unwrap();
+
+        let loaded = thread_load(cwd, detail.thread.thread_id).unwrap();
+        assert_eq!(loaded.workflow.current_stage_id, "lock");
+        assert_eq!(
+            loaded
+                .workflow
+                .stages
+                .iter()
+                .find(|stage| stage.id == "lock")
+                .map(|stage| stage.status.as_str()),
+            Some("ready")
+        );
+        assert!(loaded.workflow.readiness_summary.contains("LOCK READY"));
+    }
+
+    #[test]
+    fn thread_rename_persists_custom_title_across_user_messages() {
+        let workspace = temp_workspace("rename");
+        let detail = thread_create(
+            workspace.to_string_lossy().to_string(),
+            None,
+            "NEW THREAD".to_string(),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        let renamed = thread_rename(
+            workspace.to_string_lossy().to_string(),
+            detail.thread.thread_id.clone(),
+            "Ship tasks polish".to_string(),
+        )
+        .unwrap();
+        assert_eq!(renamed.thread.title, "Ship tasks polish");
+
+        let appended = thread_append_message(
+            workspace.to_string_lossy().to_string(),
+            detail.thread.thread_id.clone(),
+            "user".to_string(),
+            "Please finish the remaining UI alignment fixes".to_string(),
+        )
+        .unwrap();
+        assert_eq!(appended.thread.title, "Ship tasks polish");
+    }
+
+    #[test]
+    fn thread_record_role_result_exposes_agent_metadata_and_latest_artifact_preview() {
+        let workspace = temp_workspace("role-result-preview");
+        let cwd = workspace.to_string_lossy().to_string();
+        let detail = thread_create(
+            cwd.clone(),
+            None,
+            "inspect repo".to_string(),
+            None,
+            Some("full-squad".to_string()),
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        let artifact_dir = workspace.join(".rail").join("studio_runs").join("run-1").join("artifacts");
+        fs::create_dir_all(&artifact_dir).unwrap();
+        let artifact_path = artifact_dir.join("summary.md");
+        fs::write(&artifact_path, "# Summary\n\nInvestigated systems.").unwrap();
+        let artifact_path_str = artifact_path.to_string_lossy().to_string();
+
+        let recorded = thread_record_role_result(
+            cwd.clone(),
+            detail.thread.thread_id.clone(),
+            "pm_planner".to_string(),
+            "run-1".to_string(),
+            "done".to_string(),
+            vec![artifact_path_str.clone()],
+            Some("GAME DESIGNER: Investigated systems.".to_string()),
+        )
+        .unwrap();
+        assert!(recorded);
+
+        let loaded = thread_load(cwd.clone(), detail.thread.thread_id.clone()).unwrap();
+        let result_message = loaded
+            .messages
+            .iter()
+            .find(|message| message.event_kind.as_deref() == Some("agent_result"))
+            .unwrap();
+        assert_eq!(result_message.agent_label.as_deref(), Some("GAME DESIGNER"));
+        assert_eq!(result_message.source_role_id.as_deref(), Some("game_designer"));
+        assert_eq!(result_message.artifact_path.as_deref(), Some(artifact_path_str.as_str()));
+
+        let agent_detail = thread_open_agent_detail(
+            cwd,
+            detail.thread.thread_id.clone(),
+            format!("{}:game_designer", detail.thread.thread_id),
+        )
+        .unwrap();
+        assert_eq!(agent_detail.latest_artifact_path.as_deref(), Some(artifact_path_str.as_str()));
+        assert!(agent_detail
+            .latest_artifact_preview
+            .as_deref()
+            .unwrap_or_default()
+            .contains("Investigated systems."));
     }
 }

@@ -1373,16 +1373,17 @@
   max-width: 100%;
   padding: 8px 10px;
   border-radius: 6px;
-  background: color-mix(in srgb, var(--surface-soft) 82%, #d9dde3);
+  border: 1px solid #d0d7de;
+  background: #f6f8fa;
   white-space: pre-wrap;
   word-break: break-word;
   overflow-wrap: anywhere;
   overflow-x: hidden;
   overflow-y: auto;
-  font-family: "DepartureMonoRail", "Galmuri11", monospace;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   font-size: 11px;
   line-height: 1.55;
-  color: var(--text-main);
+  color: #24292f;
 }
 
 .tasks-thread-workflow-meta {
@@ -1483,8 +1484,9 @@
 .tasks-thread-detail-text-panel.is-inline.is-empty pre {
   padding: 8px 10px;
   border-radius: 6px;
-  background: color-mix(in srgb, var(--surface-soft) 82%, #d9dde3);
-  color: var(--text-muted);
+  border: 1px solid #d0d7de;
+  background: #f6f8fa;
+  color: #57606a;
 }
 
 .tasks-thread-confirm-modal {

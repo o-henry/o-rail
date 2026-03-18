@@ -8,7 +8,7 @@
   display: grid;
   grid-template-columns: 220px minmax(0, 1fr) minmax(260px, 300px);
   gap: 10px;
-  padding: 10px;
+  padding: 0;
   background: var(--bg-app);
   border-radius: var(--tasks-wrapper-radius);
   overflow: hidden;
@@ -448,7 +448,7 @@
   min-width: 0;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto auto;
-  gap: 10px;
+  gap: 0;
   background: transparent;
   overflow: hidden;
 }
@@ -728,6 +728,7 @@
 .tasks-thread-running-strip {
   display: grid;
   gap: 8px;
+  margin-top: 10px;
   padding: 10px 12px;
   border-radius: 10px;
   background: color-mix(in srgb, var(--surface-soft) 46%, #ffffff);
@@ -1004,7 +1005,7 @@
 
 .tasks-thread-composer-shell {
   position: relative;
-  margin: 0;
+  margin: 10px 0 0;
   border: 0;
   box-shadow: none;
   background: #ffffff;

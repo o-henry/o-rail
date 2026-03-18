@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { type KeyboardEvent, useMemo } from "react";
 import { TaskTerminalViewport } from "../tasks/TaskTerminalViewport";
 import { useTasksThreadState } from "../tasks/useTasksThreadState";
 import { useShellTerminalGrid } from "./useShellTerminalGrid";
@@ -49,13 +49,18 @@ export default function ShellPage(props: ShellPageProps) {
       <section className="shell-main-surface">
         <div className="shell-board">
           {state.activeThread && !shellGrid.isUnsupported ? (
-            <button
-              className="shell-add-button"
-              onClick={() => void shellGrid.addPane()}
-              type="button"
-            >
-              <img alt="" aria-hidden="true" src="/plus-large-svgrepo-com.svg" />
-            </button>
+            <div className="shell-board-toolbar">
+              <div className="shell-terminal-card-actions shell-global-actions">
+                <button
+                  aria-label="add terminal"
+                  className="shell-terminal-icon-button"
+                  onClick={() => void shellGrid.addPane()}
+                  type="button"
+                >
+                  <img alt="" aria-hidden="true" src="/plus-large-svgrepo-com.svg" />
+                </button>
+              </div>
+            </div>
           ) : null}
 
           {!state.activeThread ? (
@@ -100,36 +105,58 @@ export default function ShellPage(props: ShellPageProps) {
                 >
                   <header className="shell-terminal-card-head">
                     <div className="shell-terminal-card-copy">
-                      <strong>{pane.title}</strong>
+                      <input
+                        aria-label={`${pane.title} title`}
+                        className="shell-terminal-title-input"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                        }}
+                        onChange={(event) => {
+                          shellGrid.renamePane(pane.id, event.currentTarget.value);
+                        }}
+                        onKeyDown={(event: KeyboardEvent<HTMLInputElement>) => {
+                          if (event.key === "Enter") {
+                            event.currentTarget.blur();
+                          }
+                        }}
+                        type="text"
+                        value={pane.title}
+                      />
                     </div>
                     <div className="shell-terminal-card-actions">
                       <span>{displayTerminalStatus(pane.status, pane.exitCode)}</span>
                       <button
+                        aria-label="stop terminal"
+                        className="shell-terminal-icon-button"
                         onClick={(event) => {
                           event.stopPropagation();
                           void shellGrid.interruptPane(pane.id);
                         }}
                         type="button"
                       >
-                        STOP
+                        <img alt="" aria-hidden="true" src="/canvas-stop.svg" />
                       </button>
                       <button
+                        aria-label="clear terminal"
+                        className="shell-terminal-icon-button"
                         onClick={(event) => {
                           event.stopPropagation();
                           shellGrid.clearPane(pane.id);
                         }}
                         type="button"
                       >
-                        CLEAR
+                        <img alt="" aria-hidden="true" src="/reload.svg" />
                       </button>
                       <button
+                        aria-label="close terminal"
+                        className="shell-terminal-icon-button"
                         onClick={(event) => {
                           event.stopPropagation();
                           void shellGrid.closePane(pane.id);
                         }}
                         type="button"
                       >
-                        CLOSE
+                        <img alt="" aria-hidden="true" src="/xmark.svg" />
                       </button>
                     </div>
                   </header>

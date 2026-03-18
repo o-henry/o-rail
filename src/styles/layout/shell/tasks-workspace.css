@@ -186,7 +186,6 @@
   box-sizing: border-box;
 }
 
-.tasks-thread-new-button,
 .tasks-thread-project-node-select,
 .tasks-thread-project-node-select strong,
 .tasks-thread-project-node-select span {
@@ -204,14 +203,15 @@
 
 .tasks-thread-primary,
 .tasks-thread-detail-tabs button.is-active,
-.tasks-thread-file-list button.is-active,
-.tasks-thread-list-item.is-active {
+.tasks-thread-file-list button.is-active {
   background: color-mix(in srgb, var(--focus-ring) 18%, var(--surface-soft));
   color: var(--text-main);
 }
 
 .tasks-thread-list-item.is-active {
-  gap: 0;
+  gap: 8px;
+  background: #eef1f4;
+  color: var(--text-main);
 }
 
 .tasks-thread-nav-copy,
@@ -322,6 +322,7 @@
 .tasks-thread-list-title-row strong {
   min-width: 0;
   flex: 1 1 auto;
+  font-size: 10px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -497,7 +498,7 @@
 
 .tasks-thread-list-meta-row {
   justify-content: flex-start;
-  margin-top: 6px;
+  margin-top: 2px;
   gap: 6px;
 }
 
@@ -1695,7 +1696,7 @@
 
 .tasks-terminal-viewport {
   min-height: 260px;
-  border-radius: 10px;
+  border-radius: 0;
   overflow: hidden;
   background: #0f1520;
 }

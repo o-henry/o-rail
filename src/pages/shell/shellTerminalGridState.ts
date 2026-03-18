@@ -22,6 +22,23 @@ export function reorderShellTerminalPanes(
   return next;
 }
 
+export function renameShellTerminalPaneTitle(
+  panes: TaskTerminalPane[],
+  paneId: string,
+  nextTitle: string,
+): TaskTerminalPane[] {
+  const normalizedPaneId = String(paneId ?? "").trim();
+  const normalizedTitle = String(nextTitle ?? "").trim();
+  if (!normalizedPaneId || !normalizedTitle) {
+    return panes;
+  }
+  return panes.map((pane) => (
+    pane.id === normalizedPaneId
+      ? { ...pane, title: normalizedTitle }
+      : pane
+  ));
+}
+
 export function createShellTerminalPane(input: {
   threadId: string;
   cwd: string;

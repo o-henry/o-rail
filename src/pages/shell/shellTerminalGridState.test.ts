@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { createShellTerminalPane, reorderShellTerminalPanes } from "./shellTerminalGridState";
+import {
+  createShellTerminalPane,
+  renameShellTerminalPaneTitle,
+  reorderShellTerminalPanes,
+} from "./shellTerminalGridState";
 
 describe("shellTerminalGridState", () => {
   it("creates a stable terminal pane id and title", () => {
@@ -21,6 +25,17 @@ describe("shellTerminalGridState", () => {
       "TERMINAL 3",
       "TERMINAL 1",
       "TERMINAL 2",
+    ]);
+  });
+
+  it("renames only the targeted pane title", () => {
+    const panes = [
+      createShellTerminalPane({ threadId: "thread_1", cwd: "/repo", index: 1 }),
+      createShellTerminalPane({ threadId: "thread_1", cwd: "/repo", index: 2 }),
+    ];
+    expect(renameShellTerminalPaneTitle(panes, panes[1]!.id, "BUILD SHELL").map((pane) => pane.title)).toEqual([
+      "TERMINAL 1",
+      "BUILD SHELL",
     ]);
   });
 });

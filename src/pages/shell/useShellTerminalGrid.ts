@@ -3,7 +3,11 @@ import { listen } from "../../shared/tauri";
 import { resolveTasksThreadTerminalCwd } from "../tasks/taskThreadTerminalState";
 import type { TaskTerminalPane, TaskTerminalPaneStatus } from "../tasks/taskTerminalTypes";
 import type { ThreadDetail } from "../tasks/threadTypes";
-import { createShellTerminalPane, reorderShellTerminalPanes } from "./shellTerminalGridState";
+import {
+  createShellTerminalPane,
+  renameShellTerminalPaneTitle,
+  reorderShellTerminalPanes,
+} from "./shellTerminalGridState";
 
 type InvokeFn = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
 
@@ -79,7 +83,7 @@ export function useShellTerminalGrid(params: {
                 ...pane,
                 status: payload.state,
                 exitCode: payload.exitCode ?? null,
-                buffer: payload.message
+                buffer: payload.state === "error" && payload.message
                   ? appendTerminalChunk(pane.buffer, `\n[system] ${String(payload.message)}\n`)
                   : pane.buffer,
               }
@@ -183,6 +187,10 @@ export function useShellTerminalGrid(params: {
     setPanes((current) => current.map((pane) => (pane.id === paneId ? { ...pane, buffer: "" } : pane)));
   }, []);
 
+  const renamePane = useCallback((paneId: string, nextTitle: string) => {
+    setPanes((current) => renameShellTerminalPaneTitle(current, paneId, nextTitle));
+  }, []);
+
   const closePane = useCallback(async (paneId: string) => {
     if (params.hasTauriRuntime) {
       try {
@@ -233,6 +241,7 @@ export function useShellTerminalGrid(params: {
     sendChars,
     interruptPane,
     clearPane,
+    renamePane,
     closePane,
     reorderPanes,
   };

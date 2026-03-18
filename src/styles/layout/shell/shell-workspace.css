@@ -13,36 +13,23 @@
 }
 
 .shell-board {
-  position: relative;
   min-width: 0;
   min-height: 0;
   height: 100%;
-  border-radius: 10px;
-  overflow: hidden;
-  background: color-mix(in srgb, var(--surface-soft) 66%, #c9d1db);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  background: transparent;
 }
 
-.shell-add-button {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  z-index: 4;
-  width: 28px;
-  min-width: 28px;
-  height: 28px;
-  min-height: 28px;
-  padding: 0;
-  border: 0;
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--surface-soft) 72%, var(--surface-elevated));
-  display: inline-grid;
-  place-items: center;
+.shell-board-toolbar {
+  min-width: 0;
+  display: flex;
+  justify-content: flex-end;
+  padding: 6px 10px 0;
 }
 
-.shell-add-button img {
-  width: 12px;
-  height: 12px;
-  display: block;
+.shell-global-actions {
+  min-height: 24px;
 }
 
 .shell-empty-state {
@@ -61,7 +48,7 @@
 }
 
 .shell-empty-state strong {
-  font-size: 13px;
+  font-size: 10px;
   color: var(--text-main);
 }
 
@@ -106,10 +93,10 @@
   height: 100%;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-  gap: 6px;
-  padding: 8px;
+  gap: 0;
+  padding: 0;
   border-radius: 0;
-  background: #ffffff;
+  background: transparent;
   box-shadow: none;
   overflow: hidden;
   cursor: move;
@@ -127,8 +114,10 @@
 }
 
 .shell-terminal-card-head {
-  justify-content: space-between;
+  justify-content: flex-start;
   min-height: 24px;
+  padding: 4px 10px;
+  background: transparent;
 }
 
 .shell-terminal-card-copy {
@@ -137,8 +126,13 @@
   align-items: center;
 }
 
-.shell-terminal-card-copy strong {
+.shell-terminal-title-input {
   min-width: 0;
+  width: 180px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
   font-size: 11px;
   line-height: 1.2;
   color: var(--text-main);
@@ -147,9 +141,16 @@
   white-space: nowrap;
 }
 
+.shell-terminal-title-input:focus,
+.shell-terminal-title-input:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
 .shell-terminal-card-actions {
-  flex-wrap: wrap;
-  justify-content: flex-end;
+  flex-wrap: nowrap;
+  justify-content: flex-start;
+  margin-left: 10px;
 }
 
 .shell-terminal-card-actions span {
@@ -158,14 +159,23 @@
   color: var(--text-muted);
 }
 
-.shell-terminal-card-actions button {
+.shell-terminal-icon-button {
   border: 0;
   border-radius: 4px;
-  background: color-mix(in srgb, var(--surface-soft) 74%, var(--surface-elevated));
+  background: transparent;
   color: var(--text-main);
   min-height: 24px;
-  padding: 0 8px;
+  min-width: 24px;
+  padding: 0;
   font: inherit;
+  display: inline-grid;
+  place-items: center;
+}
+
+.shell-terminal-icon-button img {
+  width: 12px;
+  height: 12px;
+  display: block;
 }
 
 .shell-terminal-card .tasks-terminal-viewport {

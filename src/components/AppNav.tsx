@@ -7,6 +7,7 @@ type WorkspaceTab =
   | "intelligence"
   | "workflow"
   | "tasks"
+  | "shell"
   | "feed"
   | "agents"
   | "handoff"
@@ -30,6 +31,7 @@ type AppNavProps = {
 
 const NAV_ITEMS: NavItem[] = [
   { tab: "tasks", label: "TASKS", ariaLabel: "TASKS", title: "TASKS" },
+  { tab: "shell", label: "SHELL", ariaLabel: "SHELL", title: "SHELL" },
   { tab: "workflow", label: "nav.workflow.short", ariaLabel: "nav.workflow.title", title: "nav.workflow.title" },
   { tab: "knowledge", label: "nav.knowledge", ariaLabel: "nav.knowledge", title: "nav.knowledge" },
   { tab: "adaptation", label: "nav.adaptation", ariaLabel: "nav.adaptation", title: "nav.adaptation" },

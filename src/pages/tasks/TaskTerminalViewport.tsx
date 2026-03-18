@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
-import type { TaskTerminalPane } from "./useTaskTerminalGrid";
+import type { TaskTerminalPane } from "./taskTerminalTypes";
 
 type TaskTerminalViewportProps = {
   pane: TaskTerminalPane;
@@ -15,6 +15,11 @@ export function TaskTerminalViewport(props: TaskTerminalViewportProps) {
   const terminalRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const renderedBufferRef = useRef("");
+  const onTerminalDataRef = useRef(props.onTerminalData);
+
+  useEffect(() => {
+    onTerminalDataRef.current = props.onTerminalData;
+  }, [props.onTerminalData]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -71,7 +76,7 @@ export function TaskTerminalViewport(props: TaskTerminalViewportProps) {
     resizeObserver?.observe(host);
 
     const disposable = terminal.onData((chars) => {
-      void props.onTerminalData(chars);
+      void onTerminalDataRef.current(chars);
     });
 
     terminalRef.current = terminal;
@@ -85,7 +90,7 @@ export function TaskTerminalViewport(props: TaskTerminalViewportProps) {
       terminalRef.current = null;
       terminal.dispose();
     };
-  }, [props.onTerminalData]);
+  }, []);
 
   useEffect(() => {
     const terminal = terminalRef.current;
@@ -131,7 +136,13 @@ export function TaskTerminalViewport(props: TaskTerminalViewportProps) {
 
   return (
     <div className="tasks-terminal-viewport" data-selected={props.selected ? "true" : "false"}>
-      <div className="tasks-terminal-host" ref={hostRef} />
+      <div
+        className="tasks-terminal-host"
+        onMouseDown={() => {
+          terminalRef.current?.focus();
+        }}
+        ref={hostRef}
+      />
     </div>
   );
 }

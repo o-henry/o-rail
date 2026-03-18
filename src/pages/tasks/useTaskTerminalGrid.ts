@@ -2,20 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { invoke, listen } from "../../shared/tauri";
 import { getTaskAgentLabel, orderedTaskAgentPresetIds } from "./taskAgentPresets";
 import type { TaskDetail, TaskRoleId } from "./taskTypes";
-
-export type TaskTerminalPaneStatus = "idle" | "starting" | "running" | "stopped" | "error" | "exited";
-
-export type TaskTerminalPane = {
-  id: string;
-  roleId: TaskRoleId;
-  title: string;
-  subtitle: string;
-  startupCommand: string;
-  buffer: string;
-  input: string;
-  status: TaskTerminalPaneStatus;
-  exitCode?: number | null;
-};
+import type { TaskTerminalPane, TaskTerminalPaneStatus } from "./taskTerminalTypes";
 
 type TaskTerminalOutputEvent = {
   sessionId: string;

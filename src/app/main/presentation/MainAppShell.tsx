@@ -198,7 +198,7 @@ export function MainAppShell(props: any) {
         className={`workspace ${canvasFullscreen ? "canvas-fullscreen-active" : ""} ${error ? "workspace-has-error" : ""}`.trim()}
       >
         {!canvasFullscreen && <header className="workspace-header workspace-header-spacer" />}
-        {!canvasFullscreen && workspaceTab !== "tasks" && (
+        {!canvasFullscreen && workspaceTab !== "tasks" && workspaceTab !== "shell" && (
           <WorkspaceQuickPanel
             isOpen={quickPanelOpen}
             onChangeQuery={setQuickPanelQuery}

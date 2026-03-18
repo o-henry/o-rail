@@ -400,3 +400,33 @@ pub async fn workspace_terminal_stop(
     );
     Ok(())
 }
+
+#[tauri::command]
+pub async fn workspace_terminal_close(
+    app: AppHandle,
+    manager: State<'_, WorkspaceTerminalManager>,
+    session_id: String,
+) -> Result<(), String> {
+    let normalized_session_id = session_id.trim().to_string();
+    if normalized_session_id.is_empty() {
+        return Ok(());
+    }
+    let Some(session) = remove_terminal_session(manager.inner(), &normalized_session_id).await else {
+        return Ok(());
+    };
+
+    {
+        let mut child = session.child.lock().await;
+        let _ = child.kill().await;
+        let exit_code = child.wait().await.ok().and_then(|status| status.code());
+        emit_workspace_terminal_state(
+            &app,
+            &normalized_session_id,
+            "exited",
+            exit_code,
+            Some("shell session closed".to_string()),
+        );
+    }
+
+    Ok(())
+}

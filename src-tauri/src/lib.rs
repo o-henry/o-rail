@@ -114,6 +114,7 @@ pub fn run() {
             system::workspace_terminal_start,
             system::workspace_terminal_input,
             system::workspace_terminal_stop,
+            system::workspace_terminal_close,
             unity_automation::unity_guard_inspect,
             unity_automation::unity_guard_prepare,
             unity_automation::unity_collect_diagnostics,

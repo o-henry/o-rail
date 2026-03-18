@@ -35,6 +35,7 @@ export function useWorkspaceQuickPanel(params: UseWorkspaceQuickPanelParams) {
       agents: "에이전트 채팅",
       workflow: "워크플로우",
       tasks: "TASKS",
+      shell: "SHELL",
       feed: "요점 정리",
       handoff: "그래프 핸드오프",
       knowledge: "데이터베이스",

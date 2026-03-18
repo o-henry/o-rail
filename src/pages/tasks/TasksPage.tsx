@@ -9,12 +9,14 @@ import {
 import { TURN_REASONING_LEVEL_OPTIONS } from "../../features/workflow/reasoningLevels";
 import { RUNTIME_MODEL_OPTIONS } from "../../features/workflow/runtimeModelOptions";
 import {
-  UNITY_TASK_AGENT_ORDER,
   getTaskAgentLabel,
   getThreadStageLabel,
   type ThreadStageId,
 } from "./taskAgentPresets";
-import { applyTaskAgentMention, getTaskAgentMentionMatch } from "./taskAgentMentions";
+import {
+  getTaskAgentMentionMatch,
+  stripTaskAgentMentionMatch,
+} from "./taskAgentMentions";
 import { buildThreadFileTree, type ThreadFileTreeNode } from "./threadFileTree";
 import { buildLiveAgentCards, displayArtifactName } from "./liveAgentState";
 import { useTasksThreadState } from "./useTasksThreadState";
@@ -127,8 +129,6 @@ export default function TasksPage(props: TasksPageProps) {
   const reasonMenuRef = useRef<HTMLDivElement | null>(null);
   const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
   const [isReasonMenuOpen, setIsReasonMenuOpen] = useState(false);
-  const [agentDraftLabels, setAgentDraftLabels] = useState<Record<string, string>>({});
-  const [editingAgentId, setEditingAgentId] = useState("");
   const [isEditingThreadTitle, setIsEditingThreadTitle] = useState(false);
   const [threadTitleDraft, setThreadTitleDraft] = useState("");
   const [selectedStageId, setSelectedStageId] = useState<ThreadStageId>("brief");
@@ -137,6 +137,7 @@ export default function TasksPage(props: TasksPageProps) {
   const [isFilesExpanded, setIsFilesExpanded] = useState(false);
   const [composerCursor, setComposerCursor] = useState(0);
   const [mentionIndex, setMentionIndex] = useState(0);
+  const [isMentionMenuHidden, setIsMentionMenuHidden] = useState(false);
   const title = useMemo(() => displayThreadTitle(state.activeThread?.thread.title), [state.activeThread]);
   const headerTitle = state.activeThread ? title : "";
   const selectedModelOption = useMemo(
@@ -173,6 +174,12 @@ export default function TasksPage(props: TasksPageProps) {
   }, [state.composerDraft]);
 
   useEffect(() => {
+    if (!state.composerDraft) {
+      setIsMentionMenuHidden(false);
+    }
+  }, [state.composerDraft]);
+
+  useEffect(() => {
     if (!isModelMenuOpen && !isReasonMenuOpen) {
       return;
     }
@@ -193,17 +200,6 @@ export default function TasksPage(props: TasksPageProps) {
     requestAnimationFrame(() => composerRef.current?.focus());
   };
 
-  const handleAgentLabelChange = (agentId: string, value: string) => {
-    setAgentDraftLabels((current) => ({ ...current, [agentId]: value }));
-  };
-
-  const commitAgentLabel = (agentId: string, fallbackLabel: string) => {
-    const nextLabel = String(agentDraftLabels[agentId] ?? fallbackLabel).trim() || fallbackLabel;
-    setAgentDraftLabels((current) => ({ ...current, [agentId]: nextLabel }));
-    setEditingAgentId((current) => (current === agentId ? "" : current));
-    void state.updateAgent(agentId, nextLabel);
-  };
-
   const commitThreadTitle = () => {
     const nextTitle = normalizeThreadTitle(threadTitleDraft);
     setThreadTitleDraft(nextTitle);
@@ -212,7 +208,7 @@ export default function TasksPage(props: TasksPageProps) {
   };
 
   const onComposerKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
-    const currentMentionMatch = getTaskAgentMentionMatch(
+    const currentMentionMatch = mentionMatch ?? getTaskAgentMentionMatch(
       event.currentTarget.value,
       event.currentTarget.selectionStart ?? event.currentTarget.value.length,
     );
@@ -229,12 +225,13 @@ export default function TasksPage(props: TasksPageProps) {
       }
       if (event.key === "Enter" || event.key === "Tab") {
         event.preventDefault();
-        selectMention(currentMentionMatch.options[mentionIndex]!.mention, currentMentionMatch);
+        selectMention(currentMentionMatch.options[mentionIndex]!.presetId, currentMentionMatch);
         return;
       }
       if (event.key === "Escape") {
         event.preventDefault();
         setMentionIndex(0);
+        setIsMentionMenuHidden(true);
         return;
       }
     }
@@ -252,8 +249,8 @@ export default function TasksPage(props: TasksPageProps) {
   const liveAgents = useMemo(() => buildLiveAgentCards(state.activeThread, state.liveRoleNotes), [state.activeThread, state.liveRoleNotes]);
   const fileTree = useMemo(() => buildThreadFileTree(state.activeThread?.files ?? []), [state.activeThread?.files]);
   const mentionMatch = useMemo(
-    () => getTaskAgentMentionMatch(state.composerDraft, composerCursor),
-    [composerCursor, state.composerDraft],
+    () => (isMentionMenuHidden ? null : getTaskAgentMentionMatch(state.composerDraft, composerCursor)),
+    [composerCursor, isMentionMenuHidden, state.composerDraft],
   );
 
   useEffect(() => {
@@ -264,16 +261,18 @@ export default function TasksPage(props: TasksPageProps) {
     setCollapsedDirectories((current) => ({ ...current, [path]: !current[path] }));
   };
 
-  const selectMention = (mention: string, matchOverride?: typeof mentionMatch) => {
+  const selectMention = (presetId: ThreadRoleId, matchOverride?: typeof mentionMatch) => {
     const activeMatch = matchOverride ?? mentionMatch;
     if (!activeMatch) {
       return;
     }
-    const nextValue = applyTaskAgentMention(state.composerDraft, activeMatch, mention);
-    const nextCursor = activeMatch.rangeStart + mention.length + 1;
+    const nextValue = stripTaskAgentMentionMatch(state.composerDraft, activeMatch);
+    const nextCursor = activeMatch.rangeStart;
+    state.addComposerRole(presetId);
     state.setComposerDraft(nextValue);
     setComposerCursor(nextCursor);
     setMentionIndex(0);
+    setIsMentionMenuHidden(true);
     requestAnimationFrame(() => {
       composerRef.current?.focus();
       composerRef.current?.setSelectionRange(nextCursor, nextCursor);
@@ -581,6 +580,25 @@ export default function TasksPage(props: TasksPageProps) {
         ) : null}
 
         <div className="tasks-thread-composer-shell question-input agents-composer workflow-question-input">
+          {mentionMatch ? (
+            <div className="tasks-thread-mention-menu" role="listbox">
+              {mentionMatch.options.map((option, index) => (
+                <button
+                  aria-selected={index === mentionIndex}
+                  className={`tasks-thread-mention-option${index === mentionIndex ? " is-active" : ""}`}
+                  key={option.presetId}
+                  onMouseDown={(event) => {
+                    event.preventDefault();
+                    selectMention(option.presetId);
+                  }}
+                  type="button"
+                >
+                  <strong>{option.mention}</strong>
+                  <span>{option.label}</span>
+                </button>
+              ))}
+            </div>
+          ) : null}
           {state.attachedFiles.length > 0 ? (
             <div className="agents-file-list" aria-label="Attached files">
               {state.attachedFiles.map((file) => (
@@ -600,40 +618,40 @@ export default function TasksPage(props: TasksPageProps) {
               ))}
             </div>
           ) : null}
-          <textarea
-            ref={composerRef}
-            aria-label="Tasks composer"
-            className="tasks-thread-composer-input"
-            onKeyDown={onComposerKeyDown}
-            onClick={(event) => setComposerCursor(event.currentTarget.selectionStart ?? 0)}
-            onKeyUp={(event) => setComposerCursor(event.currentTarget.selectionStart ?? 0)}
-            placeholder="Describe the Unity change or use @designer @architect @implementer @playtest @techart @tools @release @docs"
-            rows={1}
-            value={state.composerDraft}
-            onChange={(event) => {
-              setComposerCursor(event.target.selectionStart ?? event.target.value.length);
-              state.setComposerDraft(event.target.value);
-            }}
-          />
-          {mentionMatch ? (
-            <div className="tasks-thread-mention-menu" role="listbox">
-              {mentionMatch.options.map((option, index) => (
-                <button
-                  aria-selected={index === mentionIndex}
-                  className={`tasks-thread-mention-option${index === mentionIndex ? " is-active" : ""}`}
-                  key={option.presetId}
-                  onMouseDown={(event) => {
-                    event.preventDefault();
-                    selectMention(option.mention);
-                  }}
-                  type="button"
-                >
-                  <strong>{option.mention}</strong>
-                  <span>{option.label}</span>
-                </button>
+          {state.selectedComposerRoleIds.length > 0 ? (
+            <div className="tasks-thread-selected-mentions" aria-label="Selected agents">
+              {state.selectedComposerRoleIds.map((roleId) => (
+                <span className="tasks-thread-selected-mention-chip" key={roleId}>
+                  <span>{getTaskAgentLabel(roleId)}</span>
+                  <button
+                    aria-label={`Remove ${getTaskAgentLabel(roleId)}`}
+                    onClick={() => state.removeComposerRole(roleId)}
+                    type="button"
+                  >
+                    ×
+                  </button>
+                </span>
               ))}
             </div>
           ) : null}
+          <div className="tasks-thread-composer-input-wrap">
+            <textarea
+              ref={composerRef}
+              aria-label="Tasks composer"
+              className="tasks-thread-composer-input"
+              onKeyDown={onComposerKeyDown}
+              onClick={(event) => setComposerCursor(event.currentTarget.selectionStart ?? 0)}
+              onKeyUp={(event) => setComposerCursor(event.currentTarget.selectionStart ?? 0)}
+              placeholder="Unity 작업 내용을 입력하거나 @로 에이전트를 선택하세요"
+              rows={1}
+              value={state.composerDraft}
+              onChange={(event) => {
+                setComposerCursor(event.target.selectionStart ?? event.target.value.length);
+                setIsMentionMenuHidden(false);
+                state.setComposerDraft(event.target.value);
+              }}
+            />
+          </div>
           <div className="question-input-footer tasks-thread-composer-toolbar">
             <div className="agents-composer-left tasks-thread-composer-controls">
               <button
@@ -783,98 +801,6 @@ export default function TasksPage(props: TasksPageProps) {
                 <p>{selectedStage?.summary || state.activeThread.workflow.nextAction}</p>
                 <small>{state.activeThread.workflow.nextAction}</small>
               </div>
-              <section className="tasks-thread-agents-card">
-                <div className="tasks-thread-section-head">
-                  <strong>백그라운드 에이전트</strong>
-                  <span>{state.activeThread.agents.length}</span>
-                </div>
-                <div className="tasks-thread-agent-list">
-                  {state.activeThread.agents.length === 0 ? (
-                    <p className="tasks-thread-empty-copy">아직 에이전트가 없습니다</p>
-                  ) : (
-                    state.activeThread.agents.map((agent) => (
-                      <article
-                        className={`tasks-thread-agent-row${state.selectedAgentId === agent.id ? " is-selected" : ""}`}
-                        key={agent.id}
-                        onClick={() => void state.openAgent(agent)}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter" || event.key === " ") {
-                            event.preventDefault();
-                            void state.openAgent(agent);
-                          }
-                        }}
-                        role="button"
-                        tabIndex={0}
-                      >
-                        <div className="tasks-thread-agent-main">
-                          <div className="tasks-thread-agent-name-slot">
-                            {editingAgentId === agent.id ? (
-                              <input
-                                autoFocus
-                                className={`tasks-thread-agent-inline-input role-${agent.roleId}`}
-                                onBlur={() => commitAgentLabel(agent.id, agent.label)}
-                                onChange={(event) => handleAgentLabelChange(agent.id, event.target.value)}
-                                onClick={(event) => event.stopPropagation()}
-                                onKeyDown={(event) => {
-                                  if (event.key === "Enter") {
-                                    event.preventDefault();
-                                    commitAgentLabel(agent.id, agent.label);
-                                  }
-                                  if (event.key === "Escape") {
-                                    event.preventDefault();
-                                    setAgentDraftLabels((current) => ({ ...current, [agent.id]: agent.label }));
-                                    setEditingAgentId("");
-                                  }
-                                }}
-                                value={agentDraftLabels[agent.id] ?? agent.label}
-                              />
-                            ) : (
-                              <button
-                                className={`tasks-thread-agent-label-button role-${agent.roleId}`}
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  setAgentDraftLabels((current) => ({ ...current, [agent.id]: current[agent.id] ?? agent.label }));
-                                  setEditingAgentId(agent.id);
-                                }}
-                                type="button"
-                              >
-                                {agent.label}
-                              </button>
-                            )}
-                          </div>
-                          <span className="tasks-thread-agent-meta">
-                            {agent.worktreePath || state.activeThread?.task.workspacePath || "로컬"}
-                          </span>
-                        </div>
-                        <div className="tasks-thread-agent-side">
-                          <span className={`tasks-thread-agent-status is-${agent.status}`}>{displayStageStatus(agent.status)}</span>
-                          <div className="tasks-thread-agent-actions">
-                            <button
-                              aria-label={`Remove ${agent.label}`}
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                void state.removeAgent(agent.id);
-                              }}
-                              type="button"
-                            >
-                              <img alt="" aria-hidden="true" className="tasks-thread-agent-action-icon" src="/xmark.svg" />
-                            </button>
-                          </div>
-                        </div>
-                      </article>
-                    ))
-                  )}
-                </div>
-                <div className="tasks-thread-agent-add-row">
-                  {(UNITY_TASK_AGENT_ORDER as ThreadRoleId[])
-                    .filter((roleId) => !(state.activeThread?.agents ?? []).some((agent) => agent.roleId === roleId))
-                    .map((roleId) => (
-                      <button key={roleId} onClick={() => void state.addAgent(roleId, getTaskAgentLabel(roleId))} type="button">
-                        {`+ ${getTaskAgentLabel(roleId)}`}
-                      </button>
-                    ))}
-                </div>
-              </section>
               <section className={`tasks-thread-files-panel${(state.activeThread?.files.length ?? 0) === 0 ? " is-empty" : ""}${isFilesExpanded ? " is-expanded" : ""}`}>
                 <div className="tasks-thread-section-head tasks-thread-section-head-with-tools">
                   <strong>파일</strong>
@@ -1068,7 +994,7 @@ export default function TasksPage(props: TasksPageProps) {
                   </section>
                 </>
               ) : (
-                <p className="tasks-thread-empty-copy">백그라운드 에이전트를 선택하면 상세 정보를 볼 수 있습니다.</p>
+                <p className="tasks-thread-empty-copy">실행 중 에이전트나 대화 기록에서 에이전트를 선택하면 상세 정보를 볼 수 있습니다.</p>
               )}
             </section>
           ) : null}

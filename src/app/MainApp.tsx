@@ -314,6 +314,7 @@ import type { FeedCategory, InternalMemorySnippet, WebProviderRunResult, RunReco
 const HIDDEN_WORKSPACE_TABS = new Set<WorkspaceTab>(["workbench", "dashboard", "intelligence", "feed", "handoff", "agents"]);
 const WORKSPACE_TOPBAR_TABS: Array<{ tab: WorkspaceTab; label: string }> = [
   { tab: "tasks", label: "TASKS" },
+  { tab: "shell", label: "SHELL" },
   { tab: "workflow", label: "그래프" },
   { tab: "knowledge", label: "데이터베이스" },
   { tab: "adaptation", label: "개선" },

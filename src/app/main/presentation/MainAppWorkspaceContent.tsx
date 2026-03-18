@@ -3,6 +3,7 @@ import AdaptationPage from "./AdaptationPage";
 import BridgePage from "../../../pages/bridge/BridgePage";
 import FeedPage from "../../../pages/feed/FeedPage";
 import KnowledgeBasePage from "../../../pages/knowledge/KnowledgeBasePage";
+import ShellPage from "../../../pages/shell/ShellPage";
 import DashboardIntelligenceSettings from "../../../pages/settings/DashboardIntelligenceSettings";
 import SettingsPage from "../../../pages/settings/SettingsPage";
 import TasksPage from "../../../pages/tasks/TasksPage";
@@ -45,6 +46,16 @@ export function MainAppWorkspaceContent(props: any) {
           hasTauriRuntime={props.hasTauriRuntime}
           invokeFn={props.invokeFn}
           onOpenSettings={() => props.onSelectWorkspaceTab("settings")}
+          publishAction={props.publishAction}
+          setStatus={props.setStatus}
+        />
+      )}
+      {props.workspaceTab === "shell" && (
+        <ShellPage
+          appendWorkspaceEvent={props.appendWorkspaceEvent}
+          cwd={props.cwd}
+          hasTauriRuntime={props.hasTauriRuntime}
+          invokeFn={props.invokeFn}
           publishAction={props.publishAction}
           setStatus={props.setStatus}
         />

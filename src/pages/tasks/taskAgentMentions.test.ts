@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { applyTaskAgentMention, getTaskAgentMentionMatch } from "./taskAgentMentions";
+import {
+  applyTaskAgentMention,
+  extractTaskAgentMentionTokens,
+  findTaskAgentMentionRemovalRange,
+  getTaskAgentMentionMatch,
+} from "./taskAgentMentions";
 
 describe("getTaskAgentMentionMatch", () => {
   it("finds mention query at the cursor", () => {
@@ -19,5 +24,37 @@ describe("applyTaskAgentMention", () => {
     const match = getTaskAgentMentionMatch(input, "@imp".length + "please ask ".length);
     expect(match).not.toBeNull();
     expect(applyTaskAgentMention(input, match!, "@implementer")).toBe("please ask @implementer about this");
+  });
+});
+
+describe("extractTaskAgentMentionTokens", () => {
+  it("returns only confirmed mention tokens in source order for inline rendering", () => {
+    expect(extractTaskAgentMentionTokens("@designer hi @implementer   @designer   ")).toMatchObject([
+      { mention: "@designer" },
+      { mention: "@implementer" },
+      { mention: "@designer" },
+    ]);
+  });
+
+  it("does not render a chip for a raw typed mention before selection is confirmed", () => {
+    expect(extractTaskAgentMentionTokens("@designer")).toEqual([]);
+  });
+});
+
+describe("findTaskAgentMentionRemovalRange", () => {
+  it("removes a whole mention token when backspace is pressed after it", () => {
+    const input = "@designer  hello";
+    expect(findTaskAgentMentionRemovalRange(input, "@designer  ".length)).toEqual({
+      start: 0,
+      end: "@designer  ".length,
+    });
+  });
+
+  it("removes the whole token plus every trailing space", () => {
+    const input = "@designer  hello";
+    expect(findTaskAgentMentionRemovalRange(input, "@designer  ".length)).toEqual({
+      start: 0,
+      end: "@designer  ".length,
+    });
   });
 });

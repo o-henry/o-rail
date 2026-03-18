@@ -430,6 +430,7 @@ export function useTasksThreadState(params: Params) {
   const [selectedFilePath, setSelectedFilePath] = useState("");
   const [selectedFileDiff, setSelectedFileDiff] = useState("");
   const [attachedFiles, setAttachedFiles] = useState<KnowledgeFileRef[]>([]);
+  const [selectedComposerRoleIds, setSelectedComposerRoleIds] = useState<ThreadRoleId[]>([]);
   const [projectPath, setProjectPath] = useState(initialProjectPath);
   const [projectPaths, setProjectPaths] = useState<string[]>(initialProjectList);
   const [hiddenProjectPaths, setHiddenProjectPaths] = useState<string[]>(initialHiddenProjectList);
@@ -892,6 +893,7 @@ export function useTasksThreadState(params: Params) {
     setSelectedAgentDetail(null);
     setSelectedFilePath("");
     setSelectedFileDiff("");
+    setSelectedComposerRoleIds([]);
     setProjectPath(normalized);
   }, [projectPath, rememberProjectPath]);
 
@@ -954,6 +956,7 @@ export function useTasksThreadState(params: Params) {
 
   const openNewThread = useCallback(async () => {
     setComposerDraft("");
+    setSelectedComposerRoleIds([]);
     clearAttachedFiles();
     setSelectedAgentId("");
     setSelectedAgentDetail(null);
@@ -1004,8 +1007,17 @@ export function useTasksThreadState(params: Params) {
   const selectThread = useCallback(async (threadId: string) => {
     setSelectedAgentId("");
     setSelectedFilePath("");
+    setSelectedComposerRoleIds([]);
     await loadThread(threadId);
   }, [loadThread]);
+
+  const addComposerRole = useCallback((roleId: ThreadRoleId) => {
+    setSelectedComposerRoleIds((current) => (current.includes(roleId) ? current : [...current, roleId]));
+  }, []);
+
+  const removeComposerRole = useCallback((roleId: ThreadRoleId) => {
+    setSelectedComposerRoleIds((current) => current.filter((entry) => entry !== roleId));
+  }, []);
 
   const dispatchRunRoles = useCallback(
     async (detail: ThreadDetail, prompt: string, roles: ThreadRoleId[]) => {
@@ -1062,7 +1074,7 @@ export function useTasksThreadState(params: Params) {
           eventKind: "user_prompt",
         }),
       );
-      const taggedRoles = parseTaskAgentTags(prompt);
+      const taggedRoles = [...new Set([...selectedComposerRoleIds, ...parseTaskAgentTags(prompt)])];
       const finalRoles = defaultRunRoles(detail, taggedRoles);
       for (const roleId of finalRoles) {
         if (!detail.agents.some((agent) => agent.roleId === roleId)) {
@@ -1159,6 +1171,7 @@ export function useTasksThreadState(params: Params) {
       setSelectedAgentId(`${detail.thread.threadId}:${finalRoles[0]}`);
       setSelectedFilePath(detail.changedFiles[0] ?? defaultSelectedFile(detail));
       setComposerDraft("");
+      setSelectedComposerRoleIds([]);
       clearAttachedFiles();
       params.appendWorkspaceEvent({
         source: "tasks-thread",
@@ -1197,7 +1210,7 @@ export function useTasksThreadState(params: Params) {
         setActiveThread(detail);
       }
 
-      const taggedRoles = parseTaskAgentTags(prompt);
+      const taggedRoles = [...new Set([...selectedComposerRoleIds, ...parseTaskAgentTags(prompt)])];
       for (const roleId of taggedRoles) {
         if (!detail.agents.some((agent) => agent.roleId === roleId)) {
           detail = withDerivedWorkflow(await params.invokeFn<ThreadDetail>("thread_add_agent", {
@@ -1235,6 +1248,7 @@ export function useTasksThreadState(params: Params) {
       });
       params.setStatus(`Thread updated: ${truncateTitle(spawned.thread.title)}`);
       setComposerDraft("");
+      setSelectedComposerRoleIds([]);
       clearAttachedFiles();
     } catch (error) {
       params.setStatus(`Thread submit failed: ${formatError(error)}`);
@@ -1245,7 +1259,7 @@ export function useTasksThreadState(params: Params) {
         message: `Thread submit failed: ${formatError(error)}`,
       });
     }
-  }, [accessMode, activeThread, applyBrowserStore, buildPromptWithAttachments, clearAttachedFiles, composerDraft, dispatchRunRoles, model, params, projectPath, reasoning, reloadThreads]);
+  }, [accessMode, activeThread, applyBrowserStore, buildPromptWithAttachments, clearAttachedFiles, composerDraft, dispatchRunRoles, model, params, projectPath, reasoning, reloadThreads, selectedComposerRoleIds]);
 
   const openAgent = useCallback(
     async (agent: BackgroundAgentRecord) => {
@@ -1627,7 +1641,10 @@ export function useTasksThreadState(params: Params) {
     selectedFileDiff,
     liveRoleNotes,
     attachedFiles,
+    selectedComposerRoleIds,
     setSelectedFilePath,
+    addComposerRole,
+    removeComposerRole,
     openProjectDirectory,
     removeProject,
     openKnowledgeEntryForArtifact,

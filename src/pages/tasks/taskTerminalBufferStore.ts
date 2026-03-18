@@ -1,30 +1,42 @@
-const MAX_BUFFER_LENGTH = 80_000;
+const MAX_BUFFER_LENGTH = 160_000;
 
 const terminalBuffers = new Map<string, string>();
-const terminalListeners = new Map<string, Set<() => void>>();
+
+export type TerminalBufferEvent =
+  | { type: "append"; chunk: string }
+  | { type: "replace"; value: string }
+  | { type: "clear" }
+  | { type: "remove" };
+
+const terminalListeners = new Map<string, Set<(event: TerminalBufferEvent) => void>>();
 
 function normalizeSessionId(input: string | null | undefined) {
   return String(input ?? "").trim();
 }
 
-function emitTerminalBuffer(sessionId: string) {
-  terminalListeners.get(sessionId)?.forEach((listener) => listener());
+function emitTerminalBuffer(sessionId: string, event: TerminalBufferEvent) {
+  terminalListeners.get(sessionId)?.forEach((listener) => listener(event));
 }
 
 function trimTerminalBuffer(input: string) {
-  return input.length > MAX_BUFFER_LENGTH ? input.slice(-MAX_BUFFER_LENGTH) : input;
+  if (input.length <= MAX_BUFFER_LENGTH) {
+    return input;
+  }
+  const tail = input.slice(-MAX_BUFFER_LENGTH);
+  const firstLineBreak = tail.indexOf("\n");
+  return firstLineBreak >= 0 ? tail.slice(firstLineBreak + 1) : tail;
 }
 
 export function getTerminalBuffer(sessionId: string) {
   return terminalBuffers.get(normalizeSessionId(sessionId)) ?? "";
 }
 
-export function subscribeTerminalBuffer(sessionId: string, listener: () => void) {
+export function subscribeTerminalBuffer(sessionId: string, listener: (event: TerminalBufferEvent) => void) {
   const normalizedSessionId = normalizeSessionId(sessionId);
   if (!normalizedSessionId) {
     return () => undefined;
   }
-  const listeners = terminalListeners.get(normalizedSessionId) ?? new Set<() => void>();
+  const listeners = terminalListeners.get(normalizedSessionId) ?? new Set<(event: TerminalBufferEvent) => void>();
   listeners.add(listener);
   terminalListeners.set(normalizedSessionId, listeners);
   return () => {
@@ -46,7 +58,7 @@ export function appendTerminalBuffer(sessionId: string, chunk: string) {
   }
   const next = trimTerminalBuffer(`${getTerminalBuffer(normalizedSessionId)}${chunk}`);
   terminalBuffers.set(normalizedSessionId, next);
-  emitTerminalBuffer(normalizedSessionId);
+  emitTerminalBuffer(normalizedSessionId, { type: "append", chunk });
 }
 
 export function replaceTerminalBuffer(sessionId: string, nextValue: string) {
@@ -54,12 +66,18 @@ export function replaceTerminalBuffer(sessionId: string, nextValue: string) {
   if (!normalizedSessionId) {
     return;
   }
-  terminalBuffers.set(normalizedSessionId, trimTerminalBuffer(String(nextValue ?? "")));
-  emitTerminalBuffer(normalizedSessionId);
+  const value = trimTerminalBuffer(String(nextValue ?? ""));
+  terminalBuffers.set(normalizedSessionId, value);
+  emitTerminalBuffer(normalizedSessionId, { type: "replace", value });
 }
 
 export function clearTerminalBuffer(sessionId: string) {
-  replaceTerminalBuffer(sessionId, "");
+  const normalizedSessionId = normalizeSessionId(sessionId);
+  if (!normalizedSessionId) {
+    return;
+  }
+  terminalBuffers.set(normalizedSessionId, "");
+  emitTerminalBuffer(normalizedSessionId, { type: "clear" });
 }
 
 export function removeTerminalBuffer(sessionId: string) {
@@ -68,5 +86,5 @@ export function removeTerminalBuffer(sessionId: string) {
     return;
   }
   terminalBuffers.delete(normalizedSessionId);
-  emitTerminalBuffer(normalizedSessionId);
+  emitTerminalBuffer(normalizedSessionId, { type: "remove" });
 }

@@ -51,9 +51,20 @@ export function useShellTerminalGrid(params: {
   const splitCounterRef = useRef(0);
   const autoCreatedThreadIdRef = useRef("");
   const paneIdsRef = useRef<string[]>([]);
+  const invokeFnRef = useRef(params.invokeFn);
 
   useEffect(() => {
-    paneIdsRef.current.forEach((paneId) => removeTerminalBuffer(paneId));
+    invokeFnRef.current = params.invokeFn;
+  }, [params.invokeFn]);
+
+  useEffect(() => {
+    const paneIds = [...paneIdsRef.current];
+    paneIds.forEach((paneId) => removeTerminalBuffer(paneId));
+    if (params.hasTauriRuntime) {
+      paneIds.forEach((paneId) => {
+        void invokeFnRef.current<void>("workspace_terminal_close", { sessionId: paneId }).catch(() => undefined);
+      });
+    }
     paneIdsRef.current = [];
     setPanes([]);
     setLayout(null);
@@ -61,7 +72,7 @@ export function useShellTerminalGrid(params: {
     paneCounterRef.current = 0;
     splitCounterRef.current = 0;
     autoCreatedThreadIdRef.current = "";
-  }, [threadId]);
+  }, [params.hasTauriRuntime, threadId]);
 
   useEffect(() => {
     paneIdsRef.current = panes.map((pane) => pane.id);
@@ -82,6 +93,10 @@ export function useShellTerminalGrid(params: {
       const payload = event.payload as WorkspaceTerminalOutputEvent;
       appendTerminalBuffer(payload.sessionId, payload.chunk);
     }).then((unlisten) => {
+      if (cancelled) {
+        void unlisten();
+        return;
+      }
       offOutput = unlisten;
     }).catch(() => undefined);
 
@@ -105,6 +120,10 @@ export function useShellTerminalGrid(params: {
         appendTerminalBuffer(payload.sessionId, `\n[system] ${String(payload.message)}\n`);
       }
     }).then((unlisten) => {
+      if (cancelled) {
+        void unlisten();
+        return;
+      }
       offState = unlisten;
     }).catch(() => undefined);
 

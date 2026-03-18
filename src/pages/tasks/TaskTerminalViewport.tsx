@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
-import { getTerminalBuffer, subscribeTerminalBuffer } from "./taskTerminalBufferStore";
+import { getTerminalBuffer, subscribeTerminalBuffer, type TerminalBufferEvent } from "./taskTerminalBufferStore";
 
 type TaskTerminalViewportProps = {
   sessionId: string;
@@ -19,6 +19,63 @@ export function TaskTerminalViewport(props: TaskTerminalViewportProps) {
   const onTerminalDataRef = useRef(props.onTerminalData);
   const onTerminalResizeRef = useRef(props.onTerminalResize);
   const appliedResizeRef = useRef("");
+  const writeQueueRef = useRef<string[]>([]);
+  const isFlushingRef = useRef(false);
+
+  const resetTerminal = () => {
+    const terminal = terminalRef.current;
+    if (!terminal) {
+      return;
+    }
+    writeQueueRef.current = [];
+    isFlushingRef.current = false;
+    terminal.reset();
+  };
+
+  const flushQueue = () => {
+    const terminal = terminalRef.current;
+    if (!terminal || isFlushingRef.current) {
+      return;
+    }
+    const nextChunk = writeQueueRef.current.shift();
+    if (!nextChunk) {
+      return;
+    }
+    isFlushingRef.current = true;
+    terminal.write(nextChunk, () => {
+      isFlushingRef.current = false;
+      flushQueue();
+    });
+  };
+
+  const enqueueWrite = (chunk: string) => {
+    if (!chunk) {
+      return;
+    }
+    const segments = chunk.length > 4096
+      ? chunk.match(/[\s\S]{1,4096}/g) ?? [chunk]
+      : [chunk];
+    writeQueueRef.current.push(...segments);
+    flushQueue();
+  };
+
+  const applyBufferEvent = (event: TerminalBufferEvent) => {
+    if (event.type === "append") {
+      renderedBufferRef.current = `${renderedBufferRef.current}${event.chunk}`;
+      enqueueWrite(event.chunk);
+      return;
+    }
+
+    if (event.type === "clear" || event.type === "remove") {
+      renderedBufferRef.current = "";
+      resetTerminal();
+      return;
+    }
+
+    renderedBufferRef.current = event.value;
+    resetTerminal();
+    enqueueWrite(event.value);
+  };
 
   useEffect(() => {
     onTerminalDataRef.current = props.onTerminalData;
@@ -122,6 +179,8 @@ export function TaskTerminalViewport(props: TaskTerminalViewportProps) {
       retryTimers.forEach((timer) => window.clearTimeout(timer));
       disposable.dispose();
       resizeObserver?.disconnect();
+      writeQueueRef.current = [];
+      isFlushingRef.current = false;
       renderedBufferRef.current = "";
       fitAddonRef.current = null;
       terminalRef.current = null;
@@ -134,32 +193,14 @@ export function TaskTerminalViewport(props: TaskTerminalViewportProps) {
     if (!terminal) {
       return;
     }
-    const syncBuffer = () => {
-      const next = getTerminalBuffer(props.sessionId);
-      const previous = renderedBufferRef.current;
+    const next = getTerminalBuffer(props.sessionId);
+    renderedBufferRef.current = next;
+    resetTerminal();
+    enqueueWrite(next);
 
-      if (!next) {
-        terminal.reset();
-        renderedBufferRef.current = "";
-        return;
-      }
-
-      if (previous && next.startsWith(previous)) {
-        const delta = next.slice(previous.length);
-        if (delta) {
-          terminal.write(delta);
-        }
-        renderedBufferRef.current = next;
-        return;
-      }
-
-      terminal.reset();
-      terminal.write(next);
-      renderedBufferRef.current = next;
-    };
-
-    syncBuffer();
-    return subscribeTerminalBuffer(props.sessionId, syncBuffer);
+    return subscribeTerminalBuffer(props.sessionId, (event) => {
+      applyBufferEvent(event);
+    });
   }, [props.sessionId]);
 
   useEffect(() => {

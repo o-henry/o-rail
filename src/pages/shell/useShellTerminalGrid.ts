@@ -2,6 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { listen } from "../../shared/tauri";
 import { resolveTasksThreadTerminalCwd } from "../tasks/taskThreadTerminalState";
 import type { TaskTerminalPane, TaskTerminalPaneStatus } from "../tasks/taskTerminalTypes";
+import {
+  appendTerminalBuffer,
+  clearTerminalBuffer,
+  removeTerminalBuffer,
+} from "../tasks/taskTerminalBufferStore";
 import type { ThreadDetail } from "../tasks/threadTypes";
 import {
   createShellTerminalPane,
@@ -25,11 +30,6 @@ type WorkspaceTerminalStateEvent = {
   message?: string;
 };
 
-function appendTerminalChunk(current: string, chunk: string): string {
-  const next = `${current}${chunk}`;
-  return next.length > 80_000 ? next.slice(-80_000) : next;
-}
-
 export function useShellTerminalGrid(params: {
   thread: ThreadDetail | null;
   hasTauriRuntime: boolean;
@@ -42,14 +42,21 @@ export function useShellTerminalGrid(params: {
   const [draggedPaneId, setDraggedPaneId] = useState("");
   const paneCounterRef = useRef(0);
   const autoCreatedThreadIdRef = useRef("");
+  const paneIdsRef = useRef<string[]>([]);
 
   useEffect(() => {
+    paneIdsRef.current.forEach((paneId) => removeTerminalBuffer(paneId));
+    paneIdsRef.current = [];
     setPanes([]);
     setSelectedPaneId("");
     setDraggedPaneId("");
     paneCounterRef.current = 0;
     autoCreatedThreadIdRef.current = "";
   }, [threadId]);
+
+  useEffect(() => {
+    paneIdsRef.current = panes.map((pane) => pane.id);
+  }, [panes]);
 
   useEffect(() => {
     if (!params.hasTauriRuntime) {
@@ -64,11 +71,7 @@ export function useShellTerminalGrid(params: {
         return;
       }
       const payload = event.payload as WorkspaceTerminalOutputEvent;
-      setPanes((current) =>
-        current.map((pane) =>
-          pane.id === payload.sessionId ? { ...pane, buffer: appendTerminalChunk(pane.buffer, payload.chunk) } : pane,
-        ),
-      );
+      appendTerminalBuffer(payload.sessionId, payload.chunk);
     }).then((unlisten) => {
       offOutput = unlisten;
     }).catch(() => undefined);
@@ -85,13 +88,13 @@ export function useShellTerminalGrid(params: {
                 ...pane,
                 status: payload.state,
                 exitCode: payload.exitCode ?? null,
-                buffer: payload.state === "error" && payload.message
-                  ? appendTerminalChunk(pane.buffer, `\n[system] ${String(payload.message)}\n`)
-                  : pane.buffer,
               }
             : pane,
         ),
       );
+      if (payload.state === "error" && payload.message) {
+        appendTerminalBuffer(payload.sessionId, `\n[system] ${String(payload.message)}\n`);
+      }
     }).then((unlisten) => {
       offState = unlisten;
     }).catch(() => undefined);
@@ -117,13 +120,13 @@ export function useShellTerminalGrid(params: {
         initialCommand: pane.startupCommand || null,
       });
     } catch (error) {
+      appendTerminalBuffer(pane.id, `\n[system] ${String(error ?? "failed to start terminal")}\n`);
       setPanes((current) =>
         current.map((row) =>
           row.id === pane.id
             ? {
                 ...row,
                 status: "error",
-                buffer: appendTerminalChunk(row.buffer, `\n[system] ${String(error ?? "failed to start terminal")}\n`),
               }
             : row,
         ),
@@ -141,6 +144,7 @@ export function useShellTerminalGrid(params: {
       cwd,
       index: paneCounterRef.current,
     });
+    clearTerminalBuffer(pane.id);
     setPanes((current) => [...current, pane]);
     setSelectedPaneId(pane.id);
     await startPane(pane);
@@ -165,10 +169,11 @@ export function useShellTerminalGrid(params: {
       await params.invokeFn<void>("workspace_terminal_input", { sessionId: paneId, chars });
     } catch (error) {
       const message = String(error ?? "failed to stream terminal input");
+      appendTerminalBuffer(paneId, `\n[system] ${message}\n`);
       setPanes((current) =>
         current.map((pane) =>
           pane.id === paneId
-            ? { ...pane, status: "error", buffer: appendTerminalChunk(pane.buffer, `\n[system] ${message}\n`) }
+            ? { ...pane, status: "error" }
             : pane,
         ),
       );
@@ -182,13 +187,13 @@ export function useShellTerminalGrid(params: {
     try {
       await params.invokeFn<void>("workspace_terminal_stop", { sessionId: paneId });
     } catch (error) {
+      appendTerminalBuffer(paneId, `\n[system] ${String(error ?? "failed to interrupt terminal")}\n`);
       setPanes((current) =>
         current.map((pane) =>
           pane.id === paneId
             ? {
                 ...pane,
                 status: "error",
-                buffer: appendTerminalChunk(pane.buffer, `\n[system] ${String(error ?? "failed to interrupt terminal")}\n`),
               }
             : pane,
         ),
@@ -197,7 +202,7 @@ export function useShellTerminalGrid(params: {
   }, [params]);
 
   const clearPane = useCallback((paneId: string) => {
-    setPanes((current) => current.map((pane) => (pane.id === paneId ? { ...pane, buffer: "" } : pane)));
+    clearTerminalBuffer(paneId);
   }, []);
 
   const renamePane = useCallback((paneId: string, nextTitle: string) => {
@@ -209,19 +214,20 @@ export function useShellTerminalGrid(params: {
       try {
         await params.invokeFn<void>("workspace_terminal_close", { sessionId: paneId });
       } catch (error) {
+        appendTerminalBuffer(paneId, `\n[system] ${String(error ?? "failed to close terminal")}\n`);
         setPanes((current) =>
           current.map((pane) =>
             pane.id === paneId
               ? {
                   ...pane,
                   status: "error",
-                  buffer: appendTerminalChunk(pane.buffer, `\n[system] ${String(error ?? "failed to close terminal")}\n`),
                 }
               : pane,
           ),
         );
       }
     }
+    removeTerminalBuffer(paneId);
     setPanes((current) => current.filter((pane) => pane.id !== paneId));
     setSelectedPaneId((current) => (current === paneId ? "" : current));
   }, [params]);

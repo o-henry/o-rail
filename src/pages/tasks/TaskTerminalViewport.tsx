@@ -2,10 +2,10 @@ import { useEffect, useRef } from "react";
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
-import type { TaskTerminalPane } from "./taskTerminalTypes";
+import { getTerminalBuffer, subscribeTerminalBuffer } from "./taskTerminalBufferStore";
 
 type TaskTerminalViewportProps = {
-  pane: TaskTerminalPane;
+  sessionId: string;
   selected: boolean;
   onTerminalData: (chars: string) => Promise<void> | void;
 };
@@ -97,28 +97,33 @@ export function TaskTerminalViewport(props: TaskTerminalViewportProps) {
     if (!terminal) {
       return;
     }
-    const next = props.pane.buffer || "";
-    const previous = renderedBufferRef.current;
+    const syncBuffer = () => {
+      const next = getTerminalBuffer(props.sessionId);
+      const previous = renderedBufferRef.current;
 
-    if (!next) {
-      terminal.reset();
-      renderedBufferRef.current = "";
-      return;
-    }
-
-    if (previous && next.startsWith(previous)) {
-      const delta = next.slice(previous.length);
-      if (delta) {
-        terminal.write(delta);
+      if (!next) {
+        terminal.reset();
+        renderedBufferRef.current = "";
+        return;
       }
-      renderedBufferRef.current = next;
-      return;
-    }
 
-    terminal.reset();
-    terminal.write(next);
-    renderedBufferRef.current = next;
-  }, [props.pane.buffer]);
+      if (previous && next.startsWith(previous)) {
+        const delta = next.slice(previous.length);
+        if (delta) {
+          terminal.write(delta);
+        }
+        renderedBufferRef.current = next;
+        return;
+      }
+
+      terminal.reset();
+      terminal.write(next);
+      renderedBufferRef.current = next;
+    };
+
+    syncBuffer();
+    return subscribeTerminalBuffer(props.sessionId, syncBuffer);
+  }, [props.sessionId]);
 
   useEffect(() => {
     if (!props.selected) {

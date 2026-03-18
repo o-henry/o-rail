@@ -399,122 +399,120 @@ export default function TasksPage(props: TasksPageProps) {
       </aside>
 
       <section className="tasks-thread-main-surface">
-        <div className="tasks-thread-main-island">
-          <header className="tasks-thread-header">
-            <div className="tasks-thread-header-copy">
-              {headerTitle ? (
-                isEditingThreadTitle ? (
-                  <input
-                    autoFocus
-                    className="tasks-thread-title-input"
-                    onBlur={commitThreadTitle}
-                    onChange={(event) => setThreadTitleDraft(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        event.preventDefault();
-                        commitThreadTitle();
-                      }
-                      if (event.key === "Escape") {
-                        event.preventDefault();
-                        setThreadTitleDraft(headerTitle);
-                        setIsEditingThreadTitle(false);
-                      }
-                    }}
-                    value={threadTitleDraft}
-                  />
-                ) : (
-                  <button
-                    aria-label="Rename thread"
-                    className="tasks-thread-title-button"
-                    onClick={() => setIsEditingThreadTitle(true)}
-                    type="button"
-                  >
-                    {headerTitle}
-                  </button>
-                )
-              ) : null}
-              <p>
-                {displayThreadPath(state.projectPath || state.activeThread?.task.worktreePath || state.activeThread?.task.workspacePath || props.cwd)}
-              </p>
-            </div>
-            {state.activeThread ? (
-              <div className="tasks-thread-header-actions">
+        <header className="tasks-thread-header">
+          <div className="tasks-thread-header-copy">
+            {headerTitle ? (
+              isEditingThreadTitle ? (
+                <input
+                  autoFocus
+                  className="tasks-thread-title-input"
+                  onBlur={commitThreadTitle}
+                  onChange={(event) => setThreadTitleDraft(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      commitThreadTitle();
+                    }
+                    if (event.key === "Escape") {
+                      event.preventDefault();
+                      setThreadTitleDraft(headerTitle);
+                      setIsEditingThreadTitle(false);
+                    }
+                  }}
+                  value={threadTitleDraft}
+                />
+              ) : (
                 <button
-                  aria-label={`Delete ${headerTitle}`}
-                  className="tasks-thread-header-delete-button"
-                  onClick={() => setPendingDeleteThreadId(state.activeThread?.thread.threadId ?? "")}
+                  aria-label="Rename thread"
+                  className="tasks-thread-title-button"
+                  onClick={() => setIsEditingThreadTitle(true)}
                   type="button"
                 >
-                  <img alt="" aria-hidden="true" src="/xmark-small-svgrepo-com.svg" />
+                  {headerTitle}
                 </button>
-              </div>
+              )
             ) : null}
-          </header>
+            <p>
+              {displayThreadPath(state.projectPath || state.activeThread?.task.worktreePath || state.activeThread?.task.workspacePath || props.cwd)}
+            </p>
+          </div>
+          {state.activeThread ? (
+            <div className="tasks-thread-header-actions">
+              <button
+                aria-label={`Delete ${headerTitle}`}
+                className="tasks-thread-header-delete-button"
+                onClick={() => setPendingDeleteThreadId(state.activeThread?.thread.threadId ?? "")}
+                type="button"
+              >
+                <img alt="" aria-hidden="true" src="/xmark-small-svgrepo-com.svg" />
+              </button>
+            </div>
+          ) : null}
+        </header>
 
-          <div className="tasks-thread-conversation-scroll" ref={conversationRef}>
-            {!state.activeThread ? (
-              <section className="tasks-thread-empty-state">
-                <strong>요청부터 시작하세요</strong>
-                <p>@designer, @architect, @implementer, @playtest, @techart, @tools, @release, @docs로 유니티 에이전트를 지정할 수 있습니다.</p>
+        <div className="tasks-thread-conversation-scroll" ref={conversationRef}>
+          {!state.activeThread ? (
+            <section className="tasks-thread-empty-state">
+              <strong>요청부터 시작하세요</strong>
+              <p>@designer, @architect, @implementer, @playtest, @techart, @tools, @release, @docs로 유니티 에이전트를 지정할 수 있습니다.</p>
+            </section>
+          ) : (
+            <>
+              <section className="tasks-thread-timeline">
+                {state.activeThread.messages.length === 0 ? null : (
+                  state.activeThread.messages.map((message) => {
+                    const parsed = resolveTimelineMessage(message, visibleAgentLabels);
+                    return (
+                      <article className={`tasks-thread-message-row is-${message.role}`} key={message.id}>
+                        {parsed.label ? <span className="tasks-thread-message-label">{parsed.label}</span> : null}
+                        <div className="tasks-thread-log-line">{parsed.body}</div>
+                        {parsed.artifactPath ? <small className="tasks-thread-message-artifact">{parsed.artifactPath}</small> : null}
+                      </article>
+                    );
+                  })
+                )}
+                {liveAgents.map((agent) => (
+                  <article className="tasks-thread-message-row is-assistant is-live-placeholder" key={`live:${agent.agentId}`}>
+                    <span className="tasks-thread-message-label">{agent.label}</span>
+                    <div className="tasks-thread-log-line">작업 중입니다...</div>
+                    {agent.latestArtifactPath ? <small className="tasks-thread-message-artifact">{agent.latestArtifactPath}</small> : null}
+                  </article>
+                ))}
               </section>
-            ) : (
-              <>
-                <section className="tasks-thread-timeline">
-                  {state.activeThread.messages.length === 0 ? null : (
-                    state.activeThread.messages.map((message) => {
-                      const parsed = resolveTimelineMessage(message, visibleAgentLabels);
-                      return (
-                        <article className={`tasks-thread-message-row is-${message.role}`} key={message.id}>
-                          {parsed.label ? <span className="tasks-thread-message-label">{parsed.label}</span> : null}
-                          <div className="tasks-thread-log-line">{parsed.body}</div>
-                          {parsed.artifactPath ? <small className="tasks-thread-message-artifact">{parsed.artifactPath}</small> : null}
-                        </article>
-                      );
-                    })
-                  )}
-                  {liveAgents.map((agent) => (
-                    <article className="tasks-thread-message-row is-assistant is-live-placeholder" key={`live:${agent.agentId}`}>
-                      <span className="tasks-thread-message-label">{agent.label}</span>
-                      <div className="tasks-thread-log-line">작업 중입니다...</div>
-                      {agent.latestArtifactPath ? <small className="tasks-thread-message-artifact">{agent.latestArtifactPath}</small> : null}
+
+              {state.pendingApprovals.length > 0 ? (
+                <section className="tasks-thread-approvals-stack">
+                  {state.pendingApprovals.map((approval) => (
+                    <article className="tasks-thread-approval-card" key={approval.id}>
+                      <div className="tasks-thread-section-head">
+                        <strong>승인 필요</strong>
+                        <span>{approval.kind.toUpperCase()}</span>
+                      </div>
+                      <p>{approval.summary}</p>
+                      <div className="tasks-thread-approval-actions">
+                        <button onClick={() => void state.resolveApproval(approval, "rejected")} type="button">
+                          거절
+                        </button>
+                        <button className="tasks-thread-primary" onClick={() => void state.resolveApproval(approval, "approved")} type="button">
+                          승인
+                        </button>
+                      </div>
                     </article>
                   ))}
                 </section>
+              ) : null}
 
-                {state.pendingApprovals.length > 0 ? (
-                  <section className="tasks-thread-approvals-stack">
-                    {state.pendingApprovals.map((approval) => (
-                      <article className="tasks-thread-approval-card" key={approval.id}>
-                        <div className="tasks-thread-section-head">
-                          <strong>승인 필요</strong>
-                          <span>{approval.kind.toUpperCase()}</span>
-                        </div>
-                        <p>{approval.summary}</p>
-                        <div className="tasks-thread-approval-actions">
-                          <button onClick={() => void state.resolveApproval(approval, "rejected")} type="button">
-                            거절
-                          </button>
-                          <button className="tasks-thread-primary" onClick={() => void state.resolveApproval(approval, "approved")} type="button">
-                            승인
-                          </button>
-                        </div>
-                      </article>
-                    ))}
-                  </section>
-                ) : null}
-
-                {state.activeThread && state.selectedFilePath ? (
-                  <section className="tasks-thread-main-diff-panel">
-                    <div className="tasks-thread-section-head">
-                      <strong>변경 내용</strong>
-                      <span>{state.selectedFilePath}</span>
-                    </div>
-                    <pre>{state.selectedFileDiff || "선택한 파일의 변경 내용을 아직 표시할 수 없습니다."}</pre>
-                  </section>
-                ) : null}
-              </>
-            )}
-          </div>
+              {state.activeThread && state.selectedFilePath ? (
+                <section className="tasks-thread-main-diff-panel">
+                  <div className="tasks-thread-section-head">
+                    <strong>변경 내용</strong>
+                    <span>{state.selectedFilePath}</span>
+                  </div>
+                  <pre>{state.selectedFileDiff || "선택한 파일의 변경 내용을 아직 표시할 수 없습니다."}</pre>
+                </section>
+              ) : null}
+            </>
+          )}
         </div>
 
         {liveAgents.length > 0 ? (

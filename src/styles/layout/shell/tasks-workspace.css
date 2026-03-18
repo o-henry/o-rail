@@ -561,9 +561,10 @@
 .tasks-thread-stage-shell-head {
   display: grid;
   gap: 10px;
-  padding: 12px;
   border-radius: var(--tasks-wrapper-radius);
-  background: color-mix(in srgb, var(--surface-soft) 40%, #ffffff);
+  background: #ffffff;
+  padding: 0;
+  overflow: hidden;
 }
 
 .tasks-thread-stage-shell-head-text {
@@ -614,9 +615,10 @@
 .tasks-thread-readiness-card {
   display: grid;
   gap: 6px;
-  padding: 10px 12px;
   border-radius: 10px;
-  background: color-mix(in srgb, var(--surface-soft) 40%, #ffffff);
+  background: #ffffff;
+  padding: 0;
+  overflow: hidden;
 }
 
 .tasks-thread-readiness-card p,
@@ -721,8 +723,15 @@
 .tasks-thread-agent-detail-panel {
   border: 0;
   border-radius: var(--tasks-wrapper-radius);
-  background: color-mix(in srgb, var(--surface-soft) 40%, #ffffff);
+  background: #ffffff;
   padding: 12px;
+}
+
+.tasks-thread-files-panel,
+.tasks-thread-workflow-panel,
+.tasks-thread-agent-detail-panel {
+  padding: 0;
+  overflow: hidden;
 }
 
 .tasks-thread-running-strip {
@@ -1221,7 +1230,7 @@
   align-items: stretch;
   gap: 14px;
   border-radius: var(--tasks-wrapper-radius);
-  background: #ffffff;
+  background: transparent;
   scrollbar-gutter: stable;
 }
 

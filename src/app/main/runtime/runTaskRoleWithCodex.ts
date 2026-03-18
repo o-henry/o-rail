@@ -48,6 +48,7 @@ type RunTaskRoleWithCodexInput = {
   prompt?: string;
   model?: string;
   reasoning?: string;
+  outputArtifactName?: string;
   sourceTab: "tasks" | "tasks-thread";
   runId: string;
 };
@@ -174,7 +175,7 @@ export async function runTaskRoleWithCodex(input: RunTaskRoleWithCodexInput): Pr
   });
   const responseArtifactPath = await input.invokeFn<string>("workspace_write_text", {
     cwd: artifactDir,
-    name: pack.outputArtifactName || `${pack.id}.md`,
+    name: String(input.outputArtifactName || pack.outputArtifactName || `${pack.id}.md`).trim(),
     content: `${summary}\n`,
   });
   const responseJsonPath = await input.invokeFn<string>("workspace_write_text", {

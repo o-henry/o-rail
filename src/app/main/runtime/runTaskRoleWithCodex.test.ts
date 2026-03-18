@@ -63,4 +63,52 @@ describe("runTaskRoleWithCodex", () => {
       reasoningEffort: "medium",
     }));
   });
+
+  it("allows collaboration runs to override the artifact file name", async () => {
+    const invokeFn = (vi.fn(async (command: string, args?: Record<string, unknown>) => {
+      switch (command) {
+        case "task_agent_pack_read":
+          return {
+            id: "unity_architect",
+            label: "UNITY ARCHITECT",
+            studioRoleId: "system_programmer",
+            model: "gpt-5.4",
+            modelReasoningEffort: "medium",
+            sandboxMode: "workspace-write",
+            outputArtifactName: "architecture_review.md",
+            promptDocFile: "unity_architect.md",
+            developerInstructions: "검토하라.",
+          };
+        case "thread_load":
+          return {
+            thread: { model: "GPT-5.4", reasoning: "중간" },
+            task: { workspacePath: "/tmp/mockking" },
+          };
+        case "thread_start":
+          return { threadId: "thread-codex-2" };
+        case "turn_start_blocking":
+          return {
+            status: "completed",
+            output_text: "충돌 포인트를 정리했습니다.",
+          };
+        case "workspace_write_text":
+          return `${String(args?.cwd)}/${String(args?.name)}`;
+        default:
+          throw new Error(`unexpected command: ${command}`);
+      }
+    }) as unknown) as <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
+
+    const result = await runTaskRoleWithCodex({
+      invokeFn,
+      storageCwd: "/tmp/rail-storage",
+      taskId: "thread-2",
+      studioRoleId: "system_programmer",
+      prompt: "충돌만 검토해줘",
+      outputArtifactName: "discussion_critique.md",
+      sourceTab: "tasks-thread",
+      runId: "role-run-2",
+    });
+
+    expect(result.artifactPaths[1]).toBe("/tmp/rail-storage/.rail/tasks/thread-2/codex_runs/role-run-2/discussion_critique.md");
+  });
 });

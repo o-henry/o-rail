@@ -178,8 +178,26 @@ where
         .collect()
 }
 
+fn unique_task_agent_ids_preserve_order<I, S>(ids: I) -> Vec<String>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    let mut seen = std::collections::BTreeSet::new();
+    let mut ordered = Vec::new();
+    for raw in ids {
+        let Some(normalized) = canonical_task_agent_id(raw.as_ref()).map(str::to_string) else {
+            continue;
+        };
+        if seen.insert(normalized.clone()) {
+            ordered.push(normalized);
+        }
+    }
+    ordered
+}
+
 pub fn default_run_task_agent_ids(enabled: &[String], requested: &[String]) -> Vec<String> {
-    let filtered = ordered_task_agent_ids(requested.iter().map(String::as_str));
+    let filtered = unique_task_agent_ids_preserve_order(requested.iter().map(String::as_str));
     if !filtered.is_empty() {
         return filtered
             .into_iter()
@@ -219,5 +237,18 @@ mod tests {
         assert_eq!(canonical_task_agent_id("validator"), Some("unity_editor_tools"));
         assert_eq!(canonical_task_agent_id("build"), Some("release_steward"));
         assert_eq!(canonical_task_agent_id("documentation"), Some("handoff_writer"));
+    }
+
+    #[test]
+    fn keeps_requested_order_for_default_runs() {
+        let roles = default_run_task_agent_ids(
+            &vec![
+                "game_designer".to_string(),
+                "unity_architect".to_string(),
+                "unity_implementer".to_string(),
+            ],
+            &vec!["unity_implementer".to_string(), "reviewer".to_string()],
+        );
+        assert_eq!(roles, vec!["unity_implementer".to_string(), "unity_architect".to_string()]);
     }
 }

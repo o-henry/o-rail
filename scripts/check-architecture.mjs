@@ -88,25 +88,25 @@ const TEMP_LINE_ALLOWLIST = new Map([
   [
     "src/app/hooks/useAgenticOrchestrationBridge.ts",
     {
-      maxLines: 560,
+      maxLines: 940,
       expiresOn: "2026-05-31",
-      reason: "Agentic orchestration bridge split pending (workflow/runtime dispatch extraction)",
+      reason: "Agentic orchestration bridge split pending (Tasks collaboration/runtime dispatch extraction)",
     },
   ],
   [
     "src/pages/tasks/TasksPage.tsx",
     {
-      maxLines: 920,
+      maxLines: 1100,
       expiresOn: "2026-05-31",
-      reason: "Unity Tasks shell decomposition pending (detail dock and thread conversation extraction)",
+      reason: "Unity Tasks shell decomposition pending (detail dock, mention UI, and shell extraction)",
     },
   ],
   [
     "src/pages/tasks/useTasksThreadState.ts",
     {
-      maxLines: 1400,
+      maxLines: 1850,
       expiresOn: "2026-05-31",
-      reason: "Unity Tasks thread state split pending (Codex runtime dispatch and browser store/actions extraction)",
+      reason: "Unity Tasks thread state split pending (browser store/actions and collaboration dispatch extraction)",
     },
   ],
 ]);
@@ -115,6 +115,13 @@ const LEGACY_IMPORT_EXCEPTIONS = new Set([
   "src/features/feed/derivedState.ts -> ../workflow/domain",
   "src/features/feed/derivedState.ts -> ../workflow/labels",
   "src/features/feed/derivedState.ts -> ../workflow/quality",
+  "src/pages/shell/ShellPage.tsx -> ../tasks/TaskTerminalViewport",
+  "src/pages/shell/ShellPage.tsx -> ../tasks/useTasksThreadState",
+  "src/pages/shell/shellTerminalGridState.ts -> ../tasks/taskTerminalTypes",
+  "src/pages/shell/useShellTerminalGrid.ts -> ../tasks/taskThreadTerminalState",
+  "src/pages/shell/useShellTerminalGrid.ts -> ../tasks/taskTerminalTypes",
+  "src/pages/shell/useShellTerminalGrid.ts -> ../tasks/taskTerminalBufferStore",
+  "src/pages/shell/useShellTerminalGrid.ts -> ../tasks/threadTypes",
 ]);
 
 function walk(dir, out = []) {

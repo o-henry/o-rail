@@ -54,6 +54,19 @@ export type AgenticAction =
       };
     }
   | {
+      type: "run_task_collaboration";
+      payload: {
+        taskId: string;
+        prompt?: string;
+        sourceTab?: "tasks" | "tasks-thread";
+        roleIds: string[];
+        primaryRoleId: string;
+        synthesisRoleId: string;
+        criticRoleId?: string;
+        cappedParticipantCount?: boolean;
+      };
+    }
+  | {
       type: "create_manual_session";
       payload: {
         title: string;

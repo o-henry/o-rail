@@ -5,7 +5,6 @@ import { readKnowledgeEntries } from "../../features/studio/knowledgeIndex";
 import {
   UNITY_DEFAULT_THREAD_PRESET_IDS,
   buildTaskAgentPrompt,
-  getDefaultRunPresetIds,
   getTaskAgentDiscussionLine,
   getTaskAgentLabel,
   getTaskAgentPresetIdByStudioRoleId,
@@ -13,6 +12,7 @@ import {
   getTaskAgentSummary,
   parseTaskAgentTags,
 } from "./taskAgentPresets";
+import { createTaskExecutionPlan } from "./taskExecutionPolicy";
 import type {
   ApprovalDecision,
   ApprovalRecord,
@@ -97,10 +97,6 @@ function shouldAutoReplaceTitle(currentTitle: string, currentPrompt: string): bo
   }
   const prompt = String(currentPrompt ?? "").trim();
   return Boolean(prompt) && title === truncateTitle(prompt);
-}
-
-function defaultRunRoles(detail: ThreadDetail, taggedRoles: ThreadRoleId[]): ThreadRoleId[] {
-  return getDefaultRunPresetIds(detail.agents.map((agent) => agent.roleId), taggedRoles);
 }
 
 function rolePrompt(detail: ThreadDetail, roleId: ThreadRoleId, prompt: string): string {
@@ -1063,12 +1059,17 @@ export function useTasksThreadState(params: Params) {
     setSelectedComposerRoleIds((current) => current.filter((entry) => entry !== roleId));
   }, []);
 
-  const dispatchRunRoles = useCallback(
-    async (detail: ThreadDetail, prompt: string, roles: ThreadRoleId[]) => {
-      for (const roleId of roles) {
+  const dispatchExecutionPlan = useCallback(
+    async (
+      detail: ThreadDetail,
+      prompt: string,
+      plan: ReturnType<typeof createTaskExecutionPlan>,
+    ) => {
+      if (plan.mode === "single") {
+        const roleId = plan.participantRoleIds[0];
         const studioRoleId = getTaskAgentStudioRoleId(roleId);
         if (!studioRoleId) {
-          continue;
+          return;
         }
         params.publishAction({
           type: "run_role",
@@ -1079,7 +1080,22 @@ export function useTasksThreadState(params: Params) {
             sourceTab: "tasks-thread",
           },
         });
+        return;
       }
+
+      params.publishAction({
+        type: "run_task_collaboration",
+        payload: {
+          taskId: detail.task.taskId,
+          prompt,
+          sourceTab: "tasks-thread",
+          roleIds: plan.participantRoleIds.map((roleId) => getTaskAgentStudioRoleId(roleId)).filter(Boolean) as string[],
+          primaryRoleId: String(getTaskAgentStudioRoleId(plan.primaryRoleId) ?? "").trim(),
+          synthesisRoleId: String(getTaskAgentStudioRoleId(plan.synthesisRoleId) ?? "").trim(),
+          criticRoleId: String(getTaskAgentStudioRoleId(plan.criticRoleId ?? "") ?? "").trim() || undefined,
+          cappedParticipantCount: plan.cappedParticipantCount,
+        },
+      });
     },
     [params],
   );
@@ -1119,7 +1135,12 @@ export function useTasksThreadState(params: Params) {
         }),
       );
       const taggedRoles = [...new Set([...selectedComposerRoleIds, ...parseTaskAgentTags(prompt)])];
-      const finalRoles = defaultRunRoles(detail, taggedRoles);
+      const plan = createTaskExecutionPlan({
+        enabledRoleIds: detail.agents.map((agent) => agent.roleId),
+        requestedRoleIds: taggedRoles,
+        prompt,
+      });
+      const finalRoles = plan.participantRoleIds;
       for (const roleId of finalRoles) {
         if (!detail.agents.some((agent) => agent.roleId === roleId)) {
           detail.agents.push({
@@ -1155,7 +1176,7 @@ export function useTasksThreadState(params: Params) {
         }
         return {
           ...agent,
-          status: activeIndex === 0 ? "thinking" : "awaiting_approval",
+          status: plan.mode === "discussion" || activeIndex === 0 ? "thinking" : "awaiting_approval",
           summary: getTaskAgentSummary(agent.roleId),
           lastUpdatedAt: timestamp,
         };
@@ -1170,7 +1191,7 @@ export function useTasksThreadState(params: Params) {
           }),
         );
       }
-      if (finalRoles.length > 1) {
+      if (finalRoles.length > 1 && plan.mode !== "discussion") {
         const sourceRole = finalRoles[0];
         const targetRole = finalRoles[1] as ThreadRoleId;
         detail.approvals = [
@@ -1194,7 +1215,9 @@ export function useTasksThreadState(params: Params) {
         createBrowserMessage(
           detail.thread.threadId,
           "assistant",
-          `${finalRoles.length} background agents are running now. I will wait for their updates and then synthesize the answer into one response.`,
+          plan.mode === "discussion"
+            ? `${finalRoles.length} background agents are running a bounded discussion now. I will synthesize the answer after they exchange short briefs.`
+            : `${finalRoles.length} background agent is running now. I will synthesize the answer after its update arrives.`,
           timestamp,
           { eventKind: "agent_batch_running" },
         ),
@@ -1207,7 +1230,9 @@ export function useTasksThreadState(params: Params) {
         ...detail.artifacts,
         brief: prompt,
         findings: finalRoles.map((roleId) => `${getTaskAgentLabel(roleId)}: ${getTaskAgentSummary(roleId)}`).join("\n"),
-        plan: `1. Run ${finalRoles.map((roleId) => getTaskAgentLabel(roleId)).join(", ")}\n2. Review files\n3. Confirm approval\n4. Synthesize answer`,
+        plan: plan.mode === "discussion"
+          ? `1. Run ${finalRoles.map((roleId) => getTaskAgentLabel(roleId)).join(", ")} brief\n2. Exchange a bounded critique\n3. Synthesize one answer`
+          : `1. Run ${finalRoles.map((roleId) => getTaskAgentLabel(roleId)).join(", ")}\n2. Review files\n3. Synthesize answer`,
       };
       detail.workflow = deriveThreadWorkflow(detail);
       store.details[detail.thread.threadId] = detail;
@@ -1221,7 +1246,7 @@ export function useTasksThreadState(params: Params) {
         source: "tasks-thread",
         actor: "user",
         level: "info",
-        message: `Thread ${detail.thread.threadId} · ${finalRoles.map((roleId) => getTaskAgentLabel(roleId)).join(", ")} dispatched`,
+        message: `Thread ${detail.thread.threadId} · ${finalRoles.map((roleId) => getTaskAgentLabel(roleId)).join(", ")} dispatched${plan.cappedParticipantCount ? " (participant cap applied)" : ""}`,
       });
       params.setStatus(`Thread updated: ${truncateTitle(detail.thread.title)}`);
       return;
@@ -1255,7 +1280,12 @@ export function useTasksThreadState(params: Params) {
       }
 
       const taggedRoles = [...new Set([...selectedComposerRoleIds, ...parseTaskAgentTags(prompt)])];
-      for (const roleId of taggedRoles) {
+      const plan = createTaskExecutionPlan({
+        enabledRoleIds: detail.agents.map((agent) => agent.roleId),
+        requestedRoleIds: taggedRoles,
+        prompt,
+      });
+      for (const roleId of plan.participantRoleIds) {
         if (!detail.agents.some((agent) => agent.roleId === roleId)) {
           detail = withDerivedWorkflow(await params.invokeFn<ThreadDetail>("thread_add_agent", {
             cwd: params.cwd,
@@ -1265,7 +1295,7 @@ export function useTasksThreadState(params: Params) {
           }));
         }
       }
-      const rolesToRun = defaultRunRoles(detail, taggedRoles);
+      const rolesToRun = plan.participantRoleIds;
       if (rolesToRun.length === 0) {
         setActiveThread(detail);
         await reloadThreads(detail.thread.threadId);
@@ -1277,18 +1307,19 @@ export function useTasksThreadState(params: Params) {
         threadId: detail.thread.threadId,
         prompt: promptWithAttachments,
         roles: rolesToRun,
+        suppressApproval: plan.mode === "discussion",
       }));
       setActiveThread(spawned);
       setActiveThreadId(spawned.thread.threadId);
       setSelectedAgentId((current) => current || defaultSelectedAgent(spawned));
       setSelectedFilePath((current) => current || defaultSelectedFile(spawned));
       await reloadThreads(spawned.thread.threadId);
-      await dispatchRunRoles(spawned, promptWithAttachments, rolesToRun);
+      await dispatchExecutionPlan(spawned, promptWithAttachments, plan);
       params.appendWorkspaceEvent({
         source: "tasks-thread",
         actor: "user",
         level: "info",
-        message: `Thread ${spawned.thread.threadId} · ${rolesToRun.map((roleId) => getTaskAgentLabel(roleId)).join(", ")} dispatched`,
+        message: `Thread ${spawned.thread.threadId} · ${rolesToRun.map((roleId) => getTaskAgentLabel(roleId)).join(", ")} dispatched${plan.cappedParticipantCount ? " (participant cap applied)" : ""}`,
       });
       params.setStatus(`Thread updated: ${truncateTitle(spawned.thread.title)}`);
       setComposerDraft("");
@@ -1303,7 +1334,7 @@ export function useTasksThreadState(params: Params) {
         message: `Thread submit failed: ${formatError(error)}`,
       });
     }
-  }, [accessMode, activeThread, applyBrowserStore, buildPromptWithAttachments, clearAttachedFiles, composerDraft, dispatchRunRoles, model, params, projectPath, reasoning, reloadThreads, selectedComposerRoleIds]);
+  }, [accessMode, activeThread, applyBrowserStore, buildPromptWithAttachments, clearAttachedFiles, composerDraft, dispatchExecutionPlan, model, params, projectPath, reasoning, reloadThreads, selectedComposerRoleIds]);
 
   const openAgent = useCallback(
     async (agent: BackgroundAgentRecord) => {
@@ -1413,14 +1444,22 @@ export function useTasksThreadState(params: Params) {
             }));
             setActiveThread(detail);
             await reloadThreads(detail.thread.threadId);
-            await dispatchRunRoles(detail, followupPrompt, [targetRole]);
+            await dispatchExecutionPlan(detail, followupPrompt, {
+              mode: "single",
+              participantRoleIds: [targetRole],
+              primaryRoleId: targetRole,
+              synthesisRoleId: targetRole,
+              maxParticipants: 1,
+              maxRounds: 1,
+              cappedParticipantCount: false,
+            });
           }
         }
       } catch (error) {
         params.setStatus(`Failed to resolve approval: ${formatError(error)}`);
       }
     },
-    [activeThread, applyBrowserStore, dispatchRunRoles, params, reloadThreads],
+    [activeThread, applyBrowserStore, dispatchExecutionPlan, params, reloadThreads],
   );
 
   const deleteThread = useCallback(

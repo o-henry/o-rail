@@ -56,4 +56,22 @@ describe("agenticRoleCoordinator", () => {
       }),
     );
   });
+
+  it("uses a caller-provided queue key override", async () => {
+    const queue = createAgenticQueue();
+    const invokeFn = (vi.fn(async () => "/tmp/write") as unknown) as InvokeFn;
+
+    const result = await runRoleWithCoordinator({
+      cwd: "/tmp/workspace",
+      sourceTab: "tasks-thread",
+      roleId: "client_programmer",
+      taskId: "THREAD-001",
+      queueKeyOverride: "role:client_programmer:thread:THREAD-001",
+      queue,
+      invokeFn,
+      execute: async () => undefined,
+    });
+
+    expect(result.envelope.record.queueKey).toBe("role:client_programmer:thread:THREAD-001");
+  });
 });

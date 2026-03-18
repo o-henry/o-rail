@@ -8,6 +8,9 @@ import type { WorkspaceTab } from "../mainAppGraphHelpers";
 import { runGraphWithCoordinator, runTopicWithCoordinator } from "../main/runtime/agenticCoordinator";
 import { runRoleWithCoordinator } from "../main/runtime/agenticRoleCoordinator";
 import { runTaskRoleWithCodex } from "../main/runtime/runTaskRoleWithCodex";
+import { buildTaskThreadContextSummary } from "../main/runtime/taskThreadContextSummary";
+import { runTaskCollaborationWithCodex } from "../main/runtime/runTaskCollaborationWithCodex";
+import { shouldSkipRecentTaskRoleRun } from "../main/runtime/taskRoleRunDeduper";
 import type { AgenticQueue } from "../main/runtime/agenticQueue";
 import {
   bootstrapRoleKnowledgeProfile,
@@ -130,6 +133,32 @@ function buildRoleArtifactJson(params: {
   )}\n`;
 }
 
+function dispatchTasksRoleEvent(params: {
+  taskId: string;
+  sourceTab: "tasks" | "tasks-thread";
+  studioRoleId: string;
+  runId?: string;
+  type: string;
+  stage?: string | null;
+  message?: string;
+}) {
+  if (typeof window === "undefined") {
+    return;
+  }
+  window.dispatchEvent(new CustomEvent("rail:tasks-role-event", {
+    detail: {
+      sourceTab: params.sourceTab,
+      taskId: params.taskId,
+      studioRoleId: params.studioRoleId,
+      runId: params.runId,
+      type: params.type,
+      stage: params.stage ?? null,
+      message: params.message ?? "",
+      at: new Date().toISOString(),
+    },
+  }));
+}
+
 export function useAgenticOrchestrationBridge(params: {
   cwd: string;
   selectedGraphFileName?: string;
@@ -158,6 +187,7 @@ export function useAgenticOrchestrationBridge(params: {
       taskId: string;
       prompt?: string;
       summary?: string;
+      internal?: boolean;
       handoffToRole?: string;
       handoffRequest?: string;
       sourceTab: "agents" | "workflow" | "workbench" | "tasks" | "tasks-thread";
@@ -254,6 +284,302 @@ export function useAgenticOrchestrationBridge(params: {
     [appendWorkspaceEvent, cwd, invokeFn, queue, refreshDashboardSnapshots, runDashboardTopic, workspaceTab],
   );
 
+  const finalizeTaskRoleRun = useCallback(async (params: {
+    runId: string;
+    roleId: string;
+    taskId: string;
+    prompt?: string;
+    sourceTab: "tasks" | "tasks-thread";
+    summary?: string;
+    artifactPaths: string[];
+    envelope: AgenticRunEnvelope;
+    runStatus: "done" | "error";
+    internal?: boolean;
+    handoffToRole?: string;
+    handoffRequest?: string;
+  }) => {
+    const baseArtifactPaths = [
+      ...params.envelope.artifacts.map((row) => String(row.path ?? "").trim()).filter(Boolean),
+      ...params.artifactPaths,
+    ];
+    let roleSummaryArtifactPath = "";
+    try {
+      const artifactDir = `${String(cwd ?? "").trim().replace(/[\\/]+$/, "")}/.rail/studio_runs/${params.runId}/artifacts`;
+      const roleToken = toRoleShortToken(params.roleId);
+      const fileName = `${toCompactTimestamp()}_${roleToken}.json`;
+      roleSummaryArtifactPath = await invokeFn<string>("workspace_write_text", {
+        cwd: artifactDir,
+        name: fileName,
+        content: buildRoleArtifactJson({
+          runId: params.runId,
+          roleId: params.roleId,
+          taskId: params.taskId,
+          prompt: params.prompt,
+          artifactPaths: baseArtifactPaths,
+        }),
+      });
+    } catch {
+      roleSummaryArtifactPath = "";
+    }
+    const artifactPaths = [
+      roleSummaryArtifactPath,
+      ...baseArtifactPaths,
+      `.rail/studio_runs/${params.runId}/run.json`,
+    ];
+    const dedupedArtifactPaths = [...new Set(artifactPaths.map((row) => String(row ?? "").trim()).filter(Boolean))];
+    onRoleRunCompleted?.({
+      runId: params.runId,
+      roleId: params.roleId,
+      taskId: params.taskId,
+      prompt: params.prompt,
+      summary: params.summary,
+      internal: params.internal,
+      handoffToRole: params.handoffToRole,
+      handoffRequest: params.handoffRequest,
+      sourceTab: params.sourceTab,
+      artifactPaths: dedupedArtifactPaths,
+      runStatus: params.runStatus,
+      envelope: params.envelope,
+    });
+  }, [cwd, invokeFn, onRoleRunCompleted]);
+
+  const executeTaskRoleRun = useCallback(async (params: {
+    runId?: string;
+    roleId: string;
+    taskId: string;
+    prompt?: string;
+    sourceTab: "tasks" | "tasks-thread";
+    internal?: boolean;
+    model?: string;
+    reasoning?: string;
+    outputArtifactName?: string;
+    includeRoleKnowledge?: boolean;
+    handoffToRole?: string;
+    handoffRequest?: string;
+    promptMode?: "direct" | "brief" | "critique" | "final";
+  }) => {
+    const sourceTab = params.sourceTab;
+    const promptText = String(params.prompt ?? "").trim();
+    if (shouldSkipRecentTaskRoleRun({
+      taskId: params.taskId,
+      roleId: params.roleId,
+      prompt: promptText,
+      mode: params.promptMode ?? "direct",
+    })) {
+      dispatchTasksRoleEvent({
+        sourceTab,
+        taskId: params.taskId,
+        studioRoleId: params.roleId,
+        type: "stage_done",
+        stage: "save",
+        message: "같은 역할 요청이 너무 가까워 중복 실행을 건너뛰었습니다.",
+      });
+      return null;
+    }
+
+    const normalizedRoleId = toStudioRoleId(params.roleId);
+    let taskCodexArtifactPaths: string[] = [];
+    let taskCodexSummary: string | undefined;
+    const queueKeyOverride = sourceTab === "tasks-thread"
+      ? `role:${params.roleId}:thread:${params.taskId}`
+      : `role:${params.roleId}:task:${params.taskId}`;
+    const result = await runRoleWithCoordinator({
+      runId: params.runId,
+      queueKeyOverride,
+      cwd,
+      sourceTab,
+      roleId: params.roleId,
+      taskId: params.taskId,
+      prompt: promptText || undefined,
+      queue,
+      invokeFn,
+      execute: async ({ runId, prompt }) => {
+        const nextPrompt = String(prompt ?? "").trim();
+        if (nextPrompt) {
+          setStatus(`역할 요청: ${nextPrompt.slice(0, 72)}`);
+        }
+        const codexTaskRun = await runTaskRoleWithCodex({
+          invokeFn,
+          storageCwd: cwd,
+          taskId: params.taskId,
+          studioRoleId: params.roleId,
+          prompt: nextPrompt || undefined,
+          model: params.model,
+          reasoning: params.reasoning,
+          outputArtifactName: params.outputArtifactName,
+          sourceTab,
+          runId,
+        });
+        taskCodexArtifactPaths = [...codexTaskRun.artifactPaths];
+        taskCodexSummary = codexTaskRun.summary;
+      },
+      appendWorkspaceEvent,
+      onEvent: (event: AgenticRunEvent) => {
+        dispatchTasksRoleEvent({
+          sourceTab,
+          taskId: params.taskId,
+          studioRoleId: params.roleId,
+          runId: event.runId,
+          type: event.type,
+          stage: event.stage ?? null,
+          message: event.message ?? "",
+        });
+      },
+      roleKnowledgePipeline: normalizedRoleId && params.includeRoleKnowledge !== false
+        ? {
+            bootstrap: async ({ runId, taskId, prompt }) => {
+              const bootstrapped = await bootstrapRoleKnowledgeProfile({
+                cwd,
+                invokeFn,
+                runId,
+                roleId: normalizedRoleId,
+                taskId,
+                userPrompt: prompt,
+              });
+              return {
+                message: bootstrapped.message,
+                artifactPaths: bootstrapped.artifactPaths,
+                payload: { profile: bootstrapped.profile },
+              };
+            },
+            store: async ({ bootstrap }) => {
+              const fromBootstrap = bootstrap?.payload?.profile as Parameters<typeof storeRoleKnowledgeProfile>[0]["profile"] | undefined;
+              if (!fromBootstrap) {
+                return null;
+              }
+              const stored = await storeRoleKnowledgeProfile({
+                cwd,
+                invokeFn,
+                profile: fromBootstrap,
+              });
+              return {
+                message: stored.message,
+                artifactPaths: stored.artifactPaths,
+                payload: { profile: stored.profile },
+              };
+            },
+            inject: async ({ prompt, store }) => {
+              const profile = (store?.payload?.profile ?? null) as Parameters<typeof injectRoleKnowledgePrompt>[0]["profile"];
+              const injected = await injectRoleKnowledgePrompt({
+                roleId: normalizedRoleId,
+                prompt,
+                profile: profile ?? null,
+              });
+              return {
+                prompt: injected.prompt,
+                message: injected.message,
+                payload: { usedProfile: injected.usedProfile },
+              };
+            },
+          }
+        : undefined,
+    });
+
+    await finalizeTaskRoleRun({
+      runId: result.runId,
+      roleId: params.roleId,
+      taskId: params.taskId,
+      prompt: params.prompt,
+      summary: taskCodexSummary,
+      internal: params.internal,
+      handoffToRole: params.handoffToRole,
+      handoffRequest: params.handoffRequest,
+      sourceTab,
+      artifactPaths: taskCodexArtifactPaths,
+      runStatus: result.envelope.record.status === "done" ? "done" : "error",
+      envelope: result.envelope,
+    });
+
+    return {
+      runId: result.runId,
+      summary: taskCodexSummary ?? "",
+      artifactPaths: [...taskCodexArtifactPaths],
+      envelope: result.envelope,
+      runStatus: result.envelope.record.status === "done" ? "done" : "error",
+    };
+  }, [appendWorkspaceEvent, cwd, finalizeTaskRoleRun, invokeFn, queue, setStatus]);
+
+  const runTaskCollaborationDirect = useCallback(async (params: {
+    taskId: string;
+    prompt?: string;
+    sourceTab?: "tasks" | "tasks-thread";
+    roleIds: string[];
+    primaryRoleId: string;
+    synthesisRoleId: string;
+    criticRoleId?: string;
+    cappedParticipantCount?: boolean;
+  }) => {
+    const sourceTab = params.sourceTab === "tasks" ? "tasks" : "tasks-thread";
+    if (!params.taskId || !params.roleIds.length) {
+      return;
+    }
+    let contextSummary = "";
+    if (sourceTab === "tasks-thread") {
+      try {
+        contextSummary = await buildTaskThreadContextSummary({
+          invokeFn,
+          cwd,
+          threadId: params.taskId,
+          maxChars: 2400,
+        });
+      } catch {
+        contextSummary = "";
+      }
+    }
+
+    const collaboration = await runTaskCollaborationWithCodex({
+      prompt: String(params.prompt ?? "").trim(),
+      contextSummary,
+      participantRoleIds: params.roleIds,
+      synthesisRoleId: params.synthesisRoleId,
+      criticRoleId: params.criticRoleId,
+      cappedParticipantCount: Boolean(params.cappedParticipantCount),
+      executeRoleRun: async (runParams) => {
+        const result = await executeTaskRoleRun({
+          roleId: runParams.roleId,
+          taskId: params.taskId,
+          prompt: runParams.prompt,
+          sourceTab,
+          internal: runParams.internal,
+          model: runParams.model,
+          reasoning: runParams.reasoning,
+          outputArtifactName: runParams.outputArtifactName,
+          includeRoleKnowledge: runParams.includeRoleKnowledge,
+          promptMode: runParams.promptMode,
+        });
+        if (!result) {
+          return {
+            roleId: runParams.roleId,
+            runId: "",
+            summary: "",
+            artifactPaths: [],
+          };
+        }
+        return {
+          roleId: runParams.roleId,
+          runId: result.runId,
+          summary: result.summary,
+          artifactPaths: result.artifactPaths,
+        };
+      },
+      onProgress: (progress) => {
+        const studioRoleId = String(progress.roleId || params.synthesisRoleId || params.primaryRoleId).trim();
+        if (!studioRoleId) {
+          return;
+        }
+        dispatchTasksRoleEvent({
+          sourceTab,
+          taskId: params.taskId,
+          studioRoleId,
+          type: "stage_started",
+          stage: progress.stage,
+          message: progress.message,
+        });
+      },
+    });
+    setStatus(`멀티에이전트 합성 완료: ${collaboration.finalResult.summary.slice(0, 40)}`);
+  }, [cwd, executeTaskRoleRun, invokeFn, setStatus]);
+
   const runRoleDirect = useCallback(
     async (params: {
       runId?: string;
@@ -274,9 +600,21 @@ export function useAgenticOrchestrationBridge(params: {
               : params.sourceTab === "tasks-thread"
                 ? "tasks-thread"
                 : "agents";
+      if (sourceTab === "tasks" || sourceTab === "tasks-thread") {
+        await executeTaskRoleRun({
+          runId: params.runId,
+          roleId: params.roleId,
+          taskId: params.taskId,
+          prompt: params.prompt,
+          sourceTab,
+          handoffToRole: params.handoffToRole,
+          handoffRequest: params.handoffRequest,
+          includeRoleKnowledge: true,
+          promptMode: "direct",
+        });
+        return;
+      }
       const normalizedRoleId = toStudioRoleId(params.roleId);
-      let taskCodexArtifactPaths: string[] = [];
-      let taskCodexSummary: string | undefined;
       const result = await runRoleWithCoordinator({
         runId: params.runId,
         cwd,
@@ -286,44 +624,14 @@ export function useAgenticOrchestrationBridge(params: {
         prompt: params.prompt,
         queue,
         invokeFn,
-        execute: async ({ runId, prompt }) => {
+        execute: async ({ prompt }) => {
           const promptText = String(prompt ?? "").trim();
           if (promptText) {
             setStatus(`역할 요청: ${promptText.slice(0, 72)}`);
           }
-          if (sourceTab === "tasks" || sourceTab === "tasks-thread") {
-            const codexTaskRun = await runTaskRoleWithCodex({
-              invokeFn,
-              storageCwd: cwd,
-              taskId: params.taskId,
-              studioRoleId: params.roleId,
-              prompt: promptText || undefined,
-              sourceTab,
-              runId,
-            });
-            taskCodexArtifactPaths = [...codexTaskRun.artifactPaths];
-            taskCodexSummary = codexTaskRun.summary;
-            return;
-          }
           await runGraphWithAgenticCoordinator(false, promptText || undefined);
         },
         appendWorkspaceEvent,
-        onEvent: (event: AgenticRunEvent) => {
-          if ((sourceTab === "tasks" || sourceTab === "tasks-thread") && typeof window !== "undefined") {
-            window.dispatchEvent(new CustomEvent("rail:tasks-role-event", {
-              detail: {
-                sourceTab,
-                taskId: params.taskId,
-                studioRoleId: params.roleId,
-                runId: event.runId,
-                type: event.type,
-                stage: event.stage ?? null,
-                message: event.message ?? "",
-                at: event.at,
-              },
-            }));
-          }
-        },
         roleKnowledgePipeline: normalizedRoleId
           ? {
               bootstrap: async ({ runId, taskId, prompt }) => {
@@ -373,10 +681,7 @@ export function useAgenticOrchestrationBridge(params: {
             }
           : undefined,
       });
-      const baseArtifactPaths = [
-        ...result.envelope.artifacts.map((row) => String(row.path ?? "").trim()).filter(Boolean),
-        ...taskCodexArtifactPaths,
-      ];
+      const baseArtifactPaths = result.envelope.artifacts.map((row) => String(row.path ?? "").trim()).filter(Boolean);
       let roleSummaryArtifactPath = "";
       try {
         const artifactDir = `${String(cwd ?? "").trim().replace(/[\\/]+$/, "")}/.rail/studio_runs/${result.runId}/artifacts`;
@@ -407,7 +712,6 @@ export function useAgenticOrchestrationBridge(params: {
         roleId: params.roleId,
         taskId: params.taskId,
         prompt: params.prompt,
-        summary: taskCodexSummary,
         handoffToRole: params.handoffToRole,
         handoffRequest: params.handoffRequest,
         sourceTab,
@@ -416,7 +720,7 @@ export function useAgenticOrchestrationBridge(params: {
         envelope: result.envelope,
       });
     },
-    [appendWorkspaceEvent, cwd, invokeFn, onRoleRunCompleted, queue, runGraphWithAgenticCoordinator, setStatus],
+    [appendWorkspaceEvent, cwd, executeTaskRoleRun, invokeFn, onRoleRunCompleted, queue, runGraphWithAgenticCoordinator, setStatus],
   );
 
   useEffect(() => {
@@ -511,6 +815,24 @@ export function useAgenticOrchestrationBridge(params: {
         void runRoleDirect({ ...action.payload, sourceTab });
         return;
       }
+      if (action.type === "run_task_collaboration") {
+        const sourceTab = action.payload.sourceTab === "tasks" ? "tasks" : "tasks-thread";
+        if (workspaceTab !== "tasks") {
+          onSelectWorkspaceTab("tasks");
+        }
+        setStatus(`멀티에이전트 협업 실행 요청: ${action.payload.taskId}`);
+        void runTaskCollaborationDirect({
+          taskId: action.payload.taskId,
+          prompt: action.payload.prompt,
+          sourceTab,
+          roleIds: action.payload.roleIds,
+          primaryRoleId: action.payload.primaryRoleId,
+          synthesisRoleId: action.payload.synthesisRoleId,
+          criticRoleId: action.payload.criticRoleId,
+          cappedParticipantCount: action.payload.cappedParticipantCount,
+        });
+        return;
+      }
       if (action.type === "handoff_create" || action.type === "request_handoff") {
         onSelectWorkspaceTab("workflow");
         setStatus(`그래프 핸드오프 요청: ${action.payload.handoffId}`);
@@ -533,7 +855,7 @@ export function useAgenticOrchestrationBridge(params: {
         applyPreset(action.payload.presetKind as PresetKind);
       }
     });
-  }, [applyPreset, onSelectWorkspaceTab, runDashboardTopicDirect, runGraphWithAgenticCoordinator, runRoleDirect, setNodeSelection, setStatus, subscribeAction, workspaceTab]);
+  }, [applyPreset, onSelectWorkspaceTab, runDashboardTopicDirect, runGraphWithAgenticCoordinator, runRoleDirect, runTaskCollaborationDirect, setNodeSelection, setStatus, subscribeAction, workspaceTab]);
 
   return {
     onRunGraph,

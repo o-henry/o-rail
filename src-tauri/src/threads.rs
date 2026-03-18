@@ -998,11 +998,20 @@ fn default_run_roles(task: &TaskRecordView, requested_roles: &[String]) -> Vec<S
     task_presets::default_run_task_agent_ids(&enabled, requested_roles)
 }
 
-fn update_agent_statuses(agents: &mut [BackgroundAgentRecord], selected_roles: &[String], workspace_path: &str) {
+fn update_agent_statuses(
+    agents: &mut [BackgroundAgentRecord],
+    selected_roles: &[String],
+    workspace_path: &str,
+    discussion_mode: bool,
+) {
     let now = now_iso();
     for (index, role_id) in selected_roles.iter().enumerate() {
         if let Some(agent) = agents.iter_mut().find(|agent| &agent.role_id == role_id) {
-            agent.status = if index == 0 { "thinking".to_string() } else { "awaiting_approval".to_string() };
+            agent.status = if discussion_mode || index == 0 {
+                "thinking".to_string()
+            } else {
+                "awaiting_approval".to_string()
+            };
             agent.summary = Some(role_summary(role_id));
             agent.worktree_path = Some(workspace_path.to_string());
             agent.last_updated_at = now.clone();
@@ -1270,7 +1279,13 @@ pub fn thread_rename(cwd: String, thread_id: String, title: String) -> Result<Th
 }
 
 #[tauri::command]
-pub fn thread_spawn_agents(cwd: String, thread_id: String, prompt: String, roles: Vec<String>) -> Result<ThreadDetail, String> {
+pub fn thread_spawn_agents(
+    cwd: String,
+    thread_id: String,
+    prompt: String,
+    roles: Vec<String>,
+    suppress_approval: Option<bool>,
+) -> Result<ThreadDetail, String> {
     let workspace = normalize_workspace_root(&cwd)?;
     let thread_id = thread_id.trim().to_string();
     let prompt = prompt.trim();
@@ -1285,7 +1300,8 @@ pub fn thread_spawn_agents(cwd: String, thread_id: String, prompt: String, roles
     }
     let task_path = task_dir(&workspace, &thread_id);
     let (mut thread, mut messages, mut agents, mut approvals) = ensure_thread_state(&task_path, &task.record, "5.4", "MEDIUM", "Local")?;
-    update_agent_statuses(&mut agents, &selected_roles, &task.record.workspace_path);
+    let discussion_mode = suppress_approval.unwrap_or(false);
+    update_agent_statuses(&mut agents, &selected_roles, &task.record.workspace_path, discussion_mode);
 
     for role_id in &selected_roles {
         let label = role_label_for(&task.record, role_id);
@@ -1318,7 +1334,7 @@ pub fn thread_spawn_agents(cwd: String, thread_id: String, prompt: String, roles
         );
     }
 
-    if selected_roles.len() >= 2 {
+    if selected_roles.len() >= 2 && !discussion_mode {
         let from_role = selected_roles[0].clone();
         let target_role = selected_roles[1].clone();
         let already_pending = approvals.iter().any(|approval| {
@@ -1514,6 +1530,7 @@ pub fn thread_record_role_result(
     run_status: String,
     artifact_paths: Vec<String>,
     summary: Option<String>,
+    internal: Option<bool>,
 ) -> Result<bool, String> {
     let workspace = normalize_workspace_root(&cwd)?;
     let thread_id = thread_id.trim().to_string();
@@ -1530,6 +1547,7 @@ pub fn thread_record_role_result(
     let task = task_detail_view(storage::task_load(cwd.clone(), thread_id.clone())?)?;
     let task_path = task_dir(&workspace, &thread_id);
     let (mut thread, mut messages, mut agents, mut approvals) = ensure_thread_state(&task_path, &task.record, "5.4", "MEDIUM", "Local")?;
+    let is_internal = internal.unwrap_or(false);
 
     let Some(task_role) = task.record.roles.iter().find(|role| role.studio_role_id == studio_role_id.trim()) else {
         return Ok(true);
@@ -1585,7 +1603,7 @@ pub fn thread_record_role_result(
         latest_artifact_path.as_deref(),
     );
 
-    if run_status.trim().eq_ignore_ascii_case("done") {
+    if run_status.trim().eq_ignore_ascii_case("done") && !is_internal {
         let mut created_handoff = false;
         if let Some(target_role) = next_handoff_target(&task.record, &task_role.id) {
             let target_already_started = task
@@ -1791,6 +1809,7 @@ mod tests {
             with_tools.thread.thread_id.clone(),
             "@designer @implementer inspect repo".to_string(),
             vec!["game_designer".to_string(), "unity_implementer".to_string()],
+            None,
         )
         .unwrap();
         assert!(spawned.messages.iter().any(|message| message.content.contains("Created GAME DESIGNER")));
@@ -1807,8 +1826,35 @@ mod tests {
                 .iter()
                 .find(|stage| stage.id == "integrate")
                 .map(|stage| stage.status.as_str()),
-            Some("blocked")
+                Some("blocked")
         );
+    }
+
+    #[test]
+    fn thread_spawn_agents_can_skip_initial_approval_for_discussion() {
+        let workspace = temp_workspace("spawn-no-approval");
+        let detail = thread_create(
+            workspace.to_string_lossy().to_string(),
+            None,
+            "inspect repo".to_string(),
+            None,
+            Some("full-squad".to_string()),
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        let spawned = thread_spawn_agents(
+            workspace.to_string_lossy().to_string(),
+            detail.thread.thread_id.clone(),
+            "@designer @implementer inspect repo".to_string(),
+            vec!["game_designer".to_string(), "unity_implementer".to_string()],
+            Some(true),
+        )
+        .unwrap();
+
+        assert!(spawned.approvals.is_empty());
     }
 
     #[test]
@@ -1926,6 +1972,7 @@ mod tests {
             "done".to_string(),
             vec![artifact_path_str.clone()],
             Some("GAME DESIGNER: Investigated systems.".to_string()),
+            None,
         )
         .unwrap();
         assert!(recorded);
@@ -1952,6 +1999,40 @@ mod tests {
             .as_deref()
             .unwrap_or_default()
             .contains("Investigated systems."));
+    }
+
+    #[test]
+    fn thread_record_role_result_internal_run_skips_handoff_approval() {
+        let workspace = temp_workspace("internal-role-result");
+        let cwd = workspace.to_string_lossy().to_string();
+        let detail = thread_create(
+            cwd.clone(),
+            None,
+            "inspect repo".to_string(),
+            None,
+            Some("full-squad".to_string()),
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+
+        let recorded = thread_record_role_result(
+            cwd.clone(),
+            detail.thread.thread_id.clone(),
+            "pm_planner".to_string(),
+            "run-2".to_string(),
+            "done".to_string(),
+            vec![],
+            Some("GAME DESIGNER: internal brief".to_string()),
+            Some(true),
+        )
+        .unwrap();
+        assert!(recorded);
+
+        let loaded = thread_load(cwd, detail.thread.thread_id.clone()).unwrap();
+        assert!(loaded.approvals.is_empty());
     }
 
     #[test]

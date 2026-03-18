@@ -75,7 +75,9 @@
   overflow: auto;
 }
 
-.shell-terminal-card {
+.shell-terminal-card,
+.shell-terminal-card.panel-card,
+.shell-terminal-card.panel-card.is-selected {
   min-width: 0;
   min-height: 0;
   height: 100%;

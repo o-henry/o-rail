@@ -18,7 +18,7 @@ export function TaskTerminalViewport(props: TaskTerminalViewportProps) {
   const renderedBufferRef = useRef("");
   const onTerminalDataRef = useRef(props.onTerminalData);
   const onTerminalResizeRef = useRef(props.onTerminalResize);
-  const lastResizeRef = useRef("");
+  const appliedResizeRef = useRef("");
 
   useEffect(() => {
     onTerminalDataRef.current = props.onTerminalData;
@@ -27,6 +27,10 @@ export function TaskTerminalViewport(props: TaskTerminalViewportProps) {
   useEffect(() => {
     onTerminalResizeRef.current = props.onTerminalResize;
   }, [props.onTerminalResize]);
+
+  useEffect(() => {
+    appliedResizeRef.current = "";
+  }, [props.sessionId]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -69,7 +73,8 @@ export function TaskTerminalViewport(props: TaskTerminalViewportProps) {
     const fitAddon = new FitAddon();
     terminal.loadAddon(fitAddon);
     terminal.open(host);
-    const fitAndResize = () => {
+    let disposed = false;
+    const fitAndResize = async () => {
       try {
         fitAddon.fit();
       } catch {
@@ -81,20 +86,27 @@ export function TaskTerminalViewport(props: TaskTerminalViewportProps) {
         return;
       }
       const nextKey = `${cols}x${rows}`;
-      if (lastResizeRef.current === nextKey) {
+      if (appliedResizeRef.current === nextKey) {
         return;
       }
-      lastResizeRef.current = nextKey;
-      void onTerminalResizeRef.current?.(cols, rows);
+      try {
+        await onTerminalResizeRef.current?.(cols, rows);
+        if (!disposed) {
+          appliedResizeRef.current = nextKey;
+        }
+      } catch {
+        // Retry on the next scheduled fit; startup races can occur before the PTY exists.
+      }
     };
-    fitAndResize();
-    window.setTimeout(fitAndResize, 0);
-    window.setTimeout(fitAndResize, 150);
+    void fitAndResize();
+    const retryTimers = [0, 150, 600, 1200].map((delay) => window.setTimeout(() => {
+      void fitAndResize();
+    }, delay));
 
     const resizeObserver = typeof ResizeObserver === "undefined"
       ? null
       : new ResizeObserver(() => {
-          fitAndResize();
+          void fitAndResize();
         });
     resizeObserver?.observe(host);
 
@@ -106,6 +118,8 @@ export function TaskTerminalViewport(props: TaskTerminalViewportProps) {
     fitAddonRef.current = fitAddon;
 
     return () => {
+      disposed = true;
+      retryTimers.forEach((timer) => window.clearTimeout(timer));
       disposable.dispose();
       resizeObserver?.disconnect();
       renderedBufferRef.current = "";
@@ -155,20 +169,20 @@ export function TaskTerminalViewport(props: TaskTerminalViewportProps) {
     const terminal = terminalRef.current;
     const fitAddon = fitAddonRef.current;
     terminal?.focus();
-    try {
-      fitAddon?.fit();
-      const cols = terminal?.cols ?? 0;
-      const rows = terminal?.rows ?? 0;
-      if (cols > 0 && rows > 0) {
-        const nextKey = `${cols}x${rows}`;
-        if (lastResizeRef.current !== nextKey) {
-          lastResizeRef.current = nextKey;
-          void onTerminalResizeRef.current?.(cols, rows);
+    window.setTimeout(() => {
+      try {
+        fitAddon?.fit();
+        const cols = terminal?.cols ?? 0;
+        const rows = terminal?.rows ?? 0;
+        if (cols > 0 && rows > 0) {
+          void Promise.resolve(onTerminalResizeRef.current?.(cols, rows)).then(() => {
+            appliedResizeRef.current = `${cols}x${rows}`;
+          });
         }
+      } catch {
+        // ignore fit races on focus
       }
-    } catch {
-      // ignore fit races on focus
-    }
+    }, 0);
   }, [props.selected]);
 
   return (

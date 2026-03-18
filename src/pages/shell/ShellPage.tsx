@@ -130,8 +130,12 @@ export default function ShellPage(props: ShellPageProps) {
                       <button
                         aria-label="close terminal"
                         className="shell-terminal-icon-button"
+                        disabled={shellGrid.panes.length <= 1}
                         onClick={(event) => {
                           event.stopPropagation();
+                          if (shellGrid.panes.length <= 1) {
+                            return;
+                          }
                           void shellGrid.closePane(pane.id);
                         }}
                         type="button"

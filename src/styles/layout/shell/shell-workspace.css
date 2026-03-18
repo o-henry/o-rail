@@ -168,6 +168,11 @@
   display: block;
 }
 
+.shell-terminal-icon-button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
 .shell-terminal-card .tasks-terminal-viewport {
   min-height: 0;
   height: 100%;

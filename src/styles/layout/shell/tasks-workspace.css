@@ -728,7 +728,6 @@
 .tasks-thread-running-strip {
   display: grid;
   gap: 8px;
-  margin-top: 10px;
   padding: 10px 12px;
   border-radius: 10px;
   background: color-mix(in srgb, var(--surface-soft) 46%, #ffffff);
@@ -1005,7 +1004,7 @@
 
 .tasks-thread-composer-shell {
   position: relative;
-  margin: 10px 0 0;
+  margin: 0;
   border: 0;
   box-shadow: none;
   background: #ffffff;

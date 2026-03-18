@@ -121,6 +121,30 @@ function resolveTimelineMessage(message: ThreadMessage, agentLabels: string[]) {
   };
 }
 
+function displayProcessStage(stage: string) {
+  const normalized = String(stage ?? "").trim().toLowerCase();
+  if (normalized === "crawler") return "수집";
+  if (normalized === "rag") return "지식 정리";
+  if (normalized === "codex") return "Codex 실행";
+  if (normalized === "critic") return "검토";
+  if (normalized === "save") return "저장";
+  if (normalized === "approval") return "승인";
+  return stage || "진행";
+}
+
+function displayProcessEventLabel(type: string) {
+  const normalized = String(type ?? "").trim().toLowerCase();
+  if (normalized === "run_queued") return "대기";
+  if (normalized === "run_started") return "시작";
+  if (normalized === "stage_started") return "진행";
+  if (normalized === "stage_done") return "완료";
+  if (normalized === "stage_error") return "오류";
+  if (normalized === "run_done") return "끝";
+  if (normalized === "run_error") return "실패";
+  if (normalized === "artifact_added") return "산출물";
+  return "진행";
+}
+
 export default function TasksPage(props: TasksPageProps) {
   const state = useTasksThreadState(props);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
@@ -471,6 +495,17 @@ export default function TasksPage(props: TasksPageProps) {
                     );
                   })
                 )}
+                {state.liveProcessEvents.map((event) => (
+                  <article className="tasks-thread-message-row is-system is-process" key={event.id}>
+                    <span className="tasks-thread-message-label">
+                      {event.agentLabel} · {displayProcessEventLabel(event.type)}
+                    </span>
+                    <div className="tasks-thread-log-line">
+                      {event.stage ? `[${displayProcessStage(event.stage)}] ` : ""}
+                      {event.message}
+                    </div>
+                  </article>
+                ))}
                 {liveAgents.map((agent) => (
                   <article className="tasks-thread-message-row is-assistant is-live-placeholder" key={`live:${agent.agentId}`}>
                     <span className="tasks-thread-message-label">{agent.label}</span>

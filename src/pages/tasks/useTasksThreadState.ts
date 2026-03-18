@@ -63,6 +63,17 @@ type KnowledgeRetrieveResult = {
   warnings: string[];
 };
 
+type LiveProcessEvent = {
+  id: string;
+  runId: string;
+  roleId: ThreadRoleId;
+  agentLabel: string;
+  type: string;
+  stage: string;
+  message: string;
+  at: string;
+};
+
 const BROWSER_STORE_KEY = "rail.tasks.browser-state.v4";
 const TASKS_PROJECT_PATH_KEY = "rail.tasks.project-path.v1";
 const TASKS_PROJECT_LIST_KEY = "rail.tasks.project-list.v1";
@@ -435,6 +446,7 @@ export function useTasksThreadState(params: Params) {
   const [projectPaths, setProjectPaths] = useState<string[]>(initialProjectList);
   const [hiddenProjectPaths, setHiddenProjectPaths] = useState<string[]>(initialHiddenProjectList);
   const [liveRoleNotes, setLiveRoleNotes] = useState<Partial<Record<ThreadRoleId, { message: string; updatedAt: string }>>>({});
+  const [liveProcessEvents, setLiveProcessEvents] = useState<LiveProcessEvent[]>([]);
   const browserStoreRef = useRef<BrowserStore>(loadBrowserStore());
   const visibleThreadItems = useMemo(
     () => threadItems.filter((item) => !hiddenProjectPaths.includes(String(item.projectPath || item.thread.cwd || "").trim())),
@@ -723,6 +735,7 @@ export function useTasksThreadState(params: Params) {
     const handler = (event: Event) => {
       const detail = (event as CustomEvent<{
         taskId?: string;
+        runId?: string;
         studioRoleId?: string;
         type?: string;
         stage?: string | null;
@@ -743,10 +756,37 @@ export function useTasksThreadState(params: Params) {
           delete next[roleId];
           return next;
         });
-        return;
       }
       const stageLabel = String(detail.stage ?? "").trim();
       const message = String(detail.message ?? "").trim() || (stageLabel ? `${stageLabel} 진행 중` : "작업 중");
+      const eventId = [
+        String(detail.runId ?? "").trim(),
+        roleId,
+        eventType,
+        stageLabel,
+        message,
+      ].filter(Boolean).join(":");
+      setLiveProcessEvents((current) => {
+        if (eventId && current.some((entry) => entry.id === eventId)) {
+          return current;
+        }
+        return [
+          ...current,
+          {
+            id: eventId || nextId("process"),
+            runId: String(detail.runId ?? "").trim(),
+            roleId,
+            agentLabel: getTaskAgentLabel(roleId),
+            type: eventType,
+            stage: stageLabel,
+            message,
+            at: String(detail.at ?? "").trim() || nowIso(),
+          },
+        ].slice(-24);
+      });
+      if (eventType === "run_done" || eventType === "run_error") {
+        return;
+      }
       setLiveRoleNotes((current) => ({
         ...current,
         [roleId]: {
@@ -757,6 +797,10 @@ export function useTasksThreadState(params: Params) {
     };
     window.addEventListener("rail:tasks-role-event", handler as EventListener);
     return () => window.removeEventListener("rail:tasks-role-event", handler as EventListener);
+  }, [activeThreadId]);
+
+  useEffect(() => {
+    setLiveProcessEvents([]);
   }, [activeThreadId]);
 
   useEffect(() => {
@@ -1640,6 +1684,7 @@ export function useTasksThreadState(params: Params) {
     selectedFilePath,
     selectedFileDiff,
     liveRoleNotes,
+    liveProcessEvents,
     attachedFiles,
     selectedComposerRoleIds,
     setSelectedFilePath,

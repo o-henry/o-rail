@@ -11,8 +11,15 @@ import type { ThreadDetail } from "../tasks/threadTypes";
 import {
   createShellTerminalPane,
   renameShellTerminalPaneTitle,
-  reorderShellTerminalPanes,
 } from "./shellTerminalGridState";
+import type { ShellSplitDirection, ShellTerminalLayoutNode } from "./shellTerminalLayout";
+import {
+  collectShellTerminalPaneIds,
+  createShellTerminalLeaf,
+  removePaneFromShellTerminalLayout,
+  splitShellTerminalLayout,
+  updateShellTerminalSplitRatio,
+} from "./shellTerminalLayout";
 
 type InvokeFn = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
 
@@ -38,9 +45,10 @@ export function useShellTerminalGrid(params: {
   const threadId = String(params.thread?.thread.threadId ?? "").trim();
   const cwd = useMemo(() => resolveTasksThreadTerminalCwd(params.thread), [params.thread]);
   const [panes, setPanes] = useState<TaskTerminalPane[]>([]);
+  const [layout, setLayout] = useState<ShellTerminalLayoutNode | null>(null);
   const [selectedPaneId, setSelectedPaneId] = useState("");
-  const [draggedPaneId, setDraggedPaneId] = useState("");
   const paneCounterRef = useRef(0);
+  const splitCounterRef = useRef(0);
   const autoCreatedThreadIdRef = useRef("");
   const paneIdsRef = useRef<string[]>([]);
 
@@ -48,9 +56,10 @@ export function useShellTerminalGrid(params: {
     paneIdsRef.current.forEach((paneId) => removeTerminalBuffer(paneId));
     paneIdsRef.current = [];
     setPanes([]);
+    setLayout(null);
     setSelectedPaneId("");
-    setDraggedPaneId("");
     paneCounterRef.current = 0;
+    splitCounterRef.current = 0;
     autoCreatedThreadIdRef.current = "";
   }, [threadId]);
 
@@ -134,11 +143,12 @@ export function useShellTerminalGrid(params: {
     }
   }, [cwd, params]);
 
-  const addPane = useCallback(async () => {
+  const addPane = useCallback(async (targetPaneId?: string, direction: ShellSplitDirection = "right") => {
     if (!threadId || !cwd) {
       return;
     }
     paneCounterRef.current += 1;
+    splitCounterRef.current += 1;
     const pane = createShellTerminalPane({
       threadId,
       cwd,
@@ -146,9 +156,24 @@ export function useShellTerminalGrid(params: {
     });
     clearTerminalBuffer(pane.id);
     setPanes((current) => [...current, pane]);
+    setLayout((current) => {
+      if (!current) {
+        return createShellTerminalLeaf(pane.id);
+      }
+      const knownPaneIds = collectShellTerminalPaneIds(current);
+      const fallbackTargetId = knownPaneIds[knownPaneIds.length - 1] ?? pane.id;
+      const targetId = String(targetPaneId ?? "").trim() || selectedPaneId || fallbackTargetId;
+      return splitShellTerminalLayout({
+        node: current,
+        targetPaneId: targetId,
+        newPaneId: pane.id,
+        direction,
+        splitId: `shell-split:${threadId}:${splitCounterRef.current}`,
+      });
+    });
     setSelectedPaneId(pane.id);
     await startPane(pane);
-  }, [cwd, startPane, threadId]);
+  }, [cwd, selectedPaneId, startPane, threadId]);
 
   useEffect(() => {
     if (!params.hasTauriRuntime || !threadId || !cwd || panes.length > 0) {
@@ -243,17 +268,19 @@ export function useShellTerminalGrid(params: {
       }
     }
     removeTerminalBuffer(paneId);
+    let nextSelectedPaneId = "";
+    setLayout((current) => {
+      const nextLayout = removePaneFromShellTerminalLayout(current, paneId);
+      nextSelectedPaneId = collectShellTerminalPaneIds(nextLayout)[0] ?? "";
+      return nextLayout;
+    });
     setPanes((current) => current.filter((pane) => pane.id !== paneId));
-    setSelectedPaneId((current) => (current === paneId ? "" : current));
+    setSelectedPaneId((current) => (current === paneId ? nextSelectedPaneId : current));
   }, [params]);
 
-  const reorderPanes = useCallback((targetPaneId: string) => {
-    if (!draggedPaneId || !targetPaneId || draggedPaneId === targetPaneId) {
-      return;
-    }
-    setPanes((current) => reorderShellTerminalPanes(current, draggedPaneId, targetPaneId));
-    setDraggedPaneId("");
-  }, [draggedPaneId]);
+  const setSplitRatio = useCallback((splitId: string, ratio: number) => {
+    setLayout((current) => updateShellTerminalSplitRatio(current, splitId, ratio));
+  }, []);
 
   useEffect(() => {
     if (panes.length === 0) {
@@ -265,12 +292,11 @@ export function useShellTerminalGrid(params: {
 
   return {
     panes,
+    layout,
     cwd,
     selectedPaneId,
-    draggedPaneId,
     isUnsupported: !params.hasTauriRuntime,
     setSelectedPaneId,
-    setDraggedPaneId,
     addPane,
     sendChars,
     resizePane,
@@ -278,6 +304,6 @@ export function useShellTerminalGrid(params: {
     clearPane,
     renamePane,
     closePane,
-    reorderPanes,
+    setSplitRatio,
   };
 }

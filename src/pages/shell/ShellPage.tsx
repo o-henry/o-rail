@@ -1,7 +1,8 @@
-import { type KeyboardEvent, useMemo } from "react";
+import { type DragEvent, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode, useMemo, useState } from "react";
 import { TaskTerminalViewport } from "../tasks/TaskTerminalViewport";
 import { useTasksThreadState } from "../tasks/useTasksThreadState";
 import { useShellTerminalGrid } from "./useShellTerminalGrid";
+import type { ShellSplitDirection, ShellTerminalLayoutNode } from "./shellTerminalLayout";
 
 type ShellPageProps = {
   cwd: string;
@@ -29,6 +30,18 @@ function displayTerminalStatus(input: string | null | undefined, exitCode?: numb
   return "IDLE";
 }
 
+function resolveDropDirection(event: DragEvent<HTMLElement>): ShellSplitDirection {
+  const rect = event.currentTarget.getBoundingClientRect();
+  const x = (event.clientX - rect.left) / Math.max(rect.width, 1);
+  const y = (event.clientY - rect.top) / Math.max(rect.height, 1);
+  const dx = Math.abs(x - 0.5);
+  const dy = Math.abs(y - 0.5);
+  if (dx >= dy) {
+    return x < 0.5 ? "left" : "right";
+  }
+  return y < 0.5 ? "top" : "bottom";
+}
+
 export default function ShellPage(props: ShellPageProps) {
   const state = useTasksThreadState(props);
   const shellGrid = useShellTerminalGrid({
@@ -36,13 +49,185 @@ export default function ShellPage(props: ShellPageProps) {
     hasTauriRuntime: props.hasTauriRuntime,
     invokeFn: props.invokeFn,
   });
+  const [addDragSourcePaneId, setAddDragSourcePaneId] = useState("");
+  const [dropTarget, setDropTarget] = useState<{ paneId: string; direction: ShellSplitDirection } | null>(null);
 
-  const shellGridClassName = useMemo(() => {
-    if (shellGrid.panes.length <= 1) {
-      return "shell-terminal-grid is-single";
+  const paneById = useMemo(
+    () => Object.fromEntries(shellGrid.panes.map((pane) => [pane.id, pane])),
+    [shellGrid.panes],
+  );
+
+  const renderLayoutNode = (node: ShellTerminalLayoutNode | null): ReactNode => {
+    if (!node) {
+      return null;
     }
-    return "shell-terminal-grid is-multi";
-  }, [shellGrid.panes.length]);
+    if (node.kind === "leaf") {
+      const pane = paneById[node.paneId];
+      if (!pane) {
+        return null;
+      }
+      const isDropTarget = dropTarget?.paneId === pane.id ? `is-drop-${dropTarget.direction}` : "";
+      return (
+        <article
+          className={`shell-terminal-card panel-card${shellGrid.selectedPaneId === pane.id ? " is-selected" : ""} ${isDropTarget}`.trim()}
+          key={pane.id}
+          onClick={() => shellGrid.setSelectedPaneId(pane.id)}
+          onDragLeave={() => {
+            setDropTarget((current) => (current?.paneId === pane.id ? null : current));
+          }}
+          onDragOver={(event) => {
+            if (!addDragSourcePaneId) {
+              return;
+            }
+            event.preventDefault();
+            setDropTarget({
+              paneId: pane.id,
+              direction: resolveDropDirection(event),
+            });
+          }}
+          onDrop={(event) => {
+            if (!addDragSourcePaneId) {
+              return;
+            }
+            event.preventDefault();
+            const direction = resolveDropDirection(event);
+            setDropTarget(null);
+            setAddDragSourcePaneId("");
+            void shellGrid.addPane(pane.id, direction);
+          }}
+        >
+          <header className="shell-terminal-card-head">
+            <div className="shell-terminal-card-copy">
+              <input
+                aria-label={`${pane.title} title`}
+                className="shell-terminal-title-input"
+                onClick={(event) => {
+                  event.stopPropagation();
+                }}
+                onChange={(event) => {
+                  shellGrid.renamePane(pane.id, event.currentTarget.value);
+                }}
+                onKeyDown={(event: KeyboardEvent<HTMLInputElement>) => {
+                  if (event.key === "Enter") {
+                    event.currentTarget.blur();
+                  }
+                }}
+                type="text"
+                value={pane.title}
+              />
+            </div>
+            <div className="shell-terminal-card-actions">
+              <span>{displayTerminalStatus(pane.status, pane.exitCode)}</span>
+              <button
+                aria-label="stop terminal"
+                className="shell-terminal-icon-button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  void shellGrid.interruptPane(pane.id);
+                }}
+                type="button"
+              >
+                <img alt="" aria-hidden="true" src="/canvas-stop.svg" />
+              </button>
+              <button
+                aria-label="clear terminal"
+                className="shell-terminal-icon-button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  shellGrid.clearPane(pane.id);
+                }}
+                type="button"
+              >
+                <img alt="" aria-hidden="true" src="/reload.svg" />
+              </button>
+              <button
+                aria-label="close terminal"
+                className="shell-terminal-icon-button"
+                disabled={shellGrid.panes.length <= 1}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  if (shellGrid.panes.length <= 1) {
+                    return;
+                  }
+                  void shellGrid.closePane(pane.id);
+                }}
+                type="button"
+              >
+                <img alt="" aria-hidden="true" src="/xmark.svg" />
+              </button>
+              <button
+                aria-label="add terminal"
+                className="shell-terminal-icon-button"
+                draggable
+                onClick={(event) => {
+                  event.stopPropagation();
+                  void shellGrid.addPane(pane.id, "right");
+                }}
+                onDragEnd={() => {
+                  setAddDragSourcePaneId("");
+                  setDropTarget(null);
+                }}
+                onDragStart={(event) => {
+                  event.stopPropagation();
+                  setAddDragSourcePaneId(pane.id);
+                  event.dataTransfer.effectAllowed = "copy";
+                }}
+                type="button"
+              >
+                <img alt="" aria-hidden="true" src="/plus-large-svgrepo-com.svg" />
+              </button>
+            </div>
+          </header>
+          <TaskTerminalViewport
+            onTerminalData={(chars) => shellGrid.sendChars(pane.id, chars)}
+            onTerminalResize={(cols, rows) => shellGrid.resizePane(pane.id, cols, rows)}
+            sessionId={pane.id}
+            selected={shellGrid.selectedPaneId === pane.id}
+          />
+          {dropTarget?.paneId === pane.id ? <div className={`shell-terminal-drop-preview is-${dropTarget.direction}`} /> : null}
+        </article>
+      );
+    }
+
+    return (
+      <div
+        className={`shell-terminal-split is-${node.orientation}`}
+        key={node.id}
+        style={
+          node.orientation === "horizontal"
+            ? { gridTemplateColumns: `minmax(0, ${node.ratio}fr) 1px minmax(0, ${1 - node.ratio}fr)` }
+            : { gridTemplateRows: `minmax(0, ${node.ratio}fr) 1px minmax(0, ${1 - node.ratio}fr)` }
+        }
+      >
+        {renderLayoutNode(node.first)}
+        <div
+          className={`shell-terminal-resizer is-${node.orientation}`}
+          onMouseDown={(event: ReactMouseEvent<HTMLDivElement>) => {
+            event.preventDefault();
+            event.stopPropagation();
+            const container = event.currentTarget.parentElement;
+            if (!container) {
+              return;
+            }
+            const rect = container.getBoundingClientRect();
+            const onMove = (moveEvent: MouseEvent) => {
+              const nextRatio = node.orientation === "horizontal"
+                ? (moveEvent.clientX - rect.left) / Math.max(rect.width, 1)
+                : (moveEvent.clientY - rect.top) / Math.max(rect.height, 1);
+              shellGrid.setSplitRatio(node.id, nextRatio);
+            };
+            const onUp = () => {
+              window.removeEventListener("mousemove", onMove);
+              window.removeEventListener("mouseup", onUp);
+            };
+            window.addEventListener("mousemove", onMove);
+            window.addEventListener("mouseup", onUp);
+          }}
+        />
+        {renderLayoutNode(node.second)}
+      </div>
+    );
+  };
 
   return (
     <section className="shell-layout workspace-tab-panel">
@@ -67,102 +252,8 @@ export default function ShellPage(props: ShellPageProps) {
               <p>브라우저 미리보기에서는 terminal session이 비활성입니다.</p>
             </section>
           ) : (
-            <div className={shellGridClassName}>
-              {shellGrid.panes.map((pane) => (
-                <article
-                  className={`shell-terminal-card panel-card${shellGrid.selectedPaneId === pane.id ? " is-selected" : ""}`}
-                  draggable
-                  key={pane.id}
-                  onClick={() => shellGrid.setSelectedPaneId(pane.id)}
-                  onDragOver={(event) => {
-                    event.preventDefault();
-                  }}
-                  onDragStart={() => shellGrid.setDraggedPaneId(pane.id)}
-                  onDrop={(event) => {
-                    event.preventDefault();
-                    shellGrid.reorderPanes(pane.id);
-                  }}
-                >
-                  <header className="shell-terminal-card-head">
-                    <div className="shell-terminal-card-copy">
-                      <input
-                        aria-label={`${pane.title} title`}
-                        className="shell-terminal-title-input"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                        }}
-                        onChange={(event) => {
-                          shellGrid.renamePane(pane.id, event.currentTarget.value);
-                        }}
-                        onKeyDown={(event: KeyboardEvent<HTMLInputElement>) => {
-                          if (event.key === "Enter") {
-                            event.currentTarget.blur();
-                          }
-                        }}
-                        type="text"
-                        value={pane.title}
-                      />
-                    </div>
-                    <div className="shell-terminal-card-actions">
-                      <span>{displayTerminalStatus(pane.status, pane.exitCode)}</span>
-                      <button
-                        aria-label="stop terminal"
-                        className="shell-terminal-icon-button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          void shellGrid.interruptPane(pane.id);
-                        }}
-                        type="button"
-                      >
-                        <img alt="" aria-hidden="true" src="/canvas-stop.svg" />
-                      </button>
-                      <button
-                        aria-label="clear terminal"
-                        className="shell-terminal-icon-button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          shellGrid.clearPane(pane.id);
-                        }}
-                        type="button"
-                      >
-                        <img alt="" aria-hidden="true" src="/reload.svg" />
-                      </button>
-                      <button
-                        aria-label="close terminal"
-                        className="shell-terminal-icon-button"
-                        disabled={shellGrid.panes.length <= 1}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          if (shellGrid.panes.length <= 1) {
-                            return;
-                          }
-                          void shellGrid.closePane(pane.id);
-                        }}
-                        type="button"
-                      >
-                        <img alt="" aria-hidden="true" src="/xmark.svg" />
-                      </button>
-                      <button
-                        aria-label="add terminal"
-                        className="shell-terminal-icon-button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          void shellGrid.addPane();
-                        }}
-                        type="button"
-                      >
-                        <img alt="" aria-hidden="true" src="/plus-large-svgrepo-com.svg" />
-                      </button>
-                    </div>
-                  </header>
-                  <TaskTerminalViewport
-                    onTerminalData={(chars) => shellGrid.sendChars(pane.id, chars)}
-                    onTerminalResize={(cols, rows) => shellGrid.resizePane(pane.id, cols, rows)}
-                    sessionId={pane.id}
-                    selected={shellGrid.selectedPaneId === pane.id}
-                  />
-                </article>
-              ))}
+            <div className="shell-terminal-grid">
+              {renderLayoutNode(shellGrid.layout)}
             </div>
           )}
         </div>

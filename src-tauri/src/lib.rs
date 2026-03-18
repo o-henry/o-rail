@@ -113,6 +113,7 @@ pub fn run() {
             system::task_terminal_exec,
             system::workspace_terminal_start,
             system::workspace_terminal_input,
+            system::workspace_terminal_resize,
             system::workspace_terminal_stop,
             system::workspace_terminal_close,
             unity_automation::unity_guard_inspect,

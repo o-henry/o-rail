@@ -153,6 +153,7 @@ export default function ShellPage(props: ShellPageProps) {
                   </header>
                   <TaskTerminalViewport
                     onTerminalData={(chars) => shellGrid.sendChars(pane.id, chars)}
+                    onTerminalResize={(cols, rows) => shellGrid.resizePane(pane.id, cols, rows)}
                     sessionId={pane.id}
                     selected={shellGrid.selectedPaneId === pane.id}
                   />

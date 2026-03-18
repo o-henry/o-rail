@@ -180,6 +180,21 @@ export function useShellTerminalGrid(params: {
     }
   }, [params]);
 
+  const resizePane = useCallback(async (paneId: string, cols: number, rows: number) => {
+    if (!params.hasTauriRuntime || cols <= 0 || rows <= 0) {
+      return;
+    }
+    try {
+      await params.invokeFn<void>("workspace_terminal_resize", {
+        sessionId: paneId,
+        cols,
+        rows,
+      });
+    } catch {
+      // ignore transient resize races while a pane is still starting
+    }
+  }, [params]);
+
   const interruptPane = useCallback(async (paneId: string) => {
     if (!params.hasTauriRuntime) {
       return;
@@ -258,6 +273,7 @@ export function useShellTerminalGrid(params: {
     setDraggedPaneId,
     addPane,
     sendChars,
+    resizePane,
     interruptPane,
     clearPane,
     renamePane,

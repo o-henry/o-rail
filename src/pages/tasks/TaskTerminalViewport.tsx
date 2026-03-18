@@ -8,6 +8,7 @@ type TaskTerminalViewportProps = {
   sessionId: string;
   selected: boolean;
   onTerminalData: (chars: string) => Promise<void> | void;
+  onTerminalResize?: (cols: number, rows: number) => Promise<void> | void;
 };
 
 export function TaskTerminalViewport(props: TaskTerminalViewportProps) {
@@ -16,10 +17,16 @@ export function TaskTerminalViewport(props: TaskTerminalViewportProps) {
   const fitAddonRef = useRef<FitAddon | null>(null);
   const renderedBufferRef = useRef("");
   const onTerminalDataRef = useRef(props.onTerminalData);
+  const onTerminalResizeRef = useRef(props.onTerminalResize);
+  const lastResizeRef = useRef("");
 
   useEffect(() => {
     onTerminalDataRef.current = props.onTerminalData;
   }, [props.onTerminalData]);
+
+  useEffect(() => {
+    onTerminalResizeRef.current = props.onTerminalResize;
+  }, [props.onTerminalResize]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -62,23 +69,32 @@ export function TaskTerminalViewport(props: TaskTerminalViewportProps) {
     const fitAddon = new FitAddon();
     terminal.loadAddon(fitAddon);
     terminal.open(host);
-    fitAddon.fit();
-    window.setTimeout(() => {
+    const fitAndResize = () => {
       try {
         fitAddon.fit();
       } catch {
-        // ignore initial fit race
+        return;
       }
-    }, 0);
+      const cols = terminal.cols;
+      const rows = terminal.rows;
+      if (!cols || !rows) {
+        return;
+      }
+      const nextKey = `${cols}x${rows}`;
+      if (lastResizeRef.current === nextKey) {
+        return;
+      }
+      lastResizeRef.current = nextKey;
+      void onTerminalResizeRef.current?.(cols, rows);
+    };
+    fitAndResize();
+    window.setTimeout(fitAndResize, 0);
+    window.setTimeout(fitAndResize, 150);
 
     const resizeObserver = typeof ResizeObserver === "undefined"
       ? null
       : new ResizeObserver(() => {
-          try {
-            fitAddon.fit();
-          } catch {
-            // ignore fit races during layout changes
-          }
+          fitAndResize();
         });
     resizeObserver?.observe(host);
 
@@ -141,6 +157,15 @@ export function TaskTerminalViewport(props: TaskTerminalViewportProps) {
     terminal?.focus();
     try {
       fitAddon?.fit();
+      const cols = terminal?.cols ?? 0;
+      const rows = terminal?.rows ?? 0;
+      if (cols > 0 && rows > 0) {
+        const nextKey = `${cols}x${rows}`;
+        if (lastResizeRef.current !== nextKey) {
+          lastResizeRef.current = nextKey;
+          void onTerminalResizeRef.current?.(cols, rows);
+        }
+      }
     } catch {
       // ignore fit races on focus
     }

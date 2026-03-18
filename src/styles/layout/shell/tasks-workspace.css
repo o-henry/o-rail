@@ -1713,8 +1713,16 @@
 
 .tasks-terminal-host {
   min-height: 260px;
-  height: 260px;
-  padding: 8px;
+  height: 100%;
+  width: 100%;
+  padding: 0;
+}
+
+.tasks-terminal-host .xterm,
+.tasks-terminal-host .xterm-viewport,
+.tasks-terminal-host .xterm-screen,
+.tasks-terminal-host .xterm-screen canvas {
+  width: 100% !important;
 }
 
 .tasks-thread-terminal-panel {

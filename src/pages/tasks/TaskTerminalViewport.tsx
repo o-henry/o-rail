@@ -32,9 +32,9 @@ export function TaskTerminalViewport(props: TaskTerminalViewportProps) {
       convertEol: false,
       cursorBlink: true,
       cursorStyle: "block",
-      fontFamily: '"DepartureMonoRail", "Galmuri11", monospace',
+      fontFamily: 'Menlo, Monaco, "Cascadia Mono", "SF Mono", Consolas, "Liberation Mono", monospace',
       fontSize: 12,
-      lineHeight: 1.28,
+      lineHeight: 1.2,
       scrollback: 6000,
       theme: {
         background: "#00000000",
@@ -63,6 +63,13 @@ export function TaskTerminalViewport(props: TaskTerminalViewportProps) {
     terminal.loadAddon(fitAddon);
     terminal.open(host);
     fitAddon.fit();
+    window.setTimeout(() => {
+      try {
+        fitAddon.fit();
+      } catch {
+        // ignore initial fit race
+      }
+    }, 0);
 
     const resizeObserver = typeof ResizeObserver === "undefined"
       ? null

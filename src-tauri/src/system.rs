@@ -2,6 +2,7 @@ use portable_pty::{native_pty_system, CommandBuilder, MasterPty, PtySize};
 use serde::Serialize;
 use std::{
     collections::HashMap,
+    fs,
     io::{Read, Write},
     sync::{Arc, Mutex as StdMutex},
     time::Instant,
@@ -55,6 +56,12 @@ pub struct WorkspaceTerminalManager {
 
 const EVENT_WORKSPACE_TERMINAL_OUTPUT: &str = "workspace-terminal-output";
 const EVENT_WORKSPACE_TERMINAL_STATE: &str = "workspace-terminal-state";
+
+fn rail_embedded_zdotdir() -> String {
+    let dir = std::env::temp_dir().join("rail-embedded-zsh");
+    let _ = fs::create_dir_all(&dir);
+    dir.to_string_lossy().to_string()
+}
 
 fn normalize_allowlist(commands: &[String]) -> Vec<String> {
     commands
@@ -287,6 +294,11 @@ pub async fn workspace_terminal_start(
     command.env("TERM", "xterm-256color");
     command.env("RAIL_EMBEDDED_TERMINAL", "1");
     command.env("TERM_PROGRAM", "rail");
+    command.env("ZDOTDIR", rail_embedded_zdotdir());
+    command.env("PS1", "%~ %# ");
+    command.env("PROMPT", "%~ %# ");
+    command.env("RPROMPT", "");
+    command.env("RPS1", "");
 
     let child = pair
         .slave

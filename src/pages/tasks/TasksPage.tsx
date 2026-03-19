@@ -592,13 +592,13 @@ export default function TasksPage(props: TasksPageProps) {
                 </section>
               ) : null}
 
-              {state.activeThread && state.selectedFilePath ? (
+              {state.activeThread && state.selectedFilePath && state.selectedFileDiff.trim() ? (
                 <section className="tasks-thread-main-diff-panel">
                   <div className="tasks-thread-section-head">
                     <strong>변경 내용</strong>
                     <span>{state.selectedFilePath}</span>
                   </div>
-                  <pre>{state.selectedFileDiff || "선택한 파일의 변경 내용을 아직 표시할 수 없습니다."}</pre>
+                  <pre>{state.selectedFileDiff}</pre>
                 </section>
               ) : null}
             </>

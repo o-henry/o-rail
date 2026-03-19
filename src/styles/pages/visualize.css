@@ -115,7 +115,7 @@
 .visualize-monitor-widget-head-main {
   min-width: 0;
   align-items: center;
-  gap: 8px;
+  gap: 0;
 }
 
 .visualize-monitor-widget-head-copy {
@@ -145,37 +145,8 @@
   text-transform: uppercase;
 }
 
-.visualize-monitor-widget-grip,
 .visualize-monitor-evidence-picker button {
   cursor: pointer;
-}
-
-.visualize-monitor-widget-grip,
-.visualize-monitor-widget-resize {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 0;
-  background: transparent;
-  padding: 0;
-  color: inherit;
-}
-
-.visualize-monitor-widget-grip {
-  display: grid;
-  grid-template-columns: repeat(3, 3px);
-  grid-template-rows: repeat(3, 3px);
-  gap: 2px;
-  width: 11px;
-  height: 11px;
-  flex: 0 0 auto;
-  pointer-events: none;
-  margin: 0;
-}
-
-.visualize-monitor-widget-grip span {
-  display: block;
-  background: rgba(255, 255, 255, 0.7);
 }
 
 .visualize-monitor-widget-surface {

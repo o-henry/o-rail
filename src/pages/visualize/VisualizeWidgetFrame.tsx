@@ -34,17 +34,6 @@ export function VisualizeWidgetFrame({
         title="Double-click to expand"
       >
         <div className="visualize-monitor-widget-head-main">
-          <span aria-hidden="true" className="visualize-monitor-widget-grip">
-            <span />
-            <span />
-            <span />
-            <span />
-            <span />
-            <span />
-            <span />
-            <span />
-            <span />
-          </span>
           <div className="visualize-monitor-widget-head-copy">
             <strong>{title}</strong>
           </div>

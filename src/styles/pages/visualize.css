@@ -96,7 +96,7 @@
   padding: 0 8px;
   color: #f8fafc;
   user-select: none;
-  cursor: zoom-in;
+  cursor: default;
 }
 
 .visualize-monitor-widget-head-main,
@@ -160,22 +160,22 @@
 }
 
 .visualize-monitor-widget.is-session {
-  grid-column: 1 / 7;
+  grid-column: 1 / 8;
   grid-row: span 2;
 }
 
 .visualize-monitor-widget.is-kpis {
-  grid-column: 7 / 13;
+  grid-column: 8 / 13;
   grid-row: span 2;
 }
 
 .visualize-monitor-widget.is-chart-main {
-  grid-column: 1 / 7;
+  grid-column: 1 / 8;
   grid-row: span 3;
 }
 
 .visualize-monitor-widget.is-chart-source {
-  grid-column: 7 / 10;
+  grid-column: 8 / 10;
   grid-row: span 3;
 }
 
@@ -190,12 +190,12 @@
 }
 
 .visualize-monitor-widget.is-steam {
-  grid-column: 4 / 7;
+  grid-column: 4 / 8;
   grid-row: span 2;
 }
 
 .visualize-monitor-widget.is-report {
-  grid-column: 7 / 13;
+  grid-column: 8 / 13;
   grid-row: span 2;
 }
 

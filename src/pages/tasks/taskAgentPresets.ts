@@ -283,6 +283,14 @@ export function getThreadStageLabel(input: string | ThreadStageId | null | undef
   return UNITY_THREAD_STAGE_DEFINITIONS.find((stage) => stage.id === normalized)?.label ?? String(input ?? "").trim().toUpperCase();
 }
 
+export function getTaskAgentWorkflowStageLabels(input: string | TaskAgentPresetId | null | undefined): string[] {
+  const preset = getTaskAgentPreset(input);
+  if (!preset) {
+    return [];
+  }
+  return preset.stageOwnership.map((stageId) => getThreadStageLabel(stageId));
+}
+
 export function isValidationPresetId(input: string | null | undefined): boolean {
   return resolveTaskAgentPresetId(input) === "qa_playtester";
 }

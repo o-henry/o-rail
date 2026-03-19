@@ -10,6 +10,7 @@ import { TURN_REASONING_LEVEL_OPTIONS } from "../../features/workflow/reasoningL
 import { RUNTIME_MODEL_OPTIONS } from "../../features/workflow/runtimeModelOptions";
 import {
   getTaskAgentLabel,
+  getTaskAgentWorkflowStageLabels,
   getThreadStageLabel,
   type ThreadStageId,
 } from "./taskAgentPresets";
@@ -280,6 +281,14 @@ export default function TasksPage(props: TasksPageProps) {
   );
   const liveAgents = useMemo(() => buildLiveAgentCards(state.activeThread, state.liveRoleNotes), [state.activeThread, state.liveRoleNotes]);
   const fileTree = useMemo(() => buildThreadFileTree(state.activeThread?.files ?? []), [state.activeThread?.files]);
+  const workflowRoleMappings = useMemo(
+    () => (state.activeThread?.agents ?? []).map((agent) => ({
+      agentId: agent.id,
+      label: getTaskAgentLabel(agent.roleId),
+      stageLabels: getTaskAgentWorkflowStageLabels(agent.roleId),
+    })),
+    [state.activeThread?.agents],
+  );
   const mentionMatch = useMemo(
     () => (isMentionMenuHidden ? null : getTaskAgentMentionMatch(state.composerDraft, composerCursor)),
     [composerCursor, isMentionMenuHidden, state.composerDraft],
@@ -924,6 +933,20 @@ export default function TasksPage(props: TasksPageProps) {
                   <span>{selectedStage?.label || "워크플로우"}</span>
                 </div>
                 <pre>{selectedStage?.summary || state.activeThread?.workflow.nextAction || "아직 워크플로우 요약이 없습니다."}</pre>
+              </section>
+              <section className="tasks-thread-detail-text-panel is-inline">
+                <div className="tasks-thread-section-head">
+                  <strong>에이전트 매핑</strong>
+                  <span>{workflowRoleMappings.length}</span>
+                </div>
+                <div className="tasks-thread-workflow-role-map">
+                  {workflowRoleMappings.map((entry) => (
+                    <article className="tasks-thread-workflow-role-card" key={entry.agentId}>
+                      <strong>{entry.label}</strong>
+                      <span>{entry.stageLabels.length > 0 ? entry.stageLabels.join(" / ") : "-"}</span>
+                    </article>
+                  ))}
+                </div>
               </section>
               {selectedStage?.id === "integrate" ? (
                 <div className="tasks-thread-workflow-list">

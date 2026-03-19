@@ -1094,10 +1094,23 @@
   background: #ffffff;
   gap: 10px;
   align-self: end;
+  z-index: 22;
 }
 
 .tasks-thread-composer-shell.workflow-question-input {
   margin-bottom: 0;
+}
+
+.tasks-thread-composer-shell.workflow-question-input::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -12px;
+  height: 12px;
+  pointer-events: none;
+  z-index: 21;
+  box-shadow: 0 -10px 14px -12px rgba(15, 23, 42, 0.28);
 }
 
 .tasks-thread-composer-input {
@@ -1108,6 +1121,36 @@
   -webkit-text-fill-color: var(--text-main);
   caret-color: var(--text-main);
   text-shadow: none;
+}
+
+.tasks-thread-workflow-role-map {
+  display: grid;
+  gap: 6px;
+}
+
+.tasks-thread-workflow-role-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 0;
+  border-top: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.tasks-thread-workflow-role-card:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.tasks-thread-workflow-role-card strong,
+.tasks-thread-workflow-role-card span {
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.tasks-thread-workflow-role-card span {
+  color: var(--text-muted);
+  text-align: right;
 }
 
 .tasks-thread-composer-input::placeholder {

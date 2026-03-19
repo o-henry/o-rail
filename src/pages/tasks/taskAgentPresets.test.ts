@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   UNITY_TASK_TEAM_PRESETS,
   getDefaultRunPresetIds,
+  getTaskAgentWorkflowStageLabels,
   getDefaultTaskAgentPresetIds,
   parseTaskAgentTags,
   resolveTaskAgentPresetId,
@@ -41,5 +42,11 @@ describe("taskAgentPresets", () => {
       ),
     ).toEqual(["unity_architect", "unity_implementer"]);
     expect(getDefaultRunPresetIds(["unity_implementer", "qa_playtester"], [])).toEqual(["unity_implementer"]);
+  });
+
+  it("exposes workflow stage labels for each agent preset", () => {
+    expect(getTaskAgentWorkflowStageLabels("game_designer")).toEqual(["요청 정리", "설계"]);
+    expect(getTaskAgentWorkflowStageLabels("researcher")).toEqual(["요청 정리"]);
+    expect(getTaskAgentWorkflowStageLabels("unity_implementer")).toEqual(["구현"]);
   });
 });

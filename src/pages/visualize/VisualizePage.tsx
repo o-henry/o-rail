@@ -48,18 +48,6 @@ function buildSourceChart(spec: ReturnType<typeof useVisualizePageState>["collec
   };
 }
 
-function buildVerificationChart(spec: ReturnType<typeof useVisualizePageState>["collectionMetrics"]): FeedChartSpec | null {
-  if (!spec || spec.byVerificationStatus.length === 0) {
-    return null;
-  }
-  return {
-    type: "pie",
-    title: "Verification",
-    labels: spec.byVerificationStatus.map((row) => row.verificationStatus),
-    series: [{ name: "Items", data: spec.byVerificationStatus.map((row) => row.itemCount), color: "#a78bfa" }],
-  };
-}
-
 function buildTimelineChart(spec: ReturnType<typeof useVisualizePageState>["collectionMetrics"]): FeedChartSpec | null {
   if (!spec || spec.timeline.length === 0) {
     return null;
@@ -82,7 +70,6 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
   const evidenceRef = useRef<HTMLElement | null>(null);
 
   const sourceChart = buildSourceChart(state.collectionMetrics);
-  const verificationChart = buildVerificationChart(state.collectionMetrics);
   const timelineChart = buildTimelineChart(state.collectionMetrics);
   const qualityScore = Math.max(0, Math.min(100, Math.round(state.collectionMetrics?.totals.avgScore ?? 0)));
 
@@ -201,26 +188,6 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
               </VisualizeWidgetFrame>
 
               <VisualizeWidgetFrame
-                className="is-kpis"
-                maximized={maximizedWidgetId === "kpis"}
-                onToggleMaximize={toggleMaximize}
-                title="CORE SIGNALS"
-                widgetId="kpis"
-              >
-                <div className="visualize-monitor-kpi-grid">
-                  {summaryMetrics.map((metric) => (
-                    <div className="visualize-monitor-kpi-item" key={metric.label}>
-                      <strong>{metric.value}</strong>
-                      <div className="visualize-monitor-kpi-copy">
-                        <span>{metric.label}</span>
-                        <small>{metric.meta}</small>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </VisualizeWidgetFrame>
-
-              <VisualizeWidgetFrame
                 className="is-chart-main"
                 maximized={maximizedWidgetId === "timeline"}
                 onToggleMaximize={toggleMaximize}
@@ -255,6 +222,9 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
                   <div className="visualize-monitor-quality-meter" role="presentation">
                     <span style={{ width: `${qualityScore}%` }} />
                   </div>
+                  <p className="visualize-monitor-quality-copy">
+                    평균 점수와 검증 비율을 함께 반영한 품질 신호입니다.
+                  </p>
                   <div className="visualize-monitor-quality-legend">
                     {(state.collectionMetrics?.byVerificationStatus ?? []).map((row) => (
                       <div className="visualize-monitor-quality-legend-row" key={row.verificationStatus}>
@@ -262,18 +232,17 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
                         <strong>{row.itemCount}</strong>
                       </div>
                     ))}
-                    {verificationChart ? null : (
-                      <>
-                        <div className="visualize-monitor-quality-legend-row">
-                          <span>signal</span>
-                          <strong>{qualityScore}</strong>
+                  </div>
+                  <div className="visualize-monitor-kpi-grid is-inline">
+                    {summaryMetrics.map((metric) => (
+                      <div className="visualize-monitor-kpi-item" key={metric.label}>
+                        <strong>{metric.value}</strong>
+                        <div className="visualize-monitor-kpi-copy">
+                          <span>{metric.label}</span>
+                          <small>{metric.meta}</small>
                         </div>
-                        <div className="visualize-monitor-quality-legend-row">
-                          <span>remaining</span>
-                          <strong>{Math.max(0, 100 - qualityScore)}</strong>
-                        </div>
-                      </>
-                    )}
+                      </div>
+                    ))}
                   </div>
                 </div>
               </VisualizeWidgetFrame>
@@ -310,7 +279,7 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
                 className="is-steam"
                 maximized={maximizedWidgetId === "steam"}
                 onToggleMaximize={toggleMaximize}
-                title={qualityGenres.length ? "BEST RATED GENRES" : "SOURCE SNAPSHOTS"}
+                title={qualityGenres.length ? "BEST RATED GENRES" : "REPRESENTATIVE TITLES"}
                 widgetId="steam"
               >
                 <div className="visualize-monitor-ranked-list">
@@ -377,7 +346,7 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
                       <span>{item.verificationStatus} · {item.score}</span>
                     </button>
                   ))}
-                  {evidenceItems.length ? null : <p className="visualize-monitor-empty">No normalized collection items yet.</p>}
+                  {evidenceItems.length ? null : <p className="visualize-monitor-empty">아직 정규화된 근거 항목이 없습니다.</p>}
                 </div>
                 {selectedEvidence ? (
                   <div className="visualize-monitor-evidence-detail">

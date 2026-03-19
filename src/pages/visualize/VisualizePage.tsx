@@ -3,7 +3,6 @@ import FeedChart from "../../components/feed/FeedChart";
 import FeedDocument from "../../components/feed/FeedDocument";
 import type { FeedChartSpec } from "../../features/feed/chartSpec";
 import { useVisualizePageState } from "./useVisualizePageState";
-import { useVisualizeWidgetLayout } from "./useVisualizeWidgetLayout";
 import { VisualizeWidgetFrame } from "./VisualizeWidgetFrame";
 import type { VisualizeWidgetId } from "./visualizeWidgetLayout";
 
@@ -75,8 +74,8 @@ function buildTimelineChart(spec: ReturnType<typeof useVisualizePageState>["coll
 
 export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEntry }: VisualizePageProps) {
   const state = useVisualizePageState({ cwd, hasTauriRuntime });
-  const layout = useVisualizeWidgetLayout({ cwd });
   const [selectedEvidenceId, setSelectedEvidenceId] = useState("");
+  const [maximizedWidgetId, setMaximizedWidgetId] = useState<VisualizeWidgetId | null>(null);
   const mainRef = useRef<HTMLElement | null>(null);
   const sessionRef = useRef<HTMLElement | null>(null);
   const reportRef = useRef<HTMLElement | null>(null);
@@ -126,18 +125,17 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
     container.scrollTo({ top, behavior: "smooth" });
   }, []);
 
-  const widgetStyle = useCallback((widgetId: VisualizeWidgetId) => {
-    const rect = layout.layoutState.widgets[widgetId];
-    if (layout.layoutState.maximizedWidgetId === widgetId) {
-      return undefined;
-    }
-    return {
-      left: `${rect.x}px`,
-      top: `${rect.y}px`,
-      width: `${rect.w}px`,
-      height: `${rect.h}px`,
-    };
-  }, [layout.layoutState]);
+  const toggleMaximize = useCallback((widgetId: VisualizeWidgetId) => {
+    setMaximizedWidgetId((current) => (current === widgetId ? null : widgetId));
+  }, []);
+
+  const resetWidget = useCallback(() => {
+    setMaximizedWidgetId(null);
+  }, []);
+
+  const ignoreDragStart = useCallback(() => {}, []);
+
+  const ignoreResizeStart = useCallback(() => {}, []);
 
   return (
     <section className="panel-card visualize-view workspace-tab-panel">
@@ -188,25 +186,16 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
 
         <section className="visualize-monitor-body">
           <section className="visualize-monitor-main" ref={mainRef}>
-            <div
-              className={`visualize-monitor-canvas${layout.layoutState.maximizedWidgetId ? " has-maximized-widget" : ""}`}
-              style={{
-                width: `${layout.canvasSize.width}px`,
-                minWidth: `${layout.canvasSize.width}px`,
-                height: `${layout.canvasSize.height}px`,
-                minHeight: `${layout.canvasSize.height}px`,
-              }}
-            >
+            <div className={`visualize-monitor-grid${maximizedWidgetId ? " has-maximized-widget" : ""}`}>
               <VisualizeWidgetFrame
                 articleRef={sessionRef}
                 className="is-session"
-                maximized={layout.layoutState.maximizedWidgetId === "session"}
+                maximized={maximizedWidgetId === "session"}
                 meta={state.selectedReportRun?.taskId || "AWAITING @RESEARCHER"}
-                onDragStart={layout.startDrag}
-                onReset={layout.resetWidget}
-                onResizeStart={layout.startResize}
-                onToggleMaximize={layout.toggleMaximize}
-                style={widgetStyle("session")}
+                onDragStart={ignoreDragStart}
+                onReset={resetWidget}
+                onResizeStart={ignoreResizeStart}
+                onToggleMaximize={toggleMaximize}
                 title="RESEARCH SESSION"
                 widgetId="session"
               >
@@ -223,13 +212,12 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
 
               <VisualizeWidgetFrame
                 className="is-kpis"
-                maximized={layout.layoutState.maximizedWidgetId === "kpis"}
+                maximized={maximizedWidgetId === "kpis"}
                 meta={state.activeJobId ? "FILTERED" : "GLOBAL"}
-                onDragStart={layout.startDrag}
-                onReset={layout.resetWidget}
-                onResizeStart={layout.startResize}
-                onToggleMaximize={layout.toggleMaximize}
-                style={widgetStyle("kpis")}
+                onDragStart={ignoreDragStart}
+                onReset={resetWidget}
+                onResizeStart={ignoreResizeStart}
+                onToggleMaximize={toggleMaximize}
                 title="CORE SIGNALS"
                 widgetId="kpis"
               >
@@ -248,13 +236,12 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
 
               <VisualizeWidgetFrame
                 className="is-chart-main"
-                maximized={layout.layoutState.maximizedWidgetId === "timeline"}
+                maximized={maximizedWidgetId === "timeline"}
                 meta={`${state.collectionMetrics?.timeline.length ?? 0} BUCKETS`}
-                onDragStart={layout.startDrag}
-                onReset={layout.resetWidget}
-                onResizeStart={layout.startResize}
-                onToggleMaximize={layout.toggleMaximize}
-                style={widgetStyle("timeline")}
+                onDragStart={ignoreDragStart}
+                onReset={resetWidget}
+                onResizeStart={ignoreResizeStart}
+                onToggleMaximize={toggleMaximize}
                 title="COLLECTION TIMELINE"
                 widgetId="timeline"
               >
@@ -263,13 +250,12 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
 
               <VisualizeWidgetFrame
                 className="is-chart-source"
-                maximized={layout.layoutState.maximizedWidgetId === "sourceMix"}
+                maximized={maximizedWidgetId === "sourceMix"}
                 meta={`${state.collectionMetrics?.bySourceType.length ?? 0} GROUPS`}
-                onDragStart={layout.startDrag}
-                onReset={layout.resetWidget}
-                onResizeStart={layout.startResize}
-                onToggleMaximize={layout.toggleMaximize}
-                style={widgetStyle("sourceMix")}
+                onDragStart={ignoreDragStart}
+                onReset={resetWidget}
+                onResizeStart={ignoreResizeStart}
+                onToggleMaximize={toggleMaximize}
                 title="SOURCE MIX"
                 widgetId="sourceMix"
               >
@@ -278,13 +264,12 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
 
               <VisualizeWidgetFrame
                 className="is-chart-quality"
-                maximized={layout.layoutState.maximizedWidgetId === "quality"}
+                maximized={maximizedWidgetId === "quality"}
                 meta={`${qualityScore}`}
-                onDragStart={layout.startDrag}
-                onReset={layout.resetWidget}
-                onResizeStart={layout.startResize}
-                onToggleMaximize={layout.toggleMaximize}
-                style={widgetStyle("quality")}
+                onDragStart={ignoreDragStart}
+                onReset={resetWidget}
+                onResizeStart={ignoreResizeStart}
+                onToggleMaximize={toggleMaximize}
                 title="QUALITY SCORE"
                 widgetId="quality"
               >
@@ -321,13 +306,12 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
 
               <VisualizeWidgetFrame
                 className="is-sources"
-                maximized={layout.layoutState.maximizedWidgetId === "sources"}
+                maximized={maximizedWidgetId === "sources"}
                 meta={`${topSources.length}`}
-                onDragStart={layout.startDrag}
-                onReset={layout.resetWidget}
-                onResizeStart={layout.startResize}
-                onToggleMaximize={layout.toggleMaximize}
-                style={widgetStyle("sources")}
+                onDragStart={ignoreDragStart}
+                onReset={resetWidget}
+                onResizeStart={ignoreResizeStart}
+                onToggleMaximize={toggleMaximize}
                 title="TOP SOURCES"
                 widgetId="sources"
               >
@@ -344,13 +328,12 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
 
               <VisualizeWidgetFrame
                 className="is-steam"
-                maximized={layout.layoutState.maximizedWidgetId === "steam"}
+                maximized={maximizedWidgetId === "steam"}
                 meta={`${topSteamGames.length}`}
-                onDragStart={layout.startDrag}
-                onReset={layout.resetWidget}
-                onResizeStart={layout.startResize}
-                onToggleMaximize={layout.toggleMaximize}
-                style={widgetStyle("steam")}
+                onDragStart={ignoreDragStart}
+                onReset={resetWidget}
+                onResizeStart={ignoreResizeStart}
+                onToggleMaximize={toggleMaximize}
                 title="STEAM SNAPSHOT"
                 widgetId="steam"
               >
@@ -368,13 +351,12 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
               <VisualizeWidgetFrame
                 articleRef={reportRef}
                 className="is-report"
-                maximized={layout.layoutState.maximizedWidgetId === "report"}
+                maximized={maximizedWidgetId === "report"}
                 meta={state.detailLoading ? "LOADING" : state.reportMarkdown ? "READY" : "EMPTY"}
-                onDragStart={layout.startDrag}
-                onReset={layout.resetWidget}
-                onResizeStart={layout.startResize}
-                onToggleMaximize={layout.toggleMaximize}
-                style={widgetStyle("report")}
+                onDragStart={ignoreDragStart}
+                onReset={resetWidget}
+                onResizeStart={ignoreResizeStart}
+                onToggleMaximize={toggleMaximize}
                 title="RESEARCH REPORT"
                 widgetId="report"
               >
@@ -388,13 +370,12 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
               <VisualizeWidgetFrame
                 articleRef={evidenceRef}
                 className="is-evidence"
-                maximized={layout.layoutState.maximizedWidgetId === "evidence"}
+                maximized={maximizedWidgetId === "evidence"}
                 meta={`${evidenceItems.length} ROWS`}
-                onDragStart={layout.startDrag}
-                onReset={layout.resetWidget}
-                onResizeStart={layout.startResize}
-                onToggleMaximize={layout.toggleMaximize}
-                style={widgetStyle("evidence")}
+                onDragStart={ignoreDragStart}
+                onReset={resetWidget}
+                onResizeStart={ignoreResizeStart}
+                onToggleMaximize={toggleMaximize}
                 title="EVIDENCE STREAM"
                 widgetId="evidence"
               >

@@ -12,6 +12,8 @@ type VisualizeWidgetFrameProps = {
   onResizeStart: (widgetId: VisualizeWidgetId, event: ReactPointerEvent<HTMLElement>) => void;
   onToggleMaximize: (widgetId: VisualizeWidgetId) => void;
   onReset: (widgetId: VisualizeWidgetId) => void;
+  draggable?: boolean;
+  resizable?: boolean;
   className?: string;
   children: ReactNode;
 };
@@ -27,6 +29,8 @@ export function VisualizeWidgetFrame({
   onResizeStart,
   onToggleMaximize,
   onReset,
+  draggable = false,
+  resizable = false,
   className = "",
   children,
 }: VisualizeWidgetFrameProps) {
@@ -36,12 +40,16 @@ export function VisualizeWidgetFrame({
       ref={articleRef}
       style={style}
     >
-      <header className="visualize-monitor-widget-head" onPointerDown={(event) => onDragStart(widgetId, event)}>
+      <header
+        className={`visualize-monitor-widget-head${draggable ? " is-draggable" : ""}`}
+        onPointerDown={draggable ? (event) => onDragStart(widgetId, event) : undefined}
+      >
         <div className="visualize-monitor-widget-head-main">
           <button
             aria-label={`${title} move`}
             className="visualize-monitor-widget-grip"
-            onPointerDown={(event) => onDragStart(widgetId, event)}
+            disabled={!draggable}
+            onPointerDown={draggable ? (event) => onDragStart(widgetId, event) : undefined}
             type="button"
           >
             <span />
@@ -81,12 +89,14 @@ export function VisualizeWidgetFrame({
         </div>
       </header>
       <div className="visualize-monitor-widget-surface">{children}</div>
-      <button
-        aria-label={`${title} resize`}
-        className="visualize-monitor-widget-resize"
-        onPointerDown={(event) => onResizeStart(widgetId, event)}
-        type="button"
-      />
+      {resizable ? (
+        <button
+          aria-label={`${title} resize`}
+          className="visualize-monitor-widget-resize"
+          onPointerDown={(event) => onResizeStart(widgetId, event)}
+          type="button"
+        />
+      ) : null}
     </article>
   );
 }

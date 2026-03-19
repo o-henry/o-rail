@@ -114,7 +114,7 @@ describe("runTaskRoleWithCodex", () => {
 
   it("lets researcher roles pre-run the collection pipeline and inject the dataset into the prompt", async () => {
     const capturedPrompts: string[] = [];
-    const invokeFn = (vi.fn(async (command: string, args?: Record<string, unknown>) => {
+    const invokeSpy = vi.fn(async (command: string, args?: Record<string, unknown>) => {
       switch (command) {
         case "task_agent_pack_read":
           return {
@@ -166,6 +166,33 @@ describe("runTaskRoleWithCodex", () => {
             timeline: [{ bucketDate: "2026-03-19", itemCount: 12 }],
             topSources: [{ sourceName: "steamcommunity.com", itemCount: 5 }],
           };
+        case "research_storage_collection_genre_rankings":
+          return {
+            popular: [
+              {
+                genreKey: "deckbuilder",
+                genreLabel: "Deckbuilder",
+                rank: 1,
+                evidenceCount: 6,
+                avgScore: 72,
+                popularityScore: 84,
+                qualityScore: 78,
+                representativeTitles: ["Slay the Spire", "Monster Train"],
+              },
+            ],
+            quality: [
+              {
+                genreKey: "roguelite",
+                genreLabel: "Roguelite",
+                rank: 1,
+                evidenceCount: 5,
+                avgScore: 81,
+                popularityScore: 70,
+                qualityScore: 88,
+                representativeTitles: ["Hades", "Dead Cells"],
+              },
+            ],
+          };
         case "research_storage_list_collection_items":
           return {
             items: [
@@ -191,7 +218,8 @@ describe("runTaskRoleWithCodex", () => {
         default:
           throw new Error(`unexpected command: ${command}`);
       }
-    }) as unknown) as <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
+    });
+    const invokeFn = (invokeSpy as unknown) as <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
 
     const result = await runTaskRoleWithCodex({
       invokeFn,
@@ -215,6 +243,15 @@ describe("runTaskRoleWithCodex", () => {
     expect(invokeFn).toHaveBeenCalledWith("turn_start_blocking", expect.objectContaining({
       text: expect.stringContaining("분석 모드: genre_ranking"),
     }));
+    expect(invokeFn).toHaveBeenCalledWith("research_storage_collection_genre_rankings", expect.objectContaining({
+      cwd: "/tmp/rail-storage",
+      jobId: "collect-1",
+    }));
+    const collectionJsonCall = invokeSpy.mock.calls.find(
+      ([command, args]) => command === "workspace_write_text" && args && (args as Record<string, unknown>).name === "research_collection.json",
+    );
+    expect(collectionJsonCall).toBeTruthy();
+    expect(String((collectionJsonCall?.[1] as Record<string, unknown>).content ?? "")).toContain("\"questionType\": \"genre_ranking\"");
   });
 
   it("strips role-formatted wrappers before planning researcher collection jobs", async () => {
@@ -269,6 +306,8 @@ describe("runTaskRoleWithCodex", () => {
           };
         case "research_storage_list_collection_items":
           return { items: [] };
+        case "research_storage_collection_genre_rankings":
+          return { popular: [], quality: [] };
         case "thread_start":
           return { threadId: "thread-codex-4" };
         case "turn_start_blocking":

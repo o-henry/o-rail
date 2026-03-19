@@ -1,3 +1,5 @@
+import type { FeedChartSpec } from "../../../features/feed/chartSpec";
+
 type InvokeFn = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
 
 type TaskAgentPromptPack = {
@@ -62,6 +64,56 @@ type ResearchCollectionItemResult = {
   }>;
 };
 
+type ResearchCollectionGenreRankingsResult = {
+  popular: Array<{
+    genreKey: string;
+    genreLabel: string;
+    rank: number;
+    evidenceCount: number;
+    avgScore: number;
+    popularityScore: number;
+    qualityScore: number;
+    representativeTitles: string[];
+  }>;
+  quality: Array<{
+    genreKey: string;
+    genreLabel: string;
+    rank: number;
+    evidenceCount: number;
+    avgScore: number;
+    popularityScore: number;
+    qualityScore: number;
+    representativeTitles: string[];
+  }>;
+};
+
+type ResearchReportListItem = {
+  title: string;
+  detail: string;
+  badge: string;
+};
+
+type ResearchReportWidgetSpec = {
+  title: string;
+  description: string;
+  chart?: FeedChartSpec | null;
+  items?: ResearchReportListItem[];
+};
+
+type ResearchAutoReportSpec = {
+  version: number;
+  locale: string;
+  questionType: "genre_ranking" | "game_comparison" | "community_sentiment" | "topic_research";
+  widgets: {
+    mainChart: ResearchReportWidgetSpec;
+    secondaryChart: ResearchReportWidgetSpec;
+    primaryList: ResearchReportWidgetSpec;
+    secondaryList: ResearchReportWidgetSpec;
+    report: ResearchReportWidgetSpec;
+    evidence: ResearchReportWidgetSpec;
+  };
+};
+
 type PrepareResearcherCollectionContextInput = {
   artifactDir: string;
   invokeFn: InvokeFn;
@@ -109,31 +161,9 @@ function buildCollectionContextMarkdown(params: {
   planner?: ResearchCollectionJobPlanResult["job"]["planner"];
   metrics: ResearchCollectionMetricsResult;
   items: ResearchCollectionItemResult;
+  genreRankings: ResearchCollectionGenreRankingsResult;
+  reportSpec: ResearchAutoReportSpec;
 }) {
-  const sourceChart = {
-    chart: {
-      type: "pie",
-      title: "",
-      labels: params.metrics.bySourceType.slice(0, 6).map((row) => row.sourceType.replace("source.", "")),
-      series: [{ name: "Items", data: params.metrics.bySourceType.slice(0, 6).map((row) => row.itemCount), color: "#4A7BFF" }],
-    },
-  };
-  const verificationChart = {
-    chart: {
-      type: "pie",
-      title: "",
-      labels: params.metrics.byVerificationStatus.map((row) => row.verificationStatus),
-      series: [{ name: "Items", data: params.metrics.byVerificationStatus.map((row) => row.itemCount) }],
-    },
-  };
-  const timelineChart = {
-    chart: {
-      type: "line",
-      title: "",
-      labels: params.metrics.timeline.slice(-10).map((row) => row.bucketDate.slice(5)),
-      series: [{ name: "Items", data: params.metrics.timeline.slice(-10).map((row) => row.itemCount), color: "#37B679" }],
-    },
-  };
   const lines = [
     `# 리서치 수집 결과`,
     ``,
@@ -147,21 +177,37 @@ function buildCollectionContextMarkdown(params: {
     `- 도메인: ${params.domains.join(", ") || "-"}`,
     `- 합계: 항목 ${params.metrics.totals.items}, 출처 ${params.metrics.totals.sources}, 검증 ${params.metrics.totals.verified}, 경고 ${params.metrics.totals.warnings}`,
     ``,
-    `## 주요 출처`,
+    `## ${params.reportSpec.widgets.mainChart.title}`,
+    params.reportSpec.widgets.mainChart.description,
   ];
 
-  for (const source of params.metrics.topSources.slice(0, 6)) {
-    lines.push(`- ${source.sourceName}: ${source.itemCount}`);
+  if (params.reportSpec.widgets.mainChart.chart) {
+    lines.push("", "```rail-chart", JSON.stringify({ chart: params.reportSpec.widgets.mainChart.chart }, null, 2), "```");
+  }
+  if (params.reportSpec.widgets.secondaryChart.chart) {
+    lines.push("", `## ${params.reportSpec.widgets.secondaryChart.title}`, params.reportSpec.widgets.secondaryChart.description);
+    lines.push("", "```rail-chart", JSON.stringify({ chart: params.reportSpec.widgets.secondaryChart.chart }, null, 2), "```");
   }
 
-  if (sourceChart.chart.labels.length > 0) {
-    lines.push("", "```rail-chart", JSON.stringify(sourceChart, null, 2), "```");
+  lines.push("", `## ${params.reportSpec.widgets.primaryList.title}`);
+  for (const item of params.reportSpec.widgets.primaryList.items ?? []) {
+    lines.push(`- ${item.title} — ${item.badge}`);
+    if (item.detail) {
+      lines.push(`  ${item.detail}`);
+    }
   }
-  if (verificationChart.chart.labels.length > 0) {
-    lines.push("", "```rail-chart", JSON.stringify(verificationChart, null, 2), "```");
+
+  lines.push("", `## ${params.reportSpec.widgets.secondaryList.title}`);
+  for (const item of params.reportSpec.widgets.secondaryList.items ?? []) {
+    lines.push(`- ${item.title} — ${item.badge}`);
+    if (item.detail) {
+      lines.push(`  ${item.detail}`);
+    }
   }
-  if (timelineChart.chart.labels.length > 0) {
-    lines.push("", "```rail-chart", JSON.stringify(timelineChart, null, 2), "```");
+
+  lines.push("", "## 주요 출처");
+  for (const source of params.metrics.topSources.slice(0, 6)) {
+    lines.push(`- ${source.sourceName}: ${source.itemCount}`);
   }
 
   lines.push("", "## 핵심 근거");
@@ -176,6 +222,256 @@ function buildCollectionContextMarkdown(params: {
   }
 
   return `${lines.join("\n")}\n`;
+}
+
+function buildSourceMixPieChart(metrics: ResearchCollectionMetricsResult): FeedChartSpec | null {
+  if (metrics.bySourceType.length === 0) {
+    return null;
+  }
+  return {
+    type: "pie",
+    title: "",
+    labels: metrics.bySourceType.slice(0, 6).map((row) => row.sourceType.replace("source.", "")),
+    series: [{ name: "Items", data: metrics.bySourceType.slice(0, 6).map((row) => row.itemCount), color: "#4A7BFF" }],
+  };
+}
+
+function buildTimelineLineChart(metrics: ResearchCollectionMetricsResult): FeedChartSpec | null {
+  if (metrics.timeline.length === 0) {
+    return null;
+  }
+  return {
+    type: "line",
+    title: "",
+    labels: metrics.timeline.slice(-10).map((row) => row.bucketDate.slice(5)),
+    series: [{ name: "Items", data: metrics.timeline.slice(-10).map((row) => row.itemCount), color: "#37B679" }],
+  };
+}
+
+function buildVerificationBarChart(metrics: ResearchCollectionMetricsResult): FeedChartSpec | null {
+  if (metrics.byVerificationStatus.length === 0) {
+    return null;
+  }
+  return {
+    type: "bar",
+    title: "",
+    labels: metrics.byVerificationStatus.map((row) => row.verificationStatus),
+    series: [{ name: "Items", data: metrics.byVerificationStatus.map((row) => row.itemCount), color: "#8b5cf6" }],
+  };
+}
+
+function buildGenreRankingChart(
+  rows: Array<{ genreLabel: string; popularityScore: number; qualityScore: number }>,
+  kind: "popularity" | "quality",
+): FeedChartSpec | null {
+  if (rows.length === 0) {
+    return null;
+  }
+  return {
+    type: "bar",
+    title: "",
+    labels: rows.slice(0, 6).map((row) => row.genreLabel),
+    series: [
+      {
+        name: kind === "popularity" ? "Popularity" : "Quality",
+        data: rows.slice(0, 6).map((row) => (kind === "popularity" ? row.popularityScore : row.qualityScore)),
+        color: kind === "popularity" ? "#4A7BFF" : "#8b5cf6",
+      },
+    ],
+  };
+}
+
+function classifyResearchQuestionType(
+  prompt: string,
+  planner: ResearchCollectionJobPlanResult["job"]["planner"] | undefined,
+): ResearchAutoReportSpec["questionType"] {
+  if (String(planner?.analysisMode ?? "").trim().toLowerCase() === "genre_ranking") {
+    return "genre_ranking";
+  }
+  const lowered = prompt.toLowerCase();
+  if (/(compare|comparison|vs\b|비교)/i.test(lowered)) {
+    return "game_comparison";
+  }
+  if (/(reddit|community|커뮤니티|sentiment|반응|여론)/i.test(lowered)) {
+    return "community_sentiment";
+  }
+  return "topic_research";
+}
+
+function buildFallbackListItems(items: ResearchCollectionItemResult): ResearchReportListItem[] {
+  return items.items.slice(0, 5).map((item) => ({
+    title: item.title || item.sourceName || "Untitled evidence",
+    detail: item.summary || item.url || "",
+    badge: `${item.verificationStatus} · ${Math.round(item.score)}`,
+  }));
+}
+
+function buildAutoReportSpec(params: {
+  prompt: string;
+  planner?: ResearchCollectionJobPlanResult["job"]["planner"];
+  metrics: ResearchCollectionMetricsResult;
+  items: ResearchCollectionItemResult;
+  genreRankings: ResearchCollectionGenreRankingsResult;
+}): ResearchAutoReportSpec {
+  const questionType = classifyResearchQuestionType(params.prompt, params.planner);
+  const fallbackItems = buildFallbackListItems(params.items);
+
+  if (questionType === "genre_ranking") {
+    const popularItems = params.genreRankings.popular.slice(0, 5).map((row) => ({
+      title: `${row.rank}. ${row.genreLabel}`,
+      detail: row.representativeTitles.slice(0, 3).join(" · ") || "대표 게임 추출 중",
+      badge: `P ${Math.round(row.popularityScore)} · E ${row.evidenceCount}`,
+    }));
+    const representativeGames = params.genreRankings.quality.slice(0, 5).flatMap((row) =>
+      row.representativeTitles.slice(0, 2).map((title, index) => ({
+        title,
+        detail: `${row.genreLabel} · ${index === 0 ? "대표작" : "후보"}`,
+        badge: `Q ${Math.round(row.qualityScore)}`,
+      })),
+    ).slice(0, 6);
+
+    return {
+      version: 1,
+      locale: "ko",
+      questionType,
+      widgets: {
+        mainChart: {
+          title: "POPULAR GENRES",
+          description: "리뷰량과 반복 언급을 합쳐 계산한 장르별 인기 점수입니다.",
+          chart: buildGenreRankingChart(params.genreRankings.popular, "popularity"),
+        },
+        secondaryChart: {
+          title: "BEST RATED GENRES",
+          description: "긍정 신호와 표본 품질을 합쳐 계산한 장르별 고평가 점수입니다.",
+          chart: buildGenreRankingChart(params.genreRankings.quality, "quality"),
+        },
+        primaryList: {
+          title: "GENRE SNAPSHOTS",
+          description: "주요 장르와 대표 게임을 한 번에 확인합니다.",
+          items: popularItems,
+        },
+        secondaryList: {
+          title: "REPRESENTATIVE GAMES",
+          description: "장르별 대표 게임 후보입니다.",
+          items: representativeGames.length ? representativeGames : fallbackItems,
+        },
+        report: {
+          title: "RESEARCH REPORT",
+          description: "질문에 대한 최종 리서치 해석입니다.",
+        },
+        evidence: {
+          title: "EVIDENCE STREAM",
+          description: "장르 순위를 만든 실제 근거 목록입니다.",
+        },
+      },
+    };
+  }
+
+  if (questionType === "game_comparison") {
+    return {
+      version: 1,
+      locale: "ko",
+      questionType,
+      widgets: {
+        mainChart: {
+          title: "COMPARISON SIGNALS",
+          description: "비교 대상 근거의 상대 점수 분포입니다.",
+          chart: buildVerificationBarChart(params.metrics),
+        },
+        secondaryChart: {
+          title: "SOURCE MIX",
+          description: "비교에 사용된 출처 유형 비중입니다.",
+          chart: buildSourceMixPieChart(params.metrics),
+        },
+        primaryList: {
+          title: "COMPARED TITLES",
+          description: "비교에 직접 등장한 주요 타이틀입니다.",
+          items: fallbackItems,
+        },
+        secondaryList: {
+          title: "TOP SOURCES",
+          description: "비교에 가장 많이 기여한 출처입니다.",
+          items: params.metrics.topSources.slice(0, 5).map((row) => ({
+            title: row.sourceName,
+            detail: "비교 근거 공급 출처",
+            badge: `${row.itemCount}건`,
+          })),
+        },
+        report: { title: "RESEARCH REPORT", description: "비교 결과를 해석한 문서입니다." },
+        evidence: { title: "EVIDENCE STREAM", description: "비교 판단의 원본 근거입니다." },
+      },
+    };
+  }
+
+  if (questionType === "community_sentiment") {
+    return {
+      version: 1,
+      locale: "ko",
+      questionType,
+      widgets: {
+        mainChart: {
+          title: "REACTION TIMELINE",
+          description: "커뮤니티 반응이 시간에 따라 어떻게 모였는지 보여줍니다.",
+          chart: buildTimelineLineChart(params.metrics),
+        },
+        secondaryChart: {
+          title: "SOURCE MIX",
+          description: "반응이 어느 커뮤니티/출처에서 왔는지 보여줍니다.",
+          chart: buildSourceMixPieChart(params.metrics),
+        },
+        primaryList: {
+          title: "REACTION HIGHLIGHTS",
+          description: "가장 자주 인용된 반응 포인트입니다.",
+          items: fallbackItems,
+        },
+        secondaryList: {
+          title: "TOP SOURCES",
+          description: "반응을 많이 제공한 출처입니다.",
+          items: params.metrics.topSources.slice(0, 5).map((row) => ({
+            title: row.sourceName,
+            detail: "커뮤니티 신호 출처",
+            badge: `${row.itemCount}건`,
+          })),
+        },
+        report: { title: "RESEARCH REPORT", description: "커뮤니티 반응을 요약한 문서입니다." },
+        evidence: { title: "EVIDENCE STREAM", description: "커뮤니티 원문 근거입니다." },
+      },
+    };
+  }
+
+  return {
+    version: 1,
+    locale: "ko",
+    questionType,
+    widgets: {
+      mainChart: {
+        title: "COLLECTION TIMELINE",
+        description: "수집된 근거가 날짜별로 몇 건 들어왔는지 보여줍니다.",
+        chart: buildTimelineLineChart(params.metrics),
+      },
+      secondaryChart: {
+        title: "SOURCE MIX",
+        description: "현재 세션에 포함된 출처 유형 비중입니다.",
+        chart: buildSourceMixPieChart(params.metrics),
+      },
+      primaryList: {
+        title: "TOP SOURCES",
+        description: "이번 조사에 가장 많이 기여한 출처입니다.",
+        items: params.metrics.topSources.slice(0, 5).map((row) => ({
+          title: row.sourceName,
+          detail: "주요 출처",
+          badge: `${row.itemCount}건`,
+        })),
+      },
+      secondaryList: {
+        title: "REPRESENTATIVE TITLES",
+        description: "질문과 가장 관련 높은 대표 근거입니다.",
+        items: fallbackItems,
+      },
+      report: { title: "RESEARCH REPORT", description: "최종 리서치 문서입니다." },
+      evidence: { title: "EVIDENCE STREAM", description: "정규화된 근거 목록입니다." },
+    },
+  };
 }
 
 function buildPromptContext(params: {
@@ -248,11 +544,25 @@ export async function prepareResearcherCollectionContext(
       cwd: input.storageCwd,
       jobId: planned.job.jobId,
     });
+    const genreRankings =
+      String(planned.job.planner?.analysisMode ?? "").trim().toLowerCase() === "genre_ranking"
+        ? await input.invokeFn<ResearchCollectionGenreRankingsResult>("research_storage_collection_genre_rankings", {
+            cwd: input.storageCwd,
+            jobId: planned.job.jobId,
+          })
+        : { popular: [], quality: [] };
     const items = await input.invokeFn<ResearchCollectionItemResult>("research_storage_list_collection_items", {
       cwd: input.storageCwd,
       jobId: planned.job.jobId,
       limit: 8,
       offset: 0,
+    });
+    const reportSpec = buildAutoReportSpec({
+      prompt: collectionPrompt,
+      planner: planned.job.planner,
+      metrics,
+      items,
+      genreRankings,
     });
 
     const markdown = buildCollectionContextMarkdown({
@@ -265,11 +575,15 @@ export async function prepareResearcherCollectionContext(
       planner: planned.job.planner,
       metrics,
       items,
+      genreRankings,
+      reportSpec,
     });
     const payload = {
       planned,
       metrics,
       items,
+      genreRankings,
+      reportSpec,
     };
 
     const markdownPath = await input.invokeFn<string>("workspace_write_text", {

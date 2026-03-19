@@ -4,6 +4,7 @@ import FeedDocument from "../../components/feed/FeedDocument";
 import type { FeedChartSpec } from "../../features/feed/chartSpec";
 import { useVisualizePageState } from "./useVisualizePageState";
 import { VisualizeWidgetFrame } from "./VisualizeWidgetFrame";
+import type { ResearchReportListItem } from "./visualizeReportUtils";
 import type { VisualizeWidgetId } from "./visualizeWidgetLayout";
 
 type VisualizePageProps = {
@@ -74,6 +75,7 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
 
   const reportEntryId = state.selectedReportRun?.collectionEntryId || state.selectedReportRun?.reportEntryId || "";
   const reportJob = state.collectionPayload?.planned?.job;
+  const autoSpec = state.collectionPayload?.reportSpec;
   const leadCopy = firstNarrativeLine(state.reportMarkdown) || firstNarrativeLine(state.collectionMarkdown);
   const evidenceItems = state.collectionItems?.items ?? [];
   const popularGenres = state.collectionGenreRankings?.popular.slice(0, 5) ?? [];
@@ -82,6 +84,44 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
   const topSteamGames = [...(state.steamMetrics?.items ?? [])]
     .sort((left, right) => right.totalReviews - left.totalReviews)
     .slice(0, 5);
+  const mainChartSpec = autoSpec?.widgets?.mainChart?.chart || timelineChart;
+  const secondaryChartSpec = autoSpec?.widgets?.secondaryChart?.chart || sourceChart;
+  const mainChartTitle = autoSpec?.widgets?.mainChart?.title || "COLLECTION TIMELINE";
+  const secondaryChartTitle = autoSpec?.widgets?.secondaryChart?.title || "SOURCE MIX";
+  const mainChartDescription = autoSpec?.widgets?.mainChart?.description || "수집된 근거가 날짜별로 몇 건 들어왔는지 보여줍니다.";
+  const secondaryChartDescription = autoSpec?.widgets?.secondaryChart?.description || "현재 세션에 포함된 출처 유형 비중입니다.";
+  const primaryListTitle = autoSpec?.widgets?.primaryList?.title || (popularGenres.length ? "POPULAR GENRES" : "TOP SOURCES");
+  const secondaryListTitle = autoSpec?.widgets?.secondaryList?.title || (qualityGenres.length ? "BEST RATED GENRES" : "REPRESENTATIVE TITLES");
+  const reportTitle = autoSpec?.widgets?.report?.title || "RESEARCH REPORT";
+  const evidenceTitle = autoSpec?.widgets?.evidence?.title || "EVIDENCE STREAM";
+  const primaryListItems: ResearchReportListItem[] =
+    autoSpec?.widgets?.primaryList?.items?.length
+      ? autoSpec.widgets.primaryList.items
+      : popularGenres.length
+        ? popularGenres.map((genre) => ({
+            title: `${genre.rank}. ${genre.genreLabel}`,
+            detail: genre.representativeTitles.slice(0, 2).join(" · ") || "대표 게임 추출 중",
+            badge: `P ${Math.round(genre.popularityScore)} · E ${genre.evidenceCount}`,
+          }))
+        : topSources.map((source) => ({
+            title: source.sourceName,
+            detail: "주요 출처",
+            badge: `${source.itemCount}건`,
+          }));
+  const secondaryListItems: ResearchReportListItem[] =
+    autoSpec?.widgets?.secondaryList?.items?.length
+      ? autoSpec.widgets.secondaryList.items
+      : qualityGenres.length
+        ? qualityGenres.map((genre) => ({
+            title: `${genre.rank}. ${genre.genreLabel}`,
+            detail: genre.representativeTitles.slice(0, 3).join(" · ") || "대표 게임 추출 중",
+            badge: `Q ${Math.round(genre.qualityScore)} · ${Math.round(genre.avgScore)}`,
+          }))
+        : topSteamGames.map((game) => ({
+            title: game.gameName,
+            detail: "대표 게임",
+            badge: `${game.totalReviews} reviews · ${formatPercent(game.positiveRatio)}`,
+          }));
   const summaryMetrics = [
     { label: "근거 수", value: state.collectionMetrics?.totals.items ?? 0, meta: "수집된 정규화 항목" },
     { label: "검증됨", value: state.collectionMetrics?.totals.verified ?? 0, meta: "확인된 근거" },
@@ -163,13 +203,13 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
                 className="is-chart-main"
                 maximized={maximizedWidgetId === "timeline"}
                 onToggleMaximize={toggleMaximize}
-                title="COLLECTION TIMELINE"
+                title={mainChartTitle}
                 widgetId="timeline"
               >
-                {timelineChart ? (
+                {mainChartSpec ? (
                   <>
-                    <p className="visualize-monitor-chart-copy">수집된 근거가 날짜별로 몇 건 들어왔는지 보여줍니다.</p>
-                    <FeedChart spec={timelineChart} />
+                    <p className="visualize-monitor-chart-copy">{mainChartDescription}</p>
+                    <FeedChart spec={mainChartSpec} />
                   </>
                 ) : <div className="visualize-monitor-placeholder">수집 타임라인 데이터가 아직 없습니다.</div>}
               </VisualizeWidgetFrame>
@@ -178,13 +218,13 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
                 className="is-chart-source"
                 maximized={maximizedWidgetId === "sourceMix"}
                 onToggleMaximize={toggleMaximize}
-                title="SOURCE MIX"
+                title={secondaryChartTitle}
                 widgetId="sourceMix"
               >
-                {sourceChart ? (
+                {secondaryChartSpec ? (
                   <>
-                    <p className="visualize-monitor-chart-copy">현재 세션에 포함된 출처 유형 비중입니다.</p>
-                    <FeedChart spec={sourceChart} />
+                    <p className="visualize-monitor-chart-copy">{secondaryChartDescription}</p>
+                    <FeedChart spec={secondaryChartSpec} />
                   </>
                 ) : <div className="visualize-monitor-placeholder">출처 분포 데이터가 아직 없습니다.</div>}
               </VisualizeWidgetFrame>
@@ -233,27 +273,20 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
                 className="is-sources"
                 maximized={maximizedWidgetId === "sources"}
                 onToggleMaximize={toggleMaximize}
-                title={popularGenres.length ? "POPULAR GENRES" : "TOP SOURCES"}
+                title={primaryListTitle}
                 widgetId="sources"
               >
                 <div className="visualize-monitor-ranked-list">
-                  {popularGenres.length
-                    ? popularGenres.map((genre) => (
-                        <div className="visualize-monitor-ranked-item" key={genre.genreKey}>
-                          <div className="visualize-monitor-ranked-item-copy">
-                            <strong>{genre.rank}. {genre.genreLabel}</strong>
-                            <p>{genre.representativeTitles.slice(0, 2).join(" · ") || "대표 게임 추출 중"}</p>
-                          </div>
-                          <span>P {Math.round(genre.popularityScore)} · E {genre.evidenceCount}</span>
-                        </div>
-                      ))
-                    : topSources.map((source) => (
-                        <div className="visualize-monitor-ranked-item" key={source.sourceName}>
-                          <strong>{source.sourceName}</strong>
-                          <span>{source.itemCount}건</span>
-                        </div>
-                      ))}
-                  {popularGenres.length || topSources.length ? null : <p className="visualize-monitor-empty">표시할 상위 소스가 없습니다.</p>}
+                  {primaryListItems.map((item, index) => (
+                    <div className="visualize-monitor-ranked-item" key={`${item.title || "item"}-${index}`}>
+                      <div className="visualize-monitor-ranked-item-copy">
+                        <strong>{item.title || "-"}</strong>
+                        <p>{item.detail || "-"}</p>
+                      </div>
+                      <span>{item.badge || "-"}</span>
+                    </div>
+                  ))}
+                  {primaryListItems.length ? null : <p className="visualize-monitor-empty">표시할 항목이 없습니다.</p>}
                 </div>
               </VisualizeWidgetFrame>
 
@@ -261,27 +294,20 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
                 className="is-steam"
                 maximized={maximizedWidgetId === "steam"}
                 onToggleMaximize={toggleMaximize}
-                title={qualityGenres.length ? "BEST RATED GENRES" : "REPRESENTATIVE TITLES"}
+                title={secondaryListTitle}
                 widgetId="steam"
               >
                 <div className="visualize-monitor-ranked-list">
-                  {qualityGenres.length
-                    ? qualityGenres.map((genre) => (
-                        <div className="visualize-monitor-ranked-item" key={genre.genreKey}>
-                          <div className="visualize-monitor-ranked-item-copy">
-                            <strong>{genre.rank}. {genre.genreLabel}</strong>
-                            <p>{genre.representativeTitles.slice(0, 3).join(" · ") || "대표 게임 추출 중"}</p>
-                          </div>
-                          <span>Q {Math.round(genre.qualityScore)} · {Math.round(genre.avgScore)}</span>
-                        </div>
-                      ))
-                    : topSteamGames.map((game) => (
-                        <div className="visualize-monitor-ranked-item" key={game.gameKey}>
-                          <strong>{game.gameName}</strong>
-                          <span>{game.totalReviews} reviews · {formatPercent(game.positiveRatio)}</span>
-                        </div>
-                      ))}
-                  {qualityGenres.length || topSteamGames.length ? null : <p className="visualize-monitor-empty">표시할 스냅샷이 아직 없습니다.</p>}
+                  {secondaryListItems.map((item, index) => (
+                    <div className="visualize-monitor-ranked-item" key={`${item.title || "item"}-${index}`}>
+                      <div className="visualize-monitor-ranked-item-copy">
+                        <strong>{item.title || "-"}</strong>
+                        <p>{item.detail || "-"}</p>
+                      </div>
+                      <span>{item.badge || "-"}</span>
+                    </div>
+                  ))}
+                  {secondaryListItems.length ? null : <p className="visualize-monitor-empty">표시할 스냅샷이 아직 없습니다.</p>}
                 </div>
               </VisualizeWidgetFrame>
 
@@ -290,7 +316,7 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
                 className="is-report"
                 maximized={maximizedWidgetId === "report"}
                 onToggleMaximize={toggleMaximize}
-                title="RESEARCH REPORT"
+                title={reportTitle}
                 widgetId="report"
               >
                 {reportBody ? (
@@ -305,7 +331,7 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
                 className="is-evidence"
                 maximized={maximizedWidgetId === "evidence"}
                 onToggleMaximize={toggleMaximize}
-                title="EVIDENCE STREAM"
+                title={evidenceTitle}
                 widgetId="evidence"
               >
                 <div className="visualize-monitor-search-row">

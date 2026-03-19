@@ -1,3 +1,4 @@
+import type { FeedChartSpec } from "../../features/feed/chartSpec";
 import type { KnowledgeEntry } from "../../features/studio/knowledgeTypes";
 
 export type VisualizeResearchRun = {
@@ -13,6 +14,33 @@ export type VisualizeResearchRun = {
   collectionMarkdownPath?: string;
   collectionJsonPath?: string;
   responseJsonPath?: string;
+};
+
+export type ResearchReportListItem = {
+  title?: string;
+  detail?: string;
+  badge?: string;
+};
+
+export type ResearchReportWidgetSpec = {
+  title?: string;
+  description?: string;
+  chart?: FeedChartSpec | null;
+  items?: ResearchReportListItem[];
+};
+
+export type ResearchAutoReportSpec = {
+  version?: number;
+  locale?: string;
+  questionType?: "genre_ranking" | "game_comparison" | "community_sentiment" | "topic_research" | string;
+  widgets?: {
+    mainChart?: ResearchReportWidgetSpec;
+    secondaryChart?: ResearchReportWidgetSpec;
+    primaryList?: ResearchReportWidgetSpec;
+    secondaryList?: ResearchReportWidgetSpec;
+    report?: ResearchReportWidgetSpec;
+    evidence?: ResearchReportWidgetSpec;
+  };
 };
 
 type ResearchCollectionPayload = {
@@ -46,6 +74,25 @@ type ResearchCollectionPayload = {
       summary?: string;
     }>;
   };
+  genreRankings?: {
+    popular?: Array<{
+      genreKey?: string;
+      genreLabel?: string;
+      rank?: number;
+      popularityScore?: number;
+      qualityScore?: number;
+      representativeTitles?: string[];
+    }>;
+    quality?: Array<{
+      genreKey?: string;
+      genreLabel?: string;
+      rank?: number;
+      popularityScore?: number;
+      qualityScore?: number;
+      representativeTitles?: string[];
+    }>;
+  };
+  reportSpec?: ResearchAutoReportSpec;
 };
 
 function artifactFileName(entry: Pick<KnowledgeEntry, "markdownPath" | "jsonPath">): string {

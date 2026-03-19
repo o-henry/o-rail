@@ -59,9 +59,24 @@ describe("visualizeReportUtils", () => {
       JSON.stringify({
         planned: { job: { jobId: "job-1", resolvedSourceType: "community" } },
         metrics: { totals: { items: 12 } },
+        reportSpec: {
+          questionType: "genre_ranking",
+          widgets: {
+            mainChart: {
+              title: "POPULAR GENRES",
+              chart: {
+                type: "bar",
+                labels: ["Deckbuilder"],
+                series: [{ name: "Popularity", data: [84] }],
+              },
+            },
+          },
+        },
       }),
     );
     expect(payload?.planned?.job?.jobId).toBe("job-1");
     expect(payload?.metrics?.totals?.items).toBe(12);
+    expect(payload?.reportSpec?.questionType).toBe("genre_ranking");
+    expect(payload?.reportSpec?.widgets?.mainChart?.title).toBe("POPULAR GENRES");
   });
 });

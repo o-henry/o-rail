@@ -1090,27 +1090,17 @@
   position: relative;
   margin: 0;
   border: 0;
-  box-shadow: none;
+  box-shadow: 0 -14px 20px -18px rgba(15, 23, 42, 0.42);
   background: #ffffff;
   gap: 10px;
   align-self: end;
+  overflow: visible;
+  isolation: isolate;
   z-index: 22;
 }
 
 .tasks-thread-composer-shell.workflow-question-input {
   margin-bottom: 0;
-}
-
-.tasks-thread-composer-shell.workflow-question-input::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: -12px;
-  height: 12px;
-  pointer-events: none;
-  z-index: 21;
-  box-shadow: 0 -10px 14px -12px rgba(15, 23, 42, 0.28);
 }
 
 .tasks-thread-composer-input {

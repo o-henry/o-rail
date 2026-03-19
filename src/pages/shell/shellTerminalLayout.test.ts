@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   collectShellTerminalPaneIds,
   createShellTerminalLeaf,
+  defaultShellAddDirection,
   removePaneFromShellTerminalLayout,
   splitShellTerminalLayout,
   updateShellTerminalSplitRatio,
@@ -44,6 +45,12 @@ describe("shellTerminalLayout", () => {
     });
 
     expect(collectShellTerminalPaneIds(next)).toEqual(["pane-1", "pane-2", "pane-3"]);
+  });
+
+  it("defaults add direction to right for the first split and bottom afterwards", () => {
+    expect(defaultShellAddDirection(1)).toBe("right");
+    expect(defaultShellAddDirection(2)).toBe("bottom");
+    expect(defaultShellAddDirection(3)).toBe("bottom");
   });
 
   it("updates only the targeted split ratio", () => {

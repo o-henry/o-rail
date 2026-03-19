@@ -32,6 +32,10 @@ export function collectShellTerminalPaneIds(node: ShellTerminalLayoutNode | null
   return [...collectShellTerminalPaneIds(node.first), ...collectShellTerminalPaneIds(node.second)];
 }
 
+export function defaultShellAddDirection(paneCount: number): ShellSplitDirection {
+  return paneCount <= 1 ? "right" : "bottom";
+}
+
 function clampRatio(value: number): number {
   if (!Number.isFinite(value)) {
     return 0.5;

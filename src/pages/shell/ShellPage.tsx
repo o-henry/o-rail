@@ -2,7 +2,11 @@ import { type DragEvent, type KeyboardEvent, type MouseEvent as ReactMouseEvent,
 import { TaskTerminalViewport } from "../tasks/TaskTerminalViewport";
 import { useTasksThreadState } from "../tasks/useTasksThreadState";
 import { useShellTerminalGrid } from "./useShellTerminalGrid";
-import type { ShellSplitDirection, ShellTerminalLayoutNode } from "./shellTerminalLayout";
+import {
+  defaultShellAddDirection,
+  type ShellSplitDirection,
+  type ShellTerminalLayoutNode,
+} from "./shellTerminalLayout";
 
 type ShellPageProps = {
   cwd: string;
@@ -183,7 +187,7 @@ export default function ShellPage(props: ShellPageProps) {
                 draggable
                 onClick={(event) => {
                   event.stopPropagation();
-                  void shellGrid.addPane(pane.id, "right");
+                  void shellGrid.addPane(pane.id, defaultShellAddDirection(shellGrid.panes.length));
                 }}
                 onDragEnd={() => {
                   setAddDragSourcePaneId("");

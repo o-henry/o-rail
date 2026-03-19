@@ -1102,21 +1102,12 @@
 .tasks-thread-composer-shell.is-mention-open::before {
   content: "";
   position: absolute;
-  left: 0;
-  right: 0;
-  top: -22px;
-  height: 24px;
+  left: 12px;
+  right: 12px;
+  top: 0;
+  height: 1px;
   pointer-events: none;
-  background: linear-gradient(
-    to top,
-    rgba(255, 255, 255, 0.98) 0%,
-    rgba(255, 255, 255, 0.92) 36%,
-    rgba(255, 255, 255, 0.74) 62%,
-    rgba(255, 255, 255, 0) 100%
-  );
-  box-shadow:
-    0 -16px 28px -18px rgba(15, 23, 42, 0.22),
-    0 -2px 8px -6px rgba(15, 23, 42, 0.18);
+  background: #dfe5ee;
   z-index: 24;
 }
 
@@ -1208,24 +1199,19 @@
   position: absolute;
   left: 12px;
   right: 12px;
-  bottom: calc(100% - 12px);
+  bottom: calc(100%);
   z-index: 20;
   width: auto;
   box-sizing: border-box;
   display: grid;
-  gap: 3px;
-  padding: 10px 10px 18px;
-  border-radius: 16px 16px 0 0;
-  border-top: 1px solid rgba(216, 221, 230, 0.92);
-  border-left: 1px solid rgba(216, 221, 230, 0.92);
-  border-right: 1px solid rgba(216, 221, 230, 0.92);
+  gap: 4px;
+  padding: 6px;
+  border-radius: 8px 8px 0 0;
+  border-top: 1px solid #d8dde6;
+  border-left: 1px solid #d8dde6;
+  border-right: 1px solid #d8dde6;
   border-bottom: 0;
-  background: rgba(255, 255, 255, 0.8);
-  backdrop-filter: blur(16px) saturate(145%);
-  -webkit-backdrop-filter: blur(16px) saturate(145%);
-  box-shadow:
-    0 18px 36px -28px rgba(15, 23, 42, 0.28),
-    0 6px 14px -12px rgba(15, 23, 42, 0.18);
+  background: #ffffff;
 }
 
 .tasks-thread-mention-option {

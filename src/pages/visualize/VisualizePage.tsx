@@ -424,9 +424,6 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
                 <button className="visualize-monitor-rail-action" disabled={state.refreshing} onClick={() => void state.refreshAll()} type="button">
                   {state.refreshing ? t("visualize.action.sync") : t("visualize.action.refresh")}
                 </button>
-                <button className="visualize-monitor-rail-action" disabled={state.steamIngesting} onClick={() => void state.ingestSteam()} type="button">
-                  {state.steamIngesting ? "STEAM" : t("visualize.action.ingestSteam")}
-                </button>
                 {reportEntryId && onOpenKnowledgeEntry ? (
                   <button className="visualize-monitor-rail-action" onClick={() => onOpenKnowledgeEntry(reportEntryId)} type="button">
                     {t("visualize.action.database")}

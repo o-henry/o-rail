@@ -160,42 +160,42 @@
 
 .visualize-monitor-widget.is-session {
   grid-column: 1 / 7;
-  grid-row: span 2;
+  grid-row: 1 / span 2;
 }
 
 .visualize-monitor-widget.is-chart-main {
   grid-column: 1 / 7;
-  grid-row: span 3;
+  grid-row: 3 / span 3;
 }
 
 .visualize-monitor-widget.is-chart-source {
   grid-column: 7 / 10;
-  grid-row: span 3;
+  grid-row: 1 / span 2;
 }
 
 .visualize-monitor-widget.is-chart-quality {
   grid-column: 10 / 13;
-  grid-row: span 3;
+  grid-row: 1 / span 2;
 }
 
 .visualize-monitor-widget.is-sources {
   grid-column: 1 / 4;
-  grid-row: span 2;
+  grid-row: 6 / span 2;
 }
 
 .visualize-monitor-widget.is-steam {
   grid-column: 4 / 7;
-  grid-row: span 2;
+  grid-row: 6 / span 2;
 }
 
 .visualize-monitor-widget.is-report {
   grid-column: 7 / 13;
-  grid-row: span 2;
+  grid-row: 6 / span 2;
 }
 
 .visualize-monitor-widget.is-evidence {
   grid-column: 1 / 13;
-  grid-row: span 3;
+  grid-row: 8 / span 3;
 }
 
 .visualize-monitor-widget.is-chart-main .visualize-monitor-widget-surface,

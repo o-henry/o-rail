@@ -1,19 +1,13 @@
-import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode, RefObject } from "react";
+import type { CSSProperties, ReactNode, RefObject } from "react";
 import type { VisualizeWidgetId } from "./visualizeWidgetLayout";
 
 type VisualizeWidgetFrameProps = {
   widgetId: VisualizeWidgetId;
   title: string;
-  meta?: string;
-  maximized?: boolean;
   style?: CSSProperties;
   articleRef?: RefObject<HTMLElement | null>;
-  onDragStart: (widgetId: VisualizeWidgetId, event: ReactPointerEvent<HTMLElement>) => void;
-  onResizeStart: (widgetId: VisualizeWidgetId, event: ReactPointerEvent<HTMLElement>) => void;
+  maximized?: boolean;
   onToggleMaximize: (widgetId: VisualizeWidgetId) => void;
-  onReset: (widgetId: VisualizeWidgetId) => void;
-  draggable?: boolean;
-  resizable?: boolean;
   className?: string;
   children: ReactNode;
 };
@@ -21,16 +15,10 @@ type VisualizeWidgetFrameProps = {
 export function VisualizeWidgetFrame({
   widgetId,
   title,
-  meta = "",
-  maximized = false,
   style,
   articleRef,
-  onDragStart,
-  onResizeStart,
+  maximized = false,
   onToggleMaximize,
-  onReset,
-  draggable = false,
-  resizable = false,
   className = "",
   children,
 }: VisualizeWidgetFrameProps) {
@@ -41,17 +29,12 @@ export function VisualizeWidgetFrame({
       style={style}
     >
       <header
-        className={`visualize-monitor-widget-head${draggable ? " is-draggable" : ""}`}
-        onPointerDown={draggable ? (event) => onDragStart(widgetId, event) : undefined}
+        className="visualize-monitor-widget-head"
+        onDoubleClick={() => onToggleMaximize(widgetId)}
+        title="Double-click to expand"
       >
         <div className="visualize-monitor-widget-head-main">
-          <button
-            aria-label={`${title} move`}
-            className="visualize-monitor-widget-grip"
-            disabled={!draggable}
-            onPointerDown={draggable ? (event) => onDragStart(widgetId, event) : undefined}
-            type="button"
-          >
+          <span aria-hidden="true" className="visualize-monitor-widget-grip">
             <span />
             <span />
             <span />
@@ -61,42 +44,13 @@ export function VisualizeWidgetFrame({
             <span />
             <span />
             <span />
-          </button>
+          </span>
           <div className="visualize-monitor-widget-head-copy">
             <strong>{title}</strong>
-            {meta ? <small>{meta}</small> : null}
           </div>
-        </div>
-        <div className="visualize-monitor-widget-head-actions">
-          <button
-            aria-label={maximized ? `${title} restore` : `${title} maximize`}
-            className="visualize-monitor-widget-head-button"
-            onPointerDown={(event) => event.stopPropagation()}
-            onClick={() => onToggleMaximize(widgetId)}
-            type="button"
-          >
-            <img alt="" aria-hidden="true" src="/canvas-fullscreen.svg" />
-          </button>
-          <button
-            aria-label={`${title} reset`}
-            className="visualize-monitor-widget-head-button"
-            onPointerDown={(event) => event.stopPropagation()}
-            onClick={() => onReset(widgetId)}
-            type="button"
-          >
-            <img alt="" aria-hidden="true" src="/close.svg" />
-          </button>
         </div>
       </header>
       <div className="visualize-monitor-widget-surface">{children}</div>
-      {resizable ? (
-        <button
-          aria-label={`${title} resize`}
-          className="visualize-monitor-widget-resize"
-          onPointerDown={(event) => onResizeStart(widgetId, event)}
-          type="button"
-        />
-      ) : null}
     </article>
   );
 }

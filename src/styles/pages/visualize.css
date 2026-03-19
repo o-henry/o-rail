@@ -217,7 +217,7 @@
 .visualize-monitor-widget p,
 .visualize-monitor-empty,
 .visualize-monitor-placeholder,
-.visualize-monitor-evidence-detail p {
+.visualize-monitor-evidence-card p {
   margin: 0;
   color: #475569;
   line-height: 1.4;
@@ -352,6 +352,10 @@
   padding: 0;
 }
 
+.visualize-monitor-widget .feed-chart-title {
+  display: none;
+}
+
 .visualize-monitor-widget .feed-chart-svg {
   width: 100%;
   height: 100%;
@@ -366,6 +370,11 @@
 .visualize-monitor-widget.is-chart-source .feed-chart-svg,
 .visualize-monitor-widget.is-chart-quality .feed-chart-svg {
   min-height: 180px;
+}
+
+.visualize-monitor-chart-copy {
+  color: #64748b !important;
+  font-size: 0.72rem !important;
 }
 
 .visualize-monitor-quality-panel {
@@ -514,16 +523,13 @@
 
 .visualize-monitor-evidence-picker {
   display: grid;
-  grid-template-columns: minmax(250px, 320px) minmax(0, 1fr);
-  gap: 8px;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-auto-flow: dense;
+  gap: 6px;
   min-height: 0;
   flex: 1 1 auto;
+  align-content: start;
   align-items: stretch;
-}
-
-.visualize-monitor-evidence-picker > button,
-.visualize-monitor-evidence-picker > p {
-  grid-column: 1;
 }
 
 .visualize-monitor-evidence-picker > .visualize-monitor-empty {
@@ -535,37 +541,23 @@
   text-align: center;
 }
 
-.visualize-monitor-evidence-picker button {
+.visualize-monitor-evidence-card {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 7px;
+  min-height: 168px;
   padding: 10px;
-  color: inherit;
-  text-align: left;
-}
-
-.visualize-monitor-evidence-picker button.is-active {
-  border-color: rgba(59, 130, 246, 0.55);
-  background: rgba(219, 234, 254, 0.92);
-}
-
-.visualize-monitor-evidence-detail {
-  grid-column: 2;
-  min-height: 0;
-  flex-direction: column;
-  gap: 10px;
   border: 1px solid rgba(226, 232, 240, 1);
   background: rgba(255, 255, 255, 0.95);
-  padding: 12px;
 }
 
-.visualize-monitor-evidence-detail a,
+.visualize-monitor-evidence-card a,
 .visualize-monitor-evidence-picker span {
   color: #64748b;
   font-size: 0.76rem;
 }
 
-.visualize-monitor-evidence-detail a {
+.visualize-monitor-evidence-card a {
   word-break: break-all;
 }
 
@@ -607,9 +599,5 @@
 
   .visualize-monitor-evidence-picker {
     grid-template-columns: 1fr;
-  }
-
-  .visualize-monitor-evidence-detail {
-    grid-column: 1;
   }
 }

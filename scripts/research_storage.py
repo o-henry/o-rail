@@ -615,6 +615,24 @@ def dedupe_text_items(values: list[str], *, limit: int) -> list[str]:
     return out
 
 
+def extract_task_request_text(prompt: str) -> str:
+    normalized = str(prompt or "").strip()
+    if not normalized:
+        return ""
+    tagged = re.search(r"<task_request>\s*([\s\S]*?)\s*</task_request>", normalized, re.IGNORECASE)
+    if tagged:
+        return str(tagged.group(1) or "").strip()
+    if "[ROLE_KB_INJECT]" in normalized:
+        trimmed = normalized.split("[ROLE_KB_INJECT]", 1)[0].strip()
+        if trimmed and trimmed != normalized:
+            return extract_task_request_text(trimmed)
+    instruction_split = re.split(r"\n\s*\n(?=집중할 점:)", normalized, maxsplit=1)
+    if len(instruction_split) > 1 and instruction_split[0].strip():
+        normalized = instruction_split[0].strip()
+    normalized = re.sub(r"^\s*(?:@[a-z0-9_-]+\s+)+", "", normalized, flags=re.IGNORECASE).strip()
+    return normalized
+
+
 def analyze_prompt_collection_plan(prompt: str) -> dict[str, Any]:
     text = " ".join(str(prompt or "").split()).strip()
     lowered = text.lower()
@@ -637,7 +655,7 @@ def analyze_prompt_collection_plan(prompt: str) -> dict[str, Any]:
         analysis_mode = "genre_ranking"
         data_scope = "steam_market" if mentions_steam else "cross_source_market"
         aggregation_unit = "genre"
-        suggested_source_type = "market" if mentions_steam else "community"
+        suggested_source_type = "community"
         if wants_popularity:
             metric_focus.append("popularity")
         if wants_quality:
@@ -812,6 +830,11 @@ def build_dynamic_collection_job(
         raise RuntimeError("at least one url, keyword, or domain hint is required")
     resolved_source_type = classify_dynamic_source_type(normalized_urls or [f"https://{domain}" for domain in normalized_domains], requested_source_type)
     via_source_type = to_via_source_type(resolved_source_type)
+    planner_scope = str((planner_context or {}).get("dataScope") or "").strip().lower()
+    planner_mode = str((planner_context or {}).get("analysisMode") or "").strip().lower()
+    if planner_scope == "steam_market" or planner_mode == "genre_ranking":
+        resolved_source_type = "community"
+        via_source_type = "source.community"
     targets: list[dict[str, Any]] = []
     domains: list[str] = []
     for domain in normalized_domains:
@@ -963,7 +986,7 @@ def plan_agent_collection_job(
     requested_source_type: str,
     max_items: int,
 ) -> dict[str, Any]:
-    normalized_prompt = str(prompt or "").strip()
+    normalized_prompt = extract_task_request_text(prompt)
     if not normalized_prompt:
         raise RuntimeError("prompt is required")
     urls = extract_urls_from_prompt(normalized_prompt)

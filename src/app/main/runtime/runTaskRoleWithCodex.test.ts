@@ -113,6 +113,7 @@ describe("runTaskRoleWithCodex", () => {
   });
 
   it("lets researcher roles pre-run the collection pipeline and inject the dataset into the prompt", async () => {
+    const capturedPrompts: string[] = [];
     const invokeFn = (vi.fn(async (command: string, args?: Record<string, unknown>) => {
       switch (command) {
         case "task_agent_pack_read":
@@ -133,6 +134,7 @@ describe("runTaskRoleWithCodex", () => {
             task: { workspacePath: "/tmp/mockking" },
           };
         case "research_storage_plan_agent_job":
+          capturedPrompts.push(String(args?.prompt ?? ""));
           return {
             job: {
               jobId: "collect-1",
@@ -206,11 +208,98 @@ describe("runTaskRoleWithCodex", () => {
     expect(invokeFn).toHaveBeenCalledWith("research_storage_plan_agent_job", expect.objectContaining({
       cwd: "/tmp/rail-storage",
     }));
+    expect(capturedPrompts[0]).toBe("스팀 게임 최근 리뷰와 장르별 평가를 조사해줘");
     expect(invokeFn).toHaveBeenCalledWith("turn_start_blocking", expect.objectContaining({
-      text: expect.stringContaining("# PRECOLLECTED DATASET"),
+      text: expect.stringContaining("# 사전 수집 데이터셋"),
     }));
     expect(invokeFn).toHaveBeenCalledWith("turn_start_blocking", expect.objectContaining({
-      text: expect.stringContaining("analysis mode: genre_ranking"),
+      text: expect.stringContaining("분석 모드: genre_ranking"),
     }));
+  });
+
+  it("strips role-formatted wrappers before planning researcher collection jobs", async () => {
+    const capturedPrompts: string[] = [];
+    const invokeFn = (vi.fn(async (command: string, args?: Record<string, unknown>) => {
+      switch (command) {
+        case "task_agent_pack_read":
+          return {
+            id: "researcher",
+            label: "RESEARCHER",
+            studioRoleId: "research_analyst",
+            model: "gpt-5.4",
+            modelReasoningEffort: "medium",
+            sandboxMode: "workspace-write",
+            outputArtifactName: "research_findings.md",
+            promptDocFile: "researcher.md",
+            developerInstructions: "자료 조사와 웹 리서치를 수행하라.",
+          };
+        case "thread_load":
+          return {
+            thread: { model: "GPT-5.4", reasoning: "중간" },
+            task: { workspacePath: "/tmp/mockking" },
+          };
+        case "research_storage_plan_agent_job":
+          capturedPrompts.push(String(args?.prompt ?? ""));
+          return {
+            job: {
+              jobId: "collect-2",
+              label: "Researcher · 스팀 장르 조사",
+              resolvedSourceType: "community",
+              collectorStrategy: "mixed_browser",
+              keywords: ["steam genre review volume"],
+              domains: ["store.steampowered.com", "steamcommunity.com"],
+              planner: {
+                analysisMode: "genre_ranking",
+                aggregationUnit: "genre",
+                dataScope: "steam_market",
+                metricFocus: ["popularity", "quality", "representatives"],
+                instructions: [],
+              },
+            },
+          };
+        case "research_storage_execute_job":
+          return { job: { jobId: "collect-2" } };
+        case "research_storage_collection_metrics":
+          return {
+            totals: { items: 0, sources: 0, verified: 0, warnings: 0, conflicted: 0, avgScore: 0 },
+            bySourceType: [],
+            byVerificationStatus: [],
+            timeline: [],
+            topSources: [],
+          };
+        case "research_storage_list_collection_items":
+          return { items: [] };
+        case "thread_start":
+          return { threadId: "thread-codex-4" };
+        case "turn_start_blocking":
+          return { status: "completed", output_text: "조사 결과를 정리했습니다." };
+        case "workspace_write_text":
+          return `${String(args?.cwd)}/${String(args?.name)}`;
+        default:
+          throw new Error(`unexpected command: ${command}`);
+      }
+    }) as unknown) as <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
+
+    await runTaskRoleWithCodex({
+      invokeFn,
+      storageCwd: "/tmp/rail-storage",
+      taskId: "thread-4",
+      studioRoleId: "research_analyst",
+      prompt: [
+        "Formatting re-enabled",
+        "",
+        "<role_profile>",
+        "role_name: 리서처",
+        "</role_profile>",
+        "",
+        "<task_request>",
+        "스팀 장르 인기 순위와 고평가 장르, 대표 게임 리스트를 조사해줘",
+        "</task_request>",
+      ].join("\n"),
+      sourceTab: "tasks-thread",
+      runId: "role-run-4",
+    });
+
+    expect(capturedPrompts[0]).toBe("스팀 장르 인기 순위와 고평가 장르, 대표 게임 리스트를 조사해줘");
   });
 });

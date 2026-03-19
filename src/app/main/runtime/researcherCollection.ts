@@ -75,6 +75,26 @@ type PrepareResearcherCollectionContextResult = {
   promptContext: string;
 };
 
+function extractResearchCollectionPrompt(input: string) {
+  const normalized = String(input ?? "").trim();
+  if (!normalized) {
+    return "";
+  }
+  const taggedRequest = normalized.match(/<task_request>\s*([\s\S]*?)\s*<\/task_request>/i)?.[1]?.trim();
+  if (taggedRequest) {
+    return taggedRequest;
+  }
+  const roleKbTrimmed = normalized.split("[ROLE_KB_INJECT]")[0]?.trim();
+  if (roleKbTrimmed && roleKbTrimmed !== normalized) {
+    return extractResearchCollectionPrompt(roleKbTrimmed);
+  }
+  const defaultInstructionSplit = normalized.split(/\n\s*\n(?=집중할 점:)/);
+  if (defaultInstructionSplit.length > 1) {
+    return (defaultInstructionSplit[0]?.trim() || normalized).replace(/^\s*(?:@[a-z0-9_-]+\s+)+/i, "").trim();
+  }
+  return normalized.replace(/^\s*(?:@[a-z0-9_-]+\s+)+/i, "").trim();
+}
+
 function isResearcherPack(pack: TaskAgentPromptPack) {
   return pack.id === "researcher" || pack.studioRoleId === "research_analyst";
 }
@@ -92,8 +112,8 @@ function buildCollectionContextMarkdown(params: {
 }) {
   const sourceChart = {
     chart: {
-      type: "bar",
-      title: "Source Mix",
+      type: "pie",
+      title: "",
       labels: params.metrics.bySourceType.slice(0, 6).map((row) => row.sourceType.replace("source.", "")),
       series: [{ name: "Items", data: params.metrics.bySourceType.slice(0, 6).map((row) => row.itemCount), color: "#4A7BFF" }],
     },
@@ -101,7 +121,7 @@ function buildCollectionContextMarkdown(params: {
   const verificationChart = {
     chart: {
       type: "pie",
-      title: "Verification",
+      title: "",
       labels: params.metrics.byVerificationStatus.map((row) => row.verificationStatus),
       series: [{ name: "Items", data: params.metrics.byVerificationStatus.map((row) => row.itemCount) }],
     },
@@ -109,25 +129,25 @@ function buildCollectionContextMarkdown(params: {
   const timelineChart = {
     chart: {
       type: "line",
-      title: "Timeline",
+      title: "",
       labels: params.metrics.timeline.slice(-10).map((row) => row.bucketDate.slice(5)),
       series: [{ name: "Items", data: params.metrics.timeline.slice(-10).map((row) => row.itemCount), color: "#37B679" }],
     },
   };
   const lines = [
-    `# Research Collection`,
+    `# 리서치 수집 결과`,
     ``,
-    `- Job ID: ${params.jobId}`,
-    `- Label: ${params.label}`,
-    `- Source Type: ${params.resolvedSourceType}`,
-    `- Strategy: ${params.collectorStrategy}`,
-    `- Analysis Mode: ${params.planner?.analysisMode ?? "topic_research"}`,
-    `- Metric Focus: ${params.planner?.metricFocus?.join(", ") || "-"}`,
-    `- Keywords: ${params.keywords.join(", ") || "-"}`,
-    `- Domains: ${params.domains.join(", ") || "-"}`,
-    `- Totals: items ${params.metrics.totals.items}, sources ${params.metrics.totals.sources}, verified ${params.metrics.totals.verified}, warnings ${params.metrics.totals.warnings}`,
+    `- 작업 ID: ${params.jobId}`,
+    `- 라벨: ${params.label}`,
+    `- 소스 유형: ${params.resolvedSourceType}`,
+    `- 수집 전략: ${params.collectorStrategy}`,
+    `- 분석 모드: ${params.planner?.analysisMode ?? "topic_research"}`,
+    `- 핵심 지표: ${params.planner?.metricFocus?.join(", ") || "-"}`,
+    `- 키워드: ${params.keywords.join(", ") || "-"}`,
+    `- 도메인: ${params.domains.join(", ") || "-"}`,
+    `- 합계: 항목 ${params.metrics.totals.items}, 출처 ${params.metrics.totals.sources}, 검증 ${params.metrics.totals.verified}, 경고 ${params.metrics.totals.warnings}`,
     ``,
-    `## Top Sources`,
+    `## 주요 출처`,
   ];
 
   for (const source of params.metrics.topSources.slice(0, 6)) {
@@ -144,9 +164,9 @@ function buildCollectionContextMarkdown(params: {
     lines.push("", "```rail-chart", JSON.stringify(timelineChart, null, 2), "```");
   }
 
-  lines.push("", "## Top Evidence");
+  lines.push("", "## 핵심 근거");
   for (const item of params.items.items.slice(0, 6)) {
-    lines.push(`- ${item.title} (${item.sourceName}, ${item.verificationStatus}, score ${item.score})`);
+    lines.push(`- ${item.title} (${item.sourceName}, ${item.verificationStatus}, 점수 ${item.score})`);
     if (item.summary) {
       lines.push(`  ${item.summary}`);
     }
@@ -168,30 +188,30 @@ function buildPromptContext(params: {
   items: ResearchCollectionItemResult;
 }) {
   const evidenceLines = params.items.items.slice(0, 5).map((item, index) =>
-    `${index + 1}. ${item.title} | ${item.sourceName} | ${item.verificationStatus} | score ${item.score} | ${item.url}`,
+    `${index + 1}. ${item.title} | ${item.sourceName} | ${item.verificationStatus} | 점수 ${item.score} | ${item.url}`,
   );
   const plannerLines = params.planner
     ? [
-        `- analysis mode: ${params.planner.analysisMode ?? "topic_research"}`,
-        `- aggregation unit: ${params.planner.aggregationUnit ?? "evidence"}`,
-        `- data scope: ${params.planner.dataScope ?? "cross_source_topic"}`,
-        `- metric focus: ${params.planner.metricFocus?.join(", ") || "-"}`,
-        ...(params.planner.instructions ?? []).map((instruction) => `- collection rule: ${instruction}`),
+        `- 분석 모드: ${params.planner.analysisMode ?? "topic_research"}`,
+        `- 집계 단위: ${params.planner.aggregationUnit ?? "evidence"}`,
+        `- 데이터 범위: ${params.planner.dataScope ?? "cross_source_topic"}`,
+        `- 핵심 지표: ${params.planner.metricFocus?.join(", ") || "-"}`,
+        ...(params.planner.instructions ?? []).map((instruction) => `- 수집 규칙: ${instruction}`),
       ]
     : [];
   return [
-    `# PRECOLLECTED DATASET`,
-    `- researcher collection job id: ${params.jobId}`,
-    `- label: ${params.label}`,
-    `- source type: ${params.resolvedSourceType}`,
-    `- collection strategy: ${params.collectorStrategy}`,
+    `# 사전 수집 데이터셋`,
+    `- researcher 수집 작업 ID: ${params.jobId}`,
+    `- 라벨: ${params.label}`,
+    `- 소스 유형: ${params.resolvedSourceType}`,
+    `- 수집 전략: ${params.collectorStrategy}`,
     ...plannerLines,
-    `- totals: items ${params.metrics.totals.items}, sources ${params.metrics.totals.sources}, verified ${params.metrics.totals.verified}, warnings ${params.metrics.totals.warnings}, conflicted ${params.metrics.totals.conflicted}`,
-    `- data is already stored in local research storage for visualize/database review`,
-    `- cite the collected evidence first, then add interpretation`,
-    `- mention the job id once in the answer so the user can trace it in the visualize tab`,
+    `- 합계: 항목 ${params.metrics.totals.items}, 출처 ${params.metrics.totals.sources}, 검증 ${params.metrics.totals.verified}, 경고 ${params.metrics.totals.warnings}, 충돌 ${params.metrics.totals.conflicted}`,
+    `- 데이터는 이미 로컬 research storage에 저장되어 있어 visualize/database에서 다시 확인할 수 있습니다`,
+    `- 해석보다 먼저 수집된 근거를 인용하세요`,
+    `- 사용자가 visualize 탭에서 추적할 수 있도록 작업 ID를 한 번 언급하세요`,
     ``,
-    `# TOP EVIDENCE`,
+    `# 핵심 근거`,
     ...evidenceLines,
   ].join("\n");
 }
@@ -206,12 +226,16 @@ export async function prepareResearcherCollectionContext(
   if (!normalizedPrompt) {
     return { artifactPaths: [], promptContext: "" };
   }
+  const collectionPrompt = extractResearchCollectionPrompt(normalizedPrompt);
+  if (!collectionPrompt) {
+    return { artifactPaths: [], promptContext: "" };
+  }
 
   try {
     const planned = await input.invokeFn<ResearchCollectionJobPlanResult>("research_storage_plan_agent_job", {
       cwd: input.storageCwd,
-      prompt: normalizedPrompt,
-      label: `Researcher · ${normalizedPrompt.slice(0, 48)}`,
+      prompt: collectionPrompt,
+      label: `Researcher · ${collectionPrompt.slice(0, 48)}`,
       requestedSourceType: "auto",
       maxItems: 40,
     });
@@ -274,7 +298,7 @@ export async function prepareResearcherCollectionContext(
   } catch (error) {
     return {
       artifactPaths: [],
-      promptContext: `# PRECOLLECTED DATASET\n- automatic collection failed: ${String(error ?? "unknown error")}\n- continue with best-effort reasoning and say collection failed if needed`,
+      promptContext: `# 사전 수집 데이터셋\n- 자동 수집 실패: ${String(error ?? "unknown error")}\n- 가능한 범위에서 추론을 이어가되, 수집 실패 사실을 숨기지 마세요`,
     };
   }
 }

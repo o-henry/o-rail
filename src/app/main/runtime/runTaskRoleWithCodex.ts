@@ -1,4 +1,5 @@
 import { toTurnModelEngineId } from "../../../features/workflow/domain";
+import { extractFinalAnswer } from "../../../features/workflow/labels";
 import { toTurnReasoningEffort } from "../../../features/workflow/reasoningLevels";
 import { extractCompletedStatus, extractDeltaText, extractUsageStats } from "../../mainAppUtils";
 import { extractStringByPaths } from "../../../shared/lib/valueUtils";
@@ -100,7 +101,8 @@ function buildRoleTurnPrompt(
 
 function resolveTurnText(raw: unknown): string {
   return (
-    extractStringByPaths(raw, [
+    extractFinalAnswer(raw) ||
+    (extractStringByPaths(raw, [
       "text",
       "output_text",
       "turn.output_text",
@@ -108,7 +110,7 @@ function resolveTurnText(raw: unknown): string {
       "turn.response.text",
       "response.output_text",
       "response.text",
-    ]) ?? extractDeltaText(raw)
+    ]) ?? extractDeltaText(raw))
   ).trim();
 }
 

@@ -2248,6 +2248,8 @@ def execute_dynamic_source_query(source_type: str, source_options: dict[str, Any
             )
             items.extend(custom_result.items)
             warnings.extend(custom_result.warnings)
+        if items:
+            return AdapterResult(adapter=f"{source_type}.dynamic", items=items[:MAX_TOTAL_ITEMS], warnings=warnings)
     elif urls:
         custom_url_targets = [
             {
@@ -2262,6 +2264,8 @@ def execute_dynamic_source_query(source_type: str, source_options: dict[str, Any
         custom_result = collect_custom_url_targets(source_type, f"{source_type}.dynamic.urls", safe_targets, snippets_per_target=3)
         items.extend(custom_result.items)
         warnings.extend(custom_result.warnings)
+        if items:
+            return AdapterResult(adapter=f"{source_type}.dynamic", items=items[:MAX_TOTAL_ITEMS], warnings=warnings)
 
     rss_targets = _build_dynamic_google_news_targets(source_type, options)
     if rss_targets:

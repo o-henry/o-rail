@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import FeedChart from "../../components/feed/FeedChart";
 import FeedDocument from "../../components/feed/FeedDocument";
 import type { FeedChartSpec } from "../../features/feed/chartSpec";
@@ -41,10 +41,9 @@ function buildSourceChart(spec: ReturnType<typeof useVisualizePageState>["collec
     return null;
   }
   return {
-    type: "bar",
-    title: "Source Mix",
+    type: "pie",
     labels: spec.bySourceType.map((row) => shorten(row.sourceType.replace("source.", ""))),
-    series: [{ name: "Items", data: spec.bySourceType.map((row) => row.itemCount), color: "#f87171" }],
+    series: [{ name: "Items", data: spec.bySourceType.map((row) => row.itemCount) }],
   };
 }
 
@@ -54,7 +53,6 @@ function buildTimelineChart(spec: ReturnType<typeof useVisualizePageState>["coll
   }
   return {
     type: "line",
-    title: "Collection Timeline",
     labels: spec.timeline.map((row) => row.bucketDate.slice(5)),
     series: [{ name: "Items", data: spec.timeline.map((row) => row.itemCount), color: "#8b5cf6" }],
   };
@@ -62,7 +60,6 @@ function buildTimelineChart(spec: ReturnType<typeof useVisualizePageState>["coll
 
 export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEntry }: VisualizePageProps) {
   const state = useVisualizePageState({ cwd, hasTauriRuntime });
-  const [selectedEvidenceId, setSelectedEvidenceId] = useState("");
   const [maximizedWidgetId, setMaximizedWidgetId] = useState<VisualizeWidgetId | null>(null);
   const mainRef = useRef<HTMLElement | null>(null);
   const sessionRef = useRef<HTMLElement | null>(null);
@@ -72,6 +69,7 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
   const sourceChart = buildSourceChart(state.collectionMetrics);
   const timelineChart = buildTimelineChart(state.collectionMetrics);
   const qualityScore = Math.max(0, Math.min(100, Math.round(state.collectionMetrics?.totals.avgScore ?? 0)));
+  const reportBody = state.reportMarkdown || state.collectionMarkdown;
 
   const reportEntryId = state.selectedReportRun?.collectionEntryId || state.selectedReportRun?.reportEntryId || "";
   const reportJob = state.collectionPayload?.planned?.job;
@@ -90,19 +88,6 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
     { label: "평균 점수", value: state.collectionMetrics?.totals.avgScore ?? 0, meta: "신호 강도" },
     { label: "경고", value: state.collectionMetrics?.totals.warnings ?? 0, meta: "주의 필요" },
   ];
-
-  useEffect(() => {
-    if (!evidenceItems.length) {
-      setSelectedEvidenceId("");
-      return;
-    }
-    setSelectedEvidenceId((current) => (evidenceItems.some((item) => item.itemFactId === current) ? current : evidenceItems[0]?.itemFactId ?? ""));
-  }, [evidenceItems]);
-
-  const selectedEvidence = useMemo(
-    () => evidenceItems.find((item) => item.itemFactId === selectedEvidenceId) ?? evidenceItems[0] ?? null,
-    [evidenceItems, selectedEvidenceId],
-  );
 
   const focusWidget = useCallback((ref: { current: HTMLElement | null }) => {
     const container = mainRef.current;
@@ -206,7 +191,12 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
                 title="COLLECTION TIMELINE"
                 widgetId="timeline"
               >
-                {timelineChart ? <FeedChart spec={timelineChart} /> : <div className="visualize-monitor-placeholder">Timeline chart pending</div>}
+                {timelineChart ? (
+                  <>
+                    <p className="visualize-monitor-chart-copy">수집된 근거가 날짜별로 몇 건 들어왔는지 보여줍니다.</p>
+                    <FeedChart spec={timelineChart} />
+                  </>
+                ) : <div className="visualize-monitor-placeholder">수집 타임라인 데이터가 아직 없습니다.</div>}
               </VisualizeWidgetFrame>
 
               <VisualizeWidgetFrame
@@ -216,7 +206,12 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
                 title="SOURCE MIX"
                 widgetId="sourceMix"
               >
-                {sourceChart ? <FeedChart spec={sourceChart} /> : <div className="visualize-monitor-placeholder">Source mix pending</div>}
+                {sourceChart ? (
+                  <>
+                    <p className="visualize-monitor-chart-copy">현재 세션에 포함된 출처 유형 비중입니다.</p>
+                    <FeedChart spec={sourceChart} />
+                  </>
+                ) : <div className="visualize-monitor-placeholder">출처 분포 데이터가 아직 없습니다.</div>}
               </VisualizeWidgetFrame>
 
               <VisualizeWidgetFrame
@@ -280,7 +275,7 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
                     : topSources.map((source) => (
                         <div className="visualize-monitor-ranked-item" key={source.sourceName}>
                           <strong>{source.sourceName}</strong>
-                          <span>{source.itemCount} items</span>
+                          <span>{source.itemCount}건</span>
                         </div>
                       ))}
                   {popularGenres.length || topSources.length ? null : <p className="visualize-monitor-empty">표시할 상위 소스가 없습니다.</p>}
@@ -323,10 +318,10 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
                 title="RESEARCH REPORT"
                 widgetId="report"
               >
-                {state.reportMarkdown ? (
-                  <FeedDocument className="visualize-monitor-document" text={state.reportMarkdown} />
+                {reportBody ? (
+                  <FeedDocument className="visualize-monitor-document" text={reportBody} />
                 ) : (
-                  <p className="visualize-monitor-empty">No final researcher report for this run yet.</p>
+                  <p className="visualize-monitor-empty">아직 표시할 researcher 문서가 없습니다.</p>
                 )}
               </VisualizeWidgetFrame>
 
@@ -348,32 +343,21 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
                 </div>
                 <div className="visualize-monitor-evidence-picker">
                   {evidenceItems.map((item) => (
-                    <button
-                      className={item.itemFactId === selectedEvidence?.itemFactId ? "is-active" : ""}
-                      key={item.itemFactId}
-                      onClick={() => setSelectedEvidenceId(item.itemFactId)}
-                      type="button"
-                    >
+                    <article className="visualize-monitor-evidence-card" key={item.itemFactId}>
                       <strong>{item.title || shorten(item.sourceName || item.sourceType, 24)}</strong>
-                      <span>{item.verificationStatus} · {item.score}</span>
-                    </button>
+                      <div className="visualize-monitor-chip-row">
+                        <span>{item.sourceName || item.sourceType}</span>
+                        <span>{item.verificationStatus}</span>
+                        <span>SCORE {item.score}</span>
+                      </div>
+                      <p>{item.summary || item.contentExcerpt || "본문 추출 요약 없음"}</p>
+                      <a href={item.url} rel="noreferrer" target="_blank">
+                        {item.url}
+                      </a>
+                    </article>
                   ))}
                   {evidenceItems.length ? null : <p className="visualize-monitor-empty">아직 정규화된 근거 항목이 없습니다.</p>}
                 </div>
-                {selectedEvidence ? (
-                  <div className="visualize-monitor-evidence-detail">
-                    <strong>{selectedEvidence.title || selectedEvidence.url}</strong>
-                    <div className="visualize-monitor-chip-row">
-                      <span>{selectedEvidence.sourceName || selectedEvidence.sourceType}</span>
-                      <span>SCORE {selectedEvidence.score}</span>
-                      <span>HOT {selectedEvidence.hotScore}</span>
-                    </div>
-                    <p>{selectedEvidence.summary || selectedEvidence.contentExcerpt || "본문 추출 요약 없음"}</p>
-                    <a href={selectedEvidence.url} rel="noreferrer" target="_blank">
-                      {selectedEvidence.url}
-                    </a>
-                  </div>
-                ) : null}
               </VisualizeWidgetFrame>
             </div>
           </section>

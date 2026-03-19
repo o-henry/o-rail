@@ -368,11 +368,35 @@ class ResearchStorageTests(unittest.TestCase):
             self.assertIn("popularity", planner["metricFocus"])
             self.assertIn("quality", planner["metricFocus"])
             self.assertIn("representatives", planner["metricFocus"])
-            self.assertEqual(job["requestedSourceType"], "market")
-            self.assertEqual(job["resolvedSourceType"], "market")
+            self.assertEqual(job["requestedSourceType"], "community")
+            self.assertEqual(job["resolvedSourceType"], "community")
+            self.assertEqual(job["viaSourceType"], "source.community")
             self.assertIn("steamdb.info", job["domains"])
             self.assertTrue(any("steam genre" in keyword.lower() for keyword in job["keywords"]))
             self.assertTrue(any("genre level" in instruction.lower() for instruction in planner["instructions"]))
+
+    def test_plan_agent_collection_job_extracts_task_request_from_role_formatted_prompt(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace = Path(temp_dir)
+            planned = plan_agent_collection_job(
+                workspace,
+                prompt=(
+                    "Formatting re-enabled\n\n"
+                    "<role_profile>\nrole_name: 리서처\n</role_profile>\n\n"
+                    "<task_request>\n"
+                    "스팀 평가 기준으로 가장 인기있는 장르와 대표 게임 리스트를 조사해줘\n"
+                    "</task_request>\n\n"
+                    "[ROLE_KB_INJECT]\nnoise\n[/ROLE_KB_INJECT]"
+                ),
+                label="",
+                requested_source_type="auto",
+                max_items=40,
+            )
+
+            job = planned["job"]
+            planner = job["planner"]
+            self.assertEqual(planner["prompt"], "스팀 평가 기준으로 가장 인기있는 장르와 대표 게임 리스트를 조사해줘")
+            self.assertTrue(all("Formatting re-enabled" not in keyword for keyword in job["keywords"]))
 
     def test_record_collection_job_run_persists_genre_rankings_for_genre_mode(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

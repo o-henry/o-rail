@@ -74,6 +74,11 @@
   gap: 8px;
 }
 
+.settings-language-controls {
+  display: grid;
+  gap: 8px;
+}
+
 .settings-opacity-slider {
   width: 100%;
   accent-color: #5f88d7;

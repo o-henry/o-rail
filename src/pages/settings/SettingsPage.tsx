@@ -1,6 +1,8 @@
-import { type ChangeEvent, useRef } from "react";
+import { type ChangeEvent, useMemo, useRef } from "react";
 import FancySelect from "../../components/FancySelect";
 import { useI18n } from "../../i18n";
+import type { AppLocale } from "../../i18n";
+import { buildSettingsLocaleOptions, detectPreferredLocale } from "./settingsLocaleOptions";
 
 type SettingsPageProps = {
   compact?: boolean;
@@ -51,8 +53,16 @@ export default function SettingsPage({
   onCloseUsageResult,
   onOpenRunsFolder,
 }: SettingsPageProps) {
-  const { t } = useI18n();
+  const { locale, setLocale, t } = useI18n();
   const backgroundFileInputRef = useRef<HTMLInputElement | null>(null);
+  const localeOptions = useMemo(
+    () =>
+      buildSettingsLocaleOptions(
+        detectPreferredLocale(typeof navigator === "undefined" ? null : (navigator.languages?.length ? navigator.languages : navigator.language)),
+        (nextLocale) => t(`lang.${nextLocale}`),
+      ),
+    [t],
+  );
 
   const onOpenBackgroundFilePicker = () => {
     backgroundFileInputRef.current?.click();
@@ -125,6 +135,16 @@ export default function SettingsPage({
           onChange={onSetCodexMultiAgentMode}
           options={[...codexMultiAgentModeOptions]}
           value={codexMultiAgentMode}
+        />
+      </label>
+      <label className="settings-language-controls">
+        {t("nav.language")}
+        <FancySelect
+          ariaLabel={t("nav.language")}
+          className="modern-select settings-language-select"
+          onChange={(next) => setLocale(next as AppLocale)}
+          options={localeOptions}
+          value={locale}
         />
       </label>
       <label className="settings-background-controls">

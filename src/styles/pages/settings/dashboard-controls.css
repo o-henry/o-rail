@@ -271,7 +271,11 @@
 .settings-multiagent-select .fancy-select-trigger,
 .settings-multiagent-select.fancy-select.is-open .fancy-select-trigger,
 .settings-multiagent-select .fancy-select-trigger:focus,
-.settings-multiagent-select .fancy-select-trigger:focus-visible {
+.settings-multiagent-select .fancy-select-trigger:focus-visible,
+.settings-language-select .fancy-select-trigger,
+.settings-language-select.fancy-select.is-open .fancy-select-trigger,
+.settings-language-select .fancy-select-trigger:focus,
+.settings-language-select .fancy-select-trigger:focus-visible {
   border: 0;
   border-radius: 4px;
   background: color-mix(in srgb, var(--surface-soft) 74%, var(--surface-elevated));

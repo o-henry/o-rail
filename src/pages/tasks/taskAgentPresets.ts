@@ -162,10 +162,11 @@ const ALIAS_TO_PRESET_ID = new Map<string, TaskAgentPresetId>(aliasEntries);
 export const UNITY_TASK_AGENT_ORDER: TaskAgentPresetId[] = UNITY_TASK_AGENT_PRESETS.map((preset) => preset.id);
 
 export const UNITY_TASK_TEAM_PRESETS: Record<"solo" | "duo" | "full-squad", TaskAgentPresetId[]> = {
-  solo: ["game_designer", "unity_implementer", "qa_playtester"],
-  duo: ["game_designer", "unity_implementer", "qa_playtester", "unity_architect", "technical_artist"],
+  solo: ["game_designer", "researcher", "unity_implementer", "qa_playtester"],
+  duo: ["game_designer", "researcher", "unity_implementer", "qa_playtester", "unity_architect", "technical_artist"],
   "full-squad": [
     "game_designer",
+    "researcher",
     "unity_implementer",
     "qa_playtester",
     "unity_architect",

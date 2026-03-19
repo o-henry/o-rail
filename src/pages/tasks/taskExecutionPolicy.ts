@@ -132,7 +132,7 @@ export function createTaskExecutionPlan(params: {
   prompt: string;
 }): TaskExecutionPlan {
   const enabledRoleIds = uniqueRoleIds(params.enabledRoleIds);
-  const requestedRoleIds = uniqueRoleIds(params.requestedRoleIds).filter((roleId) => enabledRoleIds.includes(roleId));
+  const requestedRoleIds = uniqueRoleIds(params.requestedRoleIds);
   const defaultRoleIds = getDefaultRunPresetIds(enabledRoleIds, requestedRoleIds);
   const candidateRoleIds = requestedRoleIds.length > 0 ? requestedRoleIds : (enabledRoleIds.length > 0 ? enabledRoleIds : defaultRoleIds);
   const primaryRoleId = pickPrimaryRole(params.prompt, candidateRoleIds);

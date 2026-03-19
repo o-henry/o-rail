@@ -33,6 +33,7 @@ describe("taskAgentPresets", () => {
 
   it("defaults new threads to the full Unity squad and keeps requested run roles in preset order", () => {
     expect(getDefaultTaskAgentPresetIds("full-squad")).toEqual(UNITY_TASK_TEAM_PRESETS["full-squad"]);
+    expect(UNITY_TASK_TEAM_PRESETS["full-squad"]).toContain("researcher");
     expect(
       getDefaultRunPresetIds(
         UNITY_TASK_TEAM_PRESETS["full-squad"],

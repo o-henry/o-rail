@@ -69,4 +69,16 @@ describe("taskExecutionPolicy", () => {
     expect(plan.primaryRoleId).toBe("researcher");
     expect(plan.participantRoleIds).toEqual(["researcher", "unity_architect"]);
   });
+
+  it("honors an explicit researcher tag even when the initial enabled roles omit it", () => {
+    const plan = createTaskExecutionPlan({
+      enabledRoleIds: ["game_designer", "unity_implementer", "qa_playtester"],
+      requestedRoleIds: ["researcher"],
+      prompt: "스팀 평가 기준으로 가장 인기 있는 장르와 대표 게임 리스트를 조사해줘",
+    });
+
+    expect(plan.mode).toBe("single");
+    expect(plan.primaryRoleId).toBe("researcher");
+    expect(plan.participantRoleIds).toEqual(["researcher"]);
+  });
 });

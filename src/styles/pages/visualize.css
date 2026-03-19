@@ -28,8 +28,6 @@
 .visualize-monitor-grid,
 .visualize-monitor-chip-row,
 .visualize-monitor-kpi-grid,
-.visualize-monitor-session-list,
-.visualize-monitor-manual,
 .visualize-monitor-console-meta {
   display: flex;
 }
@@ -52,10 +50,7 @@
 .visualize-monitor-widget-head small,
 .visualize-monitor-chip-row span,
 .visualize-monitor-kpi-grid span,
-.visualize-monitor-console-meta span,
-.visualize-monitor-session-item span,
-.visualize-monitor-drawer summary,
-.visualize-monitor-manual label > span {
+.visualize-monitor-console-meta span {
   font-family: "DepartureMonoRail", "Galmuri11", monospace;
 }
 
@@ -105,9 +100,7 @@
 }
 
 .visualize-monitor-actions button:hover,
-.visualize-monitor-session-item:hover,
-.visualize-monitor-evidence-picker button:hover,
-.visualize-monitor-manual button:hover {
+.visualize-monitor-evidence-picker button:hover {
   border-color: rgba(148, 163, 184, 0.95);
   background: rgba(248, 250, 252, 1);
 }
@@ -209,7 +202,7 @@
 .visualize-monitor-widget-head span,
 .visualize-monitor-widget-head small {
   color: #64748b;
-  font-size: 0.7rem;
+  font-size: 0.85rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
@@ -265,18 +258,23 @@
 }
 
 .visualize-monitor-widget.is-sources {
-  grid-column: 1 / 5;
+  grid-column: 1 / 7;
   grid-row: span 2;
+  justify-content: center;
 }
 
 .visualize-monitor-widget.is-steam {
-  grid-column: 5 / 9;
+  grid-column: 7 / 13;
   grid-row: span 2;
+  justify-content: center;
 }
 
-.visualize-monitor-widget.is-storage {
-  grid-column: 9 / 13;
-  grid-row: span 2;
+.visualize-monitor-widget.is-sources .visualize-monitor-ranked-list,
+.visualize-monitor-widget.is-steam .visualize-monitor-ranked-list {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  justify-content: center;
 }
 
 .visualize-monitor-widget.is-report {
@@ -305,7 +303,7 @@
 .visualize-monitor-kpi-grid {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 8px;
+  gap: 6px;
   align-content: start;
 }
 
@@ -317,7 +315,7 @@
   gap: 8px;
   border: 1px solid rgba(226, 232, 240, 1);
   background: rgba(248, 250, 252, 0.95);
-  padding: 8px 10px;
+  padding: 6px 8px;
 }
 
 .visualize-monitor-kpi-item strong {
@@ -412,7 +410,7 @@
   position: relative;
   width: 100%;
   height: 10px;
-  border-radius: 999px;
+  border-radius: 1px;
   background: rgba(226, 232, 240, 0.92);
   overflow: hidden;
 }
@@ -465,10 +463,24 @@
   width: 100%;
   border: 1px solid rgba(203, 213, 225, 0.95);
   background: rgba(255, 255, 255, 0.98);
-  padding: 10px 12px;
+  height: 34px;
+  padding: 0 12px;
   color: inherit;
   box-sizing: border-box;
   font-family: "DepartureMonoRail", "Galmuri11", monospace;
+}
+
+.visualize-monitor-search-row {
+  display: flex;
+  align-items: center;
+  min-height: 34px;
+}
+
+.visualize-monitor-search-row input:focus,
+.visualize-monitor-search-row input:focus-visible {
+  border-color: transparent;
+  outline: none;
+  box-shadow: none;
 }
 
 .visualize-monitor-evidence-picker {
@@ -478,8 +490,7 @@
   overflow: auto;
 }
 
-.visualize-monitor-evidence-picker button,
-.visualize-monitor-session-item {
+.visualize-monitor-evidence-picker button {
   display: flex;
   flex-direction: column;
   gap: 5px;
@@ -490,15 +501,9 @@
   text-align: left;
 }
 
-.visualize-monitor-evidence-picker button.is-active,
-.visualize-monitor-session-item.is-active {
+.visualize-monitor-evidence-picker button.is-active {
   border-color: rgba(59, 130, 246, 0.5);
   background: rgba(219, 234, 254, 0.92);
-}
-
-.visualize-monitor-drawer {
-  border-width: 0 0 1px;
-  background: transparent;
 }
 
 .visualize-monitor-console-copy {
@@ -545,61 +550,13 @@
 }
 
 .visualize-monitor-evidence-detail a,
-.visualize-monitor-evidence-picker span,
-.visualize-monitor-session-item span {
+.visualize-monitor-evidence-picker span {
   color: #64748b;
   font-size: 0.76rem;
 }
 
 .visualize-monitor-evidence-detail a {
   word-break: break-all;
-}
-
-.visualize-monitor-session-list {
-  min-height: 0;
-  flex-direction: column;
-  gap: 8px;
-  overflow: auto;
-}
-
-.visualize-monitor-drawer summary {
-  cursor: pointer;
-  list-style: none;
-  color: #334155;
-  font-size: 0.72rem;
-  letter-spacing: 0.12em;
-}
-
-.visualize-monitor-drawer summary::-webkit-details-marker {
-  display: none;
-}
-
-.visualize-monitor-manual {
-  flex-direction: column;
-  gap: 10px;
-  margin-top: 12px;
-}
-
-.visualize-monitor-manual label {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.visualize-monitor-manual textarea,
-.visualize-monitor-manual input,
-.visualize-monitor-manual select,
-.visualize-monitor-manual button {
-  border: 1px solid rgba(203, 213, 225, 0.95);
-  background: rgba(255, 255, 255, 0.98);
-  padding: 10px 12px;
-  color: inherit;
-  box-sizing: border-box;
-  font-family: "DepartureMonoRail", "Galmuri11", monospace;
-}
-
-.visualize-monitor-manual button {
-  align-self: flex-start;
 }
 
 @media (max-width: 1360px) {
@@ -621,15 +578,11 @@
   }
 
   .visualize-monitor-widget.is-sources {
-    grid-column: 1 / 4;
+    grid-column: 1 / 5;
   }
 
   .visualize-monitor-widget.is-steam {
-    grid-column: 4 / 7;
-  }
-
-  .visualize-monitor-widget.is-storage {
-    grid-column: 7 / 9;
+    grid-column: 5 / 9;
   }
 
   .visualize-monitor-kpi-grid {
@@ -663,7 +616,6 @@
   .visualize-monitor-widget.is-chart-quality,
   .visualize-monitor-widget.is-sources,
   .visualize-monitor-widget.is-steam,
-  .visualize-monitor-widget.is-storage,
   .visualize-monitor-widget.is-report,
   .visualize-monitor-widget.is-evidence {
     grid-column: 1 / -1;

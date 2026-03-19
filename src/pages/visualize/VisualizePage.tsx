@@ -295,18 +295,6 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
                 </div>
               </article>
 
-              <article className="visualize-monitor-widget is-storage">
-                <div className="visualize-monitor-widget-head">
-                  <span>[ 저장소 상태 ]</span>
-                  <small>{state.activeJobId || "global"}</small>
-                </div>
-                <div className="visualize-monitor-console-meta">
-                  <div><span>RUNS</span><strong>{state.overview?.totals.runs ?? 0}</strong></div>
-                  <div><span>REVIEWS</span><strong>{state.overview?.totals.reviews ?? 0}</strong></div>
-                  <div><span>FACTS</span><strong>{state.overview?.totals.collectionItems ?? 0}</strong></div>
-                </div>
-              </article>
-
               <article className="visualize-monitor-widget is-report" ref={reportRef}>
                 <div className="visualize-monitor-widget-head">
                   <span>[ 리서치 리포트 ]</span>
@@ -364,61 +352,6 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
             </div>
           </section>
         </section>
-
-        <details className="visualize-monitor-drawer">
-          <summary>[ 수동 수집 오버라이드 ]</summary>
-          <div className="visualize-monitor-manual">
-            <label>
-              <span>URL 목록</span>
-              <textarea
-                onChange={(event) => state.setUrlsText(event.currentTarget.value)}
-                placeholder="https://store.steampowered.com/app/..."
-                rows={4}
-                value={state.urlsText}
-              />
-            </label>
-            <label>
-              <span>키워드</span>
-              <input
-                onChange={(event) => state.setKeywordsText(event.currentTarget.value)}
-                placeholder="roguelike, indie, replayability"
-                type="text"
-                value={state.keywordsText}
-              />
-            </label>
-            <label>
-              <span>라벨</span>
-              <input onChange={(event) => state.setLabel(event.currentTarget.value)} placeholder="Idea sweep" type="text" value={state.label} />
-            </label>
-            <label>
-              <span>소스 타입</span>
-              <select onChange={(event) => state.setRequestedSourceType(event.currentTarget.value)} value={state.requestedSourceType}>
-                <option value="auto">auto</option>
-                <option value="community">community</option>
-                <option value="critic">critic</option>
-                <option value="news">news</option>
-                <option value="dev">dev</option>
-                <option value="market">market</option>
-                <option value="sns">sns</option>
-              </select>
-            </label>
-            <label>
-              <span>최대 item</span>
-              <input
-                inputMode="numeric"
-                onChange={(event) =>
-                  state.setMaxItems(Math.max(1, Math.min(120, Number(event.currentTarget.value.replace(/[^\d]/g, "")) || 40)))
-                }
-                pattern="[0-9]*"
-                type="text"
-                value={String(state.maxItems)}
-              />
-            </label>
-            <button disabled={state.busy || !hasTauriRuntime} onClick={() => void state.runCollection()} type="button">
-              {state.busy ? "수집 실행 중..." : "수집 실행"}
-            </button>
-          </div>
-        </details>
       </section>
     </section>
   );

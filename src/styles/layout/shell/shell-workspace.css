@@ -2,6 +2,7 @@
   min-width: 0;
   min-height: 0;
   height: 100%;
+  position: relative;
 }
 
 .shell-main-surface {
@@ -99,6 +100,10 @@
   position: relative;
 }
 
+.shell-terminal-card.is-fullscreen {
+  background: #ffffff;
+}
+
 .shell-terminal-card.is-selected {
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--focus-ring) 42%, transparent);
 }
@@ -188,6 +193,24 @@
 .shell-terminal-card .tasks-terminal-host {
   min-height: 0;
   height: 100%;
+}
+
+.shell-fullscreen-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  background: #ffffff;
+}
+
+.shell-fullscreen-overlay .shell-terminal-card {
+  width: 100vw;
+  height: 100vh;
+}
+
+.shell-fullscreen-overlay .shell-terminal-card-head {
+  min-height: 32px;
+  padding: 6px 12px;
+  background: #eef2f7;
 }
 
 .shell-terminal-resizer {

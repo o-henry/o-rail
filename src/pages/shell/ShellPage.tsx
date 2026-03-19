@@ -1,4 +1,4 @@
-import { type DragEvent, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode, useMemo, useState } from "react";
+import { type DragEvent, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode, useEffect, useMemo, useState } from "react";
 import { TaskTerminalViewport } from "../tasks/TaskTerminalViewport";
 import { useTasksThreadState } from "../tasks/useTasksThreadState";
 import { useShellTerminalGrid } from "./useShellTerminalGrid";
@@ -51,110 +51,132 @@ export default function ShellPage(props: ShellPageProps) {
   });
   const [addDragSourcePaneId, setAddDragSourcePaneId] = useState("");
   const [dropTarget, setDropTarget] = useState<{ paneId: string; direction: ShellSplitDirection } | null>(null);
+  const [fullscreenPaneId, setFullscreenPaneId] = useState("");
 
   const paneById = useMemo(
     () => Object.fromEntries(shellGrid.panes.map((pane) => [pane.id, pane])),
     [shellGrid.panes],
   );
+  const fullscreenPane = fullscreenPaneId ? paneById[fullscreenPaneId] : undefined;
 
-  const renderLayoutNode = (node: ShellTerminalLayoutNode | null): ReactNode => {
-    if (!node) {
+  useEffect(() => {
+    if (fullscreenPaneId && !fullscreenPane) {
+      setFullscreenPaneId("");
+    }
+  }, [fullscreenPane, fullscreenPaneId]);
+
+  const renderPaneCard = (paneId: string, fullscreen = false) => {
+    const pane = paneById[paneId];
+    if (!pane) {
       return null;
     }
-    if (node.kind === "leaf") {
-      const pane = paneById[node.paneId];
-      if (!pane) {
-        return null;
-      }
-      const isDropTarget = dropTarget?.paneId === pane.id ? `is-drop-${dropTarget.direction}` : "";
-      return (
-        <article
-          className={`shell-terminal-card panel-card${shellGrid.selectedPaneId === pane.id ? " is-selected" : ""} ${isDropTarget}`.trim()}
-          key={pane.id}
-          onClick={() => shellGrid.setSelectedPaneId(pane.id)}
-          onDragLeave={() => {
-            setDropTarget((current) => (current?.paneId === pane.id ? null : current));
-          }}
-          onDragOver={(event) => {
-            if (!addDragSourcePaneId) {
-              return;
-            }
-            event.preventDefault();
-            setDropTarget({
-              paneId: pane.id,
-              direction: resolveDropDirection(event),
-            });
-          }}
-          onDrop={(event) => {
-            if (!addDragSourcePaneId) {
-              return;
-            }
-            event.preventDefault();
-            const direction = resolveDropDirection(event);
-            setDropTarget(null);
-            setAddDragSourcePaneId("");
-            void shellGrid.addPane(pane.id, direction);
-          }}
-        >
-          <header className="shell-terminal-card-head">
-            <div className="shell-terminal-card-copy">
-              <input
-                aria-label={`${pane.title} title`}
-                className="shell-terminal-title-input"
-                onClick={(event) => {
-                  event.stopPropagation();
-                }}
-                onChange={(event) => {
-                  shellGrid.renamePane(pane.id, event.currentTarget.value);
-                }}
-                onKeyDown={(event: KeyboardEvent<HTMLInputElement>) => {
-                  if (event.key === "Enter") {
-                    event.currentTarget.blur();
-                  }
-                }}
-                type="text"
-                value={pane.title}
-              />
-            </div>
-            <div className="shell-terminal-card-actions">
-              <span>{displayTerminalStatus(pane.status, pane.exitCode)}</span>
-              <button
-                aria-label="stop terminal"
-                className="shell-terminal-icon-button"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  void shellGrid.interruptPane(pane.id);
-                }}
-                type="button"
-              >
-                <img alt="" aria-hidden="true" src="/canvas-stop.svg" />
-              </button>
-              <button
-                aria-label="clear terminal"
-                className="shell-terminal-icon-button"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  shellGrid.clearPane(pane.id);
-                }}
-                type="button"
-              >
-                <img alt="" aria-hidden="true" src="/reload.svg" />
-              </button>
-              <button
-                aria-label="close terminal"
-                className="shell-terminal-icon-button"
-                disabled={shellGrid.panes.length <= 1}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  if (shellGrid.panes.length <= 1) {
-                    return;
-                  }
-                  void shellGrid.closePane(pane.id);
-                }}
-                type="button"
-              >
-                <img alt="" aria-hidden="true" src="/xmark.svg" />
-              </button>
+    const isDropTarget = !fullscreen && dropTarget?.paneId === pane.id ? `is-drop-${dropTarget.direction}` : "";
+    return (
+      <article
+        className={`shell-terminal-card panel-card${shellGrid.selectedPaneId === pane.id ? " is-selected" : ""}${fullscreen ? " is-fullscreen" : ""} ${isDropTarget}`.trim()}
+        key={pane.id}
+        onClick={() => shellGrid.setSelectedPaneId(pane.id)}
+        onDragLeave={() => {
+          if (fullscreen) {
+            return;
+          }
+          setDropTarget((current) => (current?.paneId === pane.id ? null : current));
+        }}
+        onDragOver={(event) => {
+          if (fullscreen || !addDragSourcePaneId) {
+            return;
+          }
+          event.preventDefault();
+          setDropTarget({
+            paneId: pane.id,
+            direction: resolveDropDirection(event),
+          });
+        }}
+        onDrop={(event) => {
+          if (fullscreen || !addDragSourcePaneId) {
+            return;
+          }
+          event.preventDefault();
+          const direction = resolveDropDirection(event);
+          setDropTarget(null);
+          setAddDragSourcePaneId("");
+          void shellGrid.addPane(pane.id, direction);
+        }}
+      >
+        <header className="shell-terminal-card-head">
+          <div className="shell-terminal-card-copy">
+            <input
+              aria-label={`${pane.title} title`}
+              className="shell-terminal-title-input"
+              onClick={(event) => {
+                event.stopPropagation();
+              }}
+              onChange={(event) => {
+                shellGrid.renamePane(pane.id, event.currentTarget.value);
+              }}
+              onKeyDown={(event: KeyboardEvent<HTMLInputElement>) => {
+                if (event.key === "Enter") {
+                  event.currentTarget.blur();
+                }
+              }}
+              type="text"
+              value={pane.title}
+            />
+          </div>
+          <div className="shell-terminal-card-actions">
+            <span>{displayTerminalStatus(pane.status, pane.exitCode)}</span>
+            <button
+              aria-label={fullscreen ? "exit fullscreen" : "enter fullscreen"}
+              className="shell-terminal-icon-button"
+              onClick={(event) => {
+                event.stopPropagation();
+                setFullscreenPaneId((current) => (current === pane.id ? "" : pane.id));
+              }}
+              type="button"
+            >
+              <img alt="" aria-hidden="true" src="/canvas-fullscreen.svg" />
+            </button>
+            <button
+              aria-label="stop terminal"
+              className="shell-terminal-icon-button"
+              onClick={(event) => {
+                event.stopPropagation();
+                void shellGrid.interruptPane(pane.id);
+              }}
+              type="button"
+            >
+              <img alt="" aria-hidden="true" src="/canvas-stop.svg" />
+            </button>
+            <button
+              aria-label="clear terminal"
+              className="shell-terminal-icon-button"
+              onClick={(event) => {
+                event.stopPropagation();
+                shellGrid.clearPane(pane.id);
+              }}
+              type="button"
+            >
+              <img alt="" aria-hidden="true" src="/reload.svg" />
+            </button>
+            <button
+              aria-label="close terminal"
+              className="shell-terminal-icon-button"
+              disabled={shellGrid.panes.length <= 1}
+              onClick={(event) => {
+                event.stopPropagation();
+                if (shellGrid.panes.length <= 1) {
+                  return;
+                }
+                if (fullscreenPaneId === pane.id) {
+                  setFullscreenPaneId("");
+                }
+                void shellGrid.closePane(pane.id);
+              }}
+              type="button"
+            >
+              <img alt="" aria-hidden="true" src="/xmark.svg" />
+            </button>
+            {!fullscreen ? (
               <button
                 aria-label="add terminal"
                 className="shell-terminal-icon-button"
@@ -176,17 +198,26 @@ export default function ShellPage(props: ShellPageProps) {
               >
                 <img alt="" aria-hidden="true" src="/plus-large-svgrepo-com.svg" />
               </button>
-            </div>
-          </header>
-          <TaskTerminalViewport
-            onTerminalData={(chars) => shellGrid.sendChars(pane.id, chars)}
-            onTerminalResize={(cols, rows) => shellGrid.resizePane(pane.id, cols, rows)}
-            sessionId={pane.id}
-            selected={shellGrid.selectedPaneId === pane.id}
-          />
-          {dropTarget?.paneId === pane.id ? <div className={`shell-terminal-drop-preview is-${dropTarget.direction}`} /> : null}
-        </article>
-      );
+            ) : null}
+          </div>
+        </header>
+        <TaskTerminalViewport
+          onTerminalData={(chars) => shellGrid.sendChars(pane.id, chars)}
+          onTerminalResize={(cols, rows) => shellGrid.resizePane(pane.id, cols, rows)}
+          sessionId={pane.id}
+          selected={shellGrid.selectedPaneId === pane.id || fullscreen}
+        />
+        {!fullscreen && dropTarget?.paneId === pane.id ? <div className={`shell-terminal-drop-preview is-${dropTarget.direction}`} /> : null}
+      </article>
+    );
+  };
+
+  const renderLayoutNode = (node: ShellTerminalLayoutNode | null): ReactNode => {
+    if (!node) {
+      return null;
+    }
+    if (node.kind === "leaf") {
+      return renderPaneCard(node.paneId);
     }
 
     return (
@@ -253,11 +284,16 @@ export default function ShellPage(props: ShellPageProps) {
             </section>
           ) : (
             <div className="shell-terminal-grid">
-              {renderLayoutNode(shellGrid.layout)}
+              {!fullscreenPaneId ? renderLayoutNode(shellGrid.layout) : null}
             </div>
           )}
         </div>
       </section>
+      {fullscreenPane ? (
+        <div className="shell-fullscreen-overlay">
+          {renderPaneCard(fullscreenPane.id, true)}
+        </div>
+      ) : null}
     </section>
   );
 }

@@ -210,7 +210,7 @@ export default function ShellPage(props: ShellPageProps) {
           onTerminalResize={(cols, rows) => shellGrid.resizePane(pane.id, cols, rows)}
           sessionId={pane.id}
           selected={shellGrid.selectedPaneId === pane.id || fullscreen}
-          theme="light"
+          theme="dark"
         />
         {!fullscreen && dropTarget?.paneId === pane.id ? <div className={`shell-terminal-drop-preview is-${dropTarget.direction}`} /> : null}
       </article>

@@ -1799,7 +1799,7 @@
 .shell-terminal-card .tasks-terminal-host .xterm,
 .shell-terminal-card .tasks-terminal-host .xterm-viewport,
 .shell-terminal-card .tasks-terminal-host .xterm-screen {
-  background: #ffffff;
+  background: #222438;
 }
 
 .tasks-thread-terminal-panel {

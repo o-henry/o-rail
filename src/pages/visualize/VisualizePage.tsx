@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import FeedChart from "../../components/feed/FeedChart";
 import FeedDocument from "../../components/feed/FeedDocument";
 import type { FeedChartSpec } from "../../features/feed/chartSpec";
@@ -76,10 +76,8 @@ function buildQualityChart(score: number): FeedChartSpec {
 export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEntry }: VisualizePageProps) {
   const state = useVisualizePageState({ cwd, hasTauriRuntime });
   const [selectedEvidenceId, setSelectedEvidenceId] = useState("");
-  const [consoleCollapsed, setConsoleCollapsed] = useState(false);
-  const [canvasZoom, setCanvasZoom] = useState(1);
-  const stageRef = useRef<HTMLElement | null>(null);
-  const dragStateRef = useRef<{ pointerId: number; startX: number; startY: number; scrollLeft: number; scrollTop: number } | null>(null);
+  const [railHidden, setRailHidden] = useState(false);
+  const mainRef = useRef<HTMLElement | null>(null);
   const sessionRef = useRef<HTMLElement | null>(null);
   const reportRef = useRef<HTMLElement | null>(null);
   const evidenceRef = useRef<HTMLElement | null>(null);
@@ -108,80 +106,21 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
   );
 
   const focusWidget = useCallback((ref: { current: HTMLElement | null }) => {
-    const stage = stageRef.current;
+    const container = mainRef.current;
     const element = ref.current;
-    if (!stage || !element) {
+    if (!container || !element) {
       return;
     }
-    const left = Math.max(0, element.offsetLeft * canvasZoom - 24);
-    const top = Math.max(0, element.offsetTop * canvasZoom - 24);
-    stage.scrollTo({ left, top, behavior: "smooth" });
-  }, [canvasZoom]);
-
-  const changeZoom = useCallback((direction: "in" | "out" | "reset") => {
-    setCanvasZoom((current) => {
-      if (direction === "reset") {
-        return 1;
-      }
-      const next = direction === "in" ? current + 0.1 : current - 0.1;
-      return Math.max(0.75, Math.min(1.6, Number(next.toFixed(2))));
-    });
-  }, []);
-
-  const handleStagePointerDown = useCallback((event: ReactPointerEvent<HTMLElement>) => {
-    const target = event.target as HTMLElement | null;
-    if (!target || target.closest("button, a, input, textarea, select, summary")) {
-      return;
-    }
-    const stage = stageRef.current;
-    if (!stage) {
-      return;
-    }
-    dragStateRef.current = {
-      pointerId: event.pointerId,
-      startX: event.clientX,
-      startY: event.clientY,
-      scrollLeft: stage.scrollLeft,
-      scrollTop: stage.scrollTop,
-    };
-    stage.setPointerCapture(event.pointerId);
-  }, []);
-
-  const handleStagePointerMove = useCallback((event: ReactPointerEvent<HTMLElement>) => {
-    const dragState = dragStateRef.current;
-    const stage = stageRef.current;
-    if (!dragState || !stage || dragState.pointerId !== event.pointerId) {
-      return;
-    }
-    const deltaX = event.clientX - dragState.startX;
-    const deltaY = event.clientY - dragState.startY;
-    stage.scrollLeft = dragState.scrollLeft - deltaX;
-    stage.scrollTop = dragState.scrollTop - deltaY;
-  }, []);
-
-  const stopStageDrag = useCallback((event?: ReactPointerEvent<HTMLElement>) => {
-    const stage = stageRef.current;
-    if (event && stage && dragStateRef.current?.pointerId === event.pointerId && stage.hasPointerCapture(event.pointerId)) {
-      stage.releasePointerCapture(event.pointerId);
-    }
-    dragStateRef.current = null;
+    const top = Math.max(0, element.offsetTop - 16);
+    container.scrollTo({ top, behavior: "smooth" });
   }, []);
 
   return (
     <section className="panel-card visualize-view workspace-tab-panel">
-      {!hasTauriRuntime ? (
-        <div className="visualize-banner">
-          <strong>Desktop Runtime Required</strong>
-          <p>This workspace reads local research storage and researcher artifacts.</p>
-        </div>
-      ) : null}
-      {state.error ? <div className="visualize-banner is-error">{state.error}</div> : null}
-      {state.statusText ? <div className="visualize-banner">{state.statusText}</div> : null}
-
       <section className="visualize-monitor-shell">
         <header className="visualize-monitor-topbar">
           <div className="visualize-monitor-brand">
-            <small>RAIL RESEARCH</small>
+            <small>{state.error || state.statusText || (hasTauriRuntime ? "RAIL RESEARCH" : "Desktop Runtime Required")}</small>
             <strong>{state.selectedReportRun?.title || "Research monitor"}</strong>
           </div>
 
@@ -205,6 +144,9 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
             <button disabled={state.steamIngesting} onClick={() => void state.ingestSteam()} type="button">
               {state.steamIngesting ? "STEAM" : "INGEST"}
             </button>
+            <button onClick={() => setRailHidden((current) => !current)} type="button">
+              {railHidden ? "SHOW PANEL" : "HIDE PANEL"}
+            </button>
             {reportEntryId && onOpenKnowledgeEntry ? (
               <button onClick={() => onOpenKnowledgeEntry(reportEntryId)} type="button">
                 DATABASE
@@ -214,16 +156,8 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
         </header>
 
         <section className="visualize-monitor-body">
-          <section
-            className="visualize-monitor-stage"
-            onPointerDown={handleStagePointerDown}
-            onPointerLeave={stopStageDrag}
-            onPointerMove={handleStagePointerMove}
-            onPointerUp={stopStageDrag}
-            ref={stageRef}
-          >
-            <div className="visualize-monitor-canvas-scale" style={{ width: `${1520 * canvasZoom}px`, height: `${980 * canvasZoom}px` }}>
-              <div className="visualize-monitor-canvas" style={{ transform: `scale(${canvasZoom})` }}>
+          <section className="visualize-monitor-main" ref={mainRef}>
+            <div className="visualize-monitor-grid">
               <article className="visualize-monitor-widget is-session" ref={sessionRef}>
                 <div className="visualize-monitor-widget-head">
                   <span>[ RESEARCH SESSION ]</span>
@@ -323,51 +257,23 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
                   {evidenceItems.length ? null : <p className="visualize-monitor-empty">No normalized collection items yet.</p>}
                 </div>
               </article>
-
-              <div className="visualize-monitor-controls">
-                <div className="visualize-monitor-control-cluster">
-                  <button onClick={() => focusWidget(sessionRef)} type="button">OVERVIEW</button>
-                  <button onClick={() => focusWidget(reportRef)} type="button">REPORT</button>
-                  <button onClick={() => focusWidget(evidenceRef)} type="button">EVIDENCE</button>
-                </div>
-                <div className="visualize-monitor-control-cluster">
-                  <button onClick={() => changeZoom("out")} type="button">-</button>
-                  <button onClick={() => changeZoom("reset")} type="button">{Math.round(canvasZoom * 100)}%</button>
-                  <button onClick={() => changeZoom("in")} type="button">+</button>
-                </div>
-              </div>
-              </div>
             </div>
           </section>
 
-          <aside className="visualize-monitor-rail">
+          <aside className={`visualize-monitor-rail${railHidden ? " is-hidden" : ""}`}>
             <section className="visualize-monitor-rail-panel">
               <div className="visualize-monitor-widget-head">
-                <div>
-                  <span>[ RESEARCH CONSOLE ]</span>
-                  <small>{state.reportRuns.length} runs</small>
-                </div>
-                <button
-                  aria-expanded={!consoleCollapsed}
-                  className="visualize-monitor-collapse-button"
-                  onClick={() => setConsoleCollapsed((current) => !current)}
-                  type="button"
-                >
-                  {consoleCollapsed ? "OPEN" : "CLOSE"}
-                </button>
+                <span>[ RESEARCH CONSOLE ]</span>
+                <small>{state.reportRuns.length} runs</small>
               </div>
-              {consoleCollapsed ? null : (
-                <>
-                  <p className="visualize-monitor-console-copy">
-                    {leadCopy || "researcher의 핵심 결론과 조사 설명이 여기에 나타납니다."}
-                  </p>
-                  <div className="visualize-monitor-console-meta">
-                    <div><span>RUN</span><strong>{state.selectedReportRun?.runId || "-"}</strong></div>
-                    <div><span>UPDATED</span><strong>{formatStamp(state.selectedReportRun?.updatedAt || "")}</strong></div>
-                    <div><span>STATUS</span><strong>{state.detailLoading ? "LOADING" : "READY"}</strong></div>
-                  </div>
-                </>
-              )}
+              <p className="visualize-monitor-console-copy">
+                {leadCopy || "researcher의 핵심 결론과 조사 설명이 여기에 나타납니다."}
+              </p>
+              <div className="visualize-monitor-console-meta">
+                <div><span>RUN</span><strong>{state.selectedReportRun?.runId || "-"}</strong></div>
+                <div><span>UPDATED</span><strong>{formatStamp(state.selectedReportRun?.updatedAt || "")}</strong></div>
+                <div><span>STATUS</span><strong>{state.detailLoading ? "LOADING" : "READY"}</strong></div>
+              </div>
             </section>
 
             <section className="visualize-monitor-rail-panel">

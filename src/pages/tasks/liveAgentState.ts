@@ -23,6 +23,11 @@ function latestArtifactPath(paths: string[] | null | undefined): string {
   return normalized[normalized.length - 1] ?? "";
 }
 
+export function isLiveBackgroundAgentStatus(status: BackgroundAgentStatus | string | null | undefined): boolean {
+  const normalized = String(status ?? "").trim().toLowerCase();
+  return normalized !== "idle" && normalized !== "done" && normalized !== "failed";
+}
+
 export function buildLiveAgentCards(
   detail: ThreadDetail | null,
   liveNotes?: Partial<Record<ThreadRoleId, LiveRoleNote>>,
@@ -32,7 +37,7 @@ export function buildLiveAgentCards(
   }
 
   return detail.agents
-    .filter((agent) => agent.status !== "idle" && agent.status !== "done")
+    .filter((agent) => isLiveBackgroundAgentStatus(agent.status))
     .map((agent) => {
       const roleState = detail.task.roles.find((role) => role.id === agent.roleId);
       const note = liveNotes?.[agent.roleId];

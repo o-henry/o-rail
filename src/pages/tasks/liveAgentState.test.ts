@@ -67,6 +67,16 @@ function buildDetail(): ThreadDetail {
         worktreePath: "/workspace",
         lastUpdatedAt: "2026-03-18T00:00:00.000Z",
       },
+      {
+        id: "thread-1:unity_implementer",
+        threadId: "thread-1",
+        label: "UNITY IMPLEMENTER",
+        roleId: "unity_implementer",
+        status: "failed",
+        summary: "실패",
+        worktreePath: "/workspace",
+        lastUpdatedAt: "2026-03-18T00:00:00.000Z",
+      },
     ],
     approvals: [],
     artifacts: {},
@@ -94,6 +104,11 @@ describe("buildLiveAgentCards", () => {
       latestArtifactPath: ".rail/tasks/thread-1/findings.md",
       lastRunId: "run-designer",
     });
+  });
+
+  it("excludes failed agents from the live placeholder list", () => {
+    const cards = buildLiveAgentCards(buildDetail());
+    expect(cards.some((card) => card.roleId === "unity_implementer")).toBe(false);
   });
 });
 

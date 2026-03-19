@@ -29,6 +29,7 @@ import { buildProjectThreadGroups, filterBrowserThreadIdsByProject, filterThread
 import { rememberThreadSelection, resolveThreadSelection } from "./threadSelectionState";
 import { deriveThreadWorkflow, deriveThreadWorkflowSummary } from "./threadWorkflow";
 import { extractCodexThreadStatus, extractTaskCodexThreadRuntime } from "./taskCodexThreadRuntime";
+import { isLiveBackgroundAgentStatus } from "./liveAgentState";
 
 type InvokeFn = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
 
@@ -857,6 +858,7 @@ export function useTasksThreadState(params: Params) {
         ].slice(-24);
       });
       if (eventType === "run_done" || eventType === "run_error") {
+        void refreshCurrentThreadSilently(activeThreadId);
         return;
       }
       setLiveRoleNotes((current) => ({
@@ -869,14 +871,14 @@ export function useTasksThreadState(params: Params) {
     };
     window.addEventListener("rail:tasks-role-event", handler as EventListener);
     return () => window.removeEventListener("rail:tasks-role-event", handler as EventListener);
-  }, [activeThreadId]);
+  }, [activeThreadId, refreshCurrentThreadSilently]);
 
   useEffect(() => {
     setLiveProcessEvents([]);
   }, [activeThreadId]);
 
   useEffect(() => {
-    const liveRoleIds = new Set((activeThread?.agents ?? []).filter((agent) => agent.status !== "idle" && agent.status !== "done").map((agent) => agent.roleId));
+    const liveRoleIds = new Set((activeThread?.agents ?? []).filter((agent) => isLiveBackgroundAgentStatus(agent.status)).map((agent) => agent.roleId));
     setLiveRoleNotes((current) => {
       const next = Object.fromEntries(
         Object.entries(current).filter(([roleId]) => liveRoleIds.has(roleId as ThreadRoleId)),
@@ -888,12 +890,12 @@ export function useTasksThreadState(params: Params) {
   }, [activeThread?.agents]);
 
   const canInterruptCurrentThread = useMemo(
-    () => Boolean(activeThread && activeThread.agents.some((agent) => agent.status !== "idle" && agent.status !== "done")),
+    () => Boolean(activeThread && activeThread.agents.some((agent) => isLiveBackgroundAgentStatus(agent.status))),
     [activeThread],
   );
 
   useEffect(() => {
-    const hasLiveAgents = (activeThread?.agents ?? []).some((agent) => agent.status !== "idle" && agent.status !== "done");
+    const hasLiveAgents = (activeThread?.agents ?? []).some((agent) => isLiveBackgroundAgentStatus(agent.status));
     if (!hasLiveAgents || !activeThreadId || !params.hasTauriRuntime || !params.cwd) {
       return;
     }
@@ -1437,7 +1439,7 @@ export function useTasksThreadState(params: Params) {
     if (!activeThread || stoppingComposerRun || !canInterruptCurrentThread) {
       return;
     }
-    const runningAgents = activeThread.agents.filter((agent) => agent.status !== "idle" && agent.status !== "done");
+    const runningAgents = activeThread.agents.filter((agent) => isLiveBackgroundAgentStatus(agent.status));
     if (runningAgents.length === 0) {
       return;
     }

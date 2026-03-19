@@ -18,7 +18,7 @@ import {
   stripTaskAgentMentionMatch,
 } from "./taskAgentMentions";
 import { buildThreadFileTree, type ThreadFileTreeNode } from "./threadFileTree";
-import { buildLiveAgentCards, displayArtifactName } from "./liveAgentState";
+import { buildLiveAgentCards } from "./liveAgentState";
 import { useTasksThreadState } from "./useTasksThreadState";
 import { type ThreadMessage, type ThreadRoleId } from "./threadTypes";
 
@@ -267,6 +267,10 @@ export default function TasksPage(props: TasksPageProps) {
       return;
     }
     event.preventDefault();
+    if (state.canInterruptCurrentThread) {
+      void state.stopComposerRun();
+      return;
+    }
     void state.submitComposer();
   };
 
@@ -592,70 +596,6 @@ export default function TasksPage(props: TasksPageProps) {
           )}
         </div>
 
-        {liveAgents.length > 0 ? (
-          <section className="tasks-thread-running-strip">
-            <div className="tasks-thread-section-head">
-              <strong>실행 중인 에이전트</strong>
-              <span>{liveAgents.length}</span>
-            </div>
-            <div className="tasks-thread-running-list">
-              {liveAgents.map((agent) => (
-                <article
-                  className="tasks-thread-running-row"
-                  key={agent.agentId}
-                  onClick={() => void state.openAgent({
-                    id: agent.agentId,
-                    threadId: state.activeThread?.thread.threadId ?? "",
-                    label: agent.label,
-                    roleId: agent.roleId,
-                    status: agent.status,
-                    summary: agent.summary,
-                    worktreePath: state.activeThread?.task.worktreePath || state.activeThread?.task.workspacePath || null,
-                    lastUpdatedAt: agent.updatedAt,
-                  })}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault();
-                      void state.openAgent({
-                        id: agent.agentId,
-                        threadId: state.activeThread?.thread.threadId ?? "",
-                        label: agent.label,
-                        roleId: agent.roleId,
-                        status: agent.status,
-                        summary: agent.summary,
-                        worktreePath: state.activeThread?.task.worktreePath || state.activeThread?.task.workspacePath || null,
-                        lastUpdatedAt: agent.updatedAt,
-                      });
-                    }
-                  }}
-                  role="button"
-                  tabIndex={0}
-                >
-                  <div className="tasks-thread-running-copy">
-                    <div className="tasks-thread-running-meta">
-                      <strong className={`role-${agent.roleId}`}>{agent.label}</strong>
-                      <span>{displayStageStatus(agent.status)}</span>
-                    </div>
-                    {agent.summary ? <small className="tasks-thread-running-summary">{agent.summary}</small> : null}
-                    {agent.latestArtifactPath ? (
-                      <button
-                        className="tasks-thread-running-artifact"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          state.openKnowledgeEntryForArtifact(agent.latestArtifactPath);
-                        }}
-                        type="button"
-                      >
-                        {displayArtifactName(agent.latestArtifactPath)}
-                      </button>
-                    ) : null}
-                  </div>
-                </article>
-              ))}
-            </div>
-          </section>
-        ) : null}
-
         <div className="tasks-thread-composer-shell question-input agents-composer workflow-question-input">
           {mentionMatch ? (
             <div className="tasks-thread-mention-menu" role="listbox">
@@ -808,13 +748,24 @@ export default function TasksPage(props: TasksPageProps) {
 
             <div className="tasks-thread-composer-actions">
               <button
-                aria-label="SEND"
+                aria-label={state.canInterruptCurrentThread ? "STOP" : "SEND"}
                 className="primary-action question-create-button agents-send-button"
-                disabled={!state.composerDraft.trim()}
-                onClick={() => void state.submitComposer()}
+                disabled={state.canInterruptCurrentThread ? state.stoppingComposerRun : !state.composerDraft.trim()}
+                onClick={() => {
+                  if (state.canInterruptCurrentThread) {
+                    void state.stopComposerRun();
+                    return;
+                  }
+                  void state.submitComposer();
+                }}
                 type="button"
               >
-                <img alt="" aria-hidden="true" className="question-create-icon" src="/up.svg" />
+                <img
+                  alt=""
+                  aria-hidden="true"
+                  className="question-create-icon"
+                  src={state.canInterruptCurrentThread ? "/canvas-stop.svg" : "/up.svg"}
+                />
               </button>
             </div>
           </div>

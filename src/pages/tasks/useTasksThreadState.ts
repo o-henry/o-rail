@@ -446,6 +446,7 @@ export function useTasksThreadState(params: Params) {
   const [hiddenProjectPaths, setHiddenProjectPaths] = useState<string[]>(initialHiddenProjectList);
   const [liveRoleNotes, setLiveRoleNotes] = useState<Partial<Record<ThreadRoleId, { message: string; updatedAt: string }>>>({});
   const [liveProcessEvents, setLiveProcessEvents] = useState<LiveProcessEvent[]>([]);
+  const [stoppingComposerRun, setStoppingComposerRun] = useState(false);
   const browserStoreRef = useRef<BrowserStore>(loadBrowserStore());
   const visibleThreadItems = useMemo(
     () => threadItems.filter((item) => !hiddenProjectPaths.includes(String(item.projectPath || item.thread.cwd || "").trim())),
@@ -885,6 +886,11 @@ export function useTasksThreadState(params: Params) {
       return unchanged ? current : next;
     });
   }, [activeThread?.agents]);
+
+  const canInterruptCurrentThread = useMemo(
+    () => Boolean(activeThread && activeThread.agents.some((agent) => agent.status !== "idle" && agent.status !== "done")),
+    [activeThread],
+  );
 
   useEffect(() => {
     const hasLiveAgents = (activeThread?.agents ?? []).some((agent) => agent.status !== "idle" && agent.status !== "done");
@@ -1427,6 +1433,84 @@ export function useTasksThreadState(params: Params) {
     }
   }, [accessMode, activeThread, applyBrowserStore, buildPromptWithAttachments, clearAttachedFiles, composerDraft, dispatchExecutionPlan, model, params, projectPath, reasoning, reloadThreads, rememberSelectedAgent, rememberSelectedFile, selectedAgentIdsByThread, selectedComposerRoleIds, selectedFilePathsByThread]);
 
+  const stopComposerRun = useCallback(async () => {
+    if (!activeThread || stoppingComposerRun || !canInterruptCurrentThread) {
+      return;
+    }
+    const runningAgents = activeThread.agents.filter((agent) => agent.status !== "idle" && agent.status !== "done");
+    if (runningAgents.length === 0) {
+      return;
+    }
+
+    setStoppingComposerRun(true);
+    const timestamp = nowIso();
+    try {
+      if (!params.hasTauriRuntime || !params.cwd) {
+        const store = cloneStore(browserStoreRef.current);
+        const detail = store.details[activeThread.thread.threadId];
+        if (!detail) {
+          return;
+        }
+        detail.thread.status = "idle";
+        detail.thread.updatedAt = timestamp;
+        detail.agents = detail.agents.map((agent) => (
+          runningAgents.some((entry) => entry.id === agent.id)
+            ? { ...agent, status: "idle", lastUpdatedAt: timestamp }
+            : agent
+        ));
+        detail.messages.push(
+          createBrowserMessage(
+            detail.thread.threadId,
+            "system",
+            "사용자가 현재 작업을 중단했습니다.",
+            timestamp,
+            { eventKind: "run_interrupted" },
+          ),
+        );
+        detail.workflow = deriveThreadWorkflow(detail);
+        store.details[detail.thread.threadId] = detail;
+        applyBrowserStore(store, detail.thread.threadId);
+        params.setStatus("현재 작업을 중단했습니다.");
+        return;
+      }
+
+      const agentDetails = await Promise.all(
+        runningAgents.map((agent) => loadAgentDetail(activeThread.thread.threadId, agent.id).catch(() => null)),
+      );
+      const codexThreadIds = [...new Set(
+        agentDetails
+          .map((detail) => String(detail?.codexThreadId ?? "").trim())
+          .filter(Boolean),
+      )];
+
+      if (codexThreadIds.length === 0) {
+        params.setStatus("중단할 실행 세션을 찾지 못했습니다.");
+        return;
+      }
+
+      await Promise.all(codexThreadIds.map((threadId) => params.invokeFn("turn_interrupt", { threadId })));
+      await refreshCurrentThreadSilently(activeThread.thread.threadId);
+      if (selectedAgentDetail?.agent.id) {
+        const refreshedDetail = await loadAgentDetail(activeThread.thread.threadId, selectedAgentDetail.agent.id).catch(() => null);
+        setSelectedAgentDetail(refreshedDetail);
+      }
+      params.setStatus("현재 작업을 중단했습니다.");
+    } catch (error) {
+      params.setStatus(`작업 중단 실패: ${formatError(error)}`);
+    } finally {
+      setStoppingComposerRun(false);
+    }
+  }, [
+    activeThread,
+    applyBrowserStore,
+    canInterruptCurrentThread,
+    loadAgentDetail,
+    params,
+    refreshCurrentThreadSilently,
+    selectedAgentDetail?.agent.id,
+    stoppingComposerRun,
+  ]);
+
   const openAgent = useCallback(
     async (agent: BackgroundAgentRecord) => {
       rememberSelectedAgent(activeThread?.thread.threadId || activeThreadId, agent.id);
@@ -1842,6 +1926,9 @@ export function useTasksThreadState(params: Params) {
     selectProject,
     selectThread,
     submitComposer,
+    stopComposerRun,
+    canInterruptCurrentThread,
+    stoppingComposerRun,
     openAgent,
     resolveApproval,
     compactSelectedAgentCodexThread,

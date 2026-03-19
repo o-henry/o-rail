@@ -314,16 +314,6 @@ import {
 import { executeTurnNodeWithContext } from "./main/runtime/executeTurnNode";
 import type { FeedCategory, InternalMemorySnippet, WebProviderRunResult, RunRecord } from "./main";
 const HIDDEN_WORKSPACE_TABS = new Set<WorkspaceTab>(["workbench", "dashboard", "intelligence", "feed", "handoff", "agents"]);
-const WORKSPACE_TOPBAR_TABS: Array<{ tab: WorkspaceTab; label: string }> = [
-  { tab: "tasks", label: "TASKS" },
-  { tab: "shell", label: "SHELL" },
-  { tab: "workflow", label: "그래프" },
-  { tab: "knowledge", label: "데이터베이스" },
-  { tab: "visualize", label: "시각화" },
-  { tab: "adaptation", label: "개선" },
-  { tab: "settings", label: "설정" },
-];
-
 function App() {
   const USER_BG_IMAGE_STORAGE_KEY = "rail.settings.user_bg_image";
   const USER_BG_OPACITY_STORAGE_KEY = "rail.settings.user_bg_opacity";
@@ -334,6 +324,18 @@ function App() {
   const defaultAuthMode = useMemo(() => loadPersistedAuthMode(), []);
   const defaultCodexMultiAgentMode = useMemo(() => loadPersistedCodexMultiAgentMode(), []);
   const themeModeOptions = useMemo(() => [{ value: "light", label: t("settings.theme.light") }, { value: "dark", label: t("settings.theme.dark") }], [t]);
+  const workspaceTopbarTabs = useMemo<Array<{ tab: WorkspaceTab; label: string }>>(
+    () => [
+      { tab: "tasks", label: "TASKS" },
+      { tab: "shell", label: "SHELL" },
+      { tab: "workflow", label: t("nav.workflow.title") },
+      { tab: "knowledge", label: t("nav.knowledge") },
+      { tab: "visualize", label: t("nav.visualize") },
+      { tab: "adaptation", label: t("nav.adaptation") },
+      { tab: "settings", label: t("nav.settings") },
+    ],
+    [t],
+  );
   const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>("tasks");
   const [tasksLeftNavHidden, setTasksLeftNavHidden] = useState(false);
   const [workflowRoleId, setWorkflowRoleId] = useState<StudioRoleId>("pm_planner");
@@ -2597,8 +2599,6 @@ function App() {
     refreshDashboardSnapshots,
     dispatchAction: publishAction,
   });
-  const workspaceTopbarTabs = WORKSPACE_TOPBAR_TABS;
-
   const {
     quickPanelOpen,
     quickPanelQuery,

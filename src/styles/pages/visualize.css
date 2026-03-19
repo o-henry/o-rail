@@ -78,8 +78,8 @@
 .visualize-monitor-toolbar-icon {
   width: 28px;
   height: 28px;
-  border: 1px solid rgba(203, 213, 225, 0.9);
-  background: #ffffff;
+  border: 0;
+  background: #e5e7eb;
   display: inline-flex;
   align-items: center;
   justify-content: center;

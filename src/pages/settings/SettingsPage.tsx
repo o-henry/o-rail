@@ -99,7 +99,7 @@ export default function SettingsPage({
       )}
       {!compact && (
         <label className="settings-codex-controls">
-          <span>코덱스</span>
+          <span>{t("settings.codexSection")}</span>
           <div className="button-row">
             <button
               className="settings-usage-button settings-account-button"
@@ -172,7 +172,7 @@ export default function SettingsPage({
             {t("common.delete")}
           </button>
           <input
-            aria-label="Background opacity"
+            aria-label={t("settings.backgroundOpacity")}
             className="settings-opacity-input"
             min={0}
             max={1}
@@ -197,7 +197,7 @@ export default function SettingsPage({
       {!compact && (
         <section className="settings-run-history settings-run-history-hidden">
           <div className="settings-run-history-head">
-            <h3>LOG</h3>
+            <h3>{t("settings.log")}</h3>
             <button onClick={onOpenRunsFolder} type="button">
               {t("common.open")}
             </button>

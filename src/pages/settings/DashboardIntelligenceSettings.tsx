@@ -60,18 +60,19 @@ function formatDateTimeText(value: string): string {
 function resolveTopicStatusInfo(
   runState: DashboardTopicRunState | undefined,
   snapshot: DashboardTopicSnapshot | undefined,
+  t: (key: string) => string,
 ): DashboardTopicStatusInfo {
   if (runState?.running) {
-    return { label: "실행 중", tone: "running" };
+    return { label: t("label.status.running"), tone: "running" };
   }
   if (runState?.lastError) {
-    return { label: "오류", tone: "error" };
+    return { label: t("label.status.failed"), tone: "error" };
   }
   if (runState?.lastRunAt) {
     const hasRisk = (snapshot?.risks?.length ?? 0) > 0;
-    return { label: "완료", tone: hasRisk ? "done-risk" : "done" };
+    return { label: t("label.status.done"), tone: hasRisk ? "done-risk" : "done" };
   }
-  return { label: "대기", tone: "idle" };
+  return { label: t("label.status.idle"), tone: "idle" };
 }
 
 export default function DashboardIntelligenceSettings(props: DashboardIntelligenceSettingsProps) {
@@ -143,21 +144,21 @@ export default function DashboardIntelligenceSettings(props: DashboardIntelligen
       <section className="settings-dashboard-intelligence-main">
         <header className="settings-dashboard-intelligence-head">
           <div className="settings-dashboard-intelligence-copy">
-            <h3 className="settings-dashboard-intelligence-title">데이터 파이프라인</h3>
+            <h3 className="settings-dashboard-intelligence-title">{t("settings.dashboardIntelligence.pipeline")}</h3>
             <p>{t("settings.dashboardIntelligence.description")}</p>
           </div>
         </header>
         <div className="settings-dashboard-topic-columns" role="presentation">
-          <span>TOPIC</span>
-          <span>MODEL</span>
-          <span>STATE</span>
-          <span>RUN</span>
+          <span>{t("settings.dashboardIntelligence.columns.topic")}</span>
+          <span>{t("settings.dashboardIntelligence.columns.model")}</span>
+          <span>{t("settings.dashboardIntelligence.columns.state")}</span>
+          <span>{t("settings.dashboardIntelligence.columns.run")}</span>
         </div>
-        <div className="settings-dashboard-intelligence-list" role="tablist" aria-label="데이터 토픽">
+        <div className="settings-dashboard-intelligence-list" role="tablist" aria-label={t("settings.dashboardIntelligence.topicAria")}>
           {DASHBOARD_TOPIC_IDS.map((topic) => {
             const runState = props.runStateByTopic[topic];
             const rowSnapshot = props.snapshotsByTopic[topic];
-            const rowStatus = resolveTopicStatusInfo(runState, rowSnapshot);
+            const rowStatus = resolveTopicStatusInfo(runState, rowSnapshot, t);
             return (
               <article
                 aria-selected={activeTopic === topic}
@@ -175,7 +176,7 @@ export default function DashboardIntelligenceSettings(props: DashboardIntelligen
                 </div>
 
                 <div className="settings-dashboard-topic-model">
-                  <code className="settings-dashboard-topic-model-code">{rowSnapshot?.model || "미실행"}</code>
+                  <code className="settings-dashboard-topic-model-code">{rowSnapshot?.model || t("settings.dashboardIntelligence.notRun")}</code>
                 </div>
 
                 <div className="settings-dashboard-topic-state">
@@ -191,7 +192,7 @@ export default function DashboardIntelligenceSettings(props: DashboardIntelligen
                     }}
                     type="button"
                   >
-                    실행하기
+                    {t("settings.dashboardIntelligence.runTopic")}
                   </button>
                 </div>
               </article>
@@ -203,7 +204,7 @@ export default function DashboardIntelligenceSettings(props: DashboardIntelligen
       <aside className="settings-dashboard-topic-detail" aria-live="polite">
         <header className="settings-dashboard-topic-detail-head">
           <div className="settings-dashboard-topic-detail-title">
-            <small>선택 토픽</small>
+            <small>{t("settings.dashboardIntelligence.selectedTopic")}</small>
             <strong>{t(`dashboard.widget.${activeTopic}.title`)}</strong>
             <code>{formatTopicId(activeTopic)}</code>
           </div>
@@ -211,7 +212,7 @@ export default function DashboardIntelligenceSettings(props: DashboardIntelligen
 
         <div className="settings-dashboard-topic-detail-scroll">
           <section className="settings-dashboard-topic-detail-section">
-            <h5>실행 메타</h5>
+            <h5>{t("settings.dashboardIntelligence.runMeta")}</h5>
             <div className="settings-dashboard-topic-doc-actions">
               <button
                 className="settings-dashboard-topic-doc-open-all"
@@ -219,7 +220,7 @@ export default function DashboardIntelligenceSettings(props: DashboardIntelligen
                 onClick={() => props.onOpenBriefingDocument(activeRunId)}
                 type="button"
               >
-                피드에서 문서 보기
+                {t("settings.dashboardIntelligence.viewDocsInFeed")}
               </button>
               <button
                 className="settings-dashboard-topic-doc-open"
@@ -227,43 +228,43 @@ export default function DashboardIntelligenceSettings(props: DashboardIntelligen
                 onClick={() => props.onOpenBriefingDocument(activeRunId, latestBriefingDocumentId)}
                 type="button"
               >
-                최신 문서 열기
+                {t("settings.dashboardIntelligence.openLatestDoc")}
               </button>
             </div>
           </section>
 
           <section className="settings-dashboard-topic-detail-section">
-            <h5>브리핑 문서</h5>
-            {!activeRunId ? <small>실행 후 브리핑 문서가 생성됩니다.</small> : null}
+            <h5>{t("settings.dashboardIntelligence.briefingDocs")}</h5>
+            {!activeRunId ? <small>{t("settings.dashboardIntelligence.briefingPending")}</small> : null}
             {activeBriefingDocuments.length > 0 ? (
               <div className="settings-dashboard-topic-doc-flat">
                 {activeBriefingDocuments.slice(0, 6).map((doc) => (
                   <article className="settings-dashboard-topic-doc-row" key={doc.id}>
                     <small>{`${doc.agentName} · ${formatDateTimeText(doc.createdAt)}`}</small>
-                    <p>{doc.summary || "요약이 없는 문서입니다."}</p>
+                    <p>{doc.summary || t("settings.dashboardIntelligence.noSummaryDoc")}</p>
                     <button
                       className="settings-dashboard-topic-doc-open"
                       onClick={() => props.onOpenBriefingDocument(doc.runId, doc.id)}
                       type="button"
                     >
-                      문서 열기
+                      {t("settings.dashboardIntelligence.openDoc")}
                     </button>
                   </article>
                 ))}
               </div>
             ) : (
-              <p>해당 실행의 브리핑 문서가 아직 없습니다.</p>
+              <p>{t("settings.dashboardIntelligence.noBriefingDocs")}</p>
             )}
           </section>
 
           <section className="settings-dashboard-topic-detail-section">
-            <h5>구현 내용</h5>
+            <h5>{t("settings.dashboardIntelligence.implementation")}</h5>
             <p className="settings-dashboard-topic-implementation-copy">{activeTopicImplementationText}</p>
             <div className="settings-dashboard-topic-allowlist-block">
               <div className="settings-dashboard-topic-allowlist-head">
-                <small>{`ALLOWLIST ${activeTopicConfig.allowlist.length}개`}</small>
+                <small>{t("settings.dashboardIntelligence.allowlistCount", { count: activeTopicConfig.allowlist.length })}</small>
                 <button
-                  aria-label="ALLOWLIST 링크 보기"
+                  aria-label={t("settings.dashboardIntelligence.allowlistAria")}
                   className="settings-dashboard-allowlist-help help-tooltip"
                   type="button"
                 >
@@ -278,7 +279,7 @@ export default function DashboardIntelligenceSettings(props: DashboardIntelligen
                     ))}
                   </ul>
                 ) : (
-                  <p>등록된 링크가 없습니다.</p>
+                  <p>{t("settings.dashboardIntelligence.noLinks")}</p>
                 )}
               </div>
             </div>
@@ -286,7 +287,7 @@ export default function DashboardIntelligenceSettings(props: DashboardIntelligen
 
           {activeSnapshot?.events?.length ? (
             <section className="settings-dashboard-topic-detail-section">
-              <h5>이벤트</h5>
+              <h5>{t("settings.dashboardIntelligence.events")}</h5>
               <ul>
                 {activeSnapshot.events.map((item, index) => (
                   <li key={`${index}-${item.title}`}>
@@ -300,7 +301,7 @@ export default function DashboardIntelligenceSettings(props: DashboardIntelligen
 
           {activeSnapshot?.references?.length ? (
             <section className="settings-dashboard-topic-detail-section">
-              <h5>근거 링크</h5>
+              <h5>{t("settings.dashboardIntelligence.references")}</h5>
               <ul className="settings-dashboard-topic-detail-links">
                 {activeSnapshot.references.map((ref, index) => (
                   <li key={`${index}-${ref.url}`}>
@@ -317,13 +318,13 @@ export default function DashboardIntelligenceSettings(props: DashboardIntelligen
           <textarea
             onChange={(event) => setFollowupDraft(event.currentTarget.value)}
             onKeyDown={onFollowupKeyDown}
-            placeholder="추가 요청을 입력하면 현재 구현 내용에 반영해 실행합니다."
+            placeholder={t("settings.dashboardIntelligence.followupPlaceholder")}
             rows={1}
             value={followupDraft}
           />
           <div className="question-input-footer">
             <button
-              aria-label="추가 요청 실행"
+              aria-label={t("settings.dashboardIntelligence.followupAria")}
               className={`question-create-button settings-dashboard-topic-request-send${
                 followupDraft.trim().length > 0 ? " primary-action" : ""
               }`}

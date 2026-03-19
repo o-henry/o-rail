@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from "react";
 import FeedChart from "../../components/feed/FeedChart";
 import FeedDocument from "../../components/feed/FeedDocument";
 import type { FeedChartSpec } from "../../features/feed/chartSpec";
+import { useI18n } from "../../i18n";
 import { useVisualizePageState } from "./useVisualizePageState";
 import { VisualizeWidgetFrame } from "./VisualizeWidgetFrame";
 import type { ResearchReportListItem } from "./visualizeReportUtils";
@@ -60,6 +61,7 @@ function buildTimelineChart(spec: ReturnType<typeof useVisualizePageState>["coll
 }
 
 export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEntry }: VisualizePageProps) {
+  const { t } = useI18n();
   const state = useVisualizePageState({ cwd, hasTauriRuntime });
   const [maximizedWidgetId, setMaximizedWidgetId] = useState<VisualizeWidgetId | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -76,6 +78,7 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
   const reportEntryId = state.selectedReportRun?.collectionEntryId || state.selectedReportRun?.reportEntryId || "";
   const reportJob = state.collectionPayload?.planned?.job;
   const autoSpec = state.collectionPayload?.reportSpec;
+  const questionType = autoSpec?.questionType || "topic_research";
   const leadCopy = firstNarrativeLine(state.reportMarkdown) || firstNarrativeLine(state.collectionMarkdown);
   const evidenceItems = state.collectionItems?.items ?? [];
   const popularGenres = state.collectionGenreRankings?.popular.slice(0, 5) ?? [];
@@ -86,48 +89,76 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
     .slice(0, 5);
   const mainChartSpec = autoSpec?.widgets?.mainChart?.chart || timelineChart;
   const secondaryChartSpec = autoSpec?.widgets?.secondaryChart?.chart || sourceChart;
-  const mainChartTitle = autoSpec?.widgets?.mainChart?.title || "COLLECTION TIMELINE";
-  const secondaryChartTitle = autoSpec?.widgets?.secondaryChart?.title || "SOURCE MIX";
-  const mainChartDescription = autoSpec?.widgets?.mainChart?.description || "수집된 근거가 날짜별로 몇 건 들어왔는지 보여줍니다.";
-  const secondaryChartDescription = autoSpec?.widgets?.secondaryChart?.description || "현재 세션에 포함된 출처 유형 비중입니다.";
-  const primaryListTitle = autoSpec?.widgets?.primaryList?.title || (popularGenres.length ? "POPULAR GENRES" : "TOP SOURCES");
-  const secondaryListTitle = autoSpec?.widgets?.secondaryList?.title || (qualityGenres.length ? "BEST RATED GENRES" : "REPRESENTATIVE TITLES");
-  const reportTitle = autoSpec?.widgets?.report?.title || "RESEARCH REPORT";
-  const evidenceTitle = autoSpec?.widgets?.evidence?.title || "EVIDENCE STREAM";
+  const mainChartTitle =
+    questionType === "genre_ranking"
+      ? t("visualize.chart.popularGenres")
+      : questionType === "game_comparison"
+        ? t("visualize.chart.comparisonSignals")
+        : questionType === "community_sentiment"
+          ? t("visualize.chart.reactionTimeline")
+          : t("visualize.chart.collectionTimeline");
+  const secondaryChartTitle =
+    questionType === "genre_ranking"
+      ? t("visualize.chart.bestRatedGenres")
+      : t("visualize.chart.sourceMix");
+  const mainChartDescription =
+    questionType === "genre_ranking"
+      ? t("visualize.chart.popularGenres.desc")
+      : questionType === "game_comparison"
+        ? t("visualize.chart.comparisonSignals.desc")
+        : questionType === "community_sentiment"
+          ? t("visualize.chart.reactionTimeline.desc")
+          : t("visualize.chart.collectionTimeline.desc");
+  const secondaryChartDescription =
+    questionType === "genre_ranking"
+      ? t("visualize.chart.bestRatedGenres.desc")
+      : t("visualize.chart.sourceMix.desc");
+  const primaryListTitle =
+    questionType === "genre_ranking"
+      ? t("visualize.list.genreSnapshots")
+      : questionType === "game_comparison"
+        ? t("visualize.list.comparedTitles")
+        : questionType === "community_sentiment"
+          ? t("visualize.list.reactionHighlights")
+          : t("visualize.list.topSources");
+  const secondaryListTitle =
+    questionType === "genre_ranking"
+      ? t("visualize.list.representativeGames")
+      : questionType === "game_comparison" || questionType === "community_sentiment"
+        ? t("visualize.list.topSources")
+        : t("visualize.list.representativeTitles");
+  const reportTitle = t("visualize.report.title");
+  const evidenceTitle = t("visualize.evidence.title");
   const primaryListItems: ResearchReportListItem[] =
-    autoSpec?.widgets?.primaryList?.items?.length
-      ? autoSpec.widgets.primaryList.items
-      : popularGenres.length
-        ? popularGenres.map((genre) => ({
-            title: `${genre.rank}. ${genre.genreLabel}`,
-            detail: genre.representativeTitles.slice(0, 2).join(" · ") || "대표 게임 추출 중",
-            badge: `P ${Math.round(genre.popularityScore)} · E ${genre.evidenceCount}`,
-          }))
-        : topSources.map((source) => ({
-            title: source.sourceName,
-            detail: "주요 출처",
-            badge: `${source.itemCount}건`,
-          }));
+    popularGenres.length
+      ? popularGenres.map((genre) => ({
+          title: `${genre.rank}. ${genre.genreLabel}`,
+          detail: genre.representativeTitles.slice(0, 2).join(" · ") || t("visualize.common.representativesPending"),
+          badge: `P ${Math.round(genre.popularityScore)} · E ${genre.evidenceCount}`,
+        }))
+      : topSources.map((source) => ({
+          title: source.sourceName,
+          detail: t("visualize.common.primarySource"),
+          badge: t("visualize.common.itemCount", { count: source.itemCount }),
+        }));
   const secondaryListItems: ResearchReportListItem[] =
-    autoSpec?.widgets?.secondaryList?.items?.length
-      ? autoSpec.widgets.secondaryList.items
-      : qualityGenres.length
-        ? qualityGenres.map((genre) => ({
-            title: `${genre.rank}. ${genre.genreLabel}`,
-            detail: genre.representativeTitles.slice(0, 3).join(" · ") || "대표 게임 추출 중",
-            badge: `Q ${Math.round(genre.qualityScore)} · ${Math.round(genre.avgScore)}`,
-          }))
-        : topSteamGames.map((game) => ({
-            title: game.gameName,
-            detail: "대표 게임",
-            badge: `${game.totalReviews} reviews · ${formatPercent(game.positiveRatio)}`,
-          }));
+    qualityGenres.length
+      ? qualityGenres.map((genre) => ({
+          title: `${genre.rank}. ${genre.genreLabel}`,
+          detail: genre.representativeTitles.slice(0, 3).join(" · ") || t("visualize.common.representativesPending"),
+          badge: `Q ${Math.round(genre.qualityScore)} · ${Math.round(genre.avgScore)}`,
+        }))
+      : topSteamGames.map((game) => ({
+          title: game.gameName,
+          detail: t("visualize.common.representativeGame"),
+          badge: `${game.totalReviews} reviews · ${formatPercent(game.positiveRatio)}`,
+        }));
   const summaryMetrics = [
-    { label: "근거 수", value: state.collectionMetrics?.totals.items ?? 0, meta: "수집된 정규화 항목" },
-    { label: "검증됨", value: state.collectionMetrics?.totals.verified ?? 0, meta: "확인된 근거" },
-    { label: "소스 수", value: state.collectionMetrics?.totals.sources ?? 0, meta: "서로 다른 출처" },
-    { label: "평균 점수", value: state.collectionMetrics?.totals.avgScore ?? 0, meta: "신호 강도" },
-    { label: "경고", value: state.collectionMetrics?.totals.warnings ?? 0, meta: "주의 필요" },
+    { label: t("visualize.metric.evidence"), value: state.collectionMetrics?.totals.items ?? 0, meta: t("visualize.metric.evidence.meta") },
+    { label: t("visualize.metric.verified"), value: state.collectionMetrics?.totals.verified ?? 0, meta: t("visualize.metric.verified.meta") },
+    { label: t("visualize.metric.sources"), value: state.collectionMetrics?.totals.sources ?? 0, meta: t("visualize.metric.sources.meta") },
+    { label: t("visualize.metric.avgScore"), value: state.collectionMetrics?.totals.avgScore ?? 0, meta: t("visualize.metric.avgScore.meta") },
+    { label: t("visualize.metric.warnings"), value: state.collectionMetrics?.totals.warnings ?? 0, meta: t("visualize.metric.warnings.meta") },
   ];
 
   const focusWidget = useCallback((ref: { current: HTMLElement | null }) => {
@@ -150,11 +181,11 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
         <header className="visualize-monitor-topbar">
           <div className="visualize-monitor-toolbar-copy">
             <strong>RESEARCH</strong>
-            <span>{state.selectedReportRun?.title || "Run @researcher to create a monitored session"}</span>
+            <span>{state.selectedReportRun?.title || t("visualize.toolbar.empty")}</span>
           </div>
           <div className="visualize-monitor-toolbar-actions">
             <button
-              aria-label={historyOpen ? "리서치 패널 닫기" : "리서치 패널 열기"}
+              aria-label={historyOpen ? t("visualize.history.close") : t("visualize.history.open")}
               aria-pressed={historyOpen}
               className="visualize-monitor-toolbar-icon"
               onClick={() => setHistoryOpen((current) => !current)}
@@ -176,10 +207,10 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
                 title="RESEARCH SESSION"
                 widgetId="session"
               >
-                <h1>{state.selectedReportRun?.title || "Run @researcher to generate a new monitored session"}</h1>
+                <h1>{state.selectedReportRun?.title || t("visualize.session.emptyTitle")}</h1>
                 {state.reportRuns.length ? (
                   <div className="visualize-monitor-session-row">
-                    <span>{state.reportRuns.length} research sessions</span>
+                    <span>{t("visualize.session.count", { count: state.reportRuns.length })}</span>
                     <select onChange={(event) => state.setSelectedRunId(event.currentTarget.value)} value={state.selectedRunId}>
                       {state.reportRuns.map((run) => (
                         <option key={run.runId} value={run.runId}>
@@ -192,10 +223,10 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
                 <p>
                   {state.selectedReportRun
                     ? `${formatStamp(state.selectedReportRun.updatedAt)} · ${reportJob?.label || reportJob?.resolvedSourceType || "AUTO COLLECTION"}`
-                    : "Tasks or graph에서 @researcher로 요청하면 이 캔버스가 해당 조사 세션으로 전환됩니다."}
+                    : t("visualize.session.emptySubcopy")}
                 </p>
                 <p className="visualize-monitor-summary-copy">
-                  {leadCopy || "이 세션의 가장 중요한 결론이 아직 없습니다. researcher가 리포트를 작성하면 여기에 한 줄 요약이 나타납니다."}
+                  {leadCopy || t("visualize.session.emptySummary")}
                 </p>
               </VisualizeWidgetFrame>
 
@@ -211,7 +242,7 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
                     <p className="visualize-monitor-chart-copy">{mainChartDescription}</p>
                     <FeedChart spec={mainChartSpec} />
                   </>
-                ) : <div className="visualize-monitor-placeholder">수집 타임라인 데이터가 아직 없습니다.</div>}
+                ) : <div className="visualize-monitor-placeholder">{t("visualize.placeholder.timeline")}</div>}
               </VisualizeWidgetFrame>
 
               <VisualizeWidgetFrame
@@ -226,7 +257,7 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
                     <p className="visualize-monitor-chart-copy">{secondaryChartDescription}</p>
                     <FeedChart spec={secondaryChartSpec} />
                   </>
-                ) : <div className="visualize-monitor-placeholder">출처 분포 데이터가 아직 없습니다.</div>}
+                ) : <div className="visualize-monitor-placeholder">{t("visualize.placeholder.sourceMix")}</div>}
               </VisualizeWidgetFrame>
 
               <VisualizeWidgetFrame
@@ -239,13 +270,13 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
                 <div className="visualize-monitor-quality-panel">
                   <div className="visualize-monitor-quality-score">
                     <strong>{formatPercent(qualityScore)}</strong>
-                    <span>평균 품질 점수</span>
+                    <span>{t("visualize.quality.avg")}</span>
                   </div>
                   <div className="visualize-monitor-quality-meter" role="presentation">
                     <span style={{ width: `${qualityScore}%` }} />
                   </div>
                   <p className="visualize-monitor-quality-copy">
-                    평균 점수와 검증 비율을 함께 반영한 품질 신호입니다.
+                    {t("visualize.quality.copy")}
                   </p>
                   <div className="visualize-monitor-quality-legend">
                     {(state.collectionMetrics?.byVerificationStatus ?? []).map((row) => (
@@ -286,7 +317,7 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
                       <span>{item.badge || "-"}</span>
                     </div>
                   ))}
-                  {primaryListItems.length ? null : <p className="visualize-monitor-empty">표시할 항목이 없습니다.</p>}
+                  {primaryListItems.length ? null : <p className="visualize-monitor-empty">{t("visualize.empty.items")}</p>}
                 </div>
               </VisualizeWidgetFrame>
 
@@ -307,7 +338,7 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
                       <span>{item.badge || "-"}</span>
                     </div>
                   ))}
-                  {secondaryListItems.length ? null : <p className="visualize-monitor-empty">표시할 스냅샷이 아직 없습니다.</p>}
+                  {secondaryListItems.length ? null : <p className="visualize-monitor-empty">{t("visualize.empty.snapshots")}</p>}
                 </div>
               </VisualizeWidgetFrame>
 
@@ -322,7 +353,7 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
                 {reportBody ? (
                   <FeedDocument className="visualize-monitor-document" text={reportBody} />
                 ) : (
-                  <p className="visualize-monitor-empty">아직 표시할 researcher 문서가 없습니다.</p>
+                  <p className="visualize-monitor-empty">{t("visualize.empty.report")}</p>
                 )}
               </VisualizeWidgetFrame>
 
@@ -337,7 +368,7 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
                 <div className="visualize-monitor-search-row">
                   <input
                     onChange={(event) => state.setItemSearch(event.currentTarget.value)}
-                    placeholder="제목, 요약, 본문 검색"
+                    placeholder={t("visualize.evidence.searchPlaceholder")}
                     type="search"
                     value={state.itemSearch}
                   />
@@ -351,22 +382,22 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
                         <span>{item.verificationStatus}</span>
                         <span>SCORE {item.score}</span>
                       </div>
-                      <p>{item.summary || item.contentExcerpt || "본문 추출 요약 없음"}</p>
+                      <p>{item.summary || item.contentExcerpt || t("visualize.evidence.noSummary")}</p>
                       <a href={item.url} rel="noreferrer" target="_blank">
                         {item.url}
                       </a>
                     </article>
                   ))}
-                  {evidenceItems.length ? null : <p className="visualize-monitor-empty">아직 정규화된 근거 항목이 없습니다.</p>}
+                  {evidenceItems.length ? null : <p className="visualize-monitor-empty">{t("visualize.empty.evidence")}</p>}
                 </div>
               </VisualizeWidgetFrame>
             </div>
           </section>
           {historyOpen ? (
-            <aside className="visualize-monitor-rail" aria-label="Research history">
+            <aside className="visualize-monitor-rail" aria-label={t("visualize.history.aria")}>
               <header className="visualize-monitor-rail-head">
-                <strong>RESEARCH DATA</strong>
-                <span>{state.reportRuns.length} sessions</span>
+                <strong>{t("visualize.history.title")}</strong>
+                <span>{t("visualize.session.count", { count: state.reportRuns.length })}</span>
               </header>
               <div className="visualize-monitor-rail-list">
                 {state.reportRuns.length ? (
@@ -381,34 +412,34 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
                       >
                         <strong>{run.title || run.taskId}</strong>
                         <span>{formatStamp(run.updatedAt)}</span>
-                        <p>{run.summary || "요약이 아직 없습니다."}</p>
+                        <p>{run.summary || t("visualize.history.noSummary")}</p>
                       </button>
                     );
                   })
                 ) : (
-                  <div className="visualize-monitor-rail-empty">아직 생성된 리서치 세션이 없습니다.</div>
+                  <div className="visualize-monitor-rail-empty">{t("visualize.history.empty")}</div>
                 )}
               </div>
               <div className="visualize-monitor-rail-footer">
                 <button className="visualize-monitor-rail-action" disabled={state.refreshing} onClick={() => void state.refreshAll()} type="button">
-                  {state.refreshing ? "SYNC" : "새로고침"}
+                  {state.refreshing ? t("visualize.action.sync") : t("visualize.action.refresh")}
                 </button>
                 <button className="visualize-monitor-rail-action" disabled={state.steamIngesting} onClick={() => void state.ingestSteam()} type="button">
-                  {state.steamIngesting ? "STEAM" : "Steam 적재"}
+                  {state.steamIngesting ? "STEAM" : t("visualize.action.ingestSteam")}
                 </button>
                 {reportEntryId && onOpenKnowledgeEntry ? (
                   <button className="visualize-monitor-rail-action" onClick={() => onOpenKnowledgeEntry(reportEntryId)} type="button">
-                    데이터베이스
+                    {t("visualize.action.database")}
                   </button>
                 ) : null}
                 <button className="visualize-monitor-rail-action subtle" onClick={() => focusWidget(reportRef)} type="button">
-                  리포트로 이동
+                  {t("visualize.action.jumpReport")}
                 </button>
                 <button className="visualize-monitor-rail-action subtle" onClick={() => focusWidget(evidenceRef)} type="button">
-                  근거로 이동
+                  {t("visualize.action.jumpEvidence")}
                 </button>
                 <button className="visualize-monitor-rail-action subtle" onClick={() => focusWidget(sessionRef)} type="button">
-                  요약으로 이동
+                  {t("visualize.action.jumpSummary")}
                 </button>
               </div>
             </aside>

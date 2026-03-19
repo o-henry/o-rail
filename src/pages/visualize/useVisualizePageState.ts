@@ -25,6 +25,7 @@ import {
   parseResearchCollectionPayload,
   type VisualizeResearchRun,
 } from "./visualizeReportUtils";
+import { useI18n } from "../../i18n";
 
 type UseVisualizePageStateParams = {
   cwd: string;
@@ -52,6 +53,7 @@ function isEntryInWorkspace(entry: { sourceFile?: string; markdownPath?: string;
 }
 
 export function useVisualizePageState({ cwd, hasTauriRuntime }: UseVisualizePageStateParams) {
+  const { t } = useI18n();
   const [overview, setOverview] = useState<ResearchOverview | null>(null);
   const [jobs, setJobs] = useState<ResearchCollectionJobListItem[]>([]);
   const [collectionMetrics, setCollectionMetrics] = useState<ResearchCollectionMetricsResult | null>(null);
@@ -81,7 +83,7 @@ export function useVisualizePageState({ cwd, hasTauriRuntime }: UseVisualizePage
 
   useEffect(() => {
     if (!hasTauriRuntime || !cwd.trim()) {
-      setStatusText("데스크톱 런타임에서만 로컬 수집/조회가 동작합니다.");
+      setStatusText(t("visualize.status.desktopOnly"));
       return;
     }
     let cancelled = false;
@@ -97,7 +99,13 @@ export function useVisualizePageState({ cwd, hasTauriRuntime }: UseVisualizePage
         setJobs(nextJobs.items);
         setSteamMetrics(nextSteamMetrics);
         setSelectedJobId((current) => (current && nextJobs.items.some((item) => item.jobId === current) ? current : (nextJobs.items[0]?.jobId ?? "")));
-        setStatusText(`로컬 연구 저장소 로드 · runs ${nextOverview.totals.runs}, reviews ${nextOverview.totals.reviews}, facts ${nextOverview.totals.collectionItems}`);
+        setStatusText(
+          t("visualize.status.storageLoaded", {
+            runs: nextOverview.totals.runs,
+            reviews: nextOverview.totals.reviews,
+            facts: nextOverview.totals.collectionItems,
+          }),
+        );
       })
       .catch((nextError) => {
         if (!cancelled) {
@@ -112,7 +120,7 @@ export function useVisualizePageState({ cwd, hasTauriRuntime }: UseVisualizePage
     return () => {
       cancelled = true;
     };
-  }, [cwd, hasTauriRuntime, syncReportRuns]);
+  }, [cwd, hasTauriRuntime, syncReportRuns, t]);
 
   useEffect(() => {
     syncReportRuns();
@@ -172,7 +180,7 @@ export function useVisualizePageState({ cwd, hasTauriRuntime }: UseVisualizePage
       setCollectionMetrics(null);
       setCollectionGenreRankings(null);
       setCollectionItems(null);
-      setStatusText("선택한 researcher 보고서에 연결된 collection job 정보가 없습니다.");
+      setStatusText(t("visualize.status.noCollectionJob"));
       return;
     }
     let cancelled = false;
@@ -202,7 +210,7 @@ export function useVisualizePageState({ cwd, hasTauriRuntime }: UseVisualizePage
     return () => {
       cancelled = true;
     };
-  }, [activeJobId, cwd, hasTauriRuntime, itemSearch]);
+  }, [activeJobId, cwd, hasTauriRuntime, itemSearch, reportJobId, selectedReportRun, t]);
 
   async function refreshAll(nextSelectedJobId = selectedJobId) {
     if (!hasTauriRuntime || !cwd.trim()) {
@@ -221,7 +229,12 @@ export function useVisualizePageState({ cwd, hasTauriRuntime }: UseVisualizePage
       setSteamMetrics(nextSteamMetrics);
       syncReportRuns();
       setSelectedJobId(nextSelectedJobId && nextJobs.items.some((item) => item.jobId === nextSelectedJobId) ? nextSelectedJobId : (nextJobs.items[0]?.jobId ?? ""));
-      setStatusText(`저장소 새로고침 완료 · reports ${buildVisualizeResearchRuns(readKnowledgeEntries()).length}, facts ${nextOverview.totals.collectionItems}`);
+      setStatusText(
+        t("visualize.status.storageRefreshed", {
+          reports: buildVisualizeResearchRuns(readKnowledgeEntries()).length,
+          facts: nextOverview.totals.collectionItems,
+        }),
+      );
     } catch (nextError) {
       setError(toMessage(nextError));
     } finally {
@@ -231,19 +244,19 @@ export function useVisualizePageState({ cwd, hasTauriRuntime }: UseVisualizePage
 
   async function runCollection() {
     if (!hasTauriRuntime || !cwd.trim()) {
-      setError("데스크톱 런타임에서만 수집을 실행할 수 있습니다.");
+      setError(t("visualize.error.collectDesktopOnly"));
       return;
     }
     const urls = parseLines(urlsText);
     const keywords = parseLines(keywordsText);
     if (urls.length === 0 && keywords.length === 0) {
-      setError("URL 또는 키워드 중 하나는 입력해야 합니다.");
+      setError(t("visualize.error.requireUrlOrKeyword"));
       return;
     }
     setBusy(true);
     setError("");
     try {
-      setStatusText("수집 job 계획 중...");
+      setStatusText(t("visualize.status.planningCollection"));
       const planned = await planDynamicResearchCollectionJob(cwd, {
         urls,
         keywords,
@@ -251,10 +264,10 @@ export function useVisualizePageState({ cwd, hasTauriRuntime }: UseVisualizePage
         requestedSourceType,
         maxItems,
       });
-      setStatusText(`수집 실행 중 · ${planned.job.jobId}`);
+      setStatusText(t("visualize.status.collectionRunning", { jobId: planned.job.jobId }));
       await executeDynamicResearchCollectionJob(cwd, planned.job.jobId);
       await refreshAll(planned.job.jobId);
-      setStatusText(`수집 완료 · ${planned.job.label}`);
+      setStatusText(t("visualize.status.collectionDone", { label: planned.job.label }));
     } catch (nextError) {
       setError(toMessage(nextError));
     } finally {
@@ -264,7 +277,7 @@ export function useVisualizePageState({ cwd, hasTauriRuntime }: UseVisualizePage
 
   async function ingestSteam() {
     if (!hasTauriRuntime || !cwd.trim()) {
-      setError("데스크톱 런타임에서만 Steam 캐시 적재를 실행할 수 있습니다.");
+      setError(t("visualize.error.steamDesktopOnly"));
       return;
     }
     setSteamIngesting(true);
@@ -272,7 +285,7 @@ export function useVisualizePageState({ cwd, hasTauriRuntime }: UseVisualizePage
     try {
       const result = await ingestSteamResearchCache(cwd);
       await refreshAll();
-      setStatusText(`Steam 캐시 적재 완료 · reviews ${result.reviews}`);
+      setStatusText(t("visualize.status.steamIngestDone", { reviews: result.reviews }));
     } catch (nextError) {
       setError(toMessage(nextError));
     } finally {

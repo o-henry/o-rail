@@ -3,6 +3,7 @@
   --tasks-radius: 4px;
   --tasks-wrapper-radius: 10px;
   --tasks-control-height: 34px;
+  position: relative;
   min-height: 0;
   height: 100%;
   display: grid;
@@ -490,6 +491,20 @@
   gap: 0;
   background: transparent;
   overflow: hidden;
+}
+
+.tasks-thread-layout.is-main-surface-fullscreen .tasks-thread-nav,
+.tasks-thread-layout.is-main-surface-fullscreen .tasks-thread-detail-panel {
+  opacity: 0;
+  pointer-events: none;
+  user-select: none;
+}
+
+.tasks-thread-layout.is-main-surface-fullscreen .tasks-thread-main-surface {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  background: var(--bg-app);
 }
 
 .tasks-thread-main-surface.is-stage-shell-collapsed {

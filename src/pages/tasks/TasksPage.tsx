@@ -164,6 +164,7 @@ export default function TasksPage(props: TasksPageProps) {
   const [composerCursor, setComposerCursor] = useState(0);
   const [mentionIndex, setMentionIndex] = useState(0);
   const [isMentionMenuHidden, setIsMentionMenuHidden] = useState(false);
+  const [isMainSurfaceFullscreen, setIsMainSurfaceFullscreen] = useState(false);
   const title = useMemo(() => displayThreadTitle(state.activeThread?.thread.title), [state.activeThread]);
   const headerTitle = state.activeThread ? title : "";
   const selectedModelOption = useMemo(
@@ -356,7 +357,7 @@ export default function TasksPage(props: TasksPageProps) {
   }, [state.activeThread?.messages.length, liveAgents.length, state.pendingApprovals.length, state.selectedFileDiff]);
 
   return (
-    <section className="tasks-thread-layout workspace-tab-panel">
+    <section className={`tasks-thread-layout workspace-tab-panel${isMainSurfaceFullscreen ? " is-main-surface-fullscreen" : ""}`}>
       <aside className="tasks-thread-nav">
         <div className="tasks-thread-nav-actions">
           <button className="tasks-thread-new-button" onClick={handleNewThread} type="button">
@@ -502,6 +503,16 @@ export default function TasksPage(props: TasksPageProps) {
             <p>
               {displayThreadPath(state.projectPath || state.activeThread?.task.worktreePath || state.activeThread?.task.workspacePath || props.cwd)}
             </p>
+          </div>
+          <div className="tasks-thread-header-actions">
+            <button
+              aria-label={isMainSurfaceFullscreen ? "축소 보기" : "확대 보기"}
+              className="tasks-thread-header-terminal-button"
+              onClick={() => setIsMainSurfaceFullscreen((current) => !current)}
+              type="button"
+            >
+              <img alt="" aria-hidden="true" src="/canvas-fullscreen.svg" />
+            </button>
           </div>
         </header>
 

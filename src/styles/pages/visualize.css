@@ -190,7 +190,7 @@
 
 .visualize-monitor-widget.is-report {
   grid-column: 7 / 13;
-  grid-row: 6 / span 2;
+  grid-row: 3 / span 5;
 }
 
 .visualize-monitor-widget.is-evidence {

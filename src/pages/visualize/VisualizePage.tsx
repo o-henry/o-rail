@@ -3,6 +3,9 @@ import FeedChart from "../../components/feed/FeedChart";
 import FeedDocument from "../../components/feed/FeedDocument";
 import type { FeedChartSpec } from "../../features/feed/chartSpec";
 import { useVisualizePageState } from "./useVisualizePageState";
+import { useVisualizeWidgetLayout } from "./useVisualizeWidgetLayout";
+import { VisualizeWidgetFrame } from "./VisualizeWidgetFrame";
+import type { VisualizeWidgetId } from "./visualizeWidgetLayout";
 
 type VisualizePageProps = {
   cwd: string;
@@ -72,6 +75,7 @@ function buildTimelineChart(spec: ReturnType<typeof useVisualizePageState>["coll
 
 export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEntry }: VisualizePageProps) {
   const state = useVisualizePageState({ cwd, hasTauriRuntime });
+  const layout = useVisualizeWidgetLayout({ cwd });
   const [selectedEvidenceId, setSelectedEvidenceId] = useState("");
   const mainRef = useRef<HTMLElement | null>(null);
   const sessionRef = useRef<HTMLElement | null>(null);
@@ -122,6 +126,19 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
     container.scrollTo({ top, behavior: "smooth" });
   }, []);
 
+  const widgetStyle = useCallback((widgetId: VisualizeWidgetId) => {
+    const rect = layout.layoutState.widgets[widgetId];
+    if (layout.layoutState.maximizedWidgetId === widgetId) {
+      return undefined;
+    }
+    return {
+      left: `${rect.x}px`,
+      top: `${rect.y}px`,
+      width: `${rect.w}px`,
+      height: `${rect.h}px`,
+    };
+  }, [layout.layoutState]);
+
   return (
     <section className="panel-card visualize-view workspace-tab-panel">
       <section className="visualize-monitor-shell">
@@ -171,12 +188,23 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
 
         <section className="visualize-monitor-body">
           <section className="visualize-monitor-main" ref={mainRef}>
-            <div className="visualize-monitor-grid">
-              <article className="visualize-monitor-widget is-session" ref={sessionRef}>
-                <div className="visualize-monitor-widget-head">
-                  <span>[ 조사 세션 ]</span>
-                  <small>{state.selectedReportRun?.taskId || "awaiting @researcher"}</small>
-                </div>
+            <div
+              className={`visualize-monitor-canvas${layout.layoutState.maximizedWidgetId ? " has-maximized-widget" : ""}`}
+              style={{ minHeight: `${layout.canvasSize.height}px`, minWidth: `${layout.canvasSize.width}px` }}
+            >
+              <VisualizeWidgetFrame
+                articleRef={sessionRef}
+                className="is-session"
+                maximized={layout.layoutState.maximizedWidgetId === "session"}
+                meta={state.selectedReportRun?.taskId || "AWAITING @RESEARCHER"}
+                onDragStart={layout.startDrag}
+                onReset={layout.resetWidget}
+                onResizeStart={layout.startResize}
+                onToggleMaximize={layout.toggleMaximize}
+                style={widgetStyle("session")}
+                title="RESEARCH SESSION"
+                widgetId="session"
+              >
                 <h1>{state.selectedReportRun?.title || "Run @researcher to generate a new monitored session"}</h1>
                 <p>
                   {state.selectedReportRun
@@ -186,13 +214,20 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
                 <p className="visualize-monitor-summary-copy">
                   {leadCopy || "이 세션의 가장 중요한 결론이 아직 없습니다. researcher가 리포트를 작성하면 여기에 한 줄 요약이 나타납니다."}
                 </p>
-              </article>
+              </VisualizeWidgetFrame>
 
-              <article className="visualize-monitor-widget is-kpis">
-                <div className="visualize-monitor-widget-head">
-                  <span>[ 핵심 지표 ]</span>
-                  <small>{state.activeJobId ? "FILTERED" : "GLOBAL"}</small>
-                </div>
+              <VisualizeWidgetFrame
+                className="is-kpis"
+                maximized={layout.layoutState.maximizedWidgetId === "kpis"}
+                meta={state.activeJobId ? "FILTERED" : "GLOBAL"}
+                onDragStart={layout.startDrag}
+                onReset={layout.resetWidget}
+                onResizeStart={layout.startResize}
+                onToggleMaximize={layout.toggleMaximize}
+                style={widgetStyle("kpis")}
+                title="CORE SIGNALS"
+                widgetId="kpis"
+              >
                 <div className="visualize-monitor-kpi-grid">
                   {summaryMetrics.map((metric) => (
                     <div className="visualize-monitor-kpi-item" key={metric.label}>
@@ -204,29 +239,50 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
                     </div>
                   ))}
                 </div>
-              </article>
+              </VisualizeWidgetFrame>
 
-              <article className="visualize-monitor-widget is-chart-main">
-                <div className="visualize-monitor-widget-head">
-                  <span>[ 수집 추세 ]</span>
-                  <small>{state.collectionMetrics?.timeline.length ?? 0} buckets</small>
-                </div>
+              <VisualizeWidgetFrame
+                className="is-chart-main"
+                maximized={layout.layoutState.maximizedWidgetId === "timeline"}
+                meta={`${state.collectionMetrics?.timeline.length ?? 0} BUCKETS`}
+                onDragStart={layout.startDrag}
+                onReset={layout.resetWidget}
+                onResizeStart={layout.startResize}
+                onToggleMaximize={layout.toggleMaximize}
+                style={widgetStyle("timeline")}
+                title="COLLECTION TIMELINE"
+                widgetId="timeline"
+              >
                 {timelineChart ? <FeedChart spec={timelineChart} /> : <div className="visualize-monitor-placeholder">Timeline chart pending</div>}
-              </article>
+              </VisualizeWidgetFrame>
 
-              <article className="visualize-monitor-widget is-chart-source">
-                <div className="visualize-monitor-widget-head">
-                  <span>[ 소스 분포 ]</span>
-                  <small>{state.collectionMetrics?.bySourceType.length ?? 0} groups</small>
-                </div>
+              <VisualizeWidgetFrame
+                className="is-chart-source"
+                maximized={layout.layoutState.maximizedWidgetId === "sourceMix"}
+                meta={`${state.collectionMetrics?.bySourceType.length ?? 0} GROUPS`}
+                onDragStart={layout.startDrag}
+                onReset={layout.resetWidget}
+                onResizeStart={layout.startResize}
+                onToggleMaximize={layout.toggleMaximize}
+                style={widgetStyle("sourceMix")}
+                title="SOURCE MIX"
+                widgetId="sourceMix"
+              >
                 {sourceChart ? <FeedChart spec={sourceChart} /> : <div className="visualize-monitor-placeholder">Source mix pending</div>}
-              </article>
+              </VisualizeWidgetFrame>
 
-              <article className="visualize-monitor-widget is-chart-quality">
-                <div className="visualize-monitor-widget-head">
-                  <span>[ 검증 비율 ]</span>
-                  <small>{qualityScore}</small>
-                </div>
+              <VisualizeWidgetFrame
+                className="is-chart-quality"
+                maximized={layout.layoutState.maximizedWidgetId === "quality"}
+                meta={`${qualityScore}`}
+                onDragStart={layout.startDrag}
+                onReset={layout.resetWidget}
+                onResizeStart={layout.startResize}
+                onToggleMaximize={layout.toggleMaximize}
+                style={widgetStyle("quality")}
+                title="QUALITY SCORE"
+                widgetId="quality"
+              >
                 <div className="visualize-monitor-quality-panel">
                   <div className="visualize-monitor-quality-score">
                     <strong>{formatPercent(qualityScore)}</strong>
@@ -256,13 +312,20 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
                     )}
                   </div>
                 </div>
-              </article>
+              </VisualizeWidgetFrame>
 
-              <article className="visualize-monitor-widget is-sources">
-                <div className="visualize-monitor-widget-head">
-                  <span>[ 상위 소스 ]</span>
-                  <small>{topSources.length}</small>
-                </div>
+              <VisualizeWidgetFrame
+                className="is-sources"
+                maximized={layout.layoutState.maximizedWidgetId === "sources"}
+                meta={`${topSources.length}`}
+                onDragStart={layout.startDrag}
+                onReset={layout.resetWidget}
+                onResizeStart={layout.startResize}
+                onToggleMaximize={layout.toggleMaximize}
+                style={widgetStyle("sources")}
+                title="TOP SOURCES"
+                widgetId="sources"
+              >
                 <div className="visualize-monitor-ranked-list">
                   {topSources.map((source) => (
                     <div className="visualize-monitor-ranked-item" key={source.sourceName}>
@@ -272,13 +335,20 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
                   ))}
                   {topSources.length ? null : <p className="visualize-monitor-empty">표시할 상위 소스가 없습니다.</p>}
                 </div>
-              </article>
+              </VisualizeWidgetFrame>
 
-              <article className="visualize-monitor-widget is-steam">
-                <div className="visualize-monitor-widget-head">
-                  <span>[ 스팀 상위 게임 ]</span>
-                  <small>{topSteamGames.length}</small>
-                </div>
+              <VisualizeWidgetFrame
+                className="is-steam"
+                maximized={layout.layoutState.maximizedWidgetId === "steam"}
+                meta={`${topSteamGames.length}`}
+                onDragStart={layout.startDrag}
+                onReset={layout.resetWidget}
+                onResizeStart={layout.startResize}
+                onToggleMaximize={layout.toggleMaximize}
+                style={widgetStyle("steam")}
+                title="STEAM SNAPSHOT"
+                widgetId="steam"
+              >
                 <div className="visualize-monitor-ranked-list">
                   {topSteamGames.map((game) => (
                     <div className="visualize-monitor-ranked-item" key={game.gameKey}>
@@ -288,25 +358,41 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
                   ))}
                   {topSteamGames.length ? null : <p className="visualize-monitor-empty">Steam 데이터가 아직 없습니다.</p>}
                 </div>
-              </article>
+              </VisualizeWidgetFrame>
 
-              <article className="visualize-monitor-widget is-report" ref={reportRef}>
-                <div className="visualize-monitor-widget-head">
-                  <span>[ 리서치 리포트 ]</span>
-                  <small>{state.detailLoading ? "loading" : state.reportMarkdown ? "ready" : "empty"}</small>
-                </div>
+              <VisualizeWidgetFrame
+                articleRef={reportRef}
+                className="is-report"
+                maximized={layout.layoutState.maximizedWidgetId === "report"}
+                meta={state.detailLoading ? "LOADING" : state.reportMarkdown ? "READY" : "EMPTY"}
+                onDragStart={layout.startDrag}
+                onReset={layout.resetWidget}
+                onResizeStart={layout.startResize}
+                onToggleMaximize={layout.toggleMaximize}
+                style={widgetStyle("report")}
+                title="RESEARCH REPORT"
+                widgetId="report"
+              >
                 {state.reportMarkdown ? (
                   <FeedDocument className="visualize-monitor-document" text={state.reportMarkdown} />
                 ) : (
                   <p className="visualize-monitor-empty">No final researcher report for this run yet.</p>
                 )}
-              </article>
+              </VisualizeWidgetFrame>
 
-              <article className="visualize-monitor-widget is-evidence" ref={evidenceRef}>
-                <div className="visualize-monitor-widget-head">
-                  <span>[ 근거 스트림 ]</span>
-                  <small>{evidenceItems.length} rows</small>
-                </div>
+              <VisualizeWidgetFrame
+                articleRef={evidenceRef}
+                className="is-evidence"
+                maximized={layout.layoutState.maximizedWidgetId === "evidence"}
+                meta={`${evidenceItems.length} ROWS`}
+                onDragStart={layout.startDrag}
+                onReset={layout.resetWidget}
+                onResizeStart={layout.startResize}
+                onToggleMaximize={layout.toggleMaximize}
+                style={widgetStyle("evidence")}
+                title="EVIDENCE STREAM"
+                widgetId="evidence"
+              >
                 <div className="visualize-monitor-search-row">
                   <input
                     onChange={(event) => state.setItemSearch(event.currentTarget.value)}
@@ -343,7 +429,7 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
                     </a>
                   </div>
                 ) : null}
-              </article>
+              </VisualizeWidgetFrame>
             </div>
           </section>
         </section>

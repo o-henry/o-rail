@@ -186,11 +186,6 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
                 <p className="visualize-monitor-summary-copy">
                   {leadCopy || "이 세션의 가장 중요한 결론이 아직 없습니다. researcher가 리포트를 작성하면 여기에 한 줄 요약이 나타납니다."}
                 </p>
-                <div className="visualize-monitor-chip-row">
-                  <span>{reportJob?.collectorStrategy || "planner"}</span>
-                  <span>{reportJob?.resolvedSourceType || "auto"}</span>
-                  <span>{state.activeJobId || "no-job"}</span>
-                </div>
               </article>
 
               <article className="visualize-monitor-widget is-kpis">

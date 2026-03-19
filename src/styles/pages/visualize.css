@@ -186,6 +186,7 @@
   flex-direction: column;
   gap: 6px;
   border: 1px solid rgba(203, 213, 225, 0.92);
+  border-radius: 10px;
   background: rgba(255, 255, 255, 0.94);
   padding: 10px;
   overflow: hidden;
@@ -228,6 +229,7 @@
 }
 
 .visualize-monitor-widget.is-session h1 {
+  font-family: "DepartureMonoNerdFont", "DepartureMonoRail", "Galmuri11", monospace;
   font-size: 1.05rem;
   line-height: 1.28;
 }
@@ -240,6 +242,7 @@
 .visualize-monitor-widget.is-kpis {
   grid-column: 8 / 13;
   grid-row: span 2;
+  padding: 8px;
 }
 
 .visualize-monitor-widget.is-chart-main {
@@ -303,19 +306,20 @@
 .visualize-monitor-kpi-grid {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 6px;
-  align-content: start;
+  gap: 4px;
+  height: 100%;
+  align-content: stretch;
 }
 
 .visualize-monitor-kpi-item,
 .visualize-monitor-console-meta > div {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  gap: 8px;
+  grid-template-columns: 1fr;
+  align-content: start;
+  gap: 4px;
   border: 1px solid rgba(226, 232, 240, 1);
   background: rgba(248, 250, 252, 0.95);
-  padding: 6px 8px;
+  padding: 6px;
 }
 
 .visualize-monitor-kpi-item strong {
@@ -461,8 +465,8 @@
 
 .visualize-monitor-search-row input {
   width: 100%;
-  border: 1px solid rgba(203, 213, 225, 0.95);
-  background: rgba(255, 255, 255, 0.98);
+  border: 0;
+  background: transparent;
   height: 34px;
   padding: 0 12px;
   color: inherit;
@@ -474,6 +478,9 @@
   display: flex;
   align-items: center;
   min-height: 34px;
+  border: 0;
+  border-radius: 10px;
+  background: #f1f4f8;
 }
 
 .visualize-monitor-search-row input:focus,
@@ -486,7 +493,9 @@
 .visualize-monitor-evidence-picker {
   display: grid;
   gap: 8px;
+  flex: 1 1 auto;
   min-height: 0;
+  align-content: start;
   overflow: auto;
 }
 

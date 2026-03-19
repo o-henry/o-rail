@@ -83,7 +83,6 @@ function buildQualityChart(score: number): FeedChartSpec {
 export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEntry }: VisualizePageProps) {
   const state = useVisualizePageState({ cwd, hasTauriRuntime });
   const [selectedEvidenceId, setSelectedEvidenceId] = useState("");
-  const [railHidden, setRailHidden] = useState(false);
   const mainRef = useRef<HTMLElement | null>(null);
   const sessionRef = useRef<HTMLElement | null>(null);
   const reportRef = useRef<HTMLElement | null>(null);
@@ -162,9 +161,16 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
             <button disabled={state.steamIngesting} onClick={() => void state.ingestSteam()} type="button">
               {state.steamIngesting ? "STEAM" : "Steam 적재"}
             </button>
-            <button onClick={() => setRailHidden((current) => !current)} type="button">
-              {railHidden ? "패널 보기" : "패널 숨기기"}
-            </button>
+            <label className="visualize-monitor-session-select">
+              <span>세션</span>
+              <select onChange={(event) => state.setSelectedRunId(event.currentTarget.value)} value={state.selectedRunId}>
+                {state.reportRuns.map((run) => (
+                  <option key={run.runId} value={run.runId}>
+                    {run.title || run.taskId}
+                  </option>
+                ))}
+              </select>
+            </label>
             {reportEntryId && onOpenKnowledgeEntry ? (
               <button onClick={() => onOpenKnowledgeEntry(reportEntryId)} type="button">
                 데이터베이스
@@ -237,6 +243,50 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
                 {verificationChart ? <FeedChart spec={verificationChart} /> : <FeedChart spec={qualityChart} />}
               </article>
 
+              <article className="visualize-monitor-widget is-sources">
+                <div className="visualize-monitor-widget-head">
+                  <span>[ 상위 소스 ]</span>
+                  <small>{topSources.length}</small>
+                </div>
+                <div className="visualize-monitor-ranked-list">
+                  {topSources.map((source) => (
+                    <div className="visualize-monitor-ranked-item" key={source.sourceName}>
+                      <strong>{source.sourceName}</strong>
+                      <span>{source.itemCount} items</span>
+                    </div>
+                  ))}
+                  {topSources.length ? null : <p className="visualize-monitor-empty">표시할 상위 소스가 없습니다.</p>}
+                </div>
+              </article>
+
+              <article className="visualize-monitor-widget is-steam">
+                <div className="visualize-monitor-widget-head">
+                  <span>[ 스팀 상위 게임 ]</span>
+                  <small>{topSteamGames.length}</small>
+                </div>
+                <div className="visualize-monitor-ranked-list">
+                  {topSteamGames.map((game) => (
+                    <div className="visualize-monitor-ranked-item" key={game.gameKey}>
+                      <strong>{game.gameName}</strong>
+                      <span>{game.totalReviews} reviews · {formatPercent(game.positiveRatio)}</span>
+                    </div>
+                  ))}
+                  {topSteamGames.length ? null : <p className="visualize-monitor-empty">Steam 데이터가 아직 없습니다.</p>}
+                </div>
+              </article>
+
+              <article className="visualize-monitor-widget is-storage">
+                <div className="visualize-monitor-widget-head">
+                  <span>[ 저장소 상태 ]</span>
+                  <small>{state.activeJobId || "global"}</small>
+                </div>
+                <div className="visualize-monitor-console-meta">
+                  <div><span>RUNS</span><strong>{state.overview?.totals.runs ?? 0}</strong></div>
+                  <div><span>REVIEWS</span><strong>{state.overview?.totals.reviews ?? 0}</strong></div>
+                  <div><span>FACTS</span><strong>{state.overview?.totals.collectionItems ?? 0}</strong></div>
+                </div>
+              </article>
+
               <article className="visualize-monitor-widget is-report" ref={reportRef}>
                 <div className="visualize-monitor-widget-head">
                   <span>[ 리서치 리포트 ]</span>
@@ -276,155 +326,79 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
                   ))}
                   {evidenceItems.length ? null : <p className="visualize-monitor-empty">No normalized collection items yet.</p>}
                 </div>
+                {selectedEvidence ? (
+                  <div className="visualize-monitor-evidence-detail">
+                    <strong>{selectedEvidence.title || selectedEvidence.url}</strong>
+                    <div className="visualize-monitor-chip-row">
+                      <span>{selectedEvidence.sourceName || selectedEvidence.sourceType}</span>
+                      <span>SCORE {selectedEvidence.score}</span>
+                      <span>HOT {selectedEvidence.hotScore}</span>
+                    </div>
+                    <p>{selectedEvidence.summary || selectedEvidence.contentExcerpt || "본문 추출 요약 없음"}</p>
+                    <a href={selectedEvidence.url} rel="noreferrer" target="_blank">
+                      {selectedEvidence.url}
+                    </a>
+                  </div>
+                ) : null}
               </article>
             </div>
           </section>
-
-          <aside className={`visualize-monitor-rail${railHidden ? " is-hidden" : ""}`}>
-            <section className="visualize-monitor-rail-panel">
-              <div className="visualize-monitor-widget-head">
-                <span>[ 세션 선택 ]</span>
-                <small>{state.reportRuns.length} runs</small>
-              </div>
-              <div className="visualize-monitor-session-list">
-                {state.reportRuns.map((run) => (
-                  <button
-                    className={`visualize-monitor-session-item${run.runId === state.selectedRunId ? " is-active" : ""}`}
-                    key={run.runId}
-                    onClick={() => state.setSelectedRunId(run.runId)}
-                    type="button"
-                  >
-                    <strong>{run.title || run.taskId}</strong>
-                    <span>{run.taskId}</span>
-                    <span>{formatStamp(run.updatedAt)}</span>
-                  </button>
-                ))}
-              </div>
-            </section>
-
-            <section className="visualize-monitor-rail-panel">
-              <div className="visualize-monitor-widget-head">
-                <span>[ 선택된 근거 ]</span>
-                <small>{selectedEvidence?.verificationStatus || "none"}</small>
-              </div>
-              {selectedEvidence ? (
-                <div className="visualize-monitor-evidence-detail">
-                  <strong>{selectedEvidence.title || selectedEvidence.url}</strong>
-                  <div className="visualize-monitor-chip-row">
-                    <span>{selectedEvidence.sourceName || selectedEvidence.sourceType}</span>
-                    <span>SCORE {selectedEvidence.score}</span>
-                    <span>HOT {selectedEvidence.hotScore}</span>
-                  </div>
-                  <p>{selectedEvidence.summary || selectedEvidence.contentExcerpt || "본문 추출 요약 없음"}</p>
-                  <a href={selectedEvidence.url} rel="noreferrer" target="_blank">
-                    {selectedEvidence.url}
-                  </a>
-                </div>
-              ) : (
-                <p className="visualize-monitor-empty">증거 행을 선택하면 상세가 여기 표시됩니다.</p>
-              )}
-            </section>
-
-            <section className="visualize-monitor-rail-panel">
-              <div className="visualize-monitor-widget-head">
-                <span>[ 상위 소스 ]</span>
-                <small>{topSources.length}</small>
-              </div>
-              <div className="visualize-monitor-ranked-list">
-                {topSources.map((source) => (
-                  <div className="visualize-monitor-ranked-item" key={source.sourceName}>
-                    <strong>{source.sourceName}</strong>
-                    <span>{source.itemCount} items</span>
-                  </div>
-                ))}
-                {topSources.length ? null : <p className="visualize-monitor-empty">표시할 상위 소스가 없습니다.</p>}
-              </div>
-            </section>
-
-            <section className="visualize-monitor-rail-panel">
-              <div className="visualize-monitor-widget-head">
-                <span>[ 스팀 상위 게임 ]</span>
-                <small>{topSteamGames.length}</small>
-              </div>
-              <div className="visualize-monitor-ranked-list">
-                {topSteamGames.map((game) => (
-                  <div className="visualize-monitor-ranked-item" key={game.gameKey}>
-                    <strong>{game.gameName}</strong>
-                    <span>{game.totalReviews} reviews · {formatPercent(game.positiveRatio)}</span>
-                  </div>
-                ))}
-                {topSteamGames.length ? null : <p className="visualize-monitor-empty">Steam 데이터가 아직 없습니다.</p>}
-              </div>
-            </section>
-
-            <section className="visualize-monitor-rail-panel">
-              <div className="visualize-monitor-widget-head">
-                <span>[ 저장소 상태 ]</span>
-                <small>{state.activeJobId || "global"}</small>
-              </div>
-              <div className="visualize-monitor-console-meta">
-                <div><span>RUNS</span><strong>{state.overview?.totals.runs ?? 0}</strong></div>
-                <div><span>REVIEWS</span><strong>{state.overview?.totals.reviews ?? 0}</strong></div>
-                <div><span>FACTS</span><strong>{state.overview?.totals.collectionItems ?? 0}</strong></div>
-              </div>
-            </section>
-
-            <details className="visualize-monitor-drawer">
-              <summary>[ 수동 수집 오버라이드 ]</summary>
-              <div className="visualize-monitor-manual">
-                <label>
-                  <span>URL 목록</span>
-                  <textarea
-                    onChange={(event) => state.setUrlsText(event.currentTarget.value)}
-                    placeholder="https://store.steampowered.com/app/..."
-                    rows={4}
-                    value={state.urlsText}
-                  />
-                </label>
-                <label>
-                  <span>키워드</span>
-                  <input
-                    onChange={(event) => state.setKeywordsText(event.currentTarget.value)}
-                    placeholder="roguelike, indie, replayability"
-                    type="text"
-                    value={state.keywordsText}
-                  />
-                </label>
-                <label>
-                  <span>라벨</span>
-                  <input onChange={(event) => state.setLabel(event.currentTarget.value)} placeholder="Idea sweep" type="text" value={state.label} />
-                </label>
-                <label>
-                  <span>소스 타입</span>
-                  <select onChange={(event) => state.setRequestedSourceType(event.currentTarget.value)} value={state.requestedSourceType}>
-                    <option value="auto">auto</option>
-                    <option value="community">community</option>
-                    <option value="critic">critic</option>
-                    <option value="news">news</option>
-                    <option value="dev">dev</option>
-                    <option value="market">market</option>
-                    <option value="sns">sns</option>
-                  </select>
-                </label>
-                <label>
-                  <span>최대 item</span>
-                  <input
-                    inputMode="numeric"
-                    onChange={(event) =>
-                      state.setMaxItems(Math.max(1, Math.min(120, Number(event.currentTarget.value.replace(/[^\d]/g, "")) || 40)))
-                    }
-                    pattern="[0-9]*"
-                    type="text"
-                    value={String(state.maxItems)}
-                  />
-                </label>
-                <button disabled={state.busy || !hasTauriRuntime} onClick={() => void state.runCollection()} type="button">
-                  {state.busy ? "수집 실행 중..." : "수집 실행"}
-                </button>
-              </div>
-            </details>
-          </aside>
         </section>
+
+        <details className="visualize-monitor-drawer">
+          <summary>[ 수동 수집 오버라이드 ]</summary>
+          <div className="visualize-monitor-manual">
+            <label>
+              <span>URL 목록</span>
+              <textarea
+                onChange={(event) => state.setUrlsText(event.currentTarget.value)}
+                placeholder="https://store.steampowered.com/app/..."
+                rows={4}
+                value={state.urlsText}
+              />
+            </label>
+            <label>
+              <span>키워드</span>
+              <input
+                onChange={(event) => state.setKeywordsText(event.currentTarget.value)}
+                placeholder="roguelike, indie, replayability"
+                type="text"
+                value={state.keywordsText}
+              />
+            </label>
+            <label>
+              <span>라벨</span>
+              <input onChange={(event) => state.setLabel(event.currentTarget.value)} placeholder="Idea sweep" type="text" value={state.label} />
+            </label>
+            <label>
+              <span>소스 타입</span>
+              <select onChange={(event) => state.setRequestedSourceType(event.currentTarget.value)} value={state.requestedSourceType}>
+                <option value="auto">auto</option>
+                <option value="community">community</option>
+                <option value="critic">critic</option>
+                <option value="news">news</option>
+                <option value="dev">dev</option>
+                <option value="market">market</option>
+                <option value="sns">sns</option>
+              </select>
+            </label>
+            <label>
+              <span>최대 item</span>
+              <input
+                inputMode="numeric"
+                onChange={(event) =>
+                  state.setMaxItems(Math.max(1, Math.min(120, Number(event.currentTarget.value.replace(/[^\d]/g, "")) || 40)))
+                }
+                pattern="[0-9]*"
+                type="text"
+                value={String(state.maxItems)}
+              />
+            </label>
+            <button disabled={state.busy || !hasTauriRuntime} onClick={() => void state.runCollection()} type="button">
+              {state.busy ? "수집 실행 중..." : "수집 실행"}
+            </button>
+          </div>
+        </details>
       </section>
     </section>
   );

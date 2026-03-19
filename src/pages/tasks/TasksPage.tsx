@@ -605,11 +605,7 @@ export default function TasksPage(props: TasksPageProps) {
           )}
         </div>
 
-        <div
-          className={`tasks-thread-composer-shell question-input agents-composer workflow-question-input${
-            mentionMatch ? " is-mention-open" : ""
-          }`}
-        >
+        <div className="tasks-thread-composer-shell question-input agents-composer workflow-question-input">
           {mentionMatch ? (
             <div className="tasks-thread-mention-menu" role="listbox">
               {mentionMatch.options.map((option, index) => (

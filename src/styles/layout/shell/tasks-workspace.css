@@ -1153,18 +1153,6 @@
   width: 100%;
 }
 
-.tasks-thread-composer-shell.is-mention-open .tasks-thread-composer-input-wrap::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 0;
-  height: 1px;
-  background: #dfe5ee;
-  pointer-events: none;
-  z-index: 2;
-}
-
 .tasks-thread-selected-mentions {
   display: flex;
   flex-wrap: wrap;
@@ -1199,19 +1187,17 @@
   position: absolute;
   left: 12px;
   right: 12px;
-  bottom: calc(100%);
+  bottom: calc(100% + 0.35rem);
   z-index: 20;
   width: auto;
   box-sizing: border-box;
   display: grid;
   gap: 4px;
   padding: 6px;
-  border-radius: 8px 8px 0 0;
-  border-top: 1px solid #d8dde6;
-  border-left: 1px solid #d8dde6;
-  border-right: 1px solid #d8dde6;
-  border-bottom: 0;
-  background: #ffffff;
+  border-radius: 8px;
+  border: 1px solid #f0f0f1;
+  background: #f2f4f7;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
 }
 
 .tasks-thread-mention-option {

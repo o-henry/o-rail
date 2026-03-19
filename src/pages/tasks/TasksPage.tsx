@@ -157,6 +157,8 @@ export default function TasksPage(props: TasksPageProps) {
   const [threadTitleDraft, setThreadTitleDraft] = useState("");
   const [selectedStageId, setSelectedStageId] = useState<ThreadStageId>("brief");
   const [pendingDeleteThreadId, setPendingDeleteThreadId] = useState("");
+  const [pendingDeleteProjectPath, setPendingDeleteProjectPath] = useState("");
+  const [collapsedProjects, setCollapsedProjects] = useState<Record<string, boolean>>({});
   const [collapsedDirectories, setCollapsedDirectories] = useState<Record<string, boolean>>({});
   const [isFilesExpanded, setIsFilesExpanded] = useState(false);
   const [composerCursor, setComposerCursor] = useState(0);
@@ -189,6 +191,7 @@ export default function TasksPage(props: TasksPageProps) {
 
   useEffect(() => {
     setPendingDeleteThreadId("");
+    setPendingDeleteProjectPath("");
     setCollapsedDirectories({});
     setIsFilesExpanded(false);
   }, [state.activeThreadId]);
@@ -285,6 +288,14 @@ export default function TasksPage(props: TasksPageProps) {
     setCollapsedDirectories((current) => ({ ...current, [path]: !current[path] }));
   };
 
+  const toggleProject = (projectPath: string) => {
+    const normalized = String(projectPath ?? "").trim();
+    if (!normalized) {
+      return;
+    }
+    setCollapsedProjects((current) => ({ ...current, [normalized]: !current[normalized] }));
+  };
+
   const selectMention = (presetId: ThreadRoleId, matchOverride?: typeof mentionMatch) => {
     const activeMatch = matchOverride ?? mentionMatch;
     if (!activeMatch) {
@@ -374,9 +385,22 @@ export default function TasksPage(props: TasksPageProps) {
                   <span>{state.loading && group.isSelected ? "동기화 중" : `${group.threads.length}개`}</span>
                 </button>
                 <button
+                  aria-label={`${group.label} ${collapsedProjects[group.projectPath] ? "expand" : "collapse"}`}
+                  className="tasks-thread-project-node-toggle"
+                  onClick={() => toggleProject(group.projectPath)}
+                  type="button"
+                >
+                  <img
+                    alt=""
+                    aria-hidden="true"
+                    className={collapsedProjects[group.projectPath] ? "" : "is-expanded"}
+                    src="/down-arrow.svg"
+                  />
+                </button>
+                <button
                   aria-label={`${group.label} remove`}
                   className="tasks-thread-project-node-remove"
-                  onClick={() => state.removeProject(group.projectPath)}
+                  onClick={() => setPendingDeleteProjectPath(group.projectPath)}
                   type="button"
                 >
                   <img alt="" aria-hidden="true" src="/xmark-small-svgrepo-com.svg" />
@@ -385,38 +409,40 @@ export default function TasksPage(props: TasksPageProps) {
               <small className="tasks-thread-project-node-path" title={group.projectPath}>
                 {group.projectPath}
               </small>
-              <div className="tasks-thread-list">
-                {group.threads.length === 0 ? (
-                  <p className="tasks-thread-empty-copy">이 프로젝트에는 아직 스레드가 없습니다</p>
-                ) : (
-                  group.threads.map((item) => {
-                    return (
-                      <article
-                        className={`tasks-thread-list-row${state.activeThreadId === item.thread.threadId ? " is-active" : ""}`}
-                        key={item.thread.threadId}
-                      >
-                        <button
-                          className={`tasks-thread-list-item${state.activeThreadId === item.thread.threadId ? " is-active" : ""}`}
-                          onClick={() => void state.selectThread(item.thread.threadId)}
-                          type="button"
+              {!collapsedProjects[group.projectPath] ? (
+                <div className="tasks-thread-list">
+                  {group.threads.length === 0 ? (
+                    <p className="tasks-thread-empty-copy">이 프로젝트에는 아직 스레드가 없습니다</p>
+                  ) : (
+                    group.threads.map((item) => {
+                      return (
+                        <article
+                          className={`tasks-thread-list-row${state.activeThreadId === item.thread.threadId ? " is-active" : ""}`}
+                          key={item.thread.threadId}
                         >
-                          <div className="tasks-thread-list-title-row">
-                            <strong>{displayThreadTitle(item.thread.title)}</strong>
-                          </div>
-                          {item.workflowSummary ? (
-                            <div className="tasks-thread-list-meta-row">
-                              <span className={`tasks-thread-list-stage is-${item.workflowSummary.status}`}>
-                                {getThreadStageLabel(item.workflowSummary.currentStageId)}
-                              </span>
-                              {item.workflowSummary.blocked ? <small>차단됨</small> : null}
+                          <button
+                            className={`tasks-thread-list-item${state.activeThreadId === item.thread.threadId ? " is-active" : ""}`}
+                            onClick={() => void state.selectThread(item.thread.threadId)}
+                            type="button"
+                          >
+                            <div className="tasks-thread-list-title-row">
+                              <strong>{displayThreadTitle(item.thread.title)}</strong>
                             </div>
-                          ) : null}
-                        </button>
-                      </article>
-                    );
-                  })
-                )}
-              </div>
+                            {item.workflowSummary ? (
+                              <div className="tasks-thread-list-meta-row">
+                                <span className={`tasks-thread-list-stage is-${item.workflowSummary.status}`}>
+                                  {getThreadStageLabel(item.workflowSummary.currentStageId)}
+                                </span>
+                                {item.workflowSummary.blocked ? <small>차단됨</small> : null}
+                              </div>
+                            ) : null}
+                          </button>
+                        </article>
+                      );
+                    })
+                  )}
+                </div>
+              ) : null}
             </section>
           ))}
         </div>
@@ -797,6 +823,30 @@ export default function TasksPage(props: TasksPageProps) {
                 type="button"
               >
                 DELETE
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      {pendingDeleteProjectPath ? (
+        <div className="modal-backdrop">
+          <section className="approval-modal tasks-thread-confirm-modal">
+            <h2>PROJECT HIDE</h2>
+            <p>정말 Tasks에서 안 보이게 하시겠습니까?</p>
+            <div className="tasks-thread-approval-actions">
+              <button onClick={() => setPendingDeleteProjectPath("")} type="button">
+                CANCEL
+              </button>
+              <button
+                className="tasks-thread-primary"
+                onClick={() => {
+                  state.removeProject(pendingDeleteProjectPath);
+                  setPendingDeleteProjectPath("");
+                }}
+                type="button"
+              >
+                HIDE
               </button>
             </div>
           </section>

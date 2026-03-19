@@ -78,7 +78,6 @@
   position: relative;
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
 }
 
@@ -119,6 +118,31 @@
   align-items: center;
   justify-content: center;
   cursor: pointer;
+}
+
+.tasks-thread-project-node-toggle {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.tasks-thread-project-node-toggle img {
+  width: 9px;
+  height: 9px;
+  opacity: 0.72;
+  transition: transform 160ms ease;
+}
+
+.tasks-thread-project-node-toggle img.is-expanded {
+  transform: rotate(180deg);
 }
 
 .tasks-thread-project-node-remove img {

@@ -269,6 +269,10 @@
   gap: 8px;
 }
 
+.tasks-thread-header-copy {
+  gap: 2px;
+}
+
 .tasks-thread-agent-detail-panel,
 .tasks-thread-workflow-panel,
 .tasks-thread-main-diff-panel {

@@ -38,7 +38,7 @@
   flex: 1 1 auto;
   width: 100%;
   overflow: auto;
-  padding: 8px;
+  padding: 0;
 }
 
 .visualize-monitor-grid {
@@ -520,7 +520,7 @@
 
 @media (max-width: 960px) {
   .visualize-monitor-main {
-    padding: 10px;
+    padding: 0;
   }
 
   .visualize-monitor-grid {

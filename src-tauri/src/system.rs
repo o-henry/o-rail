@@ -282,9 +282,11 @@ pub async fn workspace_terminal_start(
         .map_err(|error| format!("failed to create workspace pty: {error}"))?;
 
     let mut command = CommandBuilder::new("/bin/zsh");
-    command.arg("-il");
+    command.arg("-dfi");
     command.cwd(cwd);
     command.env("TERM", "xterm-256color");
+    command.env("RAIL_EMBEDDED_TERMINAL", "1");
+    command.env("TERM_PROGRAM", "rail");
 
     let child = pair
         .slave

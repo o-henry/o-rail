@@ -1,6 +1,7 @@
 import { invoke } from "../../../shared/tauri";
 import type {
   ResearchCollectionExecuteResult,
+  ResearchCollectionGenreRankingsResult,
   ResearchCollectionHandoffResult,
   ResearchCollectionItemSearchFilters,
   ResearchCollectionItemSearchResult,
@@ -137,6 +138,13 @@ export function listResearchCollectionItems(cwd: string, filters: ResearchCollec
 
 export function loadResearchCollectionMetrics(cwd: string, jobId = "") {
   return invoke<ResearchCollectionMetricsResult>("research_storage_collection_metrics", {
+    cwd,
+    jobId: String(jobId ?? "").trim(),
+  });
+}
+
+export function loadResearchCollectionGenreRankings(cwd: string, jobId: string) {
+  return invoke<ResearchCollectionGenreRankingsResult>("research_storage_collection_genre_rankings", {
     cwd,
     jobId: String(jobId ?? "").trim(),
   });

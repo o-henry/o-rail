@@ -145,12 +145,28 @@ export type ResearchCollectionJob = {
   urls: string[];
   keywords: string[];
   domains: string[];
+  planner?: {
+    mode?: string;
+    prompt?: string;
+    derivedUrls?: string[];
+    derivedKeywords?: string[];
+    derivedDomains?: string[];
+    analysisMode?: string;
+    metricFocus?: string[];
+    dataScope?: string;
+    aggregationUnit?: string;
+    suggestedSourceType?: string;
+    additionalKeywords?: string[];
+    additionalDomains?: string[];
+    instructions?: string[];
+  };
   targets: ResearchCollectionTarget[];
   sourceOptions: {
     urls: string[];
     keywords: string[];
     domains: string[];
     max_items: number;
+    planner?: Record<string, unknown>;
     targets: Array<{
       url: string;
       host: string;
@@ -304,4 +320,27 @@ export type ResearchCollectionMetricsResult = {
   byVerificationStatus: ResearchCollectionMetricsVerificationRow[];
   timeline: ResearchCollectionMetricsTimelinePoint[];
   topSources: ResearchCollectionMetricsTopSource[];
+};
+
+export type ResearchCollectionGenreRankingRow = {
+  genreKey: string;
+  genreLabel: string;
+  rank: number;
+  evidenceCount: number;
+  verifiedCount: number;
+  sourceDiversity: number;
+  avgScore: number;
+  avgHotScore: number;
+  popularityScore: number;
+  qualityScore: number;
+  representativeTitles: string[];
+  sourceNames: string[];
+  generatedAt: string;
+};
+
+export type ResearchCollectionGenreRankingsResult = {
+  dbPath: string;
+  jobId: string;
+  popular: ResearchCollectionGenreRankingRow[];
+  quality: ResearchCollectionGenreRankingRow[];
 };

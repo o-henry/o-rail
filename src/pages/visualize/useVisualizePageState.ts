@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type {
   ResearchCollectionItemSearchResult,
   ResearchCollectionJobListItem,
+  ResearchCollectionGenreRankingsResult,
   ResearchCollectionMetricsResult,
   ResearchGameMetricsResult,
   ResearchOverview,
@@ -12,6 +13,7 @@ import {
   listDynamicResearchCollectionJobs,
   listResearchCollectionItems,
   loadResearchCollectionMetrics,
+  loadResearchCollectionGenreRankings,
   loadResearchGameMetrics,
   loadResearchOverview,
   planDynamicResearchCollectionJob,
@@ -53,6 +55,7 @@ export function useVisualizePageState({ cwd, hasTauriRuntime }: UseVisualizePage
   const [overview, setOverview] = useState<ResearchOverview | null>(null);
   const [jobs, setJobs] = useState<ResearchCollectionJobListItem[]>([]);
   const [collectionMetrics, setCollectionMetrics] = useState<ResearchCollectionMetricsResult | null>(null);
+  const [collectionGenreRankings, setCollectionGenreRankings] = useState<ResearchCollectionGenreRankingsResult | null>(null);
   const [collectionItems, setCollectionItems] = useState<ResearchCollectionItemSearchResult | null>(null);
   const [steamMetrics, setSteamMetrics] = useState<ResearchGameMetricsResult | null>(null);
   const [reportRuns, setReportRuns] = useState<VisualizeResearchRun[]>([]);
@@ -167,6 +170,7 @@ export function useVisualizePageState({ cwd, hasTauriRuntime }: UseVisualizePage
     }
     if (selectedReportRun && !reportJobId) {
       setCollectionMetrics(null);
+      setCollectionGenreRankings(null);
       setCollectionItems(null);
       setStatusText("선택한 researcher 보고서에 연결된 collection job 정보가 없습니다.");
       return;
@@ -174,6 +178,7 @@ export function useVisualizePageState({ cwd, hasTauriRuntime }: UseVisualizePage
     let cancelled = false;
     void Promise.all([
       loadResearchCollectionMetrics(cwd, activeJobId),
+      activeJobId ? loadResearchCollectionGenreRankings(cwd, activeJobId) : Promise.resolve({ dbPath: "", jobId: "", popular: [], quality: [] }),
       listResearchCollectionItems(cwd, {
         jobId: activeJobId,
         search: itemSearch,
@@ -181,11 +186,12 @@ export function useVisualizePageState({ cwd, hasTauriRuntime }: UseVisualizePage
         offset: 0,
       }),
     ])
-      .then(([nextMetrics, nextItems]) => {
+      .then(([nextMetrics, nextGenreRankings, nextItems]) => {
         if (cancelled) {
           return;
         }
         setCollectionMetrics(nextMetrics);
+        setCollectionGenreRankings(nextGenreRankings);
         setCollectionItems(nextItems);
       })
       .catch((nextError) => {
@@ -278,6 +284,7 @@ export function useVisualizePageState({ cwd, hasTauriRuntime }: UseVisualizePage
     activeJobId,
     busy,
     collectionItems,
+    collectionGenreRankings,
     collectionMarkdown,
     collectionMetrics,
     collectionPayload,

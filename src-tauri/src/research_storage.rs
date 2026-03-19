@@ -360,6 +360,22 @@ pub fn research_storage_collection_metrics(cwd: String, job_id: Option<String>) 
 }
 
 #[tauri::command]
+pub fn research_storage_collection_genre_rankings(cwd: String, job_id: String) -> Result<Value, String> {
+    let workspace = normalize_workspace_root(&cwd)?;
+    run_research_storage(
+        &workspace,
+        &[
+            "collection-genre-rankings".to_string(),
+            "--workspace".to_string(),
+            workspace.to_string_lossy().to_string(),
+            "--job-id".to_string(),
+            job_id,
+        ],
+        "research storage collection genre rankings",
+    )
+}
+
+#[tauri::command]
 pub async fn research_storage_execute_job(
     app: AppHandle,
     cwd: String,

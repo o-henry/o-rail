@@ -74,6 +74,7 @@ pub fn run() {
             research_storage::research_storage_build_job_handoff,
             research_storage::research_storage_list_collection_items,
             research_storage::research_storage_collection_metrics,
+            research_storage::research_storage_collection_genre_rankings,
             research_storage::research_storage_execute_job,
             via_bridge::via_health,
             via_bridge::via_run_flow,

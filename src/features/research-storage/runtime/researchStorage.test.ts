@@ -8,6 +8,7 @@ import {
   normalizeDynamicCollectionUrls,
   normalizeResearchReviewFilters,
   loadResearchCollectionMetrics,
+  loadResearchCollectionGenreRankings,
   planDynamicResearchCollectionJob,
 } from "./researchStorage";
 import * as tauriModule from "../../../shared/tauri";
@@ -171,6 +172,21 @@ describe("normalizeResearchReviewFilters", () => {
     });
     await loadResearchCollectionMetrics("/repo", "collect-1");
     expect(invokeSpy).toHaveBeenCalledWith("research_storage_collection_metrics", {
+      cwd: "/repo",
+      jobId: "collect-1",
+    });
+    invokeSpy.mockRestore();
+  });
+
+  it("loads collection genre rankings for a selected job", async () => {
+    const invokeSpy = vi.spyOn(tauriModule, "invoke").mockResolvedValue({
+      dbPath: "/tmp/app.db",
+      jobId: "collect-1",
+      popular: [],
+      quality: [],
+    });
+    await loadResearchCollectionGenreRankings("/repo", "collect-1");
+    expect(invokeSpy).toHaveBeenCalledWith("research_storage_collection_genre_rankings", {
       cwd: "/repo",
       jobId: "collect-1",
     });

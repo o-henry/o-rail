@@ -90,6 +90,8 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
   const reportJob = state.collectionPayload?.planned?.job;
   const leadCopy = firstNarrativeLine(state.reportMarkdown) || firstNarrativeLine(state.collectionMarkdown);
   const evidenceItems = state.collectionItems?.items ?? [];
+  const popularGenres = state.collectionGenreRankings?.popular.slice(0, 5) ?? [];
+  const qualityGenres = state.collectionGenreRankings?.quality.slice(0, 5) ?? [];
   const topSources = state.collectionMetrics?.topSources.slice(0, 5) ?? [];
   const topSteamGames = [...(state.steamMetrics?.items ?? [])]
     .sort((left, right) => right.totalReviews - left.totalReviews)
@@ -280,17 +282,27 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
                 className="is-sources"
                 maximized={maximizedWidgetId === "sources"}
                 onToggleMaximize={toggleMaximize}
-                title="TOP SOURCES"
+                title={popularGenres.length ? "POPULAR GENRES" : "TOP SOURCES"}
                 widgetId="sources"
               >
                 <div className="visualize-monitor-ranked-list">
-                  {topSources.map((source) => (
-                    <div className="visualize-monitor-ranked-item" key={source.sourceName}>
-                      <strong>{source.sourceName}</strong>
-                      <span>{source.itemCount} items</span>
-                    </div>
-                  ))}
-                  {topSources.length ? null : <p className="visualize-monitor-empty">표시할 상위 소스가 없습니다.</p>}
+                  {popularGenres.length
+                    ? popularGenres.map((genre) => (
+                        <div className="visualize-monitor-ranked-item" key={genre.genreKey}>
+                          <div className="visualize-monitor-ranked-item-copy">
+                            <strong>{genre.rank}. {genre.genreLabel}</strong>
+                            <p>{genre.representativeTitles.slice(0, 2).join(" · ") || "대표 게임 추출 중"}</p>
+                          </div>
+                          <span>P {Math.round(genre.popularityScore)} · E {genre.evidenceCount}</span>
+                        </div>
+                      ))
+                    : topSources.map((source) => (
+                        <div className="visualize-monitor-ranked-item" key={source.sourceName}>
+                          <strong>{source.sourceName}</strong>
+                          <span>{source.itemCount} items</span>
+                        </div>
+                      ))}
+                  {popularGenres.length || topSources.length ? null : <p className="visualize-monitor-empty">표시할 상위 소스가 없습니다.</p>}
                 </div>
               </VisualizeWidgetFrame>
 
@@ -298,17 +310,27 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
                 className="is-steam"
                 maximized={maximizedWidgetId === "steam"}
                 onToggleMaximize={toggleMaximize}
-                title="SOURCE SNAPSHOTS"
+                title={qualityGenres.length ? "BEST RATED GENRES" : "SOURCE SNAPSHOTS"}
                 widgetId="steam"
               >
                 <div className="visualize-monitor-ranked-list">
-                  {topSteamGames.map((game) => (
-                    <div className="visualize-monitor-ranked-item" key={game.gameKey}>
-                      <strong>{game.gameName}</strong>
-                      <span>{game.totalReviews} reviews · {formatPercent(game.positiveRatio)}</span>
-                    </div>
-                  ))}
-                  {topSteamGames.length ? null : <p className="visualize-monitor-empty">표시할 스냅샷이 아직 없습니다.</p>}
+                  {qualityGenres.length
+                    ? qualityGenres.map((genre) => (
+                        <div className="visualize-monitor-ranked-item" key={genre.genreKey}>
+                          <div className="visualize-monitor-ranked-item-copy">
+                            <strong>{genre.rank}. {genre.genreLabel}</strong>
+                            <p>{genre.representativeTitles.slice(0, 3).join(" · ") || "대표 게임 추출 중"}</p>
+                          </div>
+                          <span>Q {Math.round(genre.qualityScore)} · {Math.round(genre.avgScore)}</span>
+                        </div>
+                      ))
+                    : topSteamGames.map((game) => (
+                        <div className="visualize-monitor-ranked-item" key={game.gameKey}>
+                          <strong>{game.gameName}</strong>
+                          <span>{game.totalReviews} reviews · {formatPercent(game.positiveRatio)}</span>
+                        </div>
+                      ))}
+                  {qualityGenres.length || topSteamGames.length ? null : <p className="visualize-monitor-empty">표시할 스냅샷이 아직 없습니다.</p>}
                 </div>
               </VisualizeWidgetFrame>
 

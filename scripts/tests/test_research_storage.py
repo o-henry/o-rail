@@ -8,6 +8,7 @@ from pathlib import Path
 from scripts.research_storage import (
     build_collection_job_handoff,
     collection_metrics,
+    collection_genre_rankings,
     game_metrics,
     ingest_steam_cache,
     list_collection_items,
@@ -372,6 +373,78 @@ class ResearchStorageTests(unittest.TestCase):
             self.assertIn("steamdb.info", job["domains"])
             self.assertTrue(any("steam genre" in keyword.lower() for keyword in job["keywords"]))
             self.assertTrue(any("genre level" in instruction.lower() for instruction in planner["instructions"]))
+
+    def test_record_collection_job_run_persists_genre_rankings_for_genre_mode(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace = Path(temp_dir)
+            planned = plan_agent_collection_job(
+                workspace,
+                prompt="스팀에서 가장 인기있는 장르와 평이 좋은 장르, 대표 게임 리스트를 조사해줘",
+                label="",
+                requested_source_type="auto",
+                max_items=40,
+            )
+            job_id = planned["job"]["jobId"]
+            result = {
+                "status": "done",
+                "run_id": "via-genre-1",
+                "payload": {
+                    "items_all": [
+                        {
+                            "id": "row-1",
+                            "source_type": "source.community",
+                            "source_name": "steamcommunity.com",
+                            "title": "Deckbuilder players still love run variety in Slay the Spire",
+                            "summary": "The deckbuilder roguelite formula keeps replayability high.",
+                            "content_excerpt": "Players call deckbuilder runs endlessly replayable.",
+                            "url": "https://steamcommunity.com/app/646570/reviews",
+                            "published_at": "2026-03-19T02:00:00Z",
+                            "fetched_at": "2026-03-19T02:05:00Z",
+                            "verification_status": "verified",
+                            "score": 86,
+                            "hot_score": 24,
+                        },
+                        {
+                            "id": "row-2",
+                            "source_type": "source.news",
+                            "source_name": "opencritic.com",
+                            "title": "Critics say roguelite deckbuilder pacing is still excellent",
+                            "summary": "Deckbuilder and roguelite hybrids continue to review well.",
+                            "content_excerpt": "High critic enthusiasm for deckbuilder progression.",
+                            "url": "https://opencritic.com/game/646570/slay-the-spire",
+                            "published_at": "2026-03-19T02:10:00Z",
+                            "fetched_at": "2026-03-19T02:12:00Z",
+                            "verification_status": "verified",
+                            "score": 91,
+                            "hot_score": 18,
+                        },
+                        {
+                            "id": "row-3",
+                            "source_type": "source.community",
+                            "source_name": "reddit.com",
+                            "title": "Factory sim fans keep recommending automation games like Factorio",
+                            "summary": "Automation and factory sim loops remain sticky.",
+                            "content_excerpt": "Factory sim players praise optimization depth.",
+                            "url": "https://reddit.com/r/factorio/comments/example",
+                            "published_at": "2026-03-19T03:00:00Z",
+                            "fetched_at": "2026-03-19T03:02:00Z",
+                            "verification_status": "warning",
+                            "score": 72,
+                            "hot_score": 12,
+                        },
+                    ]
+                },
+            }
+
+            execution = record_collection_job_run(workspace, job_id=job_id, flow_id=1, result=result)
+            rankings = collection_genre_rankings(workspace, job_id=job_id)
+
+            self.assertEqual(execution["genreRankingCounts"]["popular"], len(rankings["popular"]))
+            self.assertGreaterEqual(len(rankings["popular"]), 1)
+            self.assertGreaterEqual(len(rankings["quality"]), 1)
+            self.assertEqual(rankings["popular"][0]["genreKey"], "deckbuilder")
+            self.assertIn("Slay the Spire", rankings["popular"][0]["representativeTitles"][0])
+            self.assertEqual(rankings["quality"][0]["genreKey"], "deckbuilder")
 
 
 if __name__ == "__main__":

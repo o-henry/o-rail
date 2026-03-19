@@ -146,6 +146,29 @@ DEFAULT_GAMES: list[tuple[int, str]] = [
     (960090, "Bloons TD 6"),
 ]
 
+GENRE_TAXONOMY: list[dict[str, Any]] = [
+    {"key": "deckbuilder", "label": "Deckbuilder", "aliases": ["deckbuilder", "deck builder", "덱빌더", "card battler", "card battle"]},
+    {"key": "roguelite", "label": "Roguelite", "aliases": ["roguelite", "로그라이트", "로그라이크라이트"]},
+    {"key": "roguelike", "label": "Roguelike", "aliases": ["roguelike", "로그라이크"]},
+    {"key": "survivorlike", "label": "Survivorlike", "aliases": ["survivorlike", "survivor-like", "뱀서라이크", "bullet heaven", "bullet-heaven"]},
+    {"key": "autobattler", "label": "Auto Battler", "aliases": ["auto battler", "auto-battler", "오토배틀러"]},
+    {"key": "factory", "label": "Factory Sim", "aliases": ["factory sim", "factory", "automation game", "자동화", "공장"]},
+    {"key": "citybuilder", "label": "City Builder", "aliases": ["city builder", "city-builder", "도시 건설"]},
+    {"key": "management", "label": "Management", "aliases": ["management", "tycoon", "경영", "management sim"]},
+    {"key": "cozy", "label": "Cozy", "aliases": ["cozy", "힐링", "cozy game"]},
+    {"key": "horror", "label": "Horror", "aliases": ["horror", "공포"]},
+    {"key": "soulslike", "label": "Soulslike", "aliases": ["soulslike", "소울라이크"]},
+    {"key": "metroidvania", "label": "Metroidvania", "aliases": ["metroidvania", "메트로배니아"]},
+    {"key": "extraction", "label": "Extraction Shooter", "aliases": ["extraction shooter", "extraction", "익스트랙션 슈터"]},
+    {"key": "boomer_shooter", "label": "Boomer Shooter", "aliases": ["boomer shooter", "부머 슈터"]},
+    {"key": "fps", "label": "FPS", "aliases": ["fps", "first-person shooter", "1인칭 슈터"]},
+    {"key": "rts", "label": "RTS", "aliases": ["rts", "real-time strategy", "실시간 전략"]},
+    {"key": "tactical_rpg", "label": "Tactical RPG", "aliases": ["tactical rpg", "srpg", "전술 rpg", "strategy rpg"]},
+    {"key": "simulation", "label": "Simulation", "aliases": ["simulation", "sim", "시뮬레이션"]},
+    {"key": "puzzle", "label": "Puzzle", "aliases": ["puzzle", "퍼즐"]},
+    {"key": "platformer", "label": "Platformer", "aliases": ["platformer", "플랫포머"]},
+]
+
 def stable_slug(raw: str) -> str:
     value = "".join(ch.lower() if ch.isalnum() else "-" for ch in str(raw or ""))
     value = "-".join(part for part in value.split("-") if part)
@@ -266,6 +289,10 @@ def parse_args() -> argparse.Namespace:
     collection_metrics_cmd = subparsers.add_parser("collection-metrics", help="Return chart-ready collection item aggregates.")
     collection_metrics_cmd.add_argument("--workspace", required=True, help="Workspace root")
     collection_metrics_cmd.add_argument("--job-id", default="", help="Optional job id filter")
+
+    genre_rankings_cmd = subparsers.add_parser("collection-genre-rankings", help="Return stored genre-ranking aggregates for a job.")
+    genre_rankings_cmd.add_argument("--workspace", required=True, help="Workspace root")
+    genre_rankings_cmd.add_argument("--job-id", required=True, help="Job id")
 
     execute_job = subparsers.add_parser("execute-job", help="Execute a planned collection job against the VIA runtime.")
     execute_job.add_argument("--workspace", required=True, help="Workspace root")
@@ -428,6 +455,27 @@ def connect_db(db_path: Path) -> sqlite3.Connection:
             metadata_json TEXT NOT NULL DEFAULT '{}'
         );
 
+        CREATE TABLE IF NOT EXISTS collection_genre_rankings_fact (
+            aggregate_id TEXT PRIMARY KEY,
+            job_id TEXT NOT NULL,
+            job_run_id TEXT NOT NULL,
+            ranking_kind TEXT NOT NULL,
+            genre_key TEXT NOT NULL,
+            genre_label TEXT NOT NULL,
+            rank_order INTEGER NOT NULL DEFAULT 0,
+            evidence_count INTEGER NOT NULL DEFAULT 0,
+            verified_count INTEGER NOT NULL DEFAULT 0,
+            source_diversity INTEGER NOT NULL DEFAULT 0,
+            avg_score REAL NOT NULL DEFAULT 0,
+            avg_hot_score REAL NOT NULL DEFAULT 0,
+            popularity_score REAL NOT NULL DEFAULT 0,
+            quality_score REAL NOT NULL DEFAULT 0,
+            representative_titles_json TEXT NOT NULL DEFAULT '[]',
+            source_names_json TEXT NOT NULL DEFAULT '[]',
+            generated_at TEXT NOT NULL,
+            metadata_json TEXT NOT NULL DEFAULT '{}'
+        );
+
         CREATE INDEX IF NOT EXISTS idx_collection_jobs_updated ON collection_jobs(updated_at DESC);
         CREATE INDEX IF NOT EXISTS idx_collection_job_targets_job ON collection_job_targets(job_id, position ASC);
         CREATE INDEX IF NOT EXISTS idx_collection_job_handoffs_job ON collection_job_handoffs(job_id, created_at DESC);
@@ -435,6 +483,8 @@ def connect_db(db_path: Path) -> sqlite3.Connection:
         CREATE UNIQUE INDEX IF NOT EXISTS idx_collection_items_fact_job_key ON collection_items_fact(job_id, item_key);
         CREATE INDEX IF NOT EXISTS idx_collection_items_fact_source ON collection_items_fact(source_type, published_at DESC);
         CREATE INDEX IF NOT EXISTS idx_collection_items_fact_verification ON collection_items_fact(verification_status, score DESC);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_collection_genre_rankings_kind ON collection_genre_rankings_fact(job_id, ranking_kind, genre_key);
+        CREATE INDEX IF NOT EXISTS idx_collection_genre_rankings_job ON collection_genre_rankings_fact(job_id, ranking_kind, rank_order ASC);
         """
     )
     return conn
@@ -1207,6 +1257,151 @@ def normalize_collection_item(
     }
 
 
+def load_job_planner(conn: sqlite3.Connection, job_id: str) -> dict[str, Any]:
+    row = conn.execute(
+        """
+        SELECT job_spec_json
+        FROM collection_jobs
+        WHERE job_id = ?
+        """,
+        (job_id,),
+    ).fetchone()
+    if row is None:
+        return {}
+    try:
+        payload = json.loads(str(row["job_spec_json"] or "{}"))
+    except Exception:
+        return {}
+    planner = payload.get("planner")
+    return planner if isinstance(planner, dict) else {}
+
+
+def detect_item_genres(item: dict[str, Any]) -> list[dict[str, str]]:
+    text_parts = [
+        str(item.get("title") or ""),
+        str(item.get("summary") or ""),
+        str(item.get("contentExcerpt") or ""),
+        str(item.get("sourceName") or ""),
+        str(item.get("metadataJson") or ""),
+    ]
+    haystack = " ".join(text_parts).lower()
+    matches: list[dict[str, str]] = []
+    for genre in GENRE_TAXONOMY:
+        alias = next((value for value in genre["aliases"] if value.lower() in haystack), "")
+        if alias:
+            matches.append({"key": str(genre["key"]), "label": str(genre["label"]), "matchedAlias": alias})
+    return matches
+
+
+def persist_genre_rankings(
+    conn: sqlite3.Connection,
+    *,
+    job_id: str,
+    job_run_id: str,
+    generated_at: str,
+    items: list[dict[str, Any]],
+) -> dict[str, Any]:
+    conn.execute("DELETE FROM collection_genre_rankings_fact WHERE job_id = ?", (job_id,))
+    genre_stats: dict[str, dict[str, Any]] = {}
+    for item in items:
+        for genre in detect_item_genres(item):
+            bucket = genre_stats.setdefault(
+                genre["key"],
+                {
+                    "genreKey": genre["key"],
+                    "genreLabel": genre["label"],
+                    "evidenceCount": 0,
+                    "verifiedCount": 0,
+                    "scores": [],
+                    "hotScores": [],
+                    "sourceNames": set(),
+                    "representativeTitles": [],
+                    "matchedAliases": set(),
+                },
+            )
+            bucket["evidenceCount"] += 1
+            if str(item.get("verificationStatus") or "") == "verified":
+                bucket["verifiedCount"] += 1
+            bucket["scores"].append(float(item.get("score") or 0))
+            bucket["hotScores"].append(float(item.get("hotScore") or 0))
+            source_name = str(item.get("sourceName") or "").strip()
+            if source_name:
+                bucket["sourceNames"].add(source_name)
+            title = str(item.get("title") or "").strip()
+            if title and title not in bucket["representativeTitles"] and len(bucket["representativeTitles"]) < 4:
+                bucket["representativeTitles"].append(title)
+            bucket["matchedAliases"].add(genre["matchedAlias"])
+
+    if not genre_stats:
+        return {"popular": [], "quality": []}
+
+    ranking_rows: list[dict[str, Any]] = []
+    for row in genre_stats.values():
+        evidence_count = int(row["evidenceCount"])
+        verified_count = int(row["verifiedCount"])
+        source_diversity = len(row["sourceNames"])
+        avg_score = round(sum(row["scores"]) / max(1, len(row["scores"])), 2)
+        avg_hot_score = round(sum(row["hotScores"]) / max(1, len(row["hotScores"])), 2)
+        verified_ratio = verified_count / max(1, evidence_count)
+        popularity_score = round((evidence_count * 10) + avg_hot_score + (source_diversity * 6) + (verified_count * 2), 2)
+        quality_score = round(avg_score + (verified_ratio * 18) + min(source_diversity, 4), 2)
+        ranking_rows.append(
+            {
+                "genreKey": row["genreKey"],
+                "genreLabel": row["genreLabel"],
+                "evidenceCount": evidence_count,
+                "verifiedCount": verified_count,
+                "sourceDiversity": source_diversity,
+                "avgScore": avg_score,
+                "avgHotScore": avg_hot_score,
+                "popularityScore": popularity_score,
+                "qualityScore": quality_score,
+                "representativeTitles": list(row["representativeTitles"]),
+                "sourceNames": sorted(row["sourceNames"]),
+                "matchedAliases": sorted(row["matchedAliases"]),
+            }
+        )
+
+    rankings = {
+        "popular": sorted(ranking_rows, key=lambda row: (-row["popularityScore"], -row["evidenceCount"], row["genreLabel"]))[:8],
+        "quality": sorted(ranking_rows, key=lambda row: (-row["qualityScore"], -row["avgScore"], row["genreLabel"]))[:8],
+    }
+
+    for ranking_kind, rows in rankings.items():
+        for index, row in enumerate(rows):
+            aggregate_id = sha256_text(f"{job_id}:{ranking_kind}:{row['genreKey']}")
+            conn.execute(
+                """
+                INSERT INTO collection_genre_rankings_fact
+                  (aggregate_id, job_id, job_run_id, ranking_kind, genre_key, genre_label, rank_order, evidence_count,
+                   verified_count, source_diversity, avg_score, avg_hot_score, popularity_score, quality_score,
+                   representative_titles_json, source_names_json, generated_at, metadata_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    aggregate_id,
+                    job_id,
+                    job_run_id,
+                    ranking_kind,
+                    row["genreKey"],
+                    row["genreLabel"],
+                    index,
+                    row["evidenceCount"],
+                    row["verifiedCount"],
+                    row["sourceDiversity"],
+                    row["avgScore"],
+                    row["avgHotScore"],
+                    row["popularityScore"],
+                    row["qualityScore"],
+                    json.dumps(row["representativeTitles"], ensure_ascii=False),
+                    json.dumps(row["sourceNames"], ensure_ascii=False),
+                    generated_at,
+                    json.dumps({"matchedAliases": row["matchedAliases"]}, ensure_ascii=False),
+                ),
+            )
+    return rankings
+
+
 def ingest_collection_items(
     conn: sqlite3.Connection,
     *,
@@ -1217,15 +1412,16 @@ def ingest_collection_items(
     raw_export_path: str,
     result: dict[str, Any],
     default_source_type: str,
-) -> int:
+) -> tuple[int, list[dict[str, Any]]]:
     payload = extract_collection_result_payload(result)
     raw_items = payload.get("items_all")
     if not isinstance(raw_items, list):
         raw_items = payload.get("items")
     if not isinstance(raw_items, list):
-        return 0
+        return 0, []
 
     inserted = 0
+    normalized_items: list[dict[str, Any]] = []
     for row in raw_items:
         if not isinstance(row, dict):
             continue
@@ -1240,6 +1436,7 @@ def ingest_collection_items(
         )
         if not normalized:
             continue
+        normalized_items.append(normalized)
         conn.execute(
             """
             INSERT INTO collection_items_fact
@@ -1294,7 +1491,7 @@ def ingest_collection_items(
             ),
         )
         inserted += 1
-    return inserted
+    return inserted, normalized_items
 
 
 def record_collection_job_run(workspace: Path, *, job_id: str, flow_id: int, result: dict[str, Any]) -> dict[str, Any]:
@@ -1355,7 +1552,7 @@ def record_collection_job_run(workspace: Path, *, job_id: str, flow_id: int, res
                     job_id,
                 ),
             )
-            item_count = ingest_collection_items(
+            item_count, normalized_items = ingest_collection_items(
                 conn,
                 job_id=job_id,
                 job_run_id=job_run_id,
@@ -1365,6 +1562,16 @@ def record_collection_job_run(workspace: Path, *, job_id: str, flow_id: int, res
                 result=result,
                 default_source_type=default_source_type,
             )
+            planner = load_job_planner(conn, job_id)
+            genre_rankings: dict[str, Any] = {"popular": [], "quality": []}
+            if str(planner.get("analysisMode") or "") == "genre_ranking":
+                genre_rankings = persist_genre_rankings(
+                    conn,
+                    job_id=job_id,
+                    job_run_id=job_run_id,
+                    generated_at=executed_at,
+                    items=normalized_items,
+                )
     return {
         "jobRunId": job_run_id,
         "jobId": job_id,
@@ -1373,6 +1580,10 @@ def record_collection_job_run(workspace: Path, *, job_id: str, flow_id: int, res
         "status": status,
         "executedAt": executed_at,
         "itemCount": item_count,
+        "genreRankingCounts": {
+            "popular": len(genre_rankings.get("popular") or []),
+            "quality": len(genre_rankings.get("quality") or []),
+        },
         "rawExportPath": raw_export_path,
         "result": result,
     }
@@ -2108,6 +2319,58 @@ def collection_metrics(workspace: Path, *, job_id: str) -> dict[str, Any]:
     }
 
 
+def collection_genre_rankings(workspace: Path, *, job_id: str) -> dict[str, Any]:
+    db_path = workspace / DB_PATH
+    normalized_job_id = job_id.strip()
+    if not db_path.exists() or not normalized_job_id:
+        return {"dbPath": str(db_path), "jobId": normalized_job_id, "popular": [], "quality": []}
+
+    with connect_db(db_path) as conn:
+        rows = conn.execute(
+            """
+            SELECT ranking_kind, genre_key, genre_label, rank_order, evidence_count, verified_count, source_diversity,
+                   avg_score, avg_hot_score, popularity_score, quality_score, representative_titles_json, source_names_json,
+                   generated_at, metadata_json
+            FROM collection_genre_rankings_fact
+            WHERE job_id = ?
+            ORDER BY ranking_kind ASC, rank_order ASC
+            """,
+            (normalized_job_id,),
+        ).fetchall()
+
+    payload = {"dbPath": str(db_path), "jobId": normalized_job_id, "popular": [], "quality": []}
+    for row in rows:
+        ranking_kind = str(row["ranking_kind"] or "")
+        if ranking_kind not in {"popular", "quality"}:
+            continue
+        try:
+            representative_titles = json.loads(str(row["representative_titles_json"] or "[]"))
+        except Exception:
+            representative_titles = []
+        try:
+            source_names = json.loads(str(row["source_names_json"] or "[]"))
+        except Exception:
+            source_names = []
+        payload[ranking_kind].append(
+            {
+                "genreKey": str(row["genre_key"] or ""),
+                "genreLabel": str(row["genre_label"] or ""),
+                "rank": int(row["rank_order"] or 0) + 1,
+                "evidenceCount": int(row["evidence_count"] or 0),
+                "verifiedCount": int(row["verified_count"] or 0),
+                "sourceDiversity": int(row["source_diversity"] or 0),
+                "avgScore": round(float(row["avg_score"] or 0.0), 2),
+                "avgHotScore": round(float(row["avg_hot_score"] or 0.0), 2),
+                "popularityScore": round(float(row["popularity_score"] or 0.0), 2),
+                "qualityScore": round(float(row["quality_score"] or 0.0), 2),
+                "representativeTitles": representative_titles if isinstance(representative_titles, list) else [],
+                "sourceNames": source_names if isinstance(source_names, list) else [],
+                "generatedAt": str(row["generated_at"] or ""),
+            }
+        )
+    return payload
+
+
 def emit(payload: dict[str, Any]) -> int:
     print(json.dumps(payload, ensure_ascii=False))
     return 0
@@ -2193,6 +2456,8 @@ def main() -> int:
         )
     if args.command == "collection-metrics":
         return emit(collection_metrics(workspace, job_id=str(args.job_id or "")))
+    if args.command == "collection-genre-rankings":
+        return emit(collection_genre_rankings(workspace, job_id=str(args.job_id or "")))
     if args.command == "execute-job":
         return emit(
             execute_collection_job(

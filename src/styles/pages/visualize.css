@@ -399,11 +399,27 @@
   padding: 10px;
 }
 
+.visualize-monitor-ranked-item-copy {
+  min-width: 0;
+}
+
 .visualize-monitor-ranked-item strong {
+  display: block;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.visualize-monitor-ranked-item-copy p {
+  margin: 2px 0 0;
+  overflow: hidden;
+  color: #64748b;
+  font-size: 0.68rem;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 
 .visualize-monitor-ranked-item span {

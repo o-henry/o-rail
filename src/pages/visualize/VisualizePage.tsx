@@ -298,7 +298,7 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
                 className="is-steam"
                 maximized={maximizedWidgetId === "steam"}
                 onToggleMaximize={toggleMaximize}
-                title="STEAM SNAPSHOT"
+                title="SOURCE SNAPSHOTS"
                 widgetId="steam"
               >
                 <div className="visualize-monitor-ranked-list">
@@ -308,7 +308,7 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
                       <span>{game.totalReviews} reviews · {formatPercent(game.positiveRatio)}</span>
                     </div>
                   ))}
-                  {topSteamGames.length ? null : <p className="visualize-monitor-empty">Steam 데이터가 아직 없습니다.</p>}
+                  {topSteamGames.length ? null : <p className="visualize-monitor-empty">표시할 스냅샷이 아직 없습니다.</p>}
                 </div>
               </VisualizeWidgetFrame>
 

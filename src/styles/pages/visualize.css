@@ -90,11 +90,10 @@
   justify-content: flex-start;
   gap: 8px;
   min-height: 28px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  background:
-    linear-gradient(180deg, rgba(47, 47, 52, 0.98), rgba(29, 30, 34, 0.98));
+  border-bottom: 1px solid rgba(203, 213, 225, 0.9);
+  background: #ffffff;
   padding: 0 8px;
-  color: #f8fafc;
+  color: #0f172a;
   user-select: none;
   cursor: default;
 }
@@ -138,7 +137,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: #f8fafc;
+  color: #0f172a;
   font-size: 0.94rem;
   font-weight: 600;
   letter-spacing: 0.08em;

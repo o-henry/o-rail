@@ -348,6 +348,31 @@ class ResearchStorageTests(unittest.TestCase):
             self.assertTrue(any("스팀" in keyword or "steam" in keyword.lower() for keyword in job["keywords"]))
             self.assertIn("planner", job)
 
+    def test_plan_agent_collection_job_marks_steam_genre_ranking_requests(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace = Path(temp_dir)
+            planned = plan_agent_collection_job(
+                workspace,
+                prompt="스팀 평가 기준으로 2026년 3월 19일 기준 가장 인기있는 장르와 평이 제일 좋은 장르 그리고 대표게임 리스트를 조사해줘",
+                label="",
+                requested_source_type="auto",
+                max_items=40,
+            )
+
+            job = planned["job"]
+            planner = job["planner"]
+            self.assertEqual(planner["analysisMode"], "genre_ranking")
+            self.assertEqual(planner["aggregationUnit"], "genre")
+            self.assertEqual(planner["dataScope"], "steam_market")
+            self.assertIn("popularity", planner["metricFocus"])
+            self.assertIn("quality", planner["metricFocus"])
+            self.assertIn("representatives", planner["metricFocus"])
+            self.assertEqual(job["requestedSourceType"], "market")
+            self.assertEqual(job["resolvedSourceType"], "market")
+            self.assertIn("steamdb.info", job["domains"])
+            self.assertTrue(any("steam genre" in keyword.lower() for keyword in job["keywords"]))
+            self.assertTrue(any("genre level" in instruction.lower() for instruction in planner["instructions"]))
+
 
 if __name__ == "__main__":
     unittest.main()

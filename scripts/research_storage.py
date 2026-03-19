@@ -97,6 +97,46 @@ PROMPT_QUERY_HINTS: dict[str, str] = {
     "리뷰": "game review impressions",
 }
 
+PROMPT_GENRE_HINTS = ("genre", "장르")
+PROMPT_POPULARITY_HINTS = (
+    "popular",
+    "popularity",
+    "most popular",
+    "top",
+    "rank",
+    "ranking",
+    "인기",
+    "인기있는",
+    "가장 인기",
+    "순위",
+    "랭킹",
+    "트렌드",
+)
+PROMPT_QUALITY_HINTS = (
+    "best reviewed",
+    "highest rated",
+    "well reviewed",
+    "review score",
+    "positivity",
+    "평이",
+    "평가",
+    "고평가",
+    "긍정",
+    "점수",
+)
+PROMPT_REPRESENTATIVE_HINTS = (
+    "representative",
+    "examples",
+    "game list",
+    "title list",
+    "대표",
+    "대표게임",
+    "대표 게임",
+    "리스트",
+    "목록",
+)
+PROMPT_DATE_HINT_RE = re.compile(r"\b20\d{2}\s*[-./년]\s*\d{1,2}\s*[-./월]\s*\d{1,2}")
+
 DEFAULT_GAMES: list[tuple[int, str]] = [
     (2379780, "Balatro"),
     (413150, "Stardew Valley"),
@@ -514,6 +554,79 @@ def build_prompt_keywords(prompt: str) -> list[str]:
     return queries[:MAX_DYNAMIC_JOB_KEYWORDS]
 
 
+def dedupe_text_items(values: list[str], *, limit: int) -> list[str]:
+    out: list[str] = []
+    for value in values:
+        normalized = " ".join(str(value or "").split()).strip()
+        if normalized and normalized not in out:
+            out.append(normalized)
+        if len(out) >= limit:
+            break
+    return out
+
+
+def analyze_prompt_collection_plan(prompt: str) -> dict[str, Any]:
+    text = " ".join(str(prompt or "").split()).strip()
+    lowered = text.lower()
+    wants_genre = any(token in lowered for token in PROMPT_GENRE_HINTS)
+    wants_popularity = any(token in lowered for token in PROMPT_POPULARITY_HINTS)
+    wants_quality = any(token in lowered for token in PROMPT_QUALITY_HINTS)
+    wants_representatives = any(token in lowered for token in PROMPT_REPRESENTATIVE_HINTS)
+    mentions_steam = "steam" in lowered or "스팀" in lowered
+    asks_for_snapshot_date = bool(PROMPT_DATE_HINT_RE.search(text))
+    analysis_mode = "topic_research"
+    metric_focus: list[str] = []
+    additional_keywords: list[str] = []
+    additional_domains: list[str] = []
+    instructions: list[str] = []
+    suggested_source_type = "auto"
+    data_scope = "cross_source_topic"
+    aggregation_unit = "evidence"
+
+    if wants_genre and (wants_popularity or wants_quality or wants_representatives):
+        analysis_mode = "genre_ranking"
+        data_scope = "steam_market" if mentions_steam else "cross_source_market"
+        aggregation_unit = "genre"
+        suggested_source_type = "market" if mentions_steam else "community"
+        if wants_popularity:
+            metric_focus.append("popularity")
+        if wants_quality:
+            metric_focus.append("quality")
+        if wants_representatives:
+            metric_focus.append("representatives")
+        if mentions_steam:
+            additional_domains.extend(["store.steampowered.com", "steamcommunity.com", "steamdb.info"])
+            additional_keywords.extend(
+                [
+                    "steam genre review volume",
+                    "steam most reviewed genres",
+                    "steam representative games by genre",
+                ]
+            )
+        if wants_popularity:
+            additional_keywords.append("popular steam genres by review volume" if mentions_steam else "popular game genres by discussion volume")
+            instructions.append("Treat popularity primarily as review volume, coverage breadth, and repeated source mentions.")
+        if wants_quality:
+            additional_keywords.append("best reviewed steam genres" if mentions_steam else "best reviewed game genres")
+            instructions.append("Treat high-rated genres as those with strong positive ratios or critic scores, while noting sample-size risk.")
+        if wants_representatives:
+            instructions.append("Return representative games for every highlighted genre instead of only a genre name.")
+        instructions.append("Aggregate evidence at the genre level before recommending winners.")
+        if asks_for_snapshot_date:
+            instructions.append("Honor the requested date window when sources support it, and explicitly call out freshness limits.")
+
+    return {
+        "analysisMode": analysis_mode,
+        "metricFocus": metric_focus,
+        "dataScope": data_scope,
+        "aggregationUnit": aggregation_unit,
+        "suggestedSourceType": suggested_source_type,
+        "additionalKeywords": dedupe_text_items(additional_keywords, limit=6),
+        "additionalDomains": dedupe_text_items(additional_domains, limit=8),
+        "instructions": dedupe_text_items(instructions, limit=8),
+    }
+
+
 def to_safe_text(value: Any, *, limit: int) -> str:
     return " ".join(str(value or "").split()).strip()[:limit]
 
@@ -638,6 +751,7 @@ def build_dynamic_collection_job(
     label: str,
     requested_source_type: str,
     max_items: int,
+    planner_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     normalized_urls = [url for url in urls if url.startswith("http://") or url.startswith("https://")]
     normalized_keywords = [str(value).strip() for value in keywords if str(value).strip()]
@@ -694,6 +808,7 @@ def build_dynamic_collection_job(
             "keywords": normalized_keywords[:MAX_DYNAMIC_JOB_KEYWORDS],
             "domains": domains,
             "max_items": max(1, min(120, int(max_items))),
+            "planner": planner_context or {},
             "targets": [
                 {
                     "url": str(target["url"]),
@@ -779,6 +894,7 @@ def plan_dynamic_collection_job(
         label=label,
         requested_source_type=requested_source_type,
         max_items=max_items,
+        planner_context=None,
     )
     db_path = workspace / DB_PATH
     with connect_db(db_path) as conn:
@@ -801,15 +917,28 @@ def plan_agent_collection_job(
     if not normalized_prompt:
         raise RuntimeError("prompt is required")
     urls = extract_urls_from_prompt(normalized_prompt)
-    keywords = build_prompt_keywords(normalized_prompt)
-    domains = infer_domains_from_prompt(normalized_prompt)
+    planner = analyze_prompt_collection_plan(normalized_prompt)
+    keywords = dedupe_text_items(
+        build_prompt_keywords(normalized_prompt) + list(planner.get("additionalKeywords") or []),
+        limit=MAX_DYNAMIC_JOB_KEYWORDS,
+    )
+    domains = dedupe_text_items(
+        infer_domains_from_prompt(normalized_prompt) + list(planner.get("additionalDomains") or []),
+        limit=24,
+    )
+    effective_source_type = str(requested_source_type or "auto").strip().lower() or "auto"
+    if effective_source_type == "auto":
+        suggested = str(planner.get("suggestedSourceType") or "").strip().lower()
+        if suggested:
+            effective_source_type = suggested
     job = build_dynamic_collection_job(
         urls=urls,
         keywords=keywords,
         seed_domains=domains,
         label=label.strip() or f"Researcher · {normalized_prompt[:48]}",
-        requested_source_type=requested_source_type,
-        max_items=max_items,
+        requested_source_type=effective_source_type,
+        max_items=60 if str(planner.get("analysisMode")) == "genre_ranking" else max_items,
+        planner_context=planner,
     )
     job["planner"] = {
         "mode": "natural_language_request",
@@ -817,6 +946,7 @@ def plan_agent_collection_job(
         "derivedUrls": urls,
         "derivedKeywords": keywords,
         "derivedDomains": domains,
+        **planner,
     }
     db_path = workspace / DB_PATH
     with connect_db(db_path) as conn:

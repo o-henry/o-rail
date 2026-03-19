@@ -141,6 +141,13 @@ describe("runTaskRoleWithCodex", () => {
               collectorStrategy: "dynamic_search",
               keywords: ["스팀 게임 최근 리뷰", "steam recent reviews"],
               domains: ["store.steampowered.com", "steamcommunity.com"],
+              planner: {
+                analysisMode: "genre_ranking",
+                aggregationUnit: "genre",
+                dataScope: "steam_market",
+                metricFocus: ["popularity", "quality", "representatives"],
+                instructions: ["Aggregate evidence at the genre level before recommending winners."],
+              },
             },
           };
         case "research_storage_execute_job":
@@ -201,6 +208,9 @@ describe("runTaskRoleWithCodex", () => {
     }));
     expect(invokeFn).toHaveBeenCalledWith("turn_start_blocking", expect.objectContaining({
       text: expect.stringContaining("# PRECOLLECTED DATASET"),
+    }));
+    expect(invokeFn).toHaveBeenCalledWith("turn_start_blocking", expect.objectContaining({
+      text: expect.stringContaining("analysis mode: genre_ranking"),
     }));
   });
 });

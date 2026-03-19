@@ -14,6 +14,13 @@ type ResearchCollectionJobPlanResult = {
     collectorStrategy: string;
     keywords?: string[];
     domains?: string[];
+    planner?: {
+      analysisMode?: string;
+      metricFocus?: string[];
+      dataScope?: string;
+      aggregationUnit?: string;
+      instructions?: string[];
+    };
   };
 };
 
@@ -79,6 +86,7 @@ function buildCollectionContextMarkdown(params: {
   collectorStrategy: string;
   keywords: string[];
   domains: string[];
+  planner?: ResearchCollectionJobPlanResult["job"]["planner"];
   metrics: ResearchCollectionMetricsResult;
   items: ResearchCollectionItemResult;
 }) {
@@ -113,6 +121,8 @@ function buildCollectionContextMarkdown(params: {
     `- Label: ${params.label}`,
     `- Source Type: ${params.resolvedSourceType}`,
     `- Strategy: ${params.collectorStrategy}`,
+    `- Analysis Mode: ${params.planner?.analysisMode ?? "topic_research"}`,
+    `- Metric Focus: ${params.planner?.metricFocus?.join(", ") || "-"}`,
     `- Keywords: ${params.keywords.join(", ") || "-"}`,
     `- Domains: ${params.domains.join(", ") || "-"}`,
     `- Totals: items ${params.metrics.totals.items}, sources ${params.metrics.totals.sources}, verified ${params.metrics.totals.verified}, warnings ${params.metrics.totals.warnings}`,
@@ -153,18 +163,29 @@ function buildPromptContext(params: {
   label: string;
   resolvedSourceType: string;
   collectorStrategy: string;
+  planner?: ResearchCollectionJobPlanResult["job"]["planner"];
   metrics: ResearchCollectionMetricsResult;
   items: ResearchCollectionItemResult;
 }) {
   const evidenceLines = params.items.items.slice(0, 5).map((item, index) =>
     `${index + 1}. ${item.title} | ${item.sourceName} | ${item.verificationStatus} | score ${item.score} | ${item.url}`,
   );
+  const plannerLines = params.planner
+    ? [
+        `- analysis mode: ${params.planner.analysisMode ?? "topic_research"}`,
+        `- aggregation unit: ${params.planner.aggregationUnit ?? "evidence"}`,
+        `- data scope: ${params.planner.dataScope ?? "cross_source_topic"}`,
+        `- metric focus: ${params.planner.metricFocus?.join(", ") || "-"}`,
+        ...(params.planner.instructions ?? []).map((instruction) => `- collection rule: ${instruction}`),
+      ]
+    : [];
   return [
     `# PRECOLLECTED DATASET`,
     `- researcher collection job id: ${params.jobId}`,
     `- label: ${params.label}`,
     `- source type: ${params.resolvedSourceType}`,
     `- collection strategy: ${params.collectorStrategy}`,
+    ...plannerLines,
     `- totals: items ${params.metrics.totals.items}, sources ${params.metrics.totals.sources}, verified ${params.metrics.totals.verified}, warnings ${params.metrics.totals.warnings}, conflicted ${params.metrics.totals.conflicted}`,
     `- data is already stored in local research storage for visualize/database review`,
     `- cite the collected evidence first, then add interpretation`,
@@ -217,6 +238,7 @@ export async function prepareResearcherCollectionContext(
       collectorStrategy: planned.job.collectorStrategy,
       keywords: planned.job.keywords ?? [],
       domains: planned.job.domains ?? [],
+      planner: planned.job.planner,
       metrics,
       items,
     });
@@ -244,6 +266,7 @@ export async function prepareResearcherCollectionContext(
         label: planned.job.label,
         resolvedSourceType: planned.job.resolvedSourceType,
         collectorStrategy: planned.job.collectorStrategy,
+        planner: planned.job.planner,
         metrics,
         items,
       }),

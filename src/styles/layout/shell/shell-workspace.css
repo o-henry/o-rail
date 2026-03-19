@@ -196,8 +196,11 @@
 }
 
 .shell-fullscreen-overlay {
-  position: absolute;
-  inset: 0;
+  position: fixed;
+  top: calc(var(--titlebar-overlay-height) + 8px);
+  right: 8px;
+  bottom: 18px;
+  left: 8px;
   z-index: 1200;
   background: #ffffff;
   overflow: hidden;

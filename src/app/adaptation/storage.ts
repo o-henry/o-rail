@@ -94,6 +94,7 @@ async function readWorkspaceFile<T>(cwd: string, invokeFn: InvokeFn, scope: "sta
   const fileName = scope === "state" ? "state.json" : `${scope}.json`;
   try {
     const raw = await invokeFn<string>("workspace_read_text", {
+      cwd,
       path: adaptationFilePath(cwd, fileName as "state.json" | "champions.json" | "comparisons.json" | "candidates.json"),
     });
     return raw ? (JSON.parse(raw) as T) : null;

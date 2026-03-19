@@ -81,6 +81,44 @@ const TASKS_PROJECT_PATH_KEY = "rail.tasks.project-path.v1";
 const TASKS_PROJECT_LIST_KEY = "rail.tasks.project-list.v1";
 const TASKS_HIDDEN_PROJECT_LIST_KEY = "rail.tasks.hidden-project-list.v1";
 
+function readSessionStorageValue(key: string): string | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  try {
+    const sessionValue = window.sessionStorage.getItem(key);
+    if (sessionValue != null) {
+      return sessionValue;
+    }
+    const legacyValue = window.localStorage.getItem(key);
+    if (legacyValue != null) {
+      window.sessionStorage.setItem(key, legacyValue);
+      window.localStorage.removeItem(key);
+      return legacyValue;
+    }
+  } catch {
+    // ignore storage failures
+  }
+  return null;
+}
+
+function writeSessionStorageValue(key: string, value: string | null) {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    if (value == null) {
+      window.sessionStorage.removeItem(key);
+      window.localStorage.removeItem(key);
+      return;
+    }
+    window.sessionStorage.setItem(key, value);
+    window.localStorage.removeItem(key);
+  } catch {
+    // ignore storage failures
+  }
+}
+
 function truncateTitle(input: string): string {
   const trimmed = String(input ?? "").trim();
   if (!trimmed) return "NEW THREAD";
@@ -142,7 +180,7 @@ function loadBrowserStore(): BrowserStore {
     return emptyBrowserStore();
   }
   try {
-    const raw = window.localStorage.getItem(BROWSER_STORE_KEY);
+    const raw = readSessionStorageValue(BROWSER_STORE_KEY);
     if (!raw) {
       return emptyBrowserStore();
     }
@@ -158,7 +196,7 @@ function loadBrowserStore(): BrowserStore {
 
 function persistBrowserStore(store: BrowserStore) {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(BROWSER_STORE_KEY, JSON.stringify(store));
+  writeSessionStorageValue(BROWSER_STORE_KEY, JSON.stringify(store));
 }
 
 function loadTasksProjectPath(defaultValue: string): string {
@@ -166,7 +204,7 @@ function loadTasksProjectPath(defaultValue: string): string {
     return defaultValue;
   }
   try {
-    const raw = window.localStorage.getItem(TASKS_PROJECT_PATH_KEY);
+    const raw = readSessionStorageValue(TASKS_PROJECT_PATH_KEY);
     const value = String(raw ?? "").trim();
     return value || defaultValue;
   } catch {
@@ -178,10 +216,10 @@ function persistTasksProjectPath(path: string) {
   if (typeof window === "undefined") return;
   const normalized = String(path ?? "").trim();
   if (!normalized) {
-    window.localStorage.removeItem(TASKS_PROJECT_PATH_KEY);
+    writeSessionStorageValue(TASKS_PROJECT_PATH_KEY, null);
     return;
   }
-  window.localStorage.setItem(TASKS_PROJECT_PATH_KEY, normalized);
+  writeSessionStorageValue(TASKS_PROJECT_PATH_KEY, normalized);
 }
 
 function loadTasksProjectList(defaultValue: string): string[] {
@@ -189,7 +227,7 @@ function loadTasksProjectList(defaultValue: string): string[] {
     return defaultValue.trim() ? [defaultValue.trim()] : [];
   }
   try {
-    const raw = window.localStorage.getItem(TASKS_PROJECT_LIST_KEY);
+    const raw = readSessionStorageValue(TASKS_PROJECT_LIST_KEY);
     const parsed = raw ? (JSON.parse(raw) as unknown) : [];
     const values = Array.isArray(parsed) ? parsed : [];
     const normalized = values
@@ -207,7 +245,7 @@ function loadTasksProjectList(defaultValue: string): string[] {
 function persistTasksProjectList(paths: string[]) {
   if (typeof window === "undefined") return;
   const normalized = [...new Set(paths.map((path) => String(path ?? "").trim()).filter(Boolean))];
-  window.localStorage.setItem(TASKS_PROJECT_LIST_KEY, JSON.stringify(normalized));
+  writeSessionStorageValue(TASKS_PROJECT_LIST_KEY, JSON.stringify(normalized));
 }
 
 function loadHiddenTasksProjectList(): string[] {
@@ -215,7 +253,7 @@ function loadHiddenTasksProjectList(): string[] {
     return [];
   }
   try {
-    const raw = window.localStorage.getItem(TASKS_HIDDEN_PROJECT_LIST_KEY);
+    const raw = readSessionStorageValue(TASKS_HIDDEN_PROJECT_LIST_KEY);
     const parsed = raw ? (JSON.parse(raw) as unknown) : [];
     return Array.isArray(parsed) ? parsed.map((value) => String(value ?? "").trim()).filter(Boolean) : [];
   } catch {
@@ -226,7 +264,7 @@ function loadHiddenTasksProjectList(): string[] {
 function persistHiddenTasksProjectList(paths: string[]) {
   if (typeof window === "undefined") return;
   const normalized = [...new Set(paths.map((path) => String(path ?? "").trim()).filter(Boolean))];
-  window.localStorage.setItem(TASKS_HIDDEN_PROJECT_LIST_KEY, JSON.stringify(normalized));
+  writeSessionStorageValue(TASKS_HIDDEN_PROJECT_LIST_KEY, JSON.stringify(normalized));
 }
 
 function withDerivedWorkflow(detail: ThreadDetail): ThreadDetail {
@@ -748,7 +786,7 @@ export function useTasksThreadState(params: Params) {
         return detail;
       }
       try {
-        const responseJson = await params.invokeFn<string>("workspace_read_text", { path: responseJsonPath });
+        const responseJson = await params.invokeFn<string>("workspace_read_text", { cwd: params.cwd, path: responseJsonPath });
         const runtime = extractTaskCodexThreadRuntime(responseJson);
         if (!runtime?.codexThreadId) {
           return detail;

@@ -1738,7 +1738,15 @@ pub async fn web_bridge_status(
     app: AppHandle,
     state: State<'_, EngineManager>,
 ) -> Result<Value, String> {
-    request_web_worker_with_recovery(&app, &state, "bridge/status", json!({})).await
+    let raw = request_web_worker_with_recovery(&app, &state, "bridge/status", json!({})).await?;
+    if !raw.is_object() {
+        return Ok(raw);
+    }
+    let mut sanitized = raw;
+    if let Some(row) = sanitized.as_object_mut() {
+        row.remove("token");
+    }
+    Ok(sanitized)
 }
 
 #[tauri::command]
@@ -1747,6 +1755,38 @@ pub async fn web_bridge_rotate_token(
     state: State<'_, EngineManager>,
 ) -> Result<Value, String> {
     request_web_worker_with_recovery(&app, &state, "bridge/tokenRotate", json!({})).await
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WebBridgeConnectCodeResult {
+    code: String,
+    masked_code: String,
+}
+
+#[tauri::command]
+pub async fn web_bridge_connect_code(
+    app: AppHandle,
+    state: State<'_, EngineManager>,
+) -> Result<WebBridgeConnectCodeResult, String> {
+    let raw = request_web_worker_with_recovery(&app, &state, "bridge/status", json!({})).await?;
+    let token = extract_string_by_paths(&raw, &["token"])
+        .ok_or_else(|| "bridge token not available".to_string())?;
+    let port = raw
+        .get("port")
+        .and_then(|value| value.as_u64())
+        .unwrap_or(38961);
+    let code = serde_json::to_string_pretty(&json!({
+        "bridgeUrl": format!("http://127.0.0.1:{port}"),
+        "token": token,
+    }))
+    .map_err(|error| format!("failed to serialize bridge connect code: {error}"))?;
+    let masked_code = serde_json::to_string_pretty(&json!({
+        "bridgeUrl": format!("http://127.0.0.1:{port}"),
+        "token": extract_string_by_paths(&raw, &["tokenMasked"]).unwrap_or_else(|| "********".to_string()),
+    }))
+    .map_err(|error| format!("failed to serialize masked bridge connect code: {error}"))?;
+    Ok(WebBridgeConnectCodeResult { code, masked_code })
 }
 
 #[tauri::command]

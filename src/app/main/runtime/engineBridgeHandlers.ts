@@ -353,24 +353,17 @@ export function createEngineBridgeHandlers(params: any) {
 
   async function onCopyWebBridgeConnectCode() {
     try {
-      const status = await refreshWebBridgeStatus(true, true);
-      if (!status?.token) {
-        throw new Error("연결 토큰을 읽을 수 없습니다.");
+      const bundle = await params.invokeFn("web_bridge_connect_code");
+      const rawCode = typeof bundle?.code === "string" ? bundle.code : "";
+      const maskedCode = typeof bundle?.maskedCode === "string" ? bundle.maskedCode : "";
+      if (!rawCode) {
+        throw new Error("연결 코드를 생성할 수 없습니다.");
       }
-      const token = status.token;
-      const code = JSON.stringify(
-        {
-          bridgeUrl: `http://127.0.0.1:${status.port}`,
-          token,
-        },
-        null,
-        2,
-      );
-      params.setWebBridgeConnectCode(code);
+      params.setWebBridgeConnectCode(maskedCode);
       let copied = false;
       try {
         if (navigator.clipboard?.writeText) {
-          await navigator.clipboard.writeText(token);
+          await navigator.clipboard.writeText(rawCode);
           copied = true;
         }
       } catch {
@@ -379,7 +372,7 @@ export function createEngineBridgeHandlers(params: any) {
 
       if (!copied) {
         const textarea = document.createElement("textarea");
-        textarea.value = token;
+        textarea.value = rawCode;
         textarea.setAttribute("readonly", "true");
         textarea.style.position = "fixed";
         textarea.style.opacity = "0";
@@ -393,14 +386,13 @@ export function createEngineBridgeHandlers(params: any) {
       }
 
       if (copied) {
-        params.setStatus("웹 연결 토큰 복사 완료");
+        params.setStatus("웹 연결 코드 복사 완료");
         params.setError("");
       } else {
-        params.setStatus("자동 복사 권한이 없어 코드 박스를 표시했습니다. 아래에서 토큰을 수동 복사하세요.");
-        params.setError("");
+        params.setError("자동 복사 권한이 없어 연결 코드를 복사하지 못했습니다.");
       }
     } catch (error) {
-      params.setError(`웹 연결 토큰 준비 실패: ${String(error)}`);
+      params.setError(`웹 연결 코드 준비 실패: ${String(error)}`);
     }
   }
 

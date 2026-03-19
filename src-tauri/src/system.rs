@@ -4,6 +4,7 @@ use std::{
     collections::HashMap,
     fs,
     io::{Read, Write},
+    path::PathBuf,
     sync::{Arc, Mutex as StdMutex},
     time::Instant,
 };
@@ -69,6 +70,23 @@ fn normalize_allowlist(commands: &[String]) -> Vec<String> {
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty())
         .collect()
+}
+
+fn normalize_existing_cwd(cwd: &str) -> Result<PathBuf, String> {
+    let trimmed = cwd.trim();
+    if trimmed.is_empty() {
+        return Err("cwd is required".to_string());
+    }
+    let path = PathBuf::from(trimmed);
+    if !path.exists() {
+        return Err(format!("workspace not found: {}", path.display()));
+    }
+    let canonical = fs::canonicalize(&path)
+        .map_err(|error| format!("failed to resolve workspace {}: {error}", path.display()))?;
+    if !canonical.is_dir() {
+        return Err("workspace path is not a directory".to_string());
+    }
+    Ok(canonical)
 }
 
 fn emit_workspace_terminal_state(
@@ -147,19 +165,19 @@ pub async fn shutdown_workspace_terminal_sessions(manager: &WorkspaceTerminalMan
     }
 }
 
-#[tauri::command]
 pub async fn command_exec(
     cwd: String,
     command: String,
     timeout_sec: Option<u64>,
 ) -> Result<ShellCommandResult, String> {
+    let workspace = normalize_existing_cwd(&cwd)?;
     let timeout_duration = Duration::from_secs(timeout_sec.unwrap_or(120));
     let started_at = Instant::now();
 
     let mut child = Command::new("/bin/zsh")
         .arg("-lc")
         .arg(command)
-        .current_dir(cwd)
+        .current_dir(workspace)
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())

@@ -147,9 +147,9 @@ export function useVisualizePageState({ cwd, hasTauriRuntime }: UseVisualizePage
     void (async () => {
       try {
         const [nextReportMarkdown, nextCollectionMarkdown, nextCollectionJson] = await Promise.all([
-          selectedReportRun.reportMarkdownPath ? invoke<string>("workspace_read_text", { path: selectedReportRun.reportMarkdownPath }) : Promise.resolve(""),
-          selectedReportRun.collectionMarkdownPath ? invoke<string>("workspace_read_text", { path: selectedReportRun.collectionMarkdownPath }) : Promise.resolve(""),
-          selectedReportRun.collectionJsonPath ? invoke<string>("workspace_read_text", { path: selectedReportRun.collectionJsonPath }) : Promise.resolve(""),
+          selectedReportRun.reportMarkdownPath ? invoke<string>("workspace_read_text", { cwd, path: selectedReportRun.reportMarkdownPath }) : Promise.resolve(""),
+          selectedReportRun.collectionMarkdownPath ? invoke<string>("workspace_read_text", { cwd, path: selectedReportRun.collectionMarkdownPath }) : Promise.resolve(""),
+          selectedReportRun.collectionJsonPath ? invoke<string>("workspace_read_text", { cwd, path: selectedReportRun.collectionJsonPath }) : Promise.resolve(""),
         ]);
         if (cancelled) {
           return;
@@ -170,7 +170,7 @@ export function useVisualizePageState({ cwd, hasTauriRuntime }: UseVisualizePage
     return () => {
       cancelled = true;
     };
-  }, [hasTauriRuntime, selectedReportRun]);
+  }, [cwd, hasTauriRuntime, selectedReportRun]);
 
   useEffect(() => {
     if (!hasTauriRuntime || !cwd.trim()) {

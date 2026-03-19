@@ -197,6 +197,27 @@ fn normalize_workspace_root(cwd: &str) -> Result<PathBuf, String> {
     Ok(canonical)
 }
 
+fn normalize_workspace_file_target(cwd: &str, raw_path: &str) -> Result<PathBuf, String> {
+    let workspace = normalize_workspace_root(cwd)?;
+    let raw = raw_path.trim();
+    if raw.is_empty() {
+        return Err("path is required".to_string());
+    }
+    let target = PathBuf::from(raw);
+    if !target.exists() {
+        return Err("file not found".to_string());
+    }
+    if !target.is_file() {
+        return Err("target is not file".to_string());
+    }
+    let canonical = fs::canonicalize(&target)
+        .map_err(|error| format!("failed to resolve target {}: {error}", target.display()))?;
+    if !canonical.starts_with(&workspace) {
+        return Err("target is outside workspace".to_string());
+    }
+    Ok(canonical)
+}
+
 fn rail_dir(workspace: &Path) -> PathBuf {
     workspace.join(".rail")
 }
@@ -1264,34 +1285,14 @@ pub fn workspace_write_text(cwd: String, name: String, content: String) -> Resul
 }
 
 #[tauri::command]
-pub fn workspace_read_text(path: String) -> Result<String, String> {
-    let raw = path.trim();
-    if raw.is_empty() {
-        return Err("path is required".to_string());
-    }
-    let target = PathBuf::from(raw);
-    if !target.exists() {
-        return Err("file not found".to_string());
-    }
-    if !target.is_file() {
-        return Err("target is not file".to_string());
-    }
+pub fn workspace_read_text(cwd: String, path: String) -> Result<String, String> {
+    let target = normalize_workspace_file_target(&cwd, &path)?;
     fs::read_to_string(&target).map_err(|e| format!("failed to read text file: {e}"))
 }
 
 #[tauri::command]
-pub fn workspace_delete_file(path: String) -> Result<(), String> {
-    let raw = path.trim();
-    if raw.is_empty() {
-        return Err("path is required".to_string());
-    }
-    let target = PathBuf::from(raw);
-    if !target.exists() {
-        return Err("file not found".to_string());
-    }
-    if !target.is_file() {
-        return Err("target is not file".to_string());
-    }
+pub fn workspace_delete_file(cwd: String, path: String) -> Result<(), String> {
+    let target = normalize_workspace_file_target(&cwd, &path)?;
     fs::remove_file(&target).map_err(|e| format!("failed to delete text file: {e}"))
 }
 
@@ -1490,5 +1491,34 @@ mod tests {
             Some("GAME DESIGNER")
         );
         let _ = fs::remove_dir_all(workspace);
+    }
+
+    #[test]
+    fn workspace_read_text_rejects_paths_outside_workspace() {
+        let workspace = temp_workspace("workspace-read-guard");
+        let inside = workspace.join("inside.txt");
+        let outside = std::env::temp_dir().join(format!(
+            "rail-storage-outside-{}.txt",
+            Utc::now().timestamp_nanos_opt().unwrap_or_default()
+        ));
+        fs::write(&inside, "ok").unwrap();
+        fs::write(&outside, "nope").unwrap();
+
+        let inside_text = workspace_read_text(
+            workspace.to_string_lossy().to_string(),
+            inside.to_string_lossy().to_string(),
+        )
+        .unwrap();
+        assert_eq!(inside_text, "ok");
+
+        let error = workspace_read_text(
+            workspace.to_string_lossy().to_string(),
+            outside.to_string_lossy().to_string(),
+        )
+        .unwrap_err();
+        assert!(error.contains("outside workspace"));
+
+        let _ = fs::remove_dir_all(workspace);
+        let _ = fs::remove_file(outside);
     }
 }

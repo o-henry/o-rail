@@ -48,6 +48,7 @@ pub fn run() {
             engine::web_provider_reset_session,
             engine::web_provider_cancel,
             engine::web_bridge_status,
+            engine::web_bridge_connect_code,
             engine::web_bridge_rotate_token,
             engine::ollama_generate,
             dashboard_crawler::dashboard_crawl_run,

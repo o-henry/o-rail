@@ -80,7 +80,7 @@ export function useWorkbenchSessions(params: {
       return;
     }
     let cancelled = false;
-    void params.invokeFn<string>("workspace_read_text", { path: workSessionIndexPath(params.cwd) })
+    void params.invokeFn<string>("workspace_read_text", { cwd: params.cwd, path: workSessionIndexPath(params.cwd) })
       .then((raw) => {
         if (cancelled || !raw) {
           return;

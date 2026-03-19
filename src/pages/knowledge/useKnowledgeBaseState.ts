@@ -133,6 +133,7 @@ export function useKnowledgeBaseState({ cwd, posts }: UseKnowledgeBaseStateParam
         if (selectedMarkdownPath) {
           try {
             const markdownText = await invoke<string>("workspace_read_text", {
+              cwd,
               path: selectedMarkdownPath,
             });
             if (cancelled) {
@@ -150,6 +151,7 @@ export function useKnowledgeBaseState({ cwd, posts }: UseKnowledgeBaseStateParam
         if (selectedJsonPath) {
           try {
             const jsonText = await invoke<string>("workspace_read_text", {
+              cwd,
               path: selectedJsonPath,
             });
             if (cancelled) {
@@ -201,7 +203,7 @@ export function useKnowledgeBaseState({ cwd, posts }: UseKnowledgeBaseStateParam
         }
       } else if (sourceFile.includes("/") || sourceFile.includes("\\")) {
         const error = await deleteIfExists(
-          async (path) => invoke("workspace_delete_file", { path }),
+          async (path) => invoke("workspace_delete_file", { cwd, path }),
           sourceFile,
           "원본 실행 파일 삭제 실패",
         );
@@ -212,7 +214,7 @@ export function useKnowledgeBaseState({ cwd, posts }: UseKnowledgeBaseStateParam
 
       for (const filePath of [String(selected.markdownPath ?? "").trim(), String(selected.jsonPath ?? "").trim()]) {
         const error = await deleteIfExists(
-          async (path) => invoke("workspace_delete_file", { path }),
+          async (path) => invoke("workspace_delete_file", { cwd, path }),
           filePath,
           "산출물 삭제 실패",
         );
@@ -264,11 +266,11 @@ export function useKnowledgeBaseState({ cwd, posts }: UseKnowledgeBaseStateParam
           continue;
         }
         if (sourceFile.includes("/") || sourceFile.includes("\\")) {
-          const error = await deleteIfExists(
-            async (path) => invoke("workspace_delete_file", { path }),
-            sourceFile,
-            "원본 실행 파일 삭제 실패",
-          );
+            const error = await deleteIfExists(
+              async (path) => invoke("workspace_delete_file", { cwd, path }),
+              sourceFile,
+              "원본 실행 파일 삭제 실패",
+            );
           if (error) {
             deleteErrors.push(error);
           }
@@ -284,7 +286,7 @@ export function useKnowledgeBaseState({ cwd, posts }: UseKnowledgeBaseStateParam
       );
       for (const filePath of artifactPaths) {
         const error = await deleteIfExists(
-          async (path) => invoke("workspace_delete_file", { path }),
+          async (path) => invoke("workspace_delete_file", { cwd, path }),
           filePath,
           "산출물 삭제 실패",
         );

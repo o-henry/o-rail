@@ -65,7 +65,6 @@ export type WebBridgeStatus = {
   running: boolean;
   port: number;
   tokenMasked: string;
-  token?: string;
   tokenStorage?: string;
   extensionOriginAllowlistConfigured?: boolean;
   allowedExtensionOriginCount?: number;
@@ -186,7 +185,6 @@ export function toWebBridgeStatus(raw: unknown): WebBridgeStatus {
     running: row.running === true,
     port: Number(row.port ?? 38961) || 38961,
     tokenMasked: typeof row.tokenMasked === "string" ? row.tokenMasked : "",
-    token: typeof row.token === "string" ? row.token : undefined,
     tokenStorage: typeof row.tokenStorage === "string" ? row.tokenStorage : undefined,
     extensionOriginAllowlistConfigured: row.extensionOriginAllowlistConfigured === true,
     allowedExtensionOriginCount: Math.max(0, Number(row.allowedExtensionOriginCount ?? 0) || 0),

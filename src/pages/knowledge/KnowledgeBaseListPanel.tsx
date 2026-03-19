@@ -64,6 +64,10 @@ export function KnowledgeBaseListPanel(props: KnowledgeBaseListPanelProps) {
                       type="button"
                     >
                       <strong>{entry.title}</strong>
+                      <span>
+                        {entry.taskAgentLabel || entry.studioRoleLabel || entry.roleId}
+                        {entry.orchestratorAgentLabel ? ` · 총괄 ${entry.orchestratorAgentLabel}` : ""}
+                      </span>
                       <span>{`${formatSourceKindLabel(entry.sourceKind)} · ${formatArtifactFileNames(entry)}`}</span>
                       <small>{new Date(entry.createdAt).toLocaleString()}</small>
                     </button>

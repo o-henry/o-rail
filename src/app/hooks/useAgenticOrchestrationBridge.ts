@@ -3,6 +3,7 @@ import type { DashboardTopicId } from "../../features/dashboard/intelligence";
 import type { AgenticAction, AgenticActionSubscriber } from "../../features/orchestration/agentic/actionBus";
 import type { AgenticRunEnvelope, AgenticRunEvent } from "../../features/orchestration/agentic/runContract";
 import { toStudioRoleId } from "../../features/studio/roleUtils";
+import { resolveTaskAgentMetadata } from "../../features/studio/taskAgentMetadata";
 import type { PresetKind } from "../../features/workflow/domain";
 import type { WorkspaceTab } from "../mainAppGraphHelpers";
 import { runGraphWithCoordinator, runTopicWithCoordinator } from "../main/runtime/agenticCoordinator";
@@ -118,11 +119,20 @@ function buildRoleArtifactJson(params: {
   taskId: string;
   prompt?: string;
   artifactPaths: string[];
+  internal?: boolean;
 }): string {
+  const metadata = resolveTaskAgentMetadata(params.roleId, Boolean(params.internal));
   return `${JSON.stringify(
     {
       runId: String(params.runId ?? "").trim(),
       roleId: String(params.roleId ?? "").trim(),
+      roleLabel: metadata.taskAgentLabel || metadata.studioRoleLabel || String(params.roleId ?? "").trim(),
+      studioRoleId: String(params.roleId ?? "").trim(),
+      studioRoleLabel: metadata.studioRoleLabel || null,
+      taskAgentId: metadata.taskAgentId || null,
+      taskAgentLabel: metadata.taskAgentLabel || null,
+      orchestratorAgentId: metadata.orchestratorAgentId || null,
+      orchestratorAgentLabel: metadata.orchestratorAgentLabel || null,
       taskId: String(params.taskId ?? "").trim(),
       createdAt: new Date().toISOString(),
       prompt: String(params.prompt ?? "").trim(),
@@ -316,6 +326,7 @@ export function useAgenticOrchestrationBridge(params: {
           taskId: params.taskId,
           prompt: params.prompt,
           artifactPaths: baseArtifactPaths,
+          internal: params.internal,
         }),
       });
     } catch {

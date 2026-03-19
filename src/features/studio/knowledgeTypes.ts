@@ -7,6 +7,11 @@ export type KnowledgeEntry = {
   runId: string;
   taskId: StudioTaskId;
   roleId: StudioRoleId;
+  taskAgentId?: string;
+  taskAgentLabel?: string;
+  studioRoleLabel?: string;
+  orchestratorAgentId?: string;
+  orchestratorAgentLabel?: string;
   sourceKind: KnowledgeSourceKind;
   sourceUrl?: string;
   title: string;

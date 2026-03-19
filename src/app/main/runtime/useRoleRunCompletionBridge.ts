@@ -3,6 +3,7 @@ import { STUDIO_ROLE_TEMPLATES } from "../../../features/studio/roleTemplates";
 import type { StudioRoleId } from "../../../features/studio/handoffTypes";
 import { STUDIO_ROLE_PROMPTS, toStudioRoleId } from "../../../features/studio/roleUtils";
 import { persistKnowledgeIndexToWorkspace, readKnowledgeEntries, upsertKnowledgeEntry } from "../../../features/studio/knowledgeIndex";
+import { resolveTaskAgentMetadata } from "../../../features/studio/taskAgentMetadata";
 
 type Params = {
   cwd: string;
@@ -34,6 +35,7 @@ export function useRoleRunCompletionBridge(params: Params) {
     const roleLabel = roleId
       ? STUDIO_ROLE_TEMPLATES.find((row) => row.id === roleId)?.label ?? payload.roleId
       : payload.roleId;
+    const taskAgentMetadata = resolveTaskAgentMetadata(payload.roleId, Boolean(payload.internal));
     const promptSummary = String(payload.prompt ?? payload.handoffRequest ?? "").trim();
     const dedupedArtifactPaths = [
       ...new Set(payload.artifactPaths.map((row: unknown) => String(row ?? "").trim()).filter(Boolean)),
@@ -45,6 +47,11 @@ export function useRoleRunCompletionBridge(params: Params) {
         runId: payload.runId,
         taskId: normalizedTaskId,
         roleId: knowledgeRoleId,
+        taskAgentId: taskAgentMetadata.taskAgentId,
+        taskAgentLabel: taskAgentMetadata.taskAgentLabel,
+        studioRoleLabel: taskAgentMetadata.studioRoleLabel,
+        orchestratorAgentId: taskAgentMetadata.orchestratorAgentId,
+        orchestratorAgentLabel: taskAgentMetadata.orchestratorAgentLabel,
         sourceKind: "artifact",
         title: `${roleLabel} · ${normalizedTaskId} · ${fileName}`,
         summary: promptSummary || `${roleLabel} 역할 실행 산출물`,

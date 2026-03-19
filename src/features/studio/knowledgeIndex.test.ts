@@ -112,4 +112,23 @@ describe("knowledgeIndex.removeKnowledgeEntriesByRunId", () => {
     removeKnowledgeEntry("a");
     expect(isKnowledgeEntryIdHidden("a")).toBe(true);
   });
+
+  it("preserves task agent and orchestrator labels across storage", () => {
+    upsertKnowledgeEntry({
+      ...entry("a", "run-1"),
+      taskAgentId: "researcher",
+      taskAgentLabel: "RESEARCHER",
+      studioRoleLabel: "리서처",
+      orchestratorAgentId: "researcher",
+      orchestratorAgentLabel: "RESEARCHER",
+    });
+
+    expect(readKnowledgeEntries()[0]).toMatchObject({
+      taskAgentId: "researcher",
+      taskAgentLabel: "RESEARCHER",
+      studioRoleLabel: "리서처",
+      orchestratorAgentId: "researcher",
+      orchestratorAgentLabel: "RESEARCHER",
+    });
+  });
 });

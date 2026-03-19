@@ -36,6 +36,12 @@ export function KnowledgeBaseDetailPanel(props: KnowledgeBaseDetailPanelProps) {
           </header>
           <p>{selected.summary || "요약 없음"}</p>
           <dl className="knowledge-paths">
+            <dt>AGENT</dt>
+            <dd>{selected.taskAgentLabel || selected.studioRoleLabel || selected.roleId}</dd>
+            <dt>ORCHESTRATOR</dt>
+            <dd>{selected.orchestratorAgentLabel || "-"}</dd>
+            <dt>STUDIO ROLE</dt>
+            <dd>{selected.studioRoleLabel || selected.roleId}</dd>
             <dt>유형</dt>
             <dd>{formatSourceKindLabel(selected.sourceKind)}</dd>
             <dt>SOURCE</dt>

@@ -84,12 +84,31 @@
   border-radius: 10px;
   box-sizing: border-box;
   overflow: hidden;
+  opacity: 1;
+  transform: translateX(0);
+  pointer-events: auto;
+  transition:
+    width 220ms ease,
+    min-width 220ms ease,
+    padding 220ms ease,
+    opacity 180ms ease,
+    transform 220ms ease;
 }
 
 .left-nav.is-collapsed {
   width: 42px;
   min-width: 42px;
   padding: 0 10px;
+}
+
+.app-shell.is-left-nav-hidden .left-nav {
+  width: 0;
+  min-width: 0;
+  padding-left: 0;
+  padding-right: 0;
+  opacity: 0;
+  transform: translateX(-10px);
+  pointer-events: none;
 }
 
 .left-nav-head {

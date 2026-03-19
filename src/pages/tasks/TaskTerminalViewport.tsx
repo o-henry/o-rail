@@ -9,6 +9,7 @@ type TaskTerminalViewportProps = {
   selected: boolean;
   onTerminalData: (chars: string) => Promise<void> | void;
   onTerminalResize?: (cols: number, rows: number) => Promise<void> | void;
+  theme?: "dark" | "light";
 };
 
 export function TaskTerminalViewport(props: TaskTerminalViewportProps) {
@@ -95,6 +96,52 @@ export function TaskTerminalViewport(props: TaskTerminalViewportProps) {
       return;
     }
 
+    const theme = props.theme === "light"
+      ? {
+          background: "#00000000",
+          foreground: "#1f2937",
+          cursor: "#111827",
+          selectionBackground: "rgba(96, 165, 250, 0.22)",
+          black: "#111827",
+          red: "#dc2626",
+          green: "#15803d",
+          yellow: "#b45309",
+          blue: "#2563eb",
+          magenta: "#9333ea",
+          cyan: "#0f766e",
+          white: "#f8fafc",
+          brightBlack: "#6b7280",
+          brightRed: "#ef4444",
+          brightGreen: "#22c55e",
+          brightYellow: "#f59e0b",
+          brightBlue: "#3b82f6",
+          brightMagenta: "#a855f7",
+          brightCyan: "#14b8a6",
+          brightWhite: "#ffffff",
+        }
+      : {
+          background: "#00000000",
+          foreground: "#ecf2fa",
+          cursor: "#d7e2ef",
+          selectionBackground: "rgba(127, 160, 212, 0.25)",
+          black: "#0b0f15",
+          red: "#ef9f9f",
+          green: "#83d28e",
+          yellow: "#e9d37e",
+          blue: "#86b9ff",
+          magenta: "#d2a6ff",
+          cyan: "#80d7d9",
+          white: "#f6f8fb",
+          brightBlack: "#627083",
+          brightRed: "#ffb0b0",
+          brightGreen: "#98f2a3",
+          brightYellow: "#f7e49b",
+          brightBlue: "#9bc8ff",
+          brightMagenta: "#e0baff",
+          brightCyan: "#9be8ea",
+          brightWhite: "#ffffff",
+        };
+
     const terminal = new Terminal({
       allowTransparency: true,
       convertEol: false,
@@ -104,28 +151,7 @@ export function TaskTerminalViewport(props: TaskTerminalViewportProps) {
       fontSize: 12,
       lineHeight: 1.2,
       scrollback: 6000,
-      theme: {
-        background: "#00000000",
-        foreground: "#ecf2fa",
-        cursor: "#d7e2ef",
-        selectionBackground: "rgba(127, 160, 212, 0.25)",
-        black: "#0b0f15",
-        red: "#ef9f9f",
-        green: "#83d28e",
-        yellow: "#e9d37e",
-        blue: "#86b9ff",
-        magenta: "#d2a6ff",
-        cyan: "#80d7d9",
-        white: "#f6f8fb",
-        brightBlack: "#627083",
-        brightRed: "#ffb0b0",
-        brightGreen: "#98f2a3",
-        brightYellow: "#f7e49b",
-        brightBlue: "#9bc8ff",
-        brightMagenta: "#e0baff",
-        brightCyan: "#9be8ea",
-        brightWhite: "#ffffff",
-      },
+      theme,
     });
     const fitAddon = new FitAddon();
     terminal.loadAddon(fitAddon);
@@ -186,7 +212,7 @@ export function TaskTerminalViewport(props: TaskTerminalViewportProps) {
       terminalRef.current = null;
       terminal.dispose();
     };
-  }, []);
+  }, [props.theme]);
 
   useEffect(() => {
     const terminal = terminalRef.current;

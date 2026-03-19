@@ -146,6 +146,7 @@ export function MainAppShell(props: any) {
     stageInsetY,
     status,
     suspendedWebTurn,
+    tasksLeftNavHidden,
     t,
     themeMode,
     themeModeOptions,
@@ -176,10 +177,14 @@ export function MainAppShell(props: any) {
   } = props;
 
   return (
-    <main className={`app-shell ${canvasFullscreen ? "canvas-fullscreen-mode" : ""}`} style={appShellStyle}>
+    <main
+      className={`app-shell ${canvasFullscreen ? "canvas-fullscreen-mode" : ""} ${tasksLeftNavHidden ? "is-left-nav-hidden" : ""}`.trim()}
+      style={appShellStyle}
+    >
       <div aria-hidden="true" className="window-drag-region" data-tauri-drag-region />
       <AppNav
         activeTab={workspaceTab}
+        hidden={tasksLeftNavHidden}
         onSelectTab={onSelectWorkspaceTab}
         renderIcon={(tab, active) => <NavIcon active={active} tab={tab} />}
       />

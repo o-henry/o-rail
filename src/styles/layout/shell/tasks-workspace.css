@@ -41,7 +41,12 @@
 
 .tasks-thread-nav-actions {
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
+}
+
+.tasks-thread-nav-actions .tasks-thread-project-card {
+  grid-column: 1 / -1;
 }
 
 .tasks-thread-project-tree {
@@ -226,6 +231,14 @@
   padding: 0 12px;
 }
 
+.tasks-thread-new-button {
+  min-width: 0;
+  font-size: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .tasks-thread-primary,
 .tasks-thread-detail-tabs button.is-active,
 .tasks-thread-file-list button.is-active {
@@ -327,11 +340,13 @@
   align-content: start;
   overflow: hidden;
   background: #eef1f4;
+  padding-right: 28px;
 }
 
 .tasks-thread-list-title-row {
   min-width: 0;
   width: 100%;
+  padding-right: 4px;
 }
 
 .tasks-thread-list-title-row span {
@@ -485,6 +500,7 @@
   padding: 12px;
   border-radius: var(--tasks-wrapper-radius) var(--tasks-wrapper-radius) 0 0;
   background: #ffffff;
+  font-family: "DepartureMonoRail", "Galmuri11", monospace;
 }
 
 .tasks-thread-header-actions {
@@ -879,7 +895,7 @@
 
 .tasks-thread-message-row.is-user .tasks-thread-log-line {
   background: rgb(238, 238, 238);
-  padding: 1rem;
+  padding: 0.7rem 1.2rem 0.7rem 1.2rem;
   border-radius: 12px 0 12px 12px;
 }
 
@@ -1119,17 +1135,19 @@
   position: absolute;
   left: 12px;
   right: 12px;
-  bottom: calc(100% + 0.35rem);
+  bottom: calc(100%);
   z-index: 20;
   width: auto;
   box-sizing: border-box;
   display: grid;
   gap: 4px;
   padding: 6px;
-  border-radius: 8px;
-  border: 1px solid #f0f0f1;
-  background: #f2f4f7;
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+  border-radius: 8px 8px 0 0;
+  border-top: 1px solid #d8dde6;
+  border-left: 1px solid #d8dde6;
+  border-right: 1px solid #d8dde6;
+  border-bottom: 0;
+  background: #ffffff;
 }
 
 .tasks-thread-mention-option {
@@ -1774,6 +1792,14 @@
 .tasks-terminal-host .xterm-screen,
 .tasks-terminal-host .xterm-screen canvas {
   width: 100% !important;
+}
+
+.shell-terminal-card .tasks-terminal-viewport,
+.shell-terminal-card .tasks-terminal-host,
+.shell-terminal-card .tasks-terminal-host .xterm,
+.shell-terminal-card .tasks-terminal-host .xterm-viewport,
+.shell-terminal-card .tasks-terminal-host .xterm-screen {
+  background: #ffffff;
 }
 
 .tasks-thread-terminal-panel {

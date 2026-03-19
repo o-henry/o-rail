@@ -1,0 +1,521 @@
+.visualize-view {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  overflow: hidden;
+  padding: 10px;
+  background:
+    radial-gradient(circle at top, rgba(96, 165, 250, 0.12), transparent 22%),
+    linear-gradient(180deg, #f7f9fc, #edf2f8 46%, #e9eef5);
+}
+
+.visualize-banner {
+  border: 1px solid rgba(193, 203, 216, 0.9);
+  background: rgba(255, 255, 255, 0.92);
+  padding: 12px 14px;
+}
+
+.visualize-banner.is-error {
+  border-color: rgba(239, 68, 68, 0.28);
+  color: #b91c1c;
+}
+
+.visualize-monitor-shell {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  border: 1px solid rgba(203, 213, 225, 0.95);
+  background: rgba(255, 255, 255, 0.9);
+  overflow: hidden;
+}
+
+.visualize-monitor-topbar,
+.visualize-monitor-nav,
+.visualize-monitor-actions,
+.visualize-monitor-body,
+.visualize-monitor-chip-row,
+.visualize-monitor-kpi-grid,
+.visualize-monitor-session-list,
+.visualize-monitor-manual,
+.visualize-monitor-console-meta,
+.visualize-monitor-control-cluster {
+  display: flex;
+}
+
+.visualize-monitor-topbar {
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid rgba(203, 213, 225, 0.95);
+  padding: 12px 18px;
+  background: rgba(251, 253, 255, 0.96);
+}
+
+.visualize-monitor-brand {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.visualize-monitor-brand small,
+.visualize-monitor-nav button,
+.visualize-monitor-actions button,
+.visualize-monitor-widget-head span,
+.visualize-monitor-widget-head small,
+.visualize-monitor-chip-row span,
+.visualize-monitor-kpi-grid span,
+.visualize-monitor-console-meta span,
+.visualize-monitor-control-cluster span,
+.visualize-monitor-session-item span,
+.visualize-monitor-drawer summary,
+.visualize-monitor-manual label > span {
+  font-family: "DepartureMonoRail", "Galmuri11", monospace;
+}
+
+.visualize-monitor-brand small {
+  color: #64748b;
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+}
+
+.visualize-monitor-brand strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 1rem;
+}
+
+.visualize-monitor-nav,
+.visualize-monitor-actions,
+.visualize-monitor-chip-row,
+.visualize-monitor-control-cluster {
+  align-items: center;
+  gap: 8px;
+}
+
+.visualize-monitor-nav button,
+.visualize-monitor-actions button,
+.visualize-monitor-control-cluster button,
+.visualize-monitor-control-cluster span {
+  border: 1px solid rgba(203, 213, 225, 0.95);
+  background: rgba(255, 255, 255, 0.98);
+  padding: 8px 10px;
+  color: #475569;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+}
+
+.visualize-monitor-nav button,
+.visualize-monitor-control-cluster button {
+  cursor: pointer;
+}
+
+.visualize-monitor-nav .is-active {
+  background: #111827;
+  color: #f8fafc;
+}
+
+.visualize-monitor-actions button {
+  color: #0f172a;
+  transition: border-color 140ms ease, background 140ms ease;
+}
+
+.visualize-monitor-actions button:hover,
+.visualize-monitor-control-cluster button:hover,
+.visualize-monitor-session-item:hover,
+.visualize-monitor-evidence-picker button:hover,
+.visualize-monitor-manual button:hover {
+  border-color: rgba(148, 163, 184, 0.95);
+  background: rgba(248, 250, 252, 1);
+}
+
+.visualize-monitor-body {
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.visualize-monitor-stage {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: auto;
+  padding: 16px;
+  cursor: grab;
+}
+
+.visualize-monitor-stage:active {
+  cursor: grabbing;
+}
+
+.visualize-monitor-canvas-scale {
+  position: relative;
+}
+
+.visualize-monitor-canvas {
+  position: relative;
+  display: grid;
+  width: 1520px;
+  height: 980px;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  grid-template-rows: repeat(10, minmax(72px, auto));
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid rgba(203, 213, 225, 0.9);
+  background:
+    linear-gradient(rgba(148, 163, 184, 0.14) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.14) 1px, transparent 1px),
+    radial-gradient(circle at center, rgba(255, 255, 255, 0.66), transparent 42%),
+    #f8fafc;
+  background-size: 22px 22px, 22px 22px, auto, auto;
+  overflow: hidden;
+  transform-origin: top left;
+}
+
+.visualize-monitor-canvas::after {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 28% 26%, rgba(139, 92, 246, 0.1), transparent 20%),
+    radial-gradient(circle at 72% 68%, rgba(59, 130, 246, 0.08), transparent 18%);
+  content: "";
+  pointer-events: none;
+}
+
+.visualize-monitor-widget,
+.visualize-monitor-rail-panel,
+.visualize-monitor-drawer {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: 10px;
+  border: 1px solid rgba(203, 213, 225, 0.92);
+  background: rgba(255, 255, 255, 0.94);
+  padding: 12px;
+  overflow: hidden;
+}
+
+.visualize-monitor-widget-head,
+.visualize-monitor-widget-head > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.visualize-monitor-widget-head span,
+.visualize-monitor-widget-head small {
+  color: #64748b;
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.visualize-monitor-collapse-button {
+  border: 1px solid rgba(203, 213, 225, 0.95);
+  background: rgba(255, 255, 255, 0.98);
+  padding: 6px 9px;
+  color: #475569;
+  font-family: "DepartureMonoRail", "Galmuri11", monospace;
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+
+.visualize-monitor-collapse-button:hover {
+  border-color: rgba(148, 163, 184, 0.95);
+  background: rgba(248, 250, 252, 1);
+}
+
+.visualize-monitor-widget h1,
+.visualize-monitor-widget strong,
+.visualize-monitor-rail-panel strong {
+  margin: 0;
+}
+
+.visualize-monitor-widget p,
+.visualize-monitor-empty,
+.visualize-monitor-console-copy,
+.visualize-monitor-evidence-detail p {
+  margin: 0;
+  color: #475569;
+  line-height: 1.6;
+}
+
+.visualize-monitor-widget.is-session {
+  grid-column: 1 / 7;
+  grid-row: 1 / 3;
+}
+
+.visualize-monitor-widget.is-kpis {
+  grid-column: 7 / 13;
+  grid-row: 1 / 3;
+}
+
+.visualize-monitor-widget.is-chart-main {
+  grid-column: 1 / 9;
+  grid-row: 3 / 7;
+}
+
+.visualize-monitor-widget.is-chart-source {
+  grid-column: 9 / 13;
+  grid-row: 3 / 5;
+}
+
+.visualize-monitor-widget.is-chart-quality {
+  grid-column: 9 / 13;
+  grid-row: 5 / 7;
+}
+
+.visualize-monitor-widget.is-report {
+  grid-column: 1 / 7;
+  grid-row: 7 / 11;
+}
+
+.visualize-monitor-widget.is-evidence {
+  grid-column: 7 / 13;
+  grid-row: 7 / 11;
+}
+
+.visualize-monitor-chip-row {
+  flex-wrap: wrap;
+}
+
+.visualize-monitor-chip-row span {
+  border: 1px solid rgba(203, 213, 225, 0.95);
+  background: #f8fafc;
+  padding: 6px 8px;
+  color: #334155;
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+}
+
+.visualize-monitor-kpi-grid {
+  height: 100%;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.visualize-monitor-kpi-grid > div,
+.visualize-monitor-console-meta > div {
+  flex: 1 1 160px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 6px;
+  border: 1px solid rgba(226, 232, 240, 1);
+  background: rgba(248, 250, 252, 0.95);
+  padding: 10px;
+}
+
+.visualize-monitor-kpi-grid strong {
+  font-size: 2rem;
+  font-weight: 600;
+}
+
+.visualize-monitor-kpi-grid span,
+.visualize-monitor-console-meta span {
+  color: #64748b;
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+}
+
+.visualize-monitor-console-meta strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.visualize-monitor-widget .feed-chart-card,
+.visualize-monitor-rail-panel .feed-chart-card {
+  margin: 0;
+  height: 100%;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+}
+
+.visualize-monitor-placeholder,
+.visualize-monitor-empty {
+  display: grid;
+  flex: 1 1 auto;
+  place-items: center;
+  color: #94a3b8;
+  text-align: center;
+}
+
+.visualize-monitor-document {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: auto;
+  border: 1px solid rgba(226, 232, 240, 1);
+  background: rgba(255, 255, 255, 0.86);
+  padding: 12px;
+}
+
+.visualize-monitor-document.is-compact {
+  max-height: 220px;
+}
+
+.visualize-monitor-evidence-picker {
+  display: grid;
+  gap: 8px;
+  min-height: 0;
+  overflow: auto;
+}
+
+.visualize-monitor-evidence-picker button,
+.visualize-monitor-session-item {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  border: 1px solid rgba(226, 232, 240, 1);
+  background: rgba(248, 250, 252, 0.92);
+  padding: 10px;
+  color: inherit;
+  text-align: left;
+}
+
+.visualize-monitor-evidence-picker button.is-active,
+.visualize-monitor-session-item.is-active {
+  border-color: rgba(59, 130, 246, 0.5);
+  background: rgba(219, 234, 254, 0.92);
+}
+
+.visualize-monitor-controls {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.visualize-monitor-control-cluster {
+  gap: 0;
+}
+
+.visualize-monitor-control-cluster button,
+.visualize-monitor-control-cluster span {
+  min-width: 46px;
+  text-align: center;
+}
+
+.visualize-monitor-rail {
+  width: 360px;
+  min-width: 360px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border-left: 1px solid rgba(203, 213, 225, 0.95);
+  background: rgba(250, 252, 255, 0.96);
+  overflow: auto;
+}
+
+.visualize-monitor-rail-panel,
+.visualize-monitor-drawer {
+  border-width: 0 0 1px;
+  background: transparent;
+}
+
+.visualize-monitor-console-copy {
+  font-size: 0.95rem;
+}
+
+.visualize-monitor-console-meta {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.visualize-monitor-evidence-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.visualize-monitor-evidence-detail a,
+.visualize-monitor-evidence-picker span,
+.visualize-monitor-session-item span {
+  color: #64748b;
+  font-size: 0.76rem;
+}
+
+.visualize-monitor-evidence-detail a {
+  word-break: break-all;
+}
+
+.visualize-monitor-session-list {
+  min-height: 0;
+  flex-direction: column;
+  gap: 8px;
+  overflow: auto;
+}
+
+.visualize-monitor-drawer summary {
+  cursor: pointer;
+  list-style: none;
+  color: #334155;
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+}
+
+.visualize-monitor-drawer summary::-webkit-details-marker {
+  display: none;
+}
+
+.visualize-monitor-manual {
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.visualize-monitor-manual label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.visualize-monitor-manual textarea,
+.visualize-monitor-manual input,
+.visualize-monitor-manual select,
+.visualize-monitor-manual button {
+  border: 1px solid rgba(203, 213, 225, 0.95);
+  background: rgba(255, 255, 255, 0.98);
+  padding: 10px 12px;
+  color: inherit;
+  box-sizing: border-box;
+  font-family: "DepartureMonoRail", "Galmuri11", monospace;
+}
+
+.visualize-monitor-manual button {
+  align-self: flex-start;
+}
+
+@media (max-width: 1360px) {
+  .visualize-monitor-body {
+    flex-direction: column;
+  }
+
+  .visualize-monitor-rail {
+    width: auto;
+    min-width: 0;
+    max-height: 44vh;
+    border-left: none;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+  }
+}
+
+@media (max-width: 860px) {
+  .visualize-monitor-topbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .visualize-monitor-canvas {
+    width: 920px;
+  }
+}

@@ -159,32 +159,32 @@
 }
 
 .visualize-monitor-widget.is-session {
-  grid-column: 1 / 9;
+  grid-column: 1 / 7;
   grid-row: span 2;
 }
 
 .visualize-monitor-widget.is-chart-main {
-  grid-column: 1 / 9;
+  grid-column: 1 / 7;
   grid-row: span 3;
 }
 
 .visualize-monitor-widget.is-chart-source {
-  grid-column: 9 / 11;
+  grid-column: 7 / 10;
   grid-row: span 3;
 }
 
 .visualize-monitor-widget.is-chart-quality {
-  grid-column: 11 / 13;
+  grid-column: 10 / 13;
   grid-row: span 3;
 }
 
 .visualize-monitor-widget.is-sources {
-  grid-column: 1 / 3;
+  grid-column: 1 / 4;
   grid-row: span 2;
 }
 
 .visualize-monitor-widget.is-steam {
-  grid-column: 3 / 7;
+  grid-column: 4 / 7;
   grid-row: span 2;
 }
 
@@ -249,11 +249,15 @@
 }
 
 .visualize-monitor-kpi-grid.is-inline {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
   height: auto;
-  overflow-x: auto;
-  overflow-y: hidden;
-  padding-bottom: 2px;
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  align-content: start;
+  padding-right: 2px;
 }
 
 .visualize-monitor-kpi-item,
@@ -274,8 +278,8 @@
 }
 
 .visualize-monitor-kpi-grid.is-inline .visualize-monitor-kpi-item {
-  min-width: 116px;
-  flex: 0 0 116px;
+  min-width: 0;
+  width: 100%;
 }
 
 .visualize-monitor-kpi-item strong {
@@ -339,9 +343,8 @@
   min-height: 0;
   height: 100%;
   flex-direction: column;
-  gap: 10px;
-  overflow: auto;
-  padding-right: 2px;
+  gap: 8px;
+  overflow: hidden;
 }
 
 .visualize-monitor-quality-score {
@@ -390,6 +393,7 @@
 .visualize-monitor-quality-legend {
   flex-direction: column;
   gap: 6px;
+  flex: 0 0 auto;
 }
 
 .visualize-monitor-quality-legend-row {

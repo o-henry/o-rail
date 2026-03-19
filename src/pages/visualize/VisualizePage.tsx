@@ -190,7 +190,12 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
           <section className="visualize-monitor-main" ref={mainRef}>
             <div
               className={`visualize-monitor-canvas${layout.layoutState.maximizedWidgetId ? " has-maximized-widget" : ""}`}
-              style={{ minHeight: `${layout.canvasSize.height}px`, minWidth: `${layout.canvasSize.width}px` }}
+              style={{
+                width: `${layout.canvasSize.width}px`,
+                minWidth: `${layout.canvasSize.width}px`,
+                height: `${layout.canvasSize.height}px`,
+                minHeight: `${layout.canvasSize.height}px`,
+              }}
             >
               <VisualizeWidgetFrame
                 articleRef={sessionRef}

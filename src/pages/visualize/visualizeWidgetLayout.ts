@@ -25,15 +25,15 @@ export type VisualizeWidgetLayoutState = {
 };
 
 const DEFAULT_WIDGETS: Record<VisualizeWidgetId, VisualizeWidgetRect> = {
-  session: { x: 0, y: 0, w: 420, h: 260, minW: 320, minH: 220 },
-  kpis: { x: 440, y: 0, w: 420, h: 260, minW: 320, minH: 220 },
-  timeline: { x: 0, y: 280, w: 540, h: 360, minW: 360, minH: 280 },
-  sourceMix: { x: 560, y: 280, w: 300, h: 300, minW: 260, minH: 240 },
-  quality: { x: 880, y: 280, w: 300, h: 300, minW: 260, minH: 220 },
-  sources: { x: 0, y: 660, w: 280, h: 280, minW: 240, minH: 220 },
-  steam: { x: 300, y: 660, w: 280, h: 280, minW: 240, minH: 220 },
-  report: { x: 600, y: 660, w: 580, h: 280, minW: 380, minH: 240 },
-  evidence: { x: 0, y: 960, w: 1180, h: 340, minW: 480, minH: 260 },
+  session: { x: 0, y: 0, w: 588, h: 248, minW: 360, minH: 220 },
+  kpis: { x: 600, y: 0, w: 588, h: 248, minW: 360, minH: 220 },
+  timeline: { x: 0, y: 260, w: 588, h: 320, minW: 420, minH: 280 },
+  sourceMix: { x: 600, y: 260, w: 288, h: 320, minW: 260, minH: 240 },
+  quality: { x: 900, y: 260, w: 288, h: 320, minW: 260, minH: 220 },
+  sources: { x: 0, y: 592, w: 288, h: 250, minW: 240, minH: 220 },
+  steam: { x: 300, y: 592, w: 288, h: 250, minW: 240, minH: 220 },
+  report: { x: 600, y: 592, w: 588, h: 250, minW: 420, minH: 240 },
+  evidence: { x: 0, y: 854, w: 1188, h: 322, minW: 620, minH: 260 },
 };
 
 const STORAGE_KEY_PREFIX = "rail.visualize.widget-layout.v1";
@@ -110,8 +110,8 @@ export function resetVisualizeWidgetRect(widgetId: VisualizeWidgetId): Visualize
 
 export function computeVisualizeCanvasSize(layout: VisualizeWidgetLayoutState) {
   const widgets = Object.values(layout.widgets);
-  const width = Math.max(1180, ...widgets.map((widget) => widget.x + widget.w));
-  const height = Math.max(1120, ...widgets.map((widget) => widget.y + widget.h));
+  const width = Math.max(1188, ...widgets.map((widget) => widget.x + widget.w));
+  const height = Math.max(1176, ...widgets.map((widget) => widget.y + widget.h));
   return {
     width,
     height,

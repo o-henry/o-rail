@@ -48,6 +48,11 @@ export function VisualizeWidgetFrame({
             <span />
             <span />
             <span />
+            <span />
+            <span />
+            <span />
+            <span />
+            <span />
           </button>
           <div className="visualize-monitor-widget-head-copy">
             <strong>{title}</strong>

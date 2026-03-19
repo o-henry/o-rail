@@ -82,12 +82,12 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
-  min-height: 54px;
+  gap: 12px;
+  min-height: 58px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   background:
     linear-gradient(180deg, rgba(47, 47, 52, 0.98), rgba(29, 30, 34, 0.98));
-  padding: 0 14px;
+  padding: 0 10px;
   color: #f8fafc;
   cursor: grab;
   user-select: none;
@@ -113,7 +113,7 @@
 .visualize-monitor-widget-head-main {
   min-width: 0;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 
 .visualize-monitor-widget-head-copy {
@@ -140,9 +140,9 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   color: #f8fafc;
-  font-size: 1rem;
+  font-size: 1.06rem;
   font-weight: 600;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 
@@ -151,8 +151,8 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   color: rgba(203, 213, 225, 0.82);
-  font-size: 0.68rem;
-  letter-spacing: 0.1em;
+  font-size: 0.64rem;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
@@ -176,34 +176,34 @@
 
 .visualize-monitor-widget-grip {
   display: grid;
-  grid-template-columns: repeat(2, 4px);
-  grid-template-rows: repeat(2, 4px);
-  gap: 4px;
-  width: 18px;
-  height: 18px;
+  grid-template-columns: repeat(3, 3px);
+  grid-template-rows: repeat(3, 3px);
+  gap: 2px;
+  width: 13px;
+  height: 13px;
+  flex: 0 0 auto;
 }
 
 .visualize-monitor-widget-grip span {
   display: block;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.7);
 }
 
 .visualize-monitor-widget-head-actions {
   align-items: center;
-  gap: 8px;
+  gap: 12px;
 }
 
 .visualize-monitor-widget-head-button {
-  width: 24px;
-  height: 24px;
-  opacity: 0.9;
+  width: 18px;
+  height: 18px;
+  opacity: 0.82;
 }
 
 .visualize-monitor-widget-head-button img {
   width: 15px;
   height: 15px;
-  opacity: 0.92;
+  opacity: 0.78;
   filter: brightness(0) invert(1);
 }
 
@@ -217,20 +217,7 @@
 }
 
 .visualize-monitor-widget-resize {
-  position: absolute;
-  right: 4px;
-  bottom: 4px;
-  width: 16px;
-  height: 16px;
-  cursor: nwse-resize;
-}
-
-.visualize-monitor-widget-resize::before {
-  content: "";
-  width: 12px;
-  height: 12px;
-  background:
-    linear-gradient(135deg, transparent 0 44%, rgba(100, 116, 139, 0.95) 44% 52%, transparent 52% 100%);
+  display: none;
 }
 
 .visualize-monitor-widget h1,

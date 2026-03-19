@@ -61,6 +61,7 @@ function buildTimelineChart(spec: ReturnType<typeof useVisualizePageState>["coll
 export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEntry }: VisualizePageProps) {
   const state = useVisualizePageState({ cwd, hasTauriRuntime });
   const [maximizedWidgetId, setMaximizedWidgetId] = useState<VisualizeWidgetId | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const mainRef = useRef<HTMLElement | null>(null);
   const sessionRef = useRef<HTMLElement | null>(null);
   const reportRef = useRef<HTMLElement | null>(null);
@@ -107,46 +108,20 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
     <section className="panel-card visualize-view workspace-tab-panel">
       <section className="visualize-monitor-shell">
         <header className="visualize-monitor-topbar">
-          <div className="visualize-monitor-brand">
-            <small>{state.error || state.statusText || (hasTauriRuntime ? "RAIL RESEARCH" : "Desktop Runtime Required")}</small>
-            <strong>{state.selectedReportRun?.title || "Research monitor"}</strong>
+          <div className="visualize-monitor-toolbar-copy">
+            <strong>RESEARCH</strong>
+            <span>{state.selectedReportRun?.title || "Run @researcher to create a monitored session"}</span>
           </div>
-
-          <nav className="visualize-monitor-nav" aria-label="Visualize sections">
-            <button className="is-active" onClick={() => focusWidget(sessionRef)} type="button">요약</button>
-            <button onClick={() => focusWidget(reportRef)} type="button">리포트</button>
-            <button onClick={() => focusWidget(evidenceRef)} type="button">근거</button>
+          <div className="visualize-monitor-toolbar-actions">
             <button
-              disabled={!reportEntryId || !onOpenKnowledgeEntry}
-              onClick={() => reportEntryId && onOpenKnowledgeEntry?.(reportEntryId)}
+              aria-label={historyOpen ? "리서치 패널 닫기" : "리서치 패널 열기"}
+              aria-pressed={historyOpen}
+              className="visualize-monitor-toolbar-icon"
+              onClick={() => setHistoryOpen((current) => !current)}
               type="button"
             >
-              원본
+              <img alt="" aria-hidden="true" src="/open.svg" />
             </button>
-          </nav>
-
-          <div className="visualize-monitor-actions">
-            <button disabled={state.refreshing} onClick={() => void state.refreshAll()} type="button">
-              {state.refreshing ? "SYNC" : "새로고침"}
-            </button>
-            <button disabled={state.steamIngesting} onClick={() => void state.ingestSteam()} type="button">
-              {state.steamIngesting ? "STEAM" : "Steam 적재"}
-            </button>
-            <label className="visualize-monitor-session-select">
-              <span>세션</span>
-              <select onChange={(event) => state.setSelectedRunId(event.currentTarget.value)} value={state.selectedRunId}>
-                {state.reportRuns.map((run) => (
-                  <option key={run.runId} value={run.runId}>
-                    {run.title || run.taskId}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {reportEntryId && onOpenKnowledgeEntry ? (
-              <button onClick={() => onOpenKnowledgeEntry(reportEntryId)} type="button">
-                데이터베이스
-              </button>
-            ) : null}
           </div>
         </header>
 
@@ -361,6 +336,57 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
               </VisualizeWidgetFrame>
             </div>
           </section>
+          {historyOpen ? (
+            <aside className="visualize-monitor-rail" aria-label="Research history">
+              <header className="visualize-monitor-rail-head">
+                <strong>RESEARCH DATA</strong>
+                <span>{state.reportRuns.length} sessions</span>
+              </header>
+              <div className="visualize-monitor-rail-list">
+                {state.reportRuns.length ? (
+                  state.reportRuns.map((run) => {
+                    const isSelected = run.runId === state.selectedRunId;
+                    return (
+                      <button
+                        className={`visualize-monitor-rail-item${isSelected ? " is-active" : ""}`}
+                        key={run.runId}
+                        onClick={() => state.setSelectedRunId(run.runId)}
+                        type="button"
+                      >
+                        <strong>{run.title || run.taskId}</strong>
+                        <span>{formatStamp(run.updatedAt)}</span>
+                        <p>{run.summary || "요약이 아직 없습니다."}</p>
+                      </button>
+                    );
+                  })
+                ) : (
+                  <div className="visualize-monitor-rail-empty">아직 생성된 리서치 세션이 없습니다.</div>
+                )}
+              </div>
+              <div className="visualize-monitor-rail-footer">
+                <button className="visualize-monitor-rail-action" disabled={state.refreshing} onClick={() => void state.refreshAll()} type="button">
+                  {state.refreshing ? "SYNC" : "새로고침"}
+                </button>
+                <button className="visualize-monitor-rail-action" disabled={state.steamIngesting} onClick={() => void state.ingestSteam()} type="button">
+                  {state.steamIngesting ? "STEAM" : "Steam 적재"}
+                </button>
+                {reportEntryId && onOpenKnowledgeEntry ? (
+                  <button className="visualize-monitor-rail-action" onClick={() => onOpenKnowledgeEntry(reportEntryId)} type="button">
+                    데이터베이스
+                  </button>
+                ) : null}
+                <button className="visualize-monitor-rail-action subtle" onClick={() => focusWidget(reportRef)} type="button">
+                  리포트로 이동
+                </button>
+                <button className="visualize-monitor-rail-action subtle" onClick={() => focusWidget(evidenceRef)} type="button">
+                  근거로 이동
+                </button>
+                <button className="visualize-monitor-rail-action subtle" onClick={() => focusWidget(sessionRef)} type="button">
+                  요약으로 이동
+                </button>
+              </div>
+            </aside>
+          ) : null}
         </section>
       </section>
     </section>

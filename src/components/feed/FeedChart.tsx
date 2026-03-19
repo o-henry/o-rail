@@ -144,11 +144,11 @@ function arcPath(cx: number, cy: number, radius: number, startAngle: number, end
 }
 
 function renderPieChart(spec: FeedChartSpec) {
-  const width = 700;
-  const height = 280;
-  const cx = 200;
-  const cy = 140;
-  const radius = 92;
+  const width = 520;
+  const height = 240;
+  const cx = 128;
+  const cy = 120;
+  const radius = 74;
   const values = spec.series[0]?.data.slice(0, spec.labels.length) ?? [];
   const total = Math.max(1, values.reduce((sum, value) => sum + Math.max(0, value), 0));
   let angle = -Math.PI / 2;
@@ -161,8 +161,8 @@ function renderPieChart(spec: FeedChartSpec) {
         const color = getSeriesColor(spec.series[0]?.color, index);
         const path = arcPath(cx, cy, radius, angle, nextAngle);
         const mid = (angle + nextAngle) / 2;
-        const labelX = cx + Math.cos(mid) * (radius + 22);
-        const labelY = cy + Math.sin(mid) * (radius + 22);
+        const labelX = cx + Math.cos(mid) * (radius + 18);
+        const labelY = cy + Math.sin(mid) * (radius + 18);
         angle = nextAngle;
         return (
           <g key={`pie-${index}`}>
@@ -175,7 +175,7 @@ function renderPieChart(spec: FeedChartSpec) {
       })}
       <g className="feed-chart-legend">
         {spec.labels.map((label, index) => (
-          <g key={`legend-${index}`} transform={`translate(380, ${46 + index * 22})`}>
+          <g key={`legend-${index}`} transform={`translate(248, ${48 + index * 20})`}>
             <rect fill={getSeriesColor(spec.series[0]?.color, index)} height={10} rx={2} width={10} x={0} y={-8} />
             <text className="feed-chart-axis-label" x={16} y={0}>
               {label} ({describeNumber(values[index] ?? 0)})

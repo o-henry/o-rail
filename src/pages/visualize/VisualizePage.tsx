@@ -70,16 +70,6 @@ function buildTimelineChart(spec: ReturnType<typeof useVisualizePageState>["coll
   };
 }
 
-function buildQualityChart(score: number): FeedChartSpec {
-  const bounded = Math.max(0, Math.min(100, Math.round(score)));
-  return {
-    type: "pie",
-    title: "Quality Score",
-    labels: ["Signal", "Remaining"],
-    series: [{ name: "Score", data: [bounded, Math.max(0, 100 - bounded)], color: "#22c55e" }],
-  };
-}
-
 export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEntry }: VisualizePageProps) {
   const state = useVisualizePageState({ cwd, hasTauriRuntime });
   const [selectedEvidenceId, setSelectedEvidenceId] = useState("");
@@ -91,7 +81,7 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
   const sourceChart = buildSourceChart(state.collectionMetrics);
   const verificationChart = buildVerificationChart(state.collectionMetrics);
   const timelineChart = buildTimelineChart(state.collectionMetrics);
-  const qualityChart = buildQualityChart(state.collectionMetrics?.totals.avgScore ?? 0);
+  const qualityScore = Math.max(0, Math.min(100, Math.round(state.collectionMetrics?.totals.avgScore ?? 0)));
 
   const reportEntryId = state.selectedReportRun?.collectionEntryId || state.selectedReportRun?.reportEntryId || "";
   const reportJob = state.collectionPayload?.planned?.job;
@@ -210,10 +200,12 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
                 </div>
                 <div className="visualize-monitor-kpi-grid">
                   {summaryMetrics.map((metric) => (
-                    <div key={metric.label}>
+                    <div className="visualize-monitor-kpi-item" key={metric.label}>
                       <strong>{metric.value}</strong>
-                      <span>{metric.label}</span>
-                      <small>{metric.meta}</small>
+                      <div className="visualize-monitor-kpi-copy">
+                        <span>{metric.label}</span>
+                        <small>{metric.meta}</small>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -238,9 +230,37 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
               <article className="visualize-monitor-widget is-chart-quality">
                 <div className="visualize-monitor-widget-head">
                   <span>[ 검증 비율 ]</span>
-                  <small>{state.collectionMetrics?.totals.avgScore ?? 0}</small>
+                  <small>{qualityScore}</small>
                 </div>
-                {verificationChart ? <FeedChart spec={verificationChart} /> : <FeedChart spec={qualityChart} />}
+                <div className="visualize-monitor-quality-panel">
+                  <div className="visualize-monitor-quality-score">
+                    <strong>{formatPercent(qualityScore)}</strong>
+                    <span>평균 품질 점수</span>
+                  </div>
+                  <div className="visualize-monitor-quality-meter" role="presentation">
+                    <span style={{ width: `${qualityScore}%` }} />
+                  </div>
+                  <div className="visualize-monitor-quality-legend">
+                    {(state.collectionMetrics?.byVerificationStatus ?? []).map((row) => (
+                      <div className="visualize-monitor-quality-legend-row" key={row.verificationStatus}>
+                        <span>{row.verificationStatus}</span>
+                        <strong>{row.itemCount}</strong>
+                      </div>
+                    ))}
+                    {verificationChart ? null : (
+                      <>
+                        <div className="visualize-monitor-quality-legend-row">
+                          <span>signal</span>
+                          <strong>{qualityScore}</strong>
+                        </div>
+                        <div className="visualize-monitor-quality-legend-row">
+                          <span>remaining</span>
+                          <strong>{Math.max(0, 100 - qualityScore)}</strong>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
               </article>
 
               <article className="visualize-monitor-widget is-sources">

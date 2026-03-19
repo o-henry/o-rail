@@ -139,6 +139,7 @@ import {
   loadPersistedLoginCompleted,
   normalizeCodexMultiAgentMode,
   resolveNodeCwd,
+  isEditableTarget,
   toErrorText,
   toOpenRunsFolderErrorMessage,
   toUsageCheckErrorMessage,
@@ -256,6 +257,7 @@ import { useMainAppWorkflowPresentation } from "./main/presentation/useMainAppWo
 import { useWorkflowRagActions } from "./main/canvas/useWorkflowRagActions";
 import { useTurnModelSelectionActions } from "./main/canvas/useTurnModelSelectionActions";
 import { useBriefingDocumentActions } from "./main/runtime/useBriefingDocumentActions";
+import { isTasksLeftNavToggleShortcut } from "../pages/tasks/tasksWorkspaceShortcuts";
 import {
   buildAdaptiveEvaluationInput,
   buildAdaptiveRecipeSnapshotForRun,
@@ -317,6 +319,7 @@ const WORKSPACE_TOPBAR_TABS: Array<{ tab: WorkspaceTab; label: string }> = [
   { tab: "shell", label: "SHELL" },
   { tab: "workflow", label: "그래프" },
   { tab: "knowledge", label: "데이터베이스" },
+  { tab: "visualize", label: "시각화" },
   { tab: "adaptation", label: "개선" },
   { tab: "settings", label: "설정" },
 ];
@@ -332,6 +335,7 @@ function App() {
   const defaultCodexMultiAgentMode = useMemo(() => loadPersistedCodexMultiAgentMode(), []);
   const themeModeOptions = useMemo(() => [{ value: "light", label: t("settings.theme.light") }, { value: "dark", label: t("settings.theme.dark") }], [t]);
   const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>("tasks");
+  const [tasksLeftNavHidden, setTasksLeftNavHidden] = useState(false);
   const [workflowRoleId, setWorkflowRoleId] = useState<StudioRoleId>("pm_planner");
   const [, setWorkflowRoleTaskId] = useState("TASK-001");
   const [workflowRolePrompt, setWorkflowRolePrompt] = useState("");
@@ -673,6 +677,24 @@ function App() {
     setWorkflowGraphViewMode("graph");
     setWorkflowSidePanelsVisible(true);
   }, [workspaceTab]);
+  useEffect(() => {
+    const onWindowKeyDown = (event: KeyboardEvent) => {
+      if (workspaceTab !== "tasks") {
+        return;
+      }
+      if (!isTasksLeftNavToggleShortcut(event) || isEditableTarget(event.target)) {
+        return;
+      }
+      event.preventDefault();
+      setTasksLeftNavHidden((prev) => {
+        const next = !prev;
+        setStatusState(next ? "TASKS 왼쪽 탐색 숨김" : "TASKS 왼쪽 탐색 표시");
+        return next;
+      });
+    };
+    window.addEventListener("keydown", onWindowKeyDown);
+    return () => window.removeEventListener("keydown", onWindowKeyDown);
+  }, [setStatusState, workspaceTab]);
   const { publishAction, subscribeAction } = useAgenticActionBus();
   const {
     snapshotsByTopic: dashboardSnapshotsByTopic,
@@ -2815,6 +2837,7 @@ function App() {
       status={status}
       suspendedWebTurn={suspendedWebTurn}
       t={t}
+      tasksLeftNavHidden={tasksLeftNavHidden}
       themeMode={themeMode}
       themeModeOptions={themeModeOptions}
       turnModelLabel={turnModelLabel}

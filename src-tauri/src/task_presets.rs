@@ -7,7 +7,7 @@ pub struct TaskAgentPreset {
     pub discussion_line: &'static str,
 }
 
-pub const UNITY_TASK_AGENT_PRESETS: [TaskAgentPreset; 9] = [
+pub const UNITY_TASK_AGENT_PRESETS: [TaskAgentPreset; 10] = [
     TaskAgentPreset {
         id: "game_designer",
         label: "GAME DESIGNER",
@@ -23,6 +23,14 @@ pub const UNITY_TASK_AGENT_PRESETS: [TaskAgentPreset; 9] = [
         default_summary: "레벨 흐름, 전투 템포, 공간 연출, 플레이 동선을 정리하고 있습니다.",
         default_instruction: "집중할 점: 씬 흐름, 전투 템포, 레벨별 설계 메모, encounter와 pacing 문제를 한국어로 정리하세요.",
         discussion_line: "LEVEL DESIGNER: 씬 흐름, 템포, 동선, 전투 가독성을 한국어로 정리하고 있습니다.",
+    },
+    TaskAgentPreset {
+        id: "researcher",
+        label: "RESEARCHER",
+        studio_role_id: "research_analyst",
+        default_summary: "요청과 관련된 자료 검색, 웹 조사, 크롤링/스크래핑 접근 경로를 정리하고 있습니다.",
+        default_instruction: "집중할 점: 사용자의 요청을 바탕으로 필요한 자료를 검색하고, 공식 문서/레퍼런스/웹페이지를 조사하며, 필요하면 크롤링/스크래핑 접근 방식과 수집 결과를 한국어로 구조화하세요.",
+        discussion_line: "RESEARCHER: 관련 자료, 참고 링크, 검색 쿼리, 크롤링/스크래핑 포인트를 한국어로 정리하고 있습니다.",
     },
     TaskAgentPreset {
         id: "unity_architect",
@@ -82,9 +90,10 @@ pub const UNITY_TASK_AGENT_PRESETS: [TaskAgentPreset; 9] = [
     },
 ];
 
-pub const UNITY_TASK_AGENT_ORDER: [&str; 9] = [
+pub const UNITY_TASK_AGENT_ORDER: [&str; 10] = [
     "game_designer",
     "level_designer",
+    "researcher",
     "unity_architect",
     "unity_implementer",
     "technical_artist",
@@ -108,22 +117,33 @@ pub fn task_team_preset_ids(team: &str) -> Vec<&'static str> {
             "unity_architect",
             "technical_artist",
         ],
-        "full-squad" => UNITY_TASK_AGENT_ORDER.to_vec(),
+        "full-squad" => vec![
+            "game_designer",
+            "level_designer",
+            "unity_architect",
+            "unity_implementer",
+            "technical_artist",
+            "unity_editor_tools",
+            "qa_playtester",
+            "release_steward",
+            "handoff_writer",
+        ],
         _ => Vec::new(),
     }
 }
 
 pub fn canonical_task_agent_id(raw: &str) -> Option<&'static str> {
     match raw.trim().to_lowercase().as_str() {
-        "game_designer" | "designer" | "explorer" | "planner" | "spec" | "brief" => Some("game_designer"),
-        "level_designer" | "level" | "encounter" | "pacing" => Some("level_designer"),
-        "unity_architect" | "architect" | "reviewer" | "review" | "codemap" | "code_mapper" | "mapper" | "performance" | "perf" => Some("unity_architect"),
-        "unity_implementer" | "implementer" | "worker" | "csharp" | "csharp_developer" | "debug" | "debugger" | "fixer" | "ui" | "ui_fixer" => Some("unity_implementer"),
-        "technical_artist" | "techart" | "shader" | "vfx" | "prefab" => Some("technical_artist"),
-        "unity_editor_tools" | "tools" | "automation" | "editor" | "validator" => Some("unity_editor_tools"),
-        "qa_playtester" | "playtest" | "qa" | "tester" | "test" | "regression" => Some("qa_playtester"),
-        "release_steward" | "release" | "build" | "ci" => Some("release_steward"),
-        "handoff_writer" | "docs" | "documentation" | "handoff" => Some("handoff_writer"),
+        "game_designer" | "designer" | "explorer" | "planner" | "spec" | "brief" | "pm_planner" => Some("game_designer"),
+        "level_designer" | "level" | "encounter" | "pacing" | "pm_creative_director" => Some("level_designer"),
+        "researcher" | "research" | "search" | "web" | "crawl" | "crawler" | "scrape" | "scraper" | "research_analyst" => Some("researcher"),
+        "unity_architect" | "architect" | "reviewer" | "review" | "codemap" | "code_mapper" | "mapper" | "performance" | "perf" | "system_programmer" => Some("unity_architect"),
+        "unity_implementer" | "implementer" | "worker" | "csharp" | "csharp_developer" | "debug" | "debugger" | "fixer" | "ui" | "ui_fixer" | "client_programmer" => Some("unity_implementer"),
+        "technical_artist" | "techart" | "shader" | "vfx" | "prefab" | "art_pipeline" => Some("technical_artist"),
+        "unity_editor_tools" | "tools" | "automation" | "editor" | "validator" | "tooling_engineer" => Some("unity_editor_tools"),
+        "qa_playtester" | "playtest" | "qa" | "tester" | "test" | "regression" | "qa_engineer" => Some("qa_playtester"),
+        "release_steward" | "release" | "build" | "ci" | "build_release" => Some("release_steward"),
+        "handoff_writer" | "docs" | "documentation" | "handoff" | "technical_writer" => Some("handoff_writer"),
         _ => None,
     }
 }
@@ -146,7 +166,7 @@ pub fn task_agent_studio_role_id(raw: &str) -> Option<String> {
 pub fn task_agent_summary(raw: &str) -> String {
     task_agent_preset(raw)
         .map(|preset| preset.default_summary.to_string())
-        .unwrap_or_else(|| "다음 Unity 제작 단계를 준비하고 있습니다.".to_string())
+        .unwrap_or_else(|| "다음 작업 단계를 준비하고 있습니다.".to_string())
 }
 
 pub fn task_agent_instruction(raw: &str, prompt: &str) -> String {
@@ -159,7 +179,7 @@ pub fn task_agent_instruction(raw: &str, prompt: &str) -> String {
 pub fn task_agent_discussion_line(raw: &str) -> String {
     task_agent_preset(raw)
         .map(|preset| preset.discussion_line.to_string())
-        .unwrap_or_else(|| "UNITY AGENT: 다음 제작 단계를 한국어로 정리하고 있습니다.".to_string())
+        .unwrap_or_else(|| "TASK AGENT: 다음 작업 단계를 한국어로 정리하고 있습니다.".to_string())
 }
 
 pub fn ordered_task_agent_ids<I, S>(ids: I) -> Vec<String>
@@ -230,6 +250,11 @@ mod tests {
 
     #[test]
     fn maps_extended_aliases_to_existing_unity_roles() {
+        assert_eq!(canonical_task_agent_id("researcher"), Some("researcher"));
+        assert_eq!(canonical_task_agent_id("scraper"), Some("researcher"));
+        assert_eq!(canonical_task_agent_id("pm_planner"), Some("game_designer"));
+        assert_eq!(canonical_task_agent_id("system_programmer"), Some("unity_architect"));
+        assert_eq!(canonical_task_agent_id("client_programmer"), Some("unity_implementer"));
         assert_eq!(canonical_task_agent_id("codemap"), Some("unity_architect"));
         assert_eq!(canonical_task_agent_id("performance"), Some("unity_architect"));
         assert_eq!(canonical_task_agent_id("csharp"), Some("unity_implementer"));

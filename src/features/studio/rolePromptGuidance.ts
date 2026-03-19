@@ -48,6 +48,13 @@ const ROLE_PROMPT_SPECS: Record<StudioRoleId, RolePromptSpec> = {
     ],
     deliverables: ["## 총평", "## 현실성 평가표", "## 치명 리스크", "## 조건부 진행안"],
   },
+  research_analyst: {
+    focus: [
+      "수집된 dataset과 공개 자료를 구분해서 사용하고, 먼저 사실과 출처를 정리합니다.",
+      "리뷰·커뮤니티·평론 점수의 공통 신호와 충돌 신호를 나눠 해석합니다.",
+    ],
+    deliverables: ["## 조사 결론", "## 핵심 근거", "## 시사점", "## 추가 수집 포인트"],
+  },
   client_programmer: {
     focus: ["게임플레이와 UX 동작을 코드/입력/상태 기준으로 쪼갭니다.", "기존 네이밍과 구조를 유지하면서 최소 수정으로 제안합니다."],
     deliverables: ["## 구현 방향", "## 수정 대상", "## 확인해야 할 플레이 포인트"],

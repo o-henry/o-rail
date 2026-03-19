@@ -21,6 +21,7 @@ const MAX_DISCUSSION_PARTICIPANTS = 3;
 const MAX_DISCUSSION_ROUNDS = 2;
 
 const PRIMARY_ROLE_PRIORITY: TaskAgentPresetId[] = [
+  "researcher",
   "unity_implementer",
   "unity_architect",
   "qa_playtester",
@@ -34,6 +35,7 @@ const PRIMARY_ROLE_PRIORITY: TaskAgentPresetId[] = [
 
 const CRITIC_ROLE_PRIORITY: TaskAgentPresetId[] = [
   "unity_architect",
+  "researcher",
   "qa_playtester",
   "release_steward",
   "technical_artist",
@@ -45,6 +47,13 @@ const CRITIC_ROLE_PRIORITY: TaskAgentPresetId[] = [
 ];
 
 const KEYWORD_ROLE_HINTS: Array<{ roleId: TaskAgentPresetId; patterns: RegExp[] }> = [
+  {
+    roleId: "researcher",
+    patterns: [
+      /\b(research|search|source|reference|crawl|crawler|scrape|scraper|docs|documentation|collect data)\b/i,
+      /(리서치|조사|검색|자료|문서|레퍼런스|참고자료|크롤링|스크래핑|수집)/,
+    ],
+  },
   {
     roleId: "unity_implementer",
     patterns: [

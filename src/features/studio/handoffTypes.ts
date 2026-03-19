@@ -2,6 +2,7 @@ export type StudioRoleId =
   | "pm_planner"
   | "pm_creative_director"
   | "pm_feasibility_critic"
+  | "research_analyst"
   | "client_programmer"
   | "system_programmer"
   | "tooling_engineer"

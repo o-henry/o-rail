@@ -13,6 +13,11 @@ describe("getTaskAgentMentionMatch", () => {
     expect(match?.options.some((option) => option.mention === "@implementer")).toBe(true);
   });
 
+  it("surfaces researcher in mention search", () => {
+    const match = getTaskAgentMentionMatch("please ask @rese", "please ask @rese".length);
+    expect(match?.options.some((option) => option.mention === "@researcher")).toBe(true);
+  });
+
   it("returns null when cursor is not inside a mention token", () => {
     expect(getTaskAgentMentionMatch("please ask implementer", 10)).toBeNull();
   });
@@ -29,8 +34,9 @@ describe("applyTaskAgentMention", () => {
 
 describe("extractTaskAgentMentionTokens", () => {
   it("returns only confirmed mention tokens in source order for inline rendering", () => {
-    expect(extractTaskAgentMentionTokens("@designer hi @implementer   @designer   ")).toMatchObject([
+    expect(extractTaskAgentMentionTokens("@designer hi @researcher @implementer   @designer   ")).toMatchObject([
       { mention: "@designer" },
+      { mention: "@researcher" },
       { mention: "@implementer" },
       { mention: "@designer" },
     ]);

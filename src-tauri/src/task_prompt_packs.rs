@@ -52,6 +52,13 @@ const TASK_AGENT_PROMPT_PACK_SOURCES: &[TaskAgentPromptPackSource] = &[
         prompt_doc_text: include_str!("../resources/tasks_agents/level_designer.md"),
     },
     TaskAgentPromptPackSource {
+        id: "researcher",
+        toml_file_name: "researcher.toml",
+        prompt_doc_file_name: "researcher.md",
+        toml_text: include_str!("../resources/tasks_agents/researcher.toml"),
+        prompt_doc_text: include_str!("../resources/tasks_agents/researcher.md"),
+    },
+    TaskAgentPromptPackSource {
         id: "unity_architect",
         toml_file_name: "unity_architect.toml",
         prompt_doc_file_name: "unity_architect.md",
@@ -190,5 +197,15 @@ mod tests {
         assert_eq!(pack.id, "unity_implementer");
         assert_eq!(pack.sandbox_mode, "workspace-write");
         assert!(pack.developer_instructions.contains("Unity"));
+    }
+
+    #[test]
+    fn prompt_pack_read_supports_studio_role_and_researcher_alias() {
+        let architect_pack = builtin_task_agent_prompt_pack("system_programmer").unwrap();
+        assert_eq!(architect_pack.id, "unity_architect");
+
+        let researcher_pack = builtin_task_agent_prompt_pack("scraper").unwrap();
+        assert_eq!(researcher_pack.id, "researcher");
+        assert!(researcher_pack.developer_instructions.contains("검색"));
     }
 }

@@ -22,6 +22,7 @@ import json
 import os
 import re
 import secrets
+import socket
 import sqlite3
 import subprocess
 import tempfile
@@ -2001,12 +2002,34 @@ def _normalize_dynamic_source_options(raw: dict[str, Any] | None) -> dict[str, A
         max_items = 0
     max_items = max(0, min(120, max_items))
 
+    targets_raw = payload.get("targets")
+    targets: list[dict[str, Any]] = []
+    if isinstance(targets_raw, list):
+        for index, row in enumerate(targets_raw[:24]):
+            if not isinstance(row, dict):
+                continue
+            url = str(row.get("url") or "").strip()
+            if not url.startswith("http://") and not url.startswith("https://"):
+                continue
+            targets.append(
+                {
+                    "url": url,
+                    "host": str(row.get("host") or parse_host(url) or "").strip().lower(),
+                    "collector_strategy": str(row.get("collectorStrategy") or row.get("collector_strategy") or "").strip().lower(),
+                    "interaction_mode": str(row.get("interactionMode") or row.get("interaction_mode") or "passive").strip().lower(),
+                    "requires_browser": bool(row.get("requiresBrowser") or row.get("requires_browser")),
+                    "interaction_steps": row.get("interactionSteps") if isinstance(row.get("interactionSteps"), list) else [],
+                    "position": index,
+                }
+            )
+
     return {
         "keywords": keywords,
         "countries": countries,
         "urls": urls,
         "domains": domains,
         "max_items": max_items,
+        "targets": targets,
     }
 
 
@@ -2046,6 +2069,40 @@ def _build_dynamic_google_news_targets(source_type: str, options: dict[str, Any]
             }
         )
     return targets
+
+
+def _is_disallowed_dynamic_host(hostname: str | None) -> bool:
+    host = str(hostname or "").strip().lower().rstrip(".")
+    if not host:
+        return True
+    if host in {"localhost", "0.0.0.0", "::1"} or host.endswith(".local"):
+        return True
+    try:
+        ip = ipaddress.ip_address(host)
+        return bool(ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast)
+    except Exception:
+        pass
+    try:
+        for _, _, _, _, sockaddr in socket.getaddrinfo(host, None):
+            ip = ipaddress.ip_address(str(sockaddr[0]))
+            if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast:
+                return True
+    except Exception:
+        return False
+    return False
+
+
+def _filter_safe_dynamic_targets(targets: list[dict[str, Any]], adapter: str) -> tuple[list[dict[str, Any]], list[str]]:
+    safe: list[dict[str, Any]] = []
+    warnings: list[str] = []
+    for row in targets:
+        url = str(row.get("url") or "").strip()
+        host = str(row.get("host") or parse_host(url) or "").strip().lower()
+        if _is_disallowed_dynamic_host(host):
+            warnings.append(f"{adapter}: blocked unsafe target host {host or url}")
+            continue
+        safe.append(row)
+    return safe, warnings
 
 
 def _extract_custom_snippets_from_html(html_text: str, limit: int = 3) -> list[str]:
@@ -2134,13 +2191,64 @@ def execute_dynamic_source_query(source_type: str, source_options: dict[str, Any
     keywords = list(options.get("keywords") or [])
     domains = list(options.get("domains") or [])
     countries = list(options.get("countries") or [])
-    is_dynamic_requested = bool(urls or keywords or domains or countries)
+    targets = list(options.get("targets") or [])
+    is_dynamic_requested = bool(urls or keywords or domains or countries or targets)
     if not is_dynamic_requested:
         return None
 
     warnings: list[str] = []
     items: list[dict[str, Any]] = []
-    if urls:
+    if targets:
+        normalized_targets = [
+            {
+                "country": "GLOBAL",
+                "name": str(row.get("host") or parse_host(str(row.get("url") or "")) or "custom-url"),
+                "url": str(row.get("url") or ""),
+                "collector_strategy": str(row.get("collector_strategy") or ""),
+            }
+            for row in targets
+        ]
+        safe_targets, safety_warnings = _filter_safe_dynamic_targets(normalized_targets, f"{source_type}.dynamic")
+        warnings.extend(safety_warnings)
+        rss_targets = [row for row in safe_targets if str(row.get("collector_strategy") or "") == "rss"]
+        scrapling_targets = [row for row in safe_targets if str(row.get("collector_strategy") or "") == "scrapling"]
+        pinchtab_targets = [row for row in safe_targets if str(row.get("collector_strategy") or "") == "pinchtab"]
+        fallback_targets = [
+            row for row in safe_targets if str(row.get("collector_strategy") or "") not in {"rss", "scrapling", "pinchtab"}
+        ]
+
+        if rss_targets:
+            rss_result = collect_custom_url_targets(source_type, f"{source_type}.dynamic.rss", rss_targets, snippets_per_target=3)
+            items.extend(rss_result.items)
+            warnings.extend(rss_result.warnings)
+        if scrapling_targets:
+            scrapling_result = collect_scrapling_targets(
+                source_type,
+                f"{source_type}.dynamic.scrapling",
+                scrapling_targets,
+                snippets_per_target=3,
+            )
+            items.extend(scrapling_result.items)
+            warnings.extend(scrapling_result.warnings)
+        if pinchtab_targets:
+            pinchtab_result = collect_pinchtab_targets(
+                source_type,
+                f"{source_type}.dynamic.pinchtab",
+                pinchtab_targets,
+                snippets_per_target=3,
+            )
+            items.extend(pinchtab_result.items)
+            warnings.extend(pinchtab_result.warnings)
+        if fallback_targets:
+            custom_result = collect_custom_url_targets(
+                source_type,
+                f"{source_type}.dynamic.urls",
+                fallback_targets,
+                snippets_per_target=3,
+            )
+            items.extend(custom_result.items)
+            warnings.extend(custom_result.warnings)
+    elif urls:
         custom_url_targets = [
             {
                 "country": "GLOBAL",
@@ -2149,7 +2257,9 @@ def execute_dynamic_source_query(source_type: str, source_options: dict[str, Any
             }
             for url in urls
         ]
-        custom_result = collect_custom_url_targets(source_type, f"{source_type}.dynamic.urls", custom_url_targets, snippets_per_target=3)
+        safe_targets, safety_warnings = _filter_safe_dynamic_targets(custom_url_targets, f"{source_type}.dynamic.urls")
+        warnings.extend(safety_warnings)
+        custom_result = collect_custom_url_targets(source_type, f"{source_type}.dynamic.urls", safe_targets, snippets_per_target=3)
         items.extend(custom_result.items)
         warnings.extend(custom_result.warnings)
 

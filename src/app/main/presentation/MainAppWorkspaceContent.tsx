@@ -7,6 +7,7 @@ import ShellPage from "../../../pages/shell/ShellPage";
 import DashboardIntelligenceSettings from "../../../pages/settings/DashboardIntelligenceSettings";
 import SettingsPage from "../../../pages/settings/SettingsPage";
 import TasksPage from "../../../pages/tasks/TasksPage";
+import VisualizePage from "../../../pages/visualize/VisualizePage";
 
 export function MainAppWorkspaceContent(props: any) {
   const handleInjectContextSources = (entries: any[]) => {
@@ -20,6 +21,13 @@ export function MainAppWorkspaceContent(props: any) {
     props.onSelectWorkspaceTab("workflow");
   };
 
+  const handleOpenKnowledgeEntry = (entryId: string) => {
+    props.onSelectWorkspaceTab("knowledge");
+    window.setTimeout(() => {
+      window.dispatchEvent(new CustomEvent("rail:open-knowledge-entry", { detail: { entryId } }));
+    }, 0);
+  };
+
   return (
     <>
       {props.workspaceTab === "feed" && <FeedPage vm={props.feedPageVm} />}
@@ -28,6 +36,13 @@ export function MainAppWorkspaceContent(props: any) {
           cwd={props.cwd}
           posts={props.feedPosts}
           onInjectContextSources={handleInjectContextSources}
+        />
+      )}
+      {props.workspaceTab === "visualize" && (
+        <VisualizePage
+          cwd={props.cwd}
+          hasTauriRuntime={props.hasTauriRuntime}
+          onOpenKnowledgeEntry={handleOpenKnowledgeEntry}
         />
       )}
       {props.workspaceTab === "adaptation" && (

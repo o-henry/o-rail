@@ -44,6 +44,7 @@ export type WorkspaceTab =
   | "agents"
   | "handoff"
   | "knowledge"
+  | "visualize"
   | "adaptation"
   | "settings"
   | "bridge";
@@ -247,6 +248,9 @@ export function NavIcon({ tab, active = false }: { tab: WorkspaceTab; active?: b
   }
   if (tab === "knowledge") {
     return <img alt="" aria-hidden="true" className="nav-workflow-image nav-database-image" src="/data-service-svgrepo-com.svg" />;
+  }
+  if (tab === "visualize") {
+    return <img alt="" aria-hidden="true" className="nav-workflow-image" src="/chart-svgrepo-com.svg" />;
   }
   if (tab === "bridge") {
     return <img alt="" aria-hidden="true" className="nav-workflow-image" src="/scroll.svg" />;

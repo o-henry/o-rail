@@ -22,6 +22,17 @@ export const UNITY_TASK_AGENT_PRESETS = [
     stageOwnership: ["design"],
   },
   {
+    id: "researcher",
+    label: "RESEARCHER",
+    studioRoleId: "research_analyst",
+    defaultSummary: "요청과 관련된 자료 검색, 웹 조사, 크롤링/스크래핑 접근 경로를 정리하고 있습니다.",
+    defaultInstruction: "집중할 점: 사용자의 요청을 바탕으로 필요한 자료를 검색하고, 공식 문서/레퍼런스/웹페이지를 조사하며, 필요하면 크롤링/스크래핑 접근 방식과 수집 결과를 한국어로 구조화하세요.",
+    discussionLine: "RESEARCHER: 관련 자료, 참고 링크, 검색 쿼리, 크롤링/스크래핑 포인트를 한국어로 정리하고 있습니다.",
+    tagAliases: ["researcher", "research", "search", "web", "crawl", "crawler", "scrape", "scraper"],
+    defaultEnabled: false,
+    stageOwnership: ["brief"],
+  },
+  {
     id: "unity_architect",
     label: "UNITY ARCHITECT",
     studioRoleId: "system_programmer",
@@ -125,6 +136,7 @@ export const UNITY_THREAD_STAGE_DEFINITIONS: ThreadStageDefinition[] = [
 
 const LEGACY_TASK_AGENT_ALIASES: Record<string, TaskAgentPresetId> = {
   explorer: "game_designer",
+  researcher: "researcher",
   reviewer: "unity_architect",
   worker: "unity_implementer",
   qa: "qa_playtester",
@@ -195,7 +207,7 @@ export function getTaskAgentPresetIdByStudioRoleId(input: string | null | undefi
 }
 
 export function getTaskAgentSummary(input: string | TaskAgentPresetId | null | undefined): string {
-  return getTaskAgentPreset(input)?.defaultSummary ?? "다음 Unity 제작 단계를 준비하고 있습니다.";
+  return getTaskAgentPreset(input)?.defaultSummary ?? "다음 작업 단계를 준비하고 있습니다.";
 }
 
 export function buildTaskAgentPrompt(input: string | TaskAgentPresetId | null | undefined, prompt: string): string {
@@ -205,7 +217,7 @@ export function buildTaskAgentPrompt(input: string | TaskAgentPresetId | null | 
 }
 
 export function getTaskAgentDiscussionLine(input: string | TaskAgentPresetId | null | undefined): string {
-  return getTaskAgentPreset(input)?.discussionLine ?? "UNITY AGENT: 다음 제작 단계를 한국어로 정리하고 있습니다.";
+  return getTaskAgentPreset(input)?.discussionLine ?? "TASK AGENT: 다음 작업 단계를 한국어로 정리하고 있습니다.";
 }
 
 export function parseTaskAgentTags(input: string): TaskAgentPresetId[] {

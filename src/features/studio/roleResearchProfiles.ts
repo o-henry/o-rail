@@ -115,6 +115,42 @@ export const ROLE_RESEARCH_PROFILES: Record<StudioRoleId, RoleResearchProfile> =
       },
     ],
   },
+  research_analyst: {
+    focusLabel: "시장·커뮤니티 리서치",
+    synthesisPrompt:
+      "수집된 리뷰, 커뮤니티 반응, 평론가 시그널을 합쳐 실제 아이디어 판단에 쓸 수 있는 근거와 패턴만 남깁니다.",
+    verificationPrompt:
+      "출처별 편향과 중복을 줄이고, 점수/반응/서술형 근거가 서로 어긋나는 지점을 따로 표시해 과한 일반화를 막습니다.",
+    lanes: [
+      {
+        label: "프로젝트 리서치 목표 정리",
+        executor: "codex",
+        prompt:
+          "현재 요청에서 어떤 장르, 어떤 플레이어 반응, 어떤 평가 신호를 확인해야 하는지 조사 목적과 판단 질문을 정리합니다.",
+      },
+      {
+        label: "커뮤니티·평가 신호 조사",
+        executor: "via_flow",
+        viaNodeType: "source.community",
+        prompt:
+          "리뷰, 커뮤니티 토론, 평론가 평점 주변의 공개 반응을 모아 반복되는 호평·악평 패턴을 정리합니다.",
+        keywords: "steam review, community sentiment, game criticism, player feedback, genre reception",
+        countries: COMMON_REGION,
+        sites: "store.steampowered.com, steamcommunity.com, reddit.com, opencritic.com, metacritic.com",
+        maxItems: 24,
+      },
+      {
+        label: "보조 검색 검증",
+        executor: "web_perplexity",
+        prompt:
+          "수집된 신호를 보조 검색으로 교차 확인해 장르, 시장성, 플레이어 평가와 관련된 외부 근거를 보강합니다.",
+        keywords: "game genre trend, player review pattern, critic score reception, indie market signal",
+        countries: COMMON_REGION,
+        sites: "gamedeveloper.com, howtomarketagame.com, opencritic.com, metacritic.com",
+        maxItems: 18,
+      },
+    ],
+  },
   pm_creative_director: {
     focusLabel: "창의 기획 리서치",
     synthesisPrompt:

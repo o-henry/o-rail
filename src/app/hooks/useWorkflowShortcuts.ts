@@ -68,8 +68,9 @@ export function useWorkflowShortcuts(params: UseWorkflowShortcutsParams) {
       "2": "shell",
       "3": "workflow",
       "4": "knowledge",
-      "5": "adaptation",
-      "6": "settings",
+      "5": "visualize",
+      "6": "adaptation",
+      "7": "settings",
     };
     const tabStatusByKey: Record<WorkspaceTab, string> = {
       workbench: "그래프 탭으로 이동",
@@ -82,6 +83,7 @@ export function useWorkflowShortcuts(params: UseWorkflowShortcutsParams) {
       feed: "피드 탭으로 이동",
       handoff: "그래프 탭으로 이동",
       knowledge: "데이터베이스 탭으로 이동",
+      visualize: "시각화 탭으로 이동",
       adaptation: "개선 탭으로 이동",
       settings: "설정 탭으로 이동",
       bridge: "설정 탭으로 이동",

@@ -39,6 +39,7 @@ export function useWorkspaceQuickPanel(params: UseWorkspaceQuickPanelParams) {
       feed: "요점 정리",
       handoff: "그래프 핸드오프",
       knowledge: "데이터베이스",
+      visualize: "시각화",
       adaptation: "개선",
       settings: "설정",
       bridge: "설정",

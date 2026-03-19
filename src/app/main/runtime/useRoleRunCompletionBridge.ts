@@ -49,7 +49,7 @@ export function useRoleRunCompletionBridge(params: Params) {
         title: `${roleLabel} · ${normalizedTaskId} · ${fileName}`,
         summary: promptSummary || `${roleLabel} 역할 실행 산출물`,
         createdAt: new Date().toISOString(),
-        markdownPath: undefined,
+        markdownPath: /\.(md|markdown)$/i.test(artifactPath) ? artifactPath : undefined,
         jsonPath: /\.json$/i.test(artifactPath) ? artifactPath : undefined,
       });
     }

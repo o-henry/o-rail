@@ -2,6 +2,7 @@ pub mod dashboard_crawler;
 mod engine;
 mod knowledge;
 mod quality;
+mod research_storage;
 mod storage;
 mod system;
 mod task_presets;
@@ -60,6 +61,20 @@ pub fn run() {
             dashboard_crawler::dashboard_scrapling_bridge_install,
             dashboard_crawler::dashboard_scrapling_bridge_stop,
             dashboard_crawler::dashboard_scrapling_fetch_url,
+            research_storage::research_storage_ingest_steam_cache,
+            research_storage::research_storage_overview,
+            research_storage::research_storage_query_reviews,
+            research_storage::research_storage_list_games,
+            research_storage::research_storage_game_metrics,
+            research_storage::research_storage_sentiment_series,
+            research_storage::research_storage_plan_dynamic_job,
+            research_storage::research_storage_plan_agent_job,
+            research_storage::research_storage_list_jobs,
+            research_storage::research_storage_load_job,
+            research_storage::research_storage_build_job_handoff,
+            research_storage::research_storage_list_collection_items,
+            research_storage::research_storage_collection_metrics,
+            research_storage::research_storage_execute_job,
             via_bridge::via_health,
             via_bridge::via_run_flow,
             via_bridge::via_get_run,

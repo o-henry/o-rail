@@ -1374,7 +1374,7 @@ export function useTasksThreadState(params: Params) {
       if (rolesToRun.length === 0) {
         setActiveThread(detail);
         await reloadThreads(detail.thread.threadId);
-        params.setStatus("No Unity agents selected. Add an agent or use @designer, @architect, @implementer, @playtest, and related tags.");
+        params.setStatus("No task agents selected. Add an agent or use @researcher, @designer, @architect, @implementer, @playtest, and related tags.");
         return;
       }
       const spawned = withDerivedWorkflow(await params.invokeFn<ThreadDetail>("thread_spawn_agents", {

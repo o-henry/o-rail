@@ -111,4 +111,96 @@ describe("runTaskRoleWithCodex", () => {
 
     expect(result.artifactPaths[1]).toBe("/tmp/rail-storage/.rail/tasks/thread-2/codex_runs/role-run-2/discussion_critique.md");
   });
+
+  it("lets researcher roles pre-run the collection pipeline and inject the dataset into the prompt", async () => {
+    const invokeFn = (vi.fn(async (command: string, args?: Record<string, unknown>) => {
+      switch (command) {
+        case "task_agent_pack_read":
+          return {
+            id: "researcher",
+            label: "RESEARCHER",
+            studioRoleId: "research_analyst",
+            model: "gpt-5.4",
+            modelReasoningEffort: "medium",
+            sandboxMode: "workspace-write",
+            outputArtifactName: "research_findings.md",
+            promptDocFile: "researcher.md",
+            developerInstructions: "자료 조사와 웹 리서치를 수행하라.",
+          };
+        case "thread_load":
+          return {
+            thread: { model: "GPT-5.4", reasoning: "중간" },
+            task: { workspacePath: "/tmp/mockking" },
+          };
+        case "research_storage_plan_agent_job":
+          return {
+            job: {
+              jobId: "collect-1",
+              label: "Researcher · 스팀 리뷰 조사",
+              resolvedSourceType: "community",
+              collectorStrategy: "dynamic_search",
+              keywords: ["스팀 게임 최근 리뷰", "steam recent reviews"],
+              domains: ["store.steampowered.com", "steamcommunity.com"],
+            },
+          };
+        case "research_storage_execute_job":
+          return {
+            job: { jobId: "collect-1" },
+            execution: { jobRunId: "jobrun-1" },
+            via: { run_id: "via-1" },
+          };
+        case "research_storage_collection_metrics":
+          return {
+            totals: { items: 12, sources: 4, verified: 8, warnings: 4, conflicted: 0, avgScore: 61 },
+            bySourceType: [{ sourceType: "source.community", itemCount: 7 }],
+            byVerificationStatus: [{ verificationStatus: "verified", itemCount: 8 }],
+            timeline: [{ bucketDate: "2026-03-19", itemCount: 12 }],
+            topSources: [{ sourceName: "steamcommunity.com", itemCount: 5 }],
+          };
+        case "research_storage_list_collection_items":
+          return {
+            items: [
+              {
+                title: "Deckbuilder fans praise replayability",
+                sourceName: "steamcommunity.com",
+                verificationStatus: "verified",
+                score: 72,
+                url: "https://steamcommunity.com/app/123/reviews",
+                summary: "Players mention strong replayability and run variety.",
+              },
+            ],
+          };
+        case "thread_start":
+          return { threadId: "thread-codex-3" };
+        case "turn_start_blocking":
+          return {
+            status: "completed",
+            output_text: "수집된 데이터를 바탕으로 최근 평가 흐름을 정리했습니다.",
+          };
+        case "workspace_write_text":
+          return `${String(args?.cwd)}/${String(args?.name)}`;
+        default:
+          throw new Error(`unexpected command: ${command}`);
+      }
+    }) as unknown) as <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
+
+    const result = await runTaskRoleWithCodex({
+      invokeFn,
+      storageCwd: "/tmp/rail-storage",
+      taskId: "thread-3",
+      studioRoleId: "research_analyst",
+      prompt: "@researcher 스팀 게임 최근 리뷰와 장르별 평가를 조사해줘",
+      sourceTab: "tasks-thread",
+      runId: "role-run-3",
+    });
+
+    expect(result.artifactPaths).toContain("/tmp/rail-storage/.rail/tasks/thread-3/codex_runs/role-run-3/research_collection.md");
+    expect(result.artifactPaths).toContain("/tmp/rail-storage/.rail/tasks/thread-3/codex_runs/role-run-3/research_collection.json");
+    expect(invokeFn).toHaveBeenCalledWith("research_storage_plan_agent_job", expect.objectContaining({
+      cwd: "/tmp/rail-storage",
+    }));
+    expect(invokeFn).toHaveBeenCalledWith("turn_start_blocking", expect.objectContaining({
+      text: expect.stringContaining("# PRECOLLECTED DATASET"),
+    }));
+  });
 });

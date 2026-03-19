@@ -57,4 +57,16 @@ describe("taskExecutionPolicy", () => {
     expect(plan.participantRoleIds).toHaveLength(3);
     expect(plan.cappedParticipantCount).toBe(true);
   });
+
+  it("routes research and scraping requests to researcher first", () => {
+    const plan = createTaskExecutionPlan({
+      enabledRoleIds: ["researcher", "unity_architect", "unity_implementer"],
+      requestedRoleIds: ["researcher", "unity_architect"],
+      prompt: "이 기능 관련 레퍼런스를 조사하고 웹 크롤링/스크래핑 포인트까지 정리해줘",
+    });
+
+    expect(plan.mode).toBe("discussion");
+    expect(plan.primaryRoleId).toBe("researcher");
+    expect(plan.participantRoleIds).toEqual(["researcher", "unity_architect"]);
+  });
 });

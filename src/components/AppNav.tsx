@@ -12,6 +12,7 @@ type WorkspaceTab =
   | "agents"
   | "handoff"
   | "knowledge"
+  | "visualize"
   | "adaptation"
   | "bridge"
   | "settings";
@@ -25,6 +26,7 @@ type NavItem = {
 
 type AppNavProps = {
   activeTab: WorkspaceTab;
+  hidden?: boolean;
   onSelectTab: (tab: WorkspaceTab) => void;
   renderIcon: (tab: WorkspaceTab, active: boolean) => ReactNode;
 };
@@ -34,16 +36,17 @@ const NAV_ITEMS: NavItem[] = [
   { tab: "shell", label: "SHELL", ariaLabel: "SHELL", title: "SHELL" },
   { tab: "workflow", label: "nav.workflow.short", ariaLabel: "nav.workflow.title", title: "nav.workflow.title" },
   { tab: "knowledge", label: "nav.knowledge", ariaLabel: "nav.knowledge", title: "nav.knowledge" },
+  { tab: "visualize", label: "VISUALIZE", ariaLabel: "VISUALIZE", title: "VISUALIZE" },
   { tab: "adaptation", label: "nav.adaptation", ariaLabel: "nav.adaptation", title: "nav.adaptation" },
   { tab: "settings", label: "nav.settings", ariaLabel: "nav.settings", title: "nav.settings" },
 ];
 const SHOW_LANGUAGE_SWITCH = false;
 
-export default function AppNav({ activeTab, onSelectTab, renderIcon }: AppNavProps) {
+export default function AppNav({ activeTab, hidden = false, onSelectTab, renderIcon }: AppNavProps) {
   const { locale, cycleLocale, t } = useI18n();
 
   return (
-    <aside className="left-nav">
+    <aside aria-hidden={hidden} className={`left-nav${hidden ? " is-hidden" : ""}`}>
       <nav className="nav-list">
         {NAV_ITEMS.map((item) => {
           const active = activeTab === item.tab;

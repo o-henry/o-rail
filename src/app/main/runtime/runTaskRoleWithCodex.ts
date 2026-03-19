@@ -2,6 +2,7 @@ import { toTurnModelEngineId } from "../../../features/workflow/domain";
 import { toTurnReasoningEffort } from "../../../features/workflow/reasoningLevels";
 import { extractCompletedStatus, extractDeltaText, extractUsageStats } from "../../mainAppUtils";
 import { extractStringByPaths } from "../../../shared/lib/valueUtils";
+import { prepareResearcherCollectionContext } from "./researcherCollection";
 
 type InvokeFn = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
 
@@ -69,7 +70,12 @@ function normalizeSandboxMode(value: string | null | undefined): "read-only" | "
   return "read-only";
 }
 
-function buildRoleTurnPrompt(pack: TaskAgentPromptPack, userPrompt: string, projectPath: string): string {
+function buildRoleTurnPrompt(
+  pack: TaskAgentPromptPack,
+  userPrompt: string,
+  projectPath: string,
+  precollectedContext = "",
+): string {
   const trimmedPrompt = String(userPrompt ?? "").trim();
   return [
     `# ROLE`,
@@ -83,6 +89,7 @@ function buildRoleTurnPrompt(pack: TaskAgentPromptPack, userPrompt: string, proj
     ``,
     `# USER REQUEST`,
     trimmedPrompt,
+    precollectedContext.trim() ? `\n${precollectedContext.trim()}` : "",
     ``,
     `# OUTPUT RULES`,
     `- 한국어로만 답변한다.`,
@@ -138,12 +145,20 @@ export async function runTaskRoleWithCodex(input: RunTaskRoleWithCodexInput): Pr
     roleId: input.studioRoleId,
   });
   const context = await resolveTaskRunContext(input);
+  const artifactDir = `${input.storageCwd.replace(/[\\/]+$/, "")}/.rail/tasks/${input.taskId}/codex_runs/${input.runId}`;
+  const researcherCollection = await prepareResearcherCollectionContext({
+    artifactDir,
+    invokeFn: input.invokeFn,
+    pack,
+    prompt: input.prompt ?? "",
+    storageCwd: input.storageCwd,
+  });
   const sandboxMode = normalizeSandboxMode(pack.sandboxMode);
   const modelEngine = toTurnModelEngineId(input.model || pack.model || context.threadModel || "GPT-5.4");
   const reasoningEffort = toTurnReasoningEffort(
     input.reasoning || pack.modelReasoningEffort || context.threadReasoning || "중간",
   );
-  const promptText = buildRoleTurnPrompt(pack, input.prompt ?? "", context.projectPath);
+  const promptText = buildRoleTurnPrompt(pack, input.prompt ?? "", context.projectPath, researcherCollection.promptContext);
 
   const threadStart = await input.invokeFn<ThreadStartResult>("thread_start", {
     model: modelEngine,
@@ -167,7 +182,6 @@ export async function runTaskRoleWithCodex(input: RunTaskRoleWithCodexInput): Pr
     throw new Error("Codex turn finished without a readable response");
   }
 
-  const artifactDir = `${input.storageCwd.replace(/[\\/]+$/, "")}/.rail/tasks/${input.taskId}/codex_runs/${input.runId}`;
   const promptArtifactPath = await input.invokeFn<string>("workspace_write_text", {
     cwd: artifactDir,
     name: "prompt.md",
@@ -201,7 +215,7 @@ export async function runTaskRoleWithCodex(input: RunTaskRoleWithCodexInput): Pr
 
   return {
     summary,
-    artifactPaths: [promptArtifactPath, responseArtifactPath, responseJsonPath],
+    artifactPaths: [...researcherCollection.artifactPaths, promptArtifactPath, responseArtifactPath, responseJsonPath],
     usage: extractUsageStats(rawResponse),
     codexThreadId: threadStart.threadId,
     codexTurnId:

@@ -88,6 +88,11 @@ export const ROLE_KB_ALLOWLIST: Record<StudioRoleId, string[]> = {
     "https://gameanalytics.com/blog/",
     "https://howtomarketagame.com/",
   ],
+  research_analyst: [
+    "https://store.steampowered.com/",
+    "https://steamcommunity.com/",
+    "https://www.reddit.com/",
+  ],
   client_programmer: [
     "https://docs.unity3d.com/Manual/index.html",
     "https://learn.unity.com/",

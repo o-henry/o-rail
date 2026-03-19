@@ -13,6 +13,8 @@ describe("taskAgentPresets", () => {
     expect(resolveTaskAgentPresetId("reviewer")).toBe("unity_architect");
     expect(resolveTaskAgentPresetId("worker")).toBe("unity_implementer");
     expect(resolveTaskAgentPresetId("qa")).toBe("qa_playtester");
+    expect(resolveTaskAgentPresetId("researcher")).toBe("researcher");
+    expect(resolveTaskAgentPresetId("scraper")).toBe("researcher");
     expect(resolveTaskAgentPresetId("codemap")).toBe("unity_architect");
     expect(resolveTaskAgentPresetId("csharp")).toBe("unity_implementer");
     expect(resolveTaskAgentPresetId("debug")).toBe("unity_implementer");
@@ -20,8 +22,9 @@ describe("taskAgentPresets", () => {
   });
 
   it("parses Unity tag aliases and removes duplicates", () => {
-    expect(parseTaskAgentTags("@designer @csharp @playtest @debug @unknown @codemap")).toEqual([
+    expect(parseTaskAgentTags("@designer @researcher @csharp @playtest @debug @unknown @codemap")).toEqual([
       "game_designer",
+      "researcher",
       "unity_implementer",
       "qa_playtester",
       "unity_architect",

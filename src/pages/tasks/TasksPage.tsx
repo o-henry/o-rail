@@ -437,6 +437,23 @@ export default function TasksPage(props: TasksPageProps) {
                               </div>
                             ) : null}
                           </button>
+                          <button
+                            aria-label={`Delete ${displayThreadTitle(item.thread.title)}`}
+                            className="tasks-thread-list-delete"
+                            onClick={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              setPendingDeleteThreadId(item.thread.threadId);
+                            }}
+                            type="button"
+                          >
+                            <img
+                              alt=""
+                              aria-hidden="true"
+                              className="tasks-thread-list-delete-icon"
+                              src="/xmark-small-svgrepo-com.svg"
+                            />
+                          </button>
                         </article>
                       );
                     })
@@ -486,18 +503,6 @@ export default function TasksPage(props: TasksPageProps) {
               {displayThreadPath(state.projectPath || state.activeThread?.task.worktreePath || state.activeThread?.task.workspacePath || props.cwd)}
             </p>
           </div>
-          {state.activeThread ? (
-            <div className="tasks-thread-header-actions">
-              <button
-                aria-label={`Delete ${headerTitle}`}
-                className="tasks-thread-header-delete-button"
-                onClick={() => setPendingDeleteThreadId(state.activeThread?.thread.threadId ?? "")}
-                type="button"
-              >
-                <img alt="" aria-hidden="true" src="/xmark-small-svgrepo-com.svg" />
-              </button>
-            </div>
-          ) : null}
         </header>
 
         <div className="tasks-thread-conversation-scroll" ref={conversationRef}>

@@ -2105,6 +2105,37 @@ def _filter_safe_dynamic_targets(targets: list[dict[str, Any]], adapter: str) ->
     return safe, warnings
 
 
+def _host_matches_allowed_domains(host: str, allowed_domains: list[str]) -> bool:
+    normalized_host = str(host or "").strip().lower()
+    if not normalized_host:
+        return False
+    for domain in allowed_domains:
+        normalized_domain = str(domain or "").strip().lower()
+        if not normalized_domain:
+            continue
+        if normalized_host == normalized_domain or normalized_host.endswith(f".{normalized_domain}"):
+            return True
+    return False
+
+
+def _filter_items_by_allowed_domains(
+    items: list[dict[str, Any]],
+    allowed_domains: list[str],
+    adapter: str,
+) -> tuple[list[dict[str, Any]], list[str]]:
+    if not allowed_domains:
+        return items, []
+    filtered: list[dict[str, Any]] = []
+    warnings: list[str] = []
+    for row in items:
+        host = parse_host(str(row.get("url") or "")) or str(row.get("source_name") or "")
+        if _host_matches_allowed_domains(host, allowed_domains):
+            filtered.append(row)
+            continue
+        warnings.append(f"{adapter}: dropped out-of-scope item from {host or 'unknown host'}")
+    return filtered, warnings
+
+
 def _extract_custom_snippets_from_html(html_text: str, limit: int = 3) -> list[str]:
     if not html_text.strip():
         return []
@@ -2190,6 +2221,8 @@ def execute_dynamic_source_query(source_type: str, source_options: dict[str, Any
     urls = list(options.get("urls") or [])
     keywords = list(options.get("keywords") or [])
     domains = list(options.get("domains") or [])
+    allowed_domains = [str(value or "").strip().lower() for value in list(options.get("allowed_domains") or domains or []) if str(value or "").strip()]
+    strict_domain_isolation = bool(options.get("strict_domain_isolation")) and bool(allowed_domains)
     countries = list(options.get("countries") or [])
     targets = list(options.get("targets") or [])
     is_dynamic_requested = bool(urls or keywords or domains or countries or targets)
@@ -2248,6 +2281,9 @@ def execute_dynamic_source_query(source_type: str, source_options: dict[str, Any
             )
             items.extend(custom_result.items)
             warnings.extend(custom_result.warnings)
+        if strict_domain_isolation:
+            items, domain_warnings = _filter_items_by_allowed_domains(items, allowed_domains, f"{source_type}.dynamic.scope")
+            warnings.extend(domain_warnings)
         if items:
             return AdapterResult(adapter=f"{source_type}.dynamic", items=items[:MAX_TOTAL_ITEMS], warnings=warnings)
     elif urls:
@@ -2264,6 +2300,9 @@ def execute_dynamic_source_query(source_type: str, source_options: dict[str, Any
         custom_result = collect_custom_url_targets(source_type, f"{source_type}.dynamic.urls", safe_targets, snippets_per_target=3)
         items.extend(custom_result.items)
         warnings.extend(custom_result.warnings)
+        if strict_domain_isolation:
+            items, domain_warnings = _filter_items_by_allowed_domains(items, allowed_domains, f"{source_type}.dynamic.scope")
+            warnings.extend(domain_warnings)
         if items:
             return AdapterResult(adapter=f"{source_type}.dynamic", items=items[:MAX_TOTAL_ITEMS], warnings=warnings)
 
@@ -2272,6 +2311,9 @@ def execute_dynamic_source_query(source_type: str, source_options: dict[str, Any
         dynamic_rss_result = collect_rss_targets(source_type, f"{source_type}.dynamic.search", rss_targets)
         items.extend(dynamic_rss_result.items)
         warnings.extend(dynamic_rss_result.warnings)
+    if strict_domain_isolation:
+        items, domain_warnings = _filter_items_by_allowed_domains(items, allowed_domains, f"{source_type}.dynamic.scope")
+        warnings.extend(domain_warnings)
 
     if items:
         return AdapterResult(adapter=f"{source_type}.dynamic", items=items[:MAX_TOTAL_ITEMS], warnings=warnings)

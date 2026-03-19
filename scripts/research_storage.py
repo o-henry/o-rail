@@ -671,6 +671,7 @@ def analyze_prompt_collection_plan(prompt: str) -> dict[str, Any]:
                     "steam representative games by genre",
                 ]
             )
+            instructions.append("Restrict evidence to Steam ecosystem sources and reject unrelated finance, stock, or macro market coverage.")
         if wants_popularity:
             additional_keywords.append("popular steam genres by review volume" if mentions_steam else "popular game genres by discussion volume")
             instructions.append("Treat popularity primarily as review volume, coverage breadth, and repeated source mentions.")
@@ -835,6 +836,7 @@ def build_dynamic_collection_job(
     if planner_scope == "steam_market" or planner_mode == "genre_ranking":
         resolved_source_type = "community"
         via_source_type = "source.community"
+    strict_domain_isolation = bool(normalized_domains) and bool(planner_context)
     targets: list[dict[str, Any]] = []
     domains: list[str] = []
     for domain in normalized_domains:
@@ -880,6 +882,8 @@ def build_dynamic_collection_job(
             "urls": normalized_urls,
             "keywords": normalized_keywords[:MAX_DYNAMIC_JOB_KEYWORDS],
             "domains": domains,
+            "allowed_domains": domains,
+            "strict_domain_isolation": strict_domain_isolation,
             "max_items": max(1, min(120, int(max_items))),
             "planner": planner_context or {},
             "targets": [

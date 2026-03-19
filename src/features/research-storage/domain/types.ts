@@ -165,6 +165,8 @@ export type ResearchCollectionJob = {
     urls: string[];
     keywords: string[];
     domains: string[];
+    allowed_domains?: string[];
+    strict_domain_isolation?: boolean;
     max_items: number;
     planner?: Record<string, unknown>;
     targets: Array<{
@@ -215,6 +217,8 @@ export type ResearchCollectionHandoff = {
     urls: string[];
     keywords: string[];
     domains: string[];
+    allowed_domains?: string[];
+    strict_domain_isolation?: boolean;
     max_items: number;
   };
   preferredExecutionOrder: string[];

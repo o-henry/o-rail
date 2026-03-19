@@ -177,6 +177,18 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
                 widgetId="session"
               >
                 <h1>{state.selectedReportRun?.title || "Run @researcher to generate a new monitored session"}</h1>
+                {state.reportRuns.length ? (
+                  <div className="visualize-monitor-session-row">
+                    <span>{state.reportRuns.length} research sessions</span>
+                    <select onChange={(event) => state.setSelectedRunId(event.currentTarget.value)} value={state.selectedRunId}>
+                      {state.reportRuns.map((run) => (
+                        <option key={run.runId} value={run.runId}>
+                          {run.title || run.taskId}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : null}
                 <p>
                   {state.selectedReportRun
                     ? `${formatStamp(state.selectedReportRun.updatedAt)} · ${reportJob?.label || reportJob?.resolvedSourceType || "AUTO COLLECTION"}`

@@ -130,7 +130,7 @@
 .visualize-monitor-evidence-picker span,
 .visualize-monitor-evidence-detail a,
 .visualize-monitor-chip-row span {
-  font-family: "DepartureMonoRail", "Galmuri11", monospace;
+  font-family: "Departure Mono", "DepartureMonoRail", "Galmuri11", monospace;
 }
 
 .visualize-monitor-widget-head-copy strong {
@@ -224,7 +224,7 @@
 }
 
 .visualize-monitor-widget.is-session h1 {
-  font-family: "DepartureMonoNerdFont", "DepartureMonoRail", "Galmuri11", monospace;
+  font-family: "Departure Mono", "DepartureMonoRail", "Galmuri11", monospace;
   font-size: 1rem;
   line-height: 1.22;
 }
@@ -232,6 +232,35 @@
 .visualize-monitor-widget.is-session p {
   font-size: 0.78rem;
   color: #64748b;
+}
+
+.visualize-monitor-session-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.visualize-monitor-session-row span,
+.visualize-monitor-session-row select {
+  font-family: "Departure Mono", "DepartureMonoRail", "Galmuri11", monospace;
+}
+
+.visualize-monitor-session-row span {
+  color: #64748b;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.visualize-monitor-session-row select {
+  min-width: 0;
+  max-width: 320px;
+  height: 28px;
+  border: 1px solid rgba(226, 232, 240, 1);
+  background: rgba(248, 250, 252, 0.95);
+  color: #0f172a;
+  padding: 0 8px;
 }
 
 .visualize-monitor-summary-copy {
@@ -474,7 +503,7 @@
   padding: 0 12px;
   color: inherit;
   box-sizing: border-box;
-  font-family: "DepartureMonoRail", "Galmuri11", monospace;
+  font-family: "Departure Mono", "DepartureMonoRail", "Galmuri11", monospace;
 }
 
 .visualize-monitor-search-row input:focus,

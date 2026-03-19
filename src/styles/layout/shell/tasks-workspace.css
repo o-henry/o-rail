@@ -1099,18 +1099,6 @@
   z-index: 22;
 }
 
-.tasks-thread-composer-shell.is-mention-open::before {
-  content: "";
-  position: absolute;
-  left: 12px;
-  right: 12px;
-  top: 0;
-  height: 1px;
-  pointer-events: none;
-  background: #dfe5ee;
-  z-index: 24;
-}
-
 .tasks-thread-composer-shell.workflow-question-input {
   margin-bottom: 0;
 }
@@ -1163,6 +1151,18 @@
   position: relative;
   min-width: 0;
   width: 100%;
+}
+
+.tasks-thread-composer-shell.is-mention-open .tasks-thread-composer-input-wrap::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 1px;
+  background: #dfe5ee;
+  pointer-events: none;
+  z-index: 2;
 }
 
 .tasks-thread-selected-mentions {

@@ -26,6 +26,7 @@ import type {
 } from "./threadTypes";
 import { THREAD_DETAIL_TABS } from "./threadTypes";
 import { buildProjectThreadGroups, filterBrowserThreadIdsByProject, filterThreadListByProject } from "./threadTree";
+import { rememberThreadSelection, resolveThreadSelection } from "./threadSelectionState";
 import { deriveThreadWorkflow, deriveThreadWorkflowSummary } from "./threadWorkflow";
 import { extractCodexThreadStatus, extractTaskCodexThreadRuntime } from "./taskCodexThreadRuntime";
 
@@ -436,6 +437,8 @@ export function useTasksThreadState(params: Params) {
   const [selectedAgentDetail, setSelectedAgentDetail] = useState<ThreadAgentDetail | null>(null);
   const [selectedFilePath, setSelectedFilePath] = useState("");
   const [selectedFileDiff, setSelectedFileDiff] = useState("");
+  const [selectedAgentIdsByThread, setSelectedAgentIdsByThread] = useState<Record<string, string>>({});
+  const [selectedFilePathsByThread, setSelectedFilePathsByThread] = useState<Record<string, string>>({});
   const [attachedFiles, setAttachedFiles] = useState<KnowledgeFileRef[]>([]);
   const [selectedComposerRoleIds, setSelectedComposerRoleIds] = useState<ThreadRoleId[]>([]);
   const [projectPath, setProjectPath] = useState(initialProjectPath);
@@ -465,6 +468,18 @@ export function useTasksThreadState(params: Params) {
     }
     setHiddenProjectPaths((current) => current.filter((path) => path !== normalized));
     setProjectPaths((current) => (current.includes(normalized) ? current : [...current, normalized]));
+  }, []);
+
+  const rememberSelectedAgent = useCallback((threadId: string, agentId: string) => {
+    const normalizedAgentId = String(agentId ?? "").trim();
+    setSelectedAgentId(normalizedAgentId);
+    setSelectedAgentIdsByThread((current) => rememberThreadSelection(current, threadId, normalizedAgentId));
+  }, []);
+
+  const rememberSelectedFile = useCallback((threadId: string, filePath: string) => {
+    const normalizedFilePath = String(filePath ?? "").trim();
+    setSelectedFilePath(normalizedFilePath);
+    setSelectedFilePathsByThread((current) => rememberThreadSelection(current, threadId, normalizedFilePath));
   }, []);
 
   useEffect(() => {
@@ -543,8 +558,24 @@ export function useTasksThreadState(params: Params) {
       const detail = withDerivedWorkflow(store.details[nextId]);
       setActiveThread(detail);
       setActiveThreadId(nextId);
-      setSelectedAgentId((current) => (current && detail.agents.some((agent) => agent.id === current) ? current : defaultSelectedAgent(detail)));
-      setSelectedFilePath((current) => (current && detail.files.some((file) => file.path === current) ? current : defaultSelectedFile(detail)));
+      rememberSelectedAgent(
+        detail.thread.threadId,
+        resolveThreadSelection(
+          selectedAgentIdsByThread,
+          detail.thread.threadId,
+          detail.agents.map((agent) => agent.id),
+          defaultSelectedAgent(detail),
+        ),
+      );
+      rememberSelectedFile(
+        detail.thread.threadId,
+        resolveThreadSelection(
+          selectedFilePathsByThread,
+          detail.thread.threadId,
+          detail.files.map((file) => file.path),
+          defaultSelectedFile(detail),
+        ),
+      );
       return detail;
     },
     [activeThreadId, params.cwd, projectPath],
@@ -570,8 +601,24 @@ export function useTasksThreadState(params: Params) {
         setProjectPath(nextProjectPath);
         setActiveThread(detail);
         setActiveThreadId(detail.thread.threadId);
-        setSelectedAgentId((current) => (current && detail.agents.some((agent) => agent.id === current) ? current : defaultSelectedAgent(detail)));
-        setSelectedFilePath((current) => (current && detail.files.some((file) => file.path === current) ? current : defaultSelectedFile(detail)));
+        rememberSelectedAgent(
+          detail.thread.threadId,
+          resolveThreadSelection(
+            selectedAgentIdsByThread,
+            detail.thread.threadId,
+            detail.agents.map((agent) => agent.id),
+            defaultSelectedAgent(detail),
+          ),
+        );
+        rememberSelectedFile(
+          detail.thread.threadId,
+          resolveThreadSelection(
+            selectedFilePathsByThread,
+            detail.thread.threadId,
+            detail.files.map((file) => file.path),
+            defaultSelectedFile(detail),
+          ),
+        );
         return detail;
       }
       try {
@@ -581,8 +628,24 @@ export function useTasksThreadState(params: Params) {
         setProjectPath(nextProjectPath);
         setActiveThread(detail);
         setActiveThreadId(detail.thread.threadId);
-        setSelectedAgentId((current) => current || defaultSelectedAgent(detail));
-        setSelectedFilePath((current) => current || defaultSelectedFile(detail));
+        rememberSelectedAgent(
+          detail.thread.threadId,
+          resolveThreadSelection(
+            selectedAgentIdsByThread,
+            detail.thread.threadId,
+            detail.agents.map((agent) => agent.id),
+            defaultSelectedAgent(detail),
+          ),
+        );
+        rememberSelectedFile(
+          detail.thread.threadId,
+          resolveThreadSelection(
+            selectedFilePathsByThread,
+            detail.thread.threadId,
+            detail.files.map((file) => file.path),
+            defaultSelectedFile(detail),
+          ),
+        );
         return detail;
       } catch (error) {
         params.setStatus(`THREAD load failed: ${formatError(error)}`);
@@ -595,7 +658,7 @@ export function useTasksThreadState(params: Params) {
         return null;
       }
     },
-    [applyBrowserStore, params],
+    [applyBrowserStore, params, rememberSelectedAgent, rememberSelectedFile, selectedAgentIdsByThread, selectedFilePathsByThread],
   );
 
   const reloadThreads = useCallback(
@@ -648,17 +711,29 @@ export function useTasksThreadState(params: Params) {
         setThreadItems(items);
         setActiveThread(nextDetail);
         setActiveThreadId(nextDetail.thread.threadId);
-        setSelectedAgentId((current) =>
-          current && nextDetail.agents.some((agent) => agent.id === current) ? current : defaultSelectedAgent(nextDetail),
+        rememberSelectedAgent(
+          nextDetail.thread.threadId,
+          resolveThreadSelection(
+            selectedAgentIdsByThread,
+            nextDetail.thread.threadId,
+            nextDetail.agents.map((agent) => agent.id),
+            defaultSelectedAgent(nextDetail),
+          ),
         );
-        setSelectedFilePath((current) =>
-          current && nextDetail.files.some((file) => file.path === current) ? current : defaultSelectedFile(nextDetail),
+        rememberSelectedFile(
+          nextDetail.thread.threadId,
+          resolveThreadSelection(
+            selectedFilePathsByThread,
+            nextDetail.thread.threadId,
+            nextDetail.files.map((file) => file.path),
+            defaultSelectedFile(nextDetail),
+          ),
         );
       } catch {
         // Keep silent polling failures from interrupting the Tasks UI.
       }
     },
-    [params, projectPath],
+    [params, projectPath, rememberSelectedAgent, rememberSelectedFile, selectedAgentIdsByThread, selectedFilePathsByThread],
   );
 
   const hydrateAgentDetailWithCodexRuntime = useCallback(
@@ -1027,8 +1102,8 @@ export function useTasksThreadState(params: Params) {
       }));
       setActiveThread(detail);
       setActiveThreadId(detail.thread.threadId);
-      setSelectedAgentId(defaultSelectedAgent(detail));
-      setSelectedFilePath(defaultSelectedFile(detail));
+      rememberSelectedAgent(detail.thread.threadId, defaultSelectedAgent(detail));
+      rememberSelectedFile(detail.thread.threadId, defaultSelectedFile(detail));
       await reloadThreads(detail.thread.threadId);
       params.setStatus(`Thread created: ${truncateTitle(detail.thread.title)}`);
     } catch (error) {
@@ -1237,8 +1312,8 @@ export function useTasksThreadState(params: Params) {
       detail.workflow = deriveThreadWorkflow(detail);
       store.details[detail.thread.threadId] = detail;
       applyBrowserStore(store, detail.thread.threadId);
-      setSelectedAgentId(`${detail.thread.threadId}:${finalRoles[0]}`);
-      setSelectedFilePath(detail.changedFiles[0] ?? defaultSelectedFile(detail));
+      rememberSelectedAgent(detail.thread.threadId, `${detail.thread.threadId}:${finalRoles[0]}`);
+      rememberSelectedFile(detail.thread.threadId, detail.changedFiles[0] ?? defaultSelectedFile(detail));
       setComposerDraft("");
       setSelectedComposerRoleIds([]);
       clearAttachedFiles();
@@ -1311,8 +1386,24 @@ export function useTasksThreadState(params: Params) {
       }));
       setActiveThread(spawned);
       setActiveThreadId(spawned.thread.threadId);
-      setSelectedAgentId((current) => current || defaultSelectedAgent(spawned));
-      setSelectedFilePath((current) => current || defaultSelectedFile(spawned));
+      rememberSelectedAgent(
+        spawned.thread.threadId,
+        resolveThreadSelection(
+          selectedAgentIdsByThread,
+          spawned.thread.threadId,
+          spawned.agents.map((agent) => agent.id),
+          defaultSelectedAgent(spawned),
+        ),
+      );
+      rememberSelectedFile(
+        spawned.thread.threadId,
+        resolveThreadSelection(
+          selectedFilePathsByThread,
+          spawned.thread.threadId,
+          spawned.files.map((file) => file.path),
+          defaultSelectedFile(spawned),
+        ),
+      );
       await reloadThreads(spawned.thread.threadId);
       await dispatchExecutionPlan(spawned, promptWithAttachments, plan);
       params.appendWorkspaceEvent({
@@ -1334,11 +1425,11 @@ export function useTasksThreadState(params: Params) {
         message: `Thread submit failed: ${formatError(error)}`,
       });
     }
-  }, [accessMode, activeThread, applyBrowserStore, buildPromptWithAttachments, clearAttachedFiles, composerDraft, dispatchExecutionPlan, model, params, projectPath, reasoning, reloadThreads, selectedComposerRoleIds]);
+  }, [accessMode, activeThread, applyBrowserStore, buildPromptWithAttachments, clearAttachedFiles, composerDraft, dispatchExecutionPlan, model, params, projectPath, reasoning, reloadThreads, rememberSelectedAgent, rememberSelectedFile, selectedAgentIdsByThread, selectedComposerRoleIds, selectedFilePathsByThread]);
 
   const openAgent = useCallback(
     async (agent: BackgroundAgentRecord) => {
-      setSelectedAgentId(agent.id);
+      rememberSelectedAgent(activeThread?.thread.threadId || activeThreadId, agent.id);
       setDetailTab("agent");
       if (!activeThread) return;
       if (!params.hasTauriRuntime || !params.cwd) {
@@ -1352,7 +1443,7 @@ export function useTasksThreadState(params: Params) {
         params.setStatus(`Failed to open agent: ${formatError(error)}`);
       }
     },
-    [activeThread, loadAgentDetail, params],
+    [activeThread, activeThreadId, loadAgentDetail, params, rememberSelectedAgent],
   );
 
   const compactSelectedAgentCodexThread = useCallback(async () => {
@@ -1582,6 +1673,7 @@ export function useTasksThreadState(params: Params) {
         if (selectedAgentId === agentId) {
           setSelectedAgentId("");
           setSelectedAgentDetail(null);
+          setSelectedAgentIdsByThread((current) => rememberThreadSelection(current, detail.thread.threadId, ""));
         }
         detail.task.roles = detail.task.roles.map((role) =>
           role.id === removedRoleId ? { ...role, enabled: false, status: "disabled", updatedAt: nowIso() } : role,
@@ -1599,7 +1691,10 @@ export function useTasksThreadState(params: Params) {
           agentId,
         }));
         setActiveThread(detail);
-        setSelectedAgentId((current) => (current === agentId ? "" : current));
+        if (selectedAgentId === agentId) {
+          setSelectedAgentId("");
+          setSelectedAgentIdsByThread((current) => rememberThreadSelection(current, detail.thread.threadId, ""));
+        }
         setSelectedAgentDetail((current) => (current?.agent.id === agentId ? null : current));
         await reloadThreads(detail.thread.threadId);
         params.setStatus("Agent removed");
@@ -1675,7 +1770,7 @@ export function useTasksThreadState(params: Params) {
         detail.workflow = deriveThreadWorkflow(detail);
         store.details[detail.thread.threadId] = detail;
         applyBrowserStore(store, detail.thread.threadId);
-        setSelectedAgentId(`${detail.thread.threadId}:${roleId}`);
+        rememberSelectedAgent(detail.thread.threadId, `${detail.thread.threadId}:${roleId}`);
         setDetailTab("agent");
         params.setStatus(`Agent added: ${getTaskAgentLabel(roleId)}`);
         return;
@@ -1688,7 +1783,7 @@ export function useTasksThreadState(params: Params) {
           label,
         }));
         setActiveThread(detail);
-        setSelectedAgentId(`${detail.thread.threadId}:${roleId}`);
+        rememberSelectedAgent(detail.thread.threadId, `${detail.thread.threadId}:${roleId}`);
         setDetailTab("agent");
         await reloadThreads(detail.thread.threadId);
         params.setStatus(`Agent added: ${getTaskAgentLabel(roleId)}`);
@@ -1696,8 +1791,17 @@ export function useTasksThreadState(params: Params) {
         params.setStatus(`Failed to add agent: ${formatError(error)}`);
       }
     },
-    [activeThread, applyBrowserStore, params, reloadThreads],
+    [activeThread, applyBrowserStore, params, reloadThreads, rememberSelectedAgent],
   );
+
+  const selectFilePath = useCallback((filePath: string) => {
+    const threadId = String(activeThread?.thread.threadId || activeThreadId).trim();
+    if (!threadId) {
+      setSelectedFilePath(String(filePath ?? "").trim());
+      return;
+    }
+    rememberSelectedFile(threadId, filePath);
+  }, [activeThread?.thread.threadId, activeThreadId, rememberSelectedFile]);
 
   return {
     loading,
@@ -1726,7 +1830,7 @@ export function useTasksThreadState(params: Params) {
     liveProcessEvents,
     attachedFiles,
     selectedComposerRoleIds,
-    setSelectedFilePath,
+    setSelectedFilePath: selectFilePath,
     addComposerRole,
     removeComposerRole,
     openProjectDirectory,

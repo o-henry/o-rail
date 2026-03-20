@@ -52,6 +52,10 @@ type ResearchCollectionPayload = {
       collectorStrategy?: string;
       keywords?: string[];
       domains?: string[];
+      sourceOptions?: {
+        allowed_domains?: string[];
+        strict_domain_isolation?: boolean;
+      };
     };
   };
   metrics?: {

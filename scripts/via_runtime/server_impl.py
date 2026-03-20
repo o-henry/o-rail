@@ -2023,11 +2023,19 @@ def _normalize_dynamic_source_options(raw: dict[str, Any] | None) -> dict[str, A
                 }
             )
 
+    allowed_domains_raw = _parse_option_list(payload.get("allowed_domains"), max_items=24)
+    allowed_domains = [row.lower().strip().strip("/") for row in allowed_domains_raw if row.strip()]
+    strict_domain_isolation = bool(payload.get("strict_domain_isolation"))
+    planner = payload.get("planner") if isinstance(payload.get("planner"), dict) else {}
+
     return {
         "keywords": keywords,
         "countries": countries,
         "urls": urls,
         "domains": domains,
+        "allowed_domains": allowed_domains,
+        "strict_domain_isolation": strict_domain_isolation,
+        "planner": planner,
         "max_items": max_items,
         "targets": targets,
     }
@@ -2392,7 +2400,7 @@ def execute_source_node(source_type: str, source_options: dict[str, Any] | None 
         max_items = MAX_TOTAL_ITEMS
 
     dynamic_result = execute_dynamic_source_query(source_type, options)
-    if dynamic_result and dynamic_result.items:
+    if dynamic_result is not None:
         return AdapterResult(
             adapter=dynamic_result.adapter,
             items=dynamic_result.items[:max_items],
@@ -2400,8 +2408,6 @@ def execute_source_node(source_type: str, source_options: dict[str, Any] | None 
         )
 
     warnings: list[str] = []
-    if dynamic_result and dynamic_result.warnings:
-        warnings.extend(dynamic_result.warnings)
 
     parallel_adapters = [adapter for adapter in chain if _is_parallel_crawler_adapter(adapter)]
     sequential_adapters = [adapter for adapter in chain if not _is_parallel_crawler_adapter(adapter)]

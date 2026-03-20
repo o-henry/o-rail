@@ -238,6 +238,7 @@
 
 .tasks-thread-new-button {
   min-width: 0;
+  padding: 10px;
   font-size: 10px;
   white-space: nowrap;
   overflow: hidden;

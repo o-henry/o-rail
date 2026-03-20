@@ -383,49 +383,49 @@ export default function VisualizePage({ cwd, hasTauriRuntime }: VisualizePagePro
                 title={primaryListTitle}
                 widgetId="sources"
               >
-                <div className="visualize-monitor-ranked-list">
-                  {primaryListItems.map((item, index) => (
-                    <div className="visualize-monitor-ranked-item" key={`${item.title || "item"}-${index}`}>
-                        <div className="visualize-monitor-ranked-item-copy">
-                          <strong>{item.title || "-"}</strong>
-                          <p>{item.detail || "-"}</p>
-                      </div>
-                      <span>{item.badge || "-"}</span>
+                <div className="visualize-monitor-stacked-panels">
+                  <section className="visualize-monitor-stacked-section">
+                    <header className="visualize-monitor-subhead">{primaryListTitle}</header>
+                    <div className="visualize-monitor-ranked-list">
+                      {primaryListItems.map((item, index) => (
+                        <div className="visualize-monitor-ranked-item" key={`${item.title || "item"}-${index}`}>
+                          <div className="visualize-monitor-ranked-item-copy">
+                            <strong>{item.title || "-"}</strong>
+                            <p>{item.detail || "-"}</p>
+                          </div>
+                          <span>{item.badge || "-"}</span>
+                        </div>
+                      ))}
+                      {primaryListItems.length ? null : <p className="visualize-monitor-empty">{t("visualize.empty.items")}</p>}
                     </div>
-                  ))}
-                  {primaryListItems.length ? null : <p className="visualize-monitor-empty">{t("visualize.empty.items")}</p>}
-                </div>
-              </VisualizeWidgetFrame>
+                  </section>
 
-              <VisualizeWidgetFrame
-                className="is-steam"
-                maximized={maximizedWidgetId === "steam"}
-                onToggleMaximize={toggleMaximize}
-                title={t("visualize.chart.collectionTimeline")}
-                widgetId="steam"
-              >
-                <div className="visualize-monitor-ranked-table">
-                  <div className="visualize-monitor-ranked-table-head">
-                    <span>{t("visualize.common.date")}</span>
-                    <span>{t("visualize.common.count")}</span>
-                    <span>{t("visualize.common.share")}</span>
-                  </div>
-                  <div className="visualize-monitor-ranked-list is-table">
-                    {timelineRows.map((row) => (
-                      <div className="visualize-monitor-ranked-item is-table" key={row.label}>
-                        <strong>{row.label}</strong>
-                        <span>{row.count}</span>
-                        <span>{formatPercent((row.count / Math.max(effectiveMetrics?.totals.items ?? 0, 1)) * 100)}</span>
+                  <section className="visualize-monitor-stacked-section">
+                    <header className="visualize-monitor-subhead">{t("visualize.chart.collectionTimeline")}</header>
+                    <div className="visualize-monitor-ranked-table">
+                      <div className="visualize-monitor-ranked-table-head">
+                        <span>{t("visualize.common.date")}</span>
+                        <span>{t("visualize.common.count")}</span>
+                        <span>{t("visualize.common.share")}</span>
                       </div>
-                    ))}
-                    {timelineRows.length ? null : <p className="visualize-monitor-empty">{t("visualize.empty.snapshots")}</p>}
-                  </div>
+                      <div className="visualize-monitor-ranked-list is-table">
+                        {timelineRows.map((row) => (
+                          <div className="visualize-monitor-ranked-item is-table" key={row.label}>
+                            <strong>{row.label}</strong>
+                            <span>{row.count}</span>
+                            <span>{formatPercent((row.count / Math.max(effectiveMetrics?.totals.items ?? 0, 1)) * 100)}</span>
+                          </div>
+                        ))}
+                        {timelineRows.length ? null : <p className="visualize-monitor-empty">{t("visualize.empty.snapshots")}</p>}
+                      </div>
+                    </div>
+                  </section>
                 </div>
               </VisualizeWidgetFrame>
 
               <VisualizeWidgetFrame
-                articleRef={reportRef}
                 className="is-report"
+                articleRef={reportRef}
                 maximized={maximizedWidgetId === "report"}
                 onToggleMaximize={toggleMaximize}
                 title={reportTitle}

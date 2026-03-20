@@ -354,12 +354,12 @@
 
 .visualize-monitor-widget.is-sources {
   grid-column: 7 / 10;
-  grid-row: 1 / span 4;
+  grid-row: 1 / span 2;
 }
 
 .visualize-monitor-widget.is-report {
   grid-column: 7 / 13;
-  grid-row: 5 / span 3;
+  grid-row: 3 / span 5;
 }
 
 .visualize-monitor-widget.is-evidence {

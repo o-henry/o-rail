@@ -402,7 +402,8 @@ export function createEngineBridgeHandlers(params: any) {
         params.setStatus(translate("bridge.status.connectCodeCopied"));
         params.setError("");
       } else {
-        params.setError(translate("bridge.error.copyDenied"));
+        params.setStatus(translate("bridge.status.connectCodeReady"));
+        params.setError("");
       }
     } catch (error) {
       params.setError(translate("bridge.error.copyFailed", { error: String(error) }));

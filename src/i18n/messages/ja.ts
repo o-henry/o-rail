@@ -427,6 +427,7 @@ export const JA_MESSAGES: Dictionary = {
     "bridge.status.tokenRotated": "Web 連携トークンを再発行しました。",
     "bridge.status.workerRestarted": "Web 連携ワーカーを再起動しました",
     "bridge.status.connectCodeCopied": "Web 連携コードをコピーしました",
+    "bridge.status.connectCodeReady": "Web 連携コードを準備しました。必要なら手動でコピーしてください。",
     "bridge.status.sessionAuthenticated": "{provider} のログイン状態を確認しました",
     "bridge.status.sessionLoginRequired": "{provider} はログインが必要です",
     "bridge.status.sessionWindowOpened": "{provider} のログインセッションウィンドウを開きました",

@@ -479,6 +479,7 @@ export const EN_MESSAGES: Dictionary = {
     "bridge.status.tokenRotated": "Rotated the web connect token.",
     "bridge.status.workerRestarted": "Web connect worker restarted",
     "bridge.status.connectCodeCopied": "Web connect code copied",
+    "bridge.status.connectCodeReady": "Web connect code is ready. Copy it manually if needed.",
     "bridge.status.sessionAuthenticated": "{provider} login session confirmed",
     "bridge.status.sessionLoginRequired": "{provider} requires login",
     "bridge.status.sessionWindowOpened": "{provider} login session window opened",

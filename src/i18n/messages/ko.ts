@@ -479,6 +479,7 @@ export const KO_MESSAGES: Dictionary = {
     "bridge.status.tokenRotated": "웹 연결 토큰을 재발급했습니다.",
     "bridge.status.workerRestarted": "웹 연결 워커 재시작 완료",
     "bridge.status.connectCodeCopied": "웹 연결 코드 복사 완료",
+    "bridge.status.connectCodeReady": "웹 연결 코드가 준비되었습니다. 필요하면 직접 복사하세요.",
     "bridge.status.sessionAuthenticated": "{provider} 로그인 상태 확인됨",
     "bridge.status.sessionLoginRequired": "{provider} 로그인 필요",
     "bridge.status.sessionWindowOpened": "{provider} 로그인 세션 창 열림",

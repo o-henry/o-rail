@@ -427,6 +427,7 @@ export const ZH_MESSAGES: Dictionary = {
     "bridge.status.tokenRotated": "已重新生成网页连接令牌。",
     "bridge.status.workerRestarted": "网页连接 worker 已重启",
     "bridge.status.connectCodeCopied": "网页连接码已复制",
+    "bridge.status.connectCodeReady": "网页连接码已准备好，如有需要请手动复制。",
     "bridge.status.sessionAuthenticated": "已确认 {provider} 登录状态",
     "bridge.status.sessionLoginRequired": "{provider} 需要登录",
     "bridge.status.sessionWindowOpened": "已打开 {provider} 登录会话窗口",

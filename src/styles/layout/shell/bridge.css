@@ -172,10 +172,10 @@
   height: 36px;
   border: 0;
   border-radius: 6px;
-  background: #ffffff;
+  background: color-mix(in srgb, var(--surface-soft) 74%, var(--surface-elevated));
   align-content: center;
   color: #1f2730;
-  padding: 8px 10px;
+  padding: 0 12px;
   font-family: "BasicallyAMono", "Noto Sans KR", monospace;
   font-size: 12px;
   line-height: 20px;

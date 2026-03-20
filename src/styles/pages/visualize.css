@@ -711,9 +711,9 @@
 
 .visualize-monitor-ranked-table-head span:nth-child(2),
 .visualize-monitor-ranked-table-head span:nth-child(3) {
-  justify-self: stretch;
-  justify-content: center;
-  text-align: center;
+  justify-self: start;
+  justify-content: flex-start;
+  text-align: left;
 }
 
 .visualize-monitor-ranked-item.is-table > span:nth-child(2),

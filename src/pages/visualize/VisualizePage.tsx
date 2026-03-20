@@ -38,13 +38,6 @@ function formatPercent(value: number) {
   return `${Math.round(value)}%`;
 }
 
-function formatCompactNumber(value: number) {
-  if (!Number.isFinite(value)) {
-    return "-";
-  }
-  return `${Math.round(value)}`;
-}
-
 type VisualizeMetrics = ReturnType<typeof useVisualizePageState>["collectionMetrics"];
 type EvidenceItem = NonNullable<ReturnType<typeof useVisualizePageState>["collectionItems"]>["items"][number];
 
@@ -146,6 +139,27 @@ function buildTimelineChart(spec: VisualizeMetrics): FeedChartSpec | null {
   };
 }
 
+function buildGenreRankingChart(
+  rows: Array<{ genreLabel: string; popularityScore?: number; avgScore?: number; qualityScore?: number }>,
+  metric: "popularityScore" | "avgScore" | "qualityScore",
+  seriesName: string,
+  color: string,
+): FeedChartSpec | null {
+  if (!rows.length) {
+    return null;
+  }
+  const labels = rows.map((row) => row.genreLabel);
+  const data = rows.map((row) => Math.round(Number(row[metric] ?? 0)));
+  if (!data.some((value) => Number.isFinite(value) && value > 0)) {
+    return null;
+  }
+  return {
+    type: "bar",
+    labels,
+    series: [{ name: seriesName, data, color }],
+  };
+}
+
 function withoutChartTitle(spec: FeedChartSpec | null | undefined): FeedChartSpec | null {
   if (!spec) {
     return null;
@@ -180,13 +194,21 @@ export default function VisualizePage({ cwd, hasTauriRuntime }: VisualizePagePro
     () => (evidenceWasFiltered ? buildMetricsFromItems(reportJobId, evidenceItems) : state.collectionMetrics),
     [evidenceItems, evidenceWasFiltered, reportJobId, state.collectionMetrics],
   );
-  const timelineChart = buildTimelineChart(effectiveMetrics);
-  const qualityScore = Math.max(0, Math.min(100, Math.round(effectiveMetrics?.totals.avgScore ?? 0)));
-  const leadCopy = firstNarrativeLine(state.reportMarkdown) || firstNarrativeLine(state.collectionMarkdown);
   const popularGenres = evidenceWasFiltered ? [] : (state.collectionGenreRankings?.popular.slice(0, 5) ?? []);
   const qualityGenres = evidenceWasFiltered ? [] : (state.collectionGenreRankings?.quality.slice(0, 5) ?? []);
   const topSources = effectiveMetrics?.topSources.slice(0, 5) ?? [];
-  const mainChartSpec = withoutChartTitle(autoSpec?.widgets ? (autoSpec.widgets.mainChart?.chart ?? null) : timelineChart);
+  const timelineChart = buildTimelineChart(effectiveMetrics);
+  const popularGenreChart = buildGenreRankingChart(popularGenres, "popularityScore", "Popularity", "#0f172a");
+  const qualityGenreChart = buildGenreRankingChart(qualityGenres, "avgScore", "Score", "#64748b");
+  const qualityScore = Math.max(0, Math.min(100, Math.round(effectiveMetrics?.totals.avgScore ?? 0)));
+  const leadCopy = firstNarrativeLine(state.reportMarkdown) || firstNarrativeLine(state.collectionMarkdown);
+  const mainChartSpec = withoutChartTitle(
+    autoSpec?.widgets
+      ? (autoSpec.widgets.mainChart?.chart ?? null)
+      : questionType === "genre_ranking"
+        ? popularGenreChart
+        : timelineChart,
+  );
   const mainChartTitle =
     questionType === "genre_ranking"
       ? t("visualize.chart.popularGenres")
@@ -194,19 +216,11 @@ export default function VisualizePage({ cwd, hasTauriRuntime }: VisualizePagePro
         ? t("visualize.chart.comparisonSignals")
         : questionType === "community_sentiment"
           ? t("visualize.chart.reactionTimeline")
-          : t("visualize.chart.collectionTimeline");
-  const mainChartDescription =
-    questionType === "genre_ranking"
-      ? t("visualize.chart.popularGenres.desc")
-      : questionType === "game_comparison"
-        ? t("visualize.chart.comparisonSignals.desc")
-        : questionType === "community_sentiment"
-          ? t("visualize.chart.reactionTimeline.desc")
-          : t("visualize.chart.collectionTimeline.desc");
+          : t("visualize.chart.generic");
   const secondaryWidgetTitle =
     questionType === "genre_ranking"
-      ? t("visualize.chart.genreComparison")
-      : t("visualize.chart.verificationMatrix");
+      ? t("visualize.chart.bestRatedGenres")
+      : t("visualize.list.topSources");
   const primaryListTitle =
     questionType === "genre_ranking"
       ? t("visualize.list.genreSnapshots")
@@ -215,60 +229,12 @@ export default function VisualizePage({ cwd, hasTauriRuntime }: VisualizePagePro
         : questionType === "community_sentiment"
           ? t("visualize.list.reactionHighlights")
           : t("visualize.list.topSources");
-  const secondaryListTitle = t("visualize.list.topSources");
   const reportTitle = t("visualize.report.title");
   const evidenceTitle = t("visualize.evidence.title");
   const toolbarTitle = t("visualize.toolbar.title");
   const sessionTitle = t("visualize.widget.session");
   const qualityTitle = t("visualize.widget.quality");
   const allowGenericFallbackLists = !autoSpec?.widgets || questionType === "topic_research";
-  const genreComparisonRows = useMemo(() => {
-    const rows = new Map<
-      string,
-      {
-        genreLabel: string;
-        popularityScore: number;
-        avgScore: number;
-        qualityScore: number;
-      }
-    >();
-
-    for (const genre of popularGenres) {
-      const existing = rows.get(genre.genreLabel) ?? {
-        genreLabel: genre.genreLabel,
-        popularityScore: 0,
-        avgScore: genre.avgScore,
-        qualityScore: 0,
-      };
-      existing.popularityScore = Math.max(existing.popularityScore, genre.popularityScore);
-      existing.avgScore = Math.max(existing.avgScore, genre.avgScore);
-      rows.set(genre.genreLabel, existing);
-    }
-
-    for (const genre of qualityGenres) {
-      const existing = rows.get(genre.genreLabel) ?? {
-        genreLabel: genre.genreLabel,
-        popularityScore: 0,
-        avgScore: genre.avgScore,
-        qualityScore: 0,
-      };
-      existing.qualityScore = Math.max(existing.qualityScore, genre.qualityScore);
-      existing.avgScore = Math.max(existing.avgScore, genre.avgScore);
-      rows.set(genre.genreLabel, existing);
-    }
-
-    return [...rows.values()]
-      .sort((left, right) => (right.popularityScore + right.qualityScore) - (left.popularityScore + left.qualityScore))
-      .slice(0, 6);
-  }, [popularGenres, qualityGenres]);
-  const verificationRows = useMemo(() => {
-    const total = Math.max(effectiveMetrics?.totals.items ?? 0, 1);
-    return (effectiveMetrics?.byVerificationStatus ?? []).map((row) => ({
-      label: row.verificationStatus,
-      count: row.itemCount,
-      share: Math.round((row.itemCount / total) * 100),
-    }));
-  }, [effectiveMetrics]);
   const sourceCoverageRows = useMemo(() => {
     const total = Math.max(effectiveMetrics?.totals.items ?? 0, 1);
     return topSources.map((source) => ({
@@ -277,6 +243,14 @@ export default function VisualizePage({ cwd, hasTauriRuntime }: VisualizePagePro
       share: Math.round((source.itemCount / total) * 100),
     }));
   }, [effectiveMetrics?.totals.items, topSources]);
+  const timelineRows = useMemo(
+    () =>
+      (effectiveMetrics?.timeline ?? []).map((row) => ({
+        label: row.bucketDate.split("-").join("."),
+        count: row.itemCount,
+      })),
+    [effectiveMetrics],
+  );
   const primaryListItems: ResearchReportListItem[] =
     (autoSpec?.widgets?.primaryList?.items?.length
       ? autoSpec.widgets.primaryList.items
@@ -294,12 +268,6 @@ export default function VisualizePage({ cwd, hasTauriRuntime }: VisualizePagePro
             badge: t("visualize.common.itemCount", { count: source.itemCount }),
           }))
         : []);
-  const secondaryListItems: ResearchReportListItem[] =
-    sourceCoverageRows.map((source) => ({
-      title: source.label,
-      detail: t("visualize.common.itemCount", { count: source.count }),
-      badge: formatPercent(source.share),
-    }));
   const summaryMetrics = [
     { label: t("visualize.metric.evidence"), value: effectiveMetrics?.totals.items ?? 0, meta: t("visualize.metric.evidence.meta") },
     { label: t("visualize.metric.verified"), value: effectiveMetrics?.totals.verified ?? 0, meta: t("visualize.metric.verified.meta") },
@@ -318,7 +286,6 @@ export default function VisualizePage({ cwd, hasTauriRuntime }: VisualizePagePro
         <header className="visualize-monitor-topbar">
           <div className="visualize-monitor-toolbar-copy">
             <strong>{toolbarTitle}</strong>
-            <span>{state.selectedReportRun?.title || t("visualize.toolbar.empty")}</span>
           </div>
           <div className="visualize-monitor-toolbar-actions">
             <button
@@ -344,7 +311,7 @@ export default function VisualizePage({ cwd, hasTauriRuntime }: VisualizePagePro
                 title={sessionTitle}
                 widgetId="session"
               >
-                <h1>{state.selectedReportRun?.title || t("visualize.session.emptyTitle")}</h1>
+                {state.selectedReportRun?.title ? <h1>{state.selectedReportRun.title}</h1> : null}
                 {state.reportRuns.length ? (
                   <div className="visualize-monitor-session-row">
                     <span>{t("visualize.session.count", { count: state.reportRuns.length })}</span>
@@ -376,7 +343,6 @@ export default function VisualizePage({ cwd, hasTauriRuntime }: VisualizePagePro
               >
                 {mainChartSpec ? (
                   <>
-                    <p className="visualize-monitor-chart-copy">{mainChartDescription}</p>
                     <FeedChart spec={mainChartSpec} />
                   </>
                 ) : <div className="visualize-monitor-placeholder">{t("visualize.placeholder.timeline")}</div>}
@@ -389,32 +355,17 @@ export default function VisualizePage({ cwd, hasTauriRuntime }: VisualizePagePro
                 title={secondaryWidgetTitle}
                 widgetId="sourceMix"
               >
-                {questionType === "genre_ranking" && genreComparisonRows.length ? (
+                {questionType === "genre_ranking" && qualityGenreChart ? (
+                  <FeedChart spec={qualityGenreChart} />
+                ) : sourceCoverageRows.length ? (
                   <div className="visualize-monitor-ranked-table">
                     <div className="visualize-monitor-ranked-table-head">
                       <span>{t("visualize.evidence.column.title")}</span>
-                      <span>{t("visualize.common.popularity")}</span>
-                      <span>{t("visualize.evidence.column.score")}</span>
-                    </div>
-                    <div className="visualize-monitor-ranked-list is-table">
-                      {genreComparisonRows.map((row) => (
-                        <div className="visualize-monitor-ranked-item is-table" key={row.genreLabel}>
-                          <strong>{row.genreLabel}</strong>
-                          <span>{formatCompactNumber(row.popularityScore)}</span>
-                          <span>{formatCompactNumber(row.avgScore)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : verificationRows.length ? (
-                  <div className="visualize-monitor-ranked-table">
-                    <div className="visualize-monitor-ranked-table-head">
-                      <span>{t("visualize.common.status")}</span>
                       <span>{t("visualize.common.items")}</span>
                       <span>{t("visualize.common.share")}</span>
                     </div>
                     <div className="visualize-monitor-ranked-list is-table">
-                      {verificationRows.map((row) => (
+                      {sourceCoverageRows.map((row) => (
                         <div className="visualize-monitor-ranked-item is-table" key={row.label}>
                           <strong>{row.label}</strong>
                           <span>{row.count}</span>
@@ -491,24 +442,24 @@ export default function VisualizePage({ cwd, hasTauriRuntime }: VisualizePagePro
                 className="is-steam"
                 maximized={maximizedWidgetId === "steam"}
                 onToggleMaximize={toggleMaximize}
-                title={secondaryListTitle}
+                title={t("visualize.chart.collectionTimeline")}
                 widgetId="steam"
               >
                 <div className="visualize-monitor-ranked-table">
                   <div className="visualize-monitor-ranked-table-head">
-                    <span>{t("visualize.evidence.column.title")}</span>
-                    <span>{t("visualize.common.items")}</span>
+                    <span>{t("visualize.common.date")}</span>
+                    <span>{t("visualize.common.count")}</span>
                     <span>{t("visualize.common.share")}</span>
                   </div>
                   <div className="visualize-monitor-ranked-list is-table">
-                  {secondaryListItems.map((item, index) => (
-                    <div className="visualize-monitor-ranked-item is-table" key={`${item.title || "item"}-${index}`}>
-                      <strong>{item.title || "-"}</strong>
-                      <span>{item.detail || "-"}</span>
-                      <span>{item.badge || "-"}</span>
-                    </div>
-                  ))}
-                    {secondaryListItems.length ? null : <p className="visualize-monitor-empty">{t("visualize.empty.snapshots")}</p>}
+                    {timelineRows.map((row) => (
+                      <div className="visualize-monitor-ranked-item is-table" key={row.label}>
+                        <strong>{row.label}</strong>
+                        <span>{row.count}</span>
+                        <span>{formatPercent((row.count / Math.max(effectiveMetrics?.totals.items ?? 0, 1)) * 100)}</span>
+                      </div>
+                    ))}
+                    {timelineRows.length ? null : <p className="visualize-monitor-empty">{t("visualize.empty.snapshots")}</p>}
                   </div>
                 </div>
               </VisualizeWidgetFrame>

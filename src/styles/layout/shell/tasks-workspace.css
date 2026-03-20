@@ -3,12 +3,13 @@
   --tasks-radius: 4px;
   --tasks-wrapper-radius: 10px;
   --tasks-control-height: 34px;
+  --tasks-nav-width: 296px;
   position: relative;
   min-height: 0;
   height: 100%;
   display: grid;
   width: 100%;
-  grid-template-columns: minmax(0, 296px) minmax(0, 1fr);
+  grid-template-columns: minmax(0, var(--tasks-nav-width)) minmax(0, 1fr);
   gap: 10px;
   padding: 0;
   background: var(--bg-app);
@@ -17,7 +18,7 @@
 }
 
 .tasks-thread-layout.is-review-pane-open {
-  grid-template-columns: minmax(0, 296px) minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, var(--tasks-nav-width)) minmax(0, 1fr) minmax(0, 1fr);
 }
 
 .tasks-thread-layout.is-thread-nav-hidden {
@@ -45,9 +46,9 @@
   align-content: start;
   gap: 10px;
   padding: 0;
-  width: 296px;
-  min-width: 296px;
-  max-width: 296px;
+  width: var(--tasks-nav-width);
+  min-width: var(--tasks-nav-width);
+  max-width: var(--tasks-nav-width);
   border-radius: var(--tasks-wrapper-radius);
   background: transparent;
   overflow: auto;
@@ -89,7 +90,7 @@
 
 .tasks-thread-nav-utility-actions {
   gap: 8px;
-  margin-right: 6px;
+  margin-right: 10px;
 }
 
 .tasks-thread-nav.is-collapsed .tasks-thread-nav-utility-actions {
@@ -1837,13 +1838,11 @@
 @media (max-width: 1400px) {
   .tasks-thread-layout {
     font-family: "DepartureMonoRail", "Galmuri11", monospace;
-    grid-template-columns: minmax(0, 268px) minmax(0, 1fr) minmax(260px, 0.92fr);
+    --tasks-nav-width: 268px;
   }
 
-  .tasks-thread-nav {
-    width: 268px;
-    min-width: 268px;
-    max-width: 268px;
+  .tasks-thread-layout.is-review-pane-open {
+    grid-template-columns: minmax(0, var(--tasks-nav-width)) minmax(0, 1fr) minmax(260px, 0.92fr);
   }
 
   .tasks-thread-stage-rail {
@@ -1854,13 +1853,11 @@
 @media (max-width: 1120px) {
   .tasks-thread-layout {
     font-family: "DepartureMonoRail", "Galmuri11", monospace;
-    grid-template-columns: minmax(0, 268px) minmax(0, 1fr);
+    --tasks-nav-width: 268px;
   }
 
-  .tasks-thread-nav {
-    width: 268px;
-    min-width: 268px;
-    max-width: 268px;
+  .tasks-thread-layout.is-review-pane-open {
+    grid-template-columns: minmax(0, var(--tasks-nav-width)) minmax(0, 1fr);
   }
 
   .tasks-thread-detail-panel {

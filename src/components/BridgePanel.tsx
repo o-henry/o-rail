@@ -116,19 +116,17 @@ function BridgePanel({
           </div>
         </div>
         <div className="settings-badges">
-          <span className={`status-tag ${status.running ? "on" : "off"}`}>
-            {status.running ? t("bridge.ready") : t("bridge.stopped")}
-          </span>
+          {status.running ? (
+            <span className="status-tag on">
+              {t("bridge.ready")}
+            </span>
+          ) : null}
           <span className="status-tag neutral">{t("bridge.endpoint")}: {bridgeUrl}</span>
-          <span
-            className={`status-tag ${
-              status.extensionOriginAllowlistConfigured ? "on" : "off"
-            }`}
-          >
-            {status.extensionOriginAllowlistConfigured
-              ? t("bridge.allowlist.count", { count: status.allowedExtensionOriginCount ?? 0 })
-              : t("bridge.tokenMode")}
-          </span>
+          {status.extensionOriginAllowlistConfigured ? (
+            <span className="status-tag on">
+              {t("bridge.allowlist.count", { count: status.allowedExtensionOriginCount ?? 0 })}
+            </span>
+          ) : null}
         </div>
         {displayConnectCode && (
           <div className="bridge-code-card">

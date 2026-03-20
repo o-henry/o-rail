@@ -190,7 +190,7 @@ export default function TasksPage(props: TasksPageProps) {
   const [mentionIndex, setMentionIndex] = useState(0);
   const [isMentionMenuHidden, setIsMentionMenuHidden] = useState(false);
   const [isMainSurfaceFullscreen, setIsMainSurfaceFullscreen] = useState(false);
-  const [isDetailPanelCollapsed, setIsDetailPanelCollapsed] = useState(false);
+  const [isSidePanelsCollapsed, setIsSidePanelsCollapsed] = useState(false);
   const title = useMemo(() => displayThreadTitle(state.activeThread?.thread.title), [state.activeThread]);
   const headerTitle = state.activeThread ? title : "";
   const selectedModelOption = useMemo(
@@ -389,7 +389,7 @@ export default function TasksPage(props: TasksPageProps) {
 
   return (
     <section
-      className={`tasks-thread-layout workspace-tab-panel${isMainSurfaceFullscreen ? " is-main-surface-fullscreen" : ""}${!state.activeThread || isDetailPanelCollapsed ? " is-detail-panel-collapsed" : ""}`}
+      className={`tasks-thread-layout workspace-tab-panel${isMainSurfaceFullscreen ? " is-main-surface-fullscreen" : ""}${!state.activeThread ? " is-detail-panel-collapsed" : ""}${isSidePanelsCollapsed ? " is-side-panels-collapsed" : ""}`}
     >
       <aside className="tasks-thread-nav">
         <div className="tasks-thread-nav-actions">
@@ -542,12 +542,12 @@ export default function TasksPage(props: TasksPageProps) {
           <div className="tasks-thread-header-actions">
             {state.activeThread ? (
               <button
-                aria-label={isDetailPanelCollapsed ? t("tasks.detailPanel.show") : t("tasks.detailPanel.hide")}
+                aria-label={isSidePanelsCollapsed ? t("tasks.detailPanel.show") : t("tasks.detailPanel.hide")}
                 className="tasks-thread-header-terminal-button"
-                onClick={() => setIsDetailPanelCollapsed((current) => !current)}
+                onClick={() => setIsSidePanelsCollapsed((current) => !current)}
                 type="button"
               >
-                <img alt="" aria-hidden="true" src={isDetailPanelCollapsed ? "/open-panel.svg" : "/close.svg"} />
+                <img alt="" aria-hidden="true" src={isSidePanelsCollapsed ? "/open-panel.svg" : "/close.svg"} />
               </button>
             ) : null}
             <button
@@ -875,7 +875,7 @@ export default function TasksPage(props: TasksPageProps) {
         </div>
       ) : null}
 
-      {!state.activeThread || isDetailPanelCollapsed ? null : (
+      {!state.activeThread || isSidePanelsCollapsed ? null : (
       <aside className="tasks-thread-detail-panel">
         <div className="tasks-thread-detail-body">
           {state.activeThread ? (

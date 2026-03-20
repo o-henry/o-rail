@@ -19,6 +19,10 @@
   grid-template-columns: 220px minmax(0, 1fr);
 }
 
+.tasks-thread-layout.is-side-panels-collapsed {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .tasks-thread-layout.workspace-tab-panel {
   border-radius: 10px;
 }
@@ -503,7 +507,9 @@
 }
 
 .tasks-thread-layout.is-main-surface-fullscreen .tasks-thread-nav,
-.tasks-thread-layout.is-main-surface-fullscreen .tasks-thread-detail-panel {
+.tasks-thread-layout.is-main-surface-fullscreen .tasks-thread-detail-panel,
+.tasks-thread-layout.is-side-panels-collapsed .tasks-thread-nav,
+.tasks-thread-layout.is-side-panels-collapsed .tasks-thread-detail-panel {
   display: none;
 }
 

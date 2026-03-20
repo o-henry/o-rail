@@ -29,6 +29,18 @@ type BridgePanelProps = {
   onRestartBridge: () => void;
 };
 
+function normalizeConnectCode(input: string): string {
+  const raw = String(input ?? "").trim();
+  if (!raw) {
+    return "";
+  }
+  try {
+    return JSON.stringify(JSON.parse(raw));
+  } catch {
+    return raw.replace(/\s+/g, " ").trim();
+  }
+}
+
 function BridgePanel({
   status,
   connectCode,
@@ -40,6 +52,13 @@ function BridgePanel({
 }: BridgePanelProps) {
   const { t } = useI18n();
   const bridgeUrl = `http://127.0.0.1:${status.port}`;
+  const displayConnectCode = normalizeConnectCode(connectCode);
+  const connectCodeFontSize =
+    displayConnectCode.length > 150
+      ? "10px"
+      : displayConnectCode.length > 120
+        ? "11px"
+        : "12px";
 
   const content = (
     <>
@@ -111,7 +130,7 @@ function BridgePanel({
               : t("bridge.tokenMode")}
           </span>
         </div>
-        {connectCode && (
+        {displayConnectCode && (
           <div className="bridge-code-card">
             <div className="bridge-code-head">
               <span>{t("bridge.connectCode")}</span>
@@ -129,8 +148,9 @@ function BridgePanel({
               onFocus={(event) => event.currentTarget.select()}
               readOnly
               rows={1}
+              style={{ fontSize: connectCodeFontSize }}
               wrap="off"
-              value={connectCode}
+              value={displayConnectCode}
             />
           </div>
         )}

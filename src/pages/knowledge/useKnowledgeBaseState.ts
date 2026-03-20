@@ -28,6 +28,22 @@ type UseKnowledgeBaseStateParams = {
 
 type DeleteFileFn = (path: string) => Promise<void>;
 
+export type PendingKnowledgeGroupDelete = {
+  runId: string;
+  taskId: string;
+};
+
+export function buildKnowledgeGroupDeleteRequest(runId: string, taskId: string): PendingKnowledgeGroupDelete | null {
+  const normalizedRunId = String(runId ?? "").trim();
+  if (!normalizedRunId) {
+    return null;
+  }
+  return {
+    runId: normalizedRunId,
+    taskId: String(taskId ?? "").trim(),
+  };
+}
+
 async function deleteIfExists(
   action: DeleteFileFn,
   target: string,
@@ -59,6 +75,7 @@ export function useKnowledgeBaseState({ cwd, posts }: UseKnowledgeBaseStateParam
   const [jsonContent, setJsonContent] = useState("");
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState("");
+  const [pendingGroupDelete, setPendingGroupDelete] = useState<PendingKnowledgeGroupDelete | null>(null);
 
   useEffect(() => {
     let next = readKnowledgeEntries().filter((row) => !isHiddenKnowledgeEntry(row));
@@ -232,13 +249,9 @@ export function useKnowledgeBaseState({ cwd, posts }: UseKnowledgeBaseStateParam
     })();
   };
 
-  const onDeleteGroup = (runId: string, taskId: string) => {
+  const executeDeleteGroup = (runId: string) => {
     const normalizedRunId = String(runId ?? "").trim();
     if (!normalizedRunId) {
-      return;
-    }
-    const shouldDelete = window.confirm(`'${taskId} · ${normalizedRunId}' 그룹을 삭제할까요?`);
-    if (!shouldDelete) {
       return;
     }
     void (async () => {
@@ -306,6 +319,23 @@ export function useKnowledgeBaseState({ cwd, posts }: UseKnowledgeBaseStateParam
     })();
   };
 
+  const onDeleteGroup = (runId: string, taskId: string) => {
+    setPendingGroupDelete(buildKnowledgeGroupDeleteRequest(runId, taskId));
+  };
+
+  const onConfirmDeleteGroup = () => {
+    if (!pendingGroupDelete) {
+      return;
+    }
+    const current = pendingGroupDelete;
+    setPendingGroupDelete(null);
+    executeDeleteGroup(current.runId);
+  };
+
+  const onCancelDeleteGroup = () => {
+    setPendingGroupDelete(null);
+  };
+
   const onRevealPath = async (path: string) => {
     const normalized = String(path ?? "").trim();
     if (!normalized) {
@@ -335,6 +365,9 @@ export function useKnowledgeBaseState({ cwd, posts }: UseKnowledgeBaseStateParam
     jsonContent,
     jsonReadable,
     markdownContent,
+    pendingGroupDelete,
+    onCancelDeleteGroup,
+    onConfirmDeleteGroup,
     onDeleteGroup,
     onDeleteSelected,
     onRevealPath,

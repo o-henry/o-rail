@@ -1,5 +1,6 @@
 import type { KnowledgeEntry, KnowledgeSourcePost } from "../../features/studio/knowledgeTypes";
 import { KnowledgeBaseDetailPanel } from "./KnowledgeBaseDetailPanel";
+import { KnowledgeDeleteGroupModal } from "./KnowledgeDeleteGroupModal";
 import { KnowledgeBaseListPanel } from "./KnowledgeBaseListPanel";
 import { useKnowledgeBaseState } from "./useKnowledgeBaseState";
 
@@ -44,6 +45,12 @@ export default function KnowledgeBasePage({
           selected={state.selected}
         />
       </section>
+      <KnowledgeDeleteGroupModal
+        onCancel={state.onCancelDeleteGroup}
+        onConfirm={state.onConfirmDeleteGroup}
+        open={Boolean(state.pendingGroupDelete)}
+        pendingGroupDelete={state.pendingGroupDelete}
+      />
     </section>
   );
 }

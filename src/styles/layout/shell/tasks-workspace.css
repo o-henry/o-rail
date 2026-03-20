@@ -8,7 +8,7 @@
   height: 100%;
   display: grid;
   width: 100%;
-  grid-template-columns: 280px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 296px) minmax(0, 1fr);
   gap: 10px;
   padding: 0;
   background: var(--bg-app);
@@ -17,7 +17,7 @@
 }
 
 .tasks-thread-layout.is-review-pane-open {
-  grid-template-columns: 280px minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 296px) minmax(0, 1fr) minmax(0, 1fr);
 }
 
 .tasks-thread-layout.is-thread-nav-hidden {
@@ -45,6 +45,9 @@
   align-content: start;
   gap: 10px;
   padding: 0;
+  width: 296px;
+  min-width: 296px;
+  max-width: 296px;
   border-radius: var(--tasks-wrapper-radius);
   background: transparent;
   overflow: auto;
@@ -75,6 +78,7 @@
 
 .tasks-thread-nav-utility-actions {
   gap: 8px;
+  margin-right: 6px;
 }
 
 .tasks-thread-nav-copy {
@@ -1818,7 +1822,13 @@
 @media (max-width: 1400px) {
   .tasks-thread-layout {
     font-family: "DepartureMonoRail", "Galmuri11", monospace;
-    grid-template-columns: 248px minmax(0, 1fr) minmax(260px, 0.92fr);
+    grid-template-columns: minmax(0, 268px) minmax(0, 1fr) minmax(260px, 0.92fr);
+  }
+
+  .tasks-thread-nav {
+    width: 268px;
+    min-width: 268px;
+    max-width: 268px;
   }
 
   .tasks-thread-stage-rail {
@@ -1829,7 +1839,13 @@
 @media (max-width: 1120px) {
   .tasks-thread-layout {
     font-family: "DepartureMonoRail", "Galmuri11", monospace;
-    grid-template-columns: 248px minmax(0, 1fr);
+    grid-template-columns: minmax(0, 268px) minmax(0, 1fr);
+  }
+
+  .tasks-thread-nav {
+    width: 268px;
+    min-width: 268px;
+    max-width: 268px;
   }
 
   .tasks-thread-detail-panel {

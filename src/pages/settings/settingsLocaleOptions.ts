@@ -1,7 +1,7 @@
 import type { FancySelectOption } from "../../components/FancySelect";
 import type { AppLocale } from "../../i18n";
 
-const DEFAULT_LOCALE_ORDER: AppLocale[] = ["ko", "en", "jp", "zh"];
+const DEFAULT_LOCALE_ORDER: AppLocale[] = ["ko", "en"];
 
 export function detectPreferredLocale(input: string | readonly string[] | null | undefined): AppLocale {
   const values = Array.isArray(input) ? input : [input ?? ""];
@@ -27,7 +27,8 @@ export function detectPreferredLocale(input: string | readonly string[] | null |
 }
 
 export function orderLocalesByPreference(preferred: AppLocale): AppLocale[] {
-  return [preferred, ...DEFAULT_LOCALE_ORDER.filter((locale) => locale !== preferred)];
+  const normalizedPreferred = preferred === "ko" ? "ko" : "en";
+  return [normalizedPreferred, ...DEFAULT_LOCALE_ORDER.filter((locale) => locale !== normalizedPreferred)];
 }
 
 export function buildSettingsLocaleOptions(

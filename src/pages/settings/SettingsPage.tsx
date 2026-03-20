@@ -55,6 +55,7 @@ export default function SettingsPage({
 }: SettingsPageProps) {
   const { locale, setLocale, t } = useI18n();
   const backgroundFileInputRef = useRef<HTMLInputElement | null>(null);
+  const selectableLocale: AppLocale = locale === "ko" ? "ko" : "en";
   const localeOptions = useMemo(
     () =>
       buildSettingsLocaleOptions(
@@ -144,7 +145,7 @@ export default function SettingsPage({
           className="modern-select settings-language-select"
           onChange={(next) => setLocale(next as AppLocale)}
           options={localeOptions}
-          value={locale}
+          value={selectableLocale}
         />
       </label>
       <label className="settings-background-controls">

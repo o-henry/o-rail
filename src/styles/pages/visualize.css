@@ -123,7 +123,8 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 8px;
-  padding: 10px 12px;
+  min-height: 28px;
+  padding: 0 12px;
   border-bottom: 1px solid rgba(226, 232, 240, 0.9);
 }
 
@@ -696,22 +697,49 @@
   box-shadow: none;
 }
 
-.visualize-monitor-evidence-picker {
+.visualize-monitor-evidence-table {
   display: grid;
-  width: 100%;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  grid-auto-flow: row;
-  grid-auto-rows: 260px;
-  gap: 6px;
   min-height: 0;
   flex: 1 1 auto;
-  align-content: start;
-  align-items: stretch;
-  justify-items: stretch;
+  grid-template-rows: auto minmax(0, 1fr);
+  border: 1px solid rgba(226, 232, 240, 1);
+  background: rgba(255, 255, 255, 0.94);
+}
+
+.visualize-monitor-evidence-table-head,
+.visualize-monitor-evidence-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.3fr) 100px 72px minmax(0, 2.2fr);
+  align-items: start;
+  column-gap: 10px;
+}
+
+.visualize-monitor-evidence-table-head {
+  min-height: 34px;
+  padding: 0 10px;
+  border-bottom: 1px solid rgba(226, 232, 240, 1);
+  background: #f8fafc;
+}
+
+.visualize-monitor-evidence-table-head span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  color: #64748b;
+  font-family: "Departure Mono", "DepartureMonoRail", "Galmuri11", monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.visualize-monitor-evidence-picker {
+  display: grid;
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: auto;
 }
 
 .visualize-monitor-evidence-picker > .visualize-monitor-empty {
-  grid-column: 1 / -1;
   display: flex;
   min-height: 100%;
   align-items: center;
@@ -719,47 +747,52 @@
   text-align: center;
 }
 
-.visualize-monitor-evidence-card {
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
+.visualize-monitor-evidence-row {
+  display: grid;
   min-width: 0;
-  min-height: 0;
   width: 100%;
-  max-width: none;
-  height: 100%;
   box-sizing: border-box;
   padding: 10px;
-  border: 1px solid rgba(226, 232, 240, 1);
+  border-bottom: 1px solid rgba(226, 232, 240, 1);
   background: rgba(255, 255, 255, 0.95);
-  overflow: hidden;
 }
 
-.visualize-monitor-evidence-card strong {
-  display: -webkit-box;
+.visualize-monitor-evidence-row:last-child {
+  border-bottom: 0;
+}
+
+.visualize-monitor-evidence-row > strong,
+.visualize-monitor-evidence-row > span,
+.visualize-monitor-evidence-summary-cell {
   min-width: 0;
+}
+
+.visualize-monitor-evidence-row > strong {
   overflow: hidden;
-  overflow-wrap: anywhere;
   color: #0f172a;
   line-height: 1.32;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  overflow-wrap: anywhere;
 }
 
-.visualize-monitor-evidence-card a,
-.visualize-monitor-evidence-picker span {
+.visualize-monitor-evidence-row > span,
+.visualize-monitor-evidence-summary-cell a {
   color: #64748b;
   font-size: 0.76rem;
 }
 
-.visualize-monitor-evidence-card a {
+.visualize-monitor-evidence-summary-cell {
+  display: grid;
+  gap: 6px;
+}
+
+.visualize-monitor-evidence-summary-cell a {
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.visualize-monitor-evidence-card p {
+.visualize-monitor-evidence-summary-cell p {
   min-width: 0;
   overflow: hidden;
   display: -webkit-box;
@@ -805,22 +838,27 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .visualize-monitor-evidence-picker {
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    grid-auto-rows: 240px;
+  .visualize-monitor-evidence-table-head,
+  .visualize-monitor-evidence-row {
+    grid-template-columns: minmax(180px, 1.1fr) 88px 64px minmax(0, 1.8fr);
   }
 }
 
 @media (max-width: 1440px) {
-  .visualize-monitor-evidence-picker {
-    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-    grid-auto-rows: 250px;
+  .visualize-monitor-evidence-table-head,
+  .visualize-monitor-evidence-row {
+    grid-template-columns: minmax(200px, 1.2fr) 92px 68px minmax(0, 2fr);
   }
 }
 
 @media (max-width: 720px) {
-  .visualize-monitor-evidence-picker {
+  .visualize-monitor-evidence-table-head,
+  .visualize-monitor-evidence-row {
     grid-template-columns: minmax(0, 1fr);
-    grid-auto-rows: 240px;
+    row-gap: 6px;
+  }
+
+  .visualize-monitor-evidence-table-head {
+    display: none;
   }
 }

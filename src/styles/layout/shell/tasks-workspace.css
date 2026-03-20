@@ -15,6 +15,10 @@
   overflow: hidden;
 }
 
+.tasks-thread-layout.is-detail-panel-collapsed {
+  grid-template-columns: 220px minmax(0, 1fr);
+}
+
 .tasks-thread-layout.workspace-tab-panel {
   border-radius: 10px;
 }
@@ -910,6 +914,12 @@
   margin-top: 18px;
 }
 
+.tasks-thread-message-row.is-assistant + .tasks-thread-message-row.is-user,
+.tasks-thread-message-row.is-process + .tasks-thread-message-row.is-user,
+.tasks-thread-message-row.is-live-placeholder + .tasks-thread-message-row.is-user {
+  margin-top: 18px;
+}
+
 .tasks-thread-message-row.is-live-placeholder {
   opacity: 0.8;
 }
@@ -1332,6 +1342,10 @@
   min-height: 0;
   background: transparent;
   overflow: visible;
+}
+
+.tasks-thread-layout.is-detail-panel-collapsed .tasks-thread-main-surface {
+  grid-column: 2 / -1;
 }
 
 .tasks-thread-detail-tabs {

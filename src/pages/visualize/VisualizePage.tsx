@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import FeedChart from "../../components/feed/FeedChart";
 import FeedDocument from "../../components/feed/FeedDocument";
 import type { FeedChartSpec } from "../../features/feed/chartSpec";
@@ -38,7 +38,97 @@ function formatPercent(value: number) {
   return `${Math.round(value)}%`;
 }
 
-function buildSourceChart(spec: ReturnType<typeof useVisualizePageState>["collectionMetrics"]): FeedChartSpec | null {
+type VisualizeMetrics = ReturnType<typeof useVisualizePageState>["collectionMetrics"];
+type EvidenceItem = NonNullable<ReturnType<typeof useVisualizePageState>["collectionItems"]>["items"][number];
+
+function parseUrlHost(input: string) {
+  try {
+    return new URL(input).hostname.toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
+function matchesAllowedDomain(host: string, allowedDomains: string[]) {
+  return allowedDomains.some((domain) => host === domain || host.endsWith(`.${domain}`));
+}
+
+function filterEvidenceItems(items: EvidenceItem[], allowedDomains: string[], shouldFilter: boolean) {
+  if (!shouldFilter || allowedDomains.length === 0) {
+    return items;
+  }
+  return items.filter((item) => {
+    const host = parseUrlHost(item.url);
+    return host ? matchesAllowedDomain(host, allowedDomains) : false;
+  });
+}
+
+function buildMetricsFromItems(jobId: string, items: EvidenceItem[]): NonNullable<VisualizeMetrics> {
+  const bySourceType = new Map<string, { itemCount: number; avgScore: number; avgHotScore: number }>();
+  const byVerificationStatus = new Map<string, number>();
+  const timeline = new Map<string, number>();
+  const topSources = new Map<string, number>();
+  let scoreTotal = 0;
+  let verified = 0;
+  let warnings = 0;
+  let conflicted = 0;
+
+  for (const item of items) {
+    const sourceRow = bySourceType.get(item.sourceType) ?? { itemCount: 0, avgScore: 0, avgHotScore: 0 };
+    sourceRow.itemCount += 1;
+    sourceRow.avgScore += item.score;
+    sourceRow.avgHotScore += item.hotScore;
+    bySourceType.set(item.sourceType, sourceRow);
+
+    byVerificationStatus.set(item.verificationStatus, (byVerificationStatus.get(item.verificationStatus) ?? 0) + 1);
+    topSources.set(item.sourceName, (topSources.get(item.sourceName) ?? 0) + 1);
+    const bucket = String(item.publishedAt || item.fetchedAt || "").slice(0, 10);
+    if (bucket) {
+      timeline.set(bucket, (timeline.get(bucket) ?? 0) + 1);
+    }
+    if (item.verificationStatus === "verified") {
+      verified += 1;
+    } else if (item.verificationStatus === "warning") {
+      warnings += 1;
+    } else if (item.verificationStatus === "conflicted") {
+      conflicted += 1;
+    }
+    scoreTotal += item.score;
+  }
+
+  return {
+    dbPath: "",
+    jobId,
+    totals: {
+      items: items.length,
+      sources: topSources.size,
+      verified,
+      warnings,
+      conflicted,
+      avgScore: items.length ? scoreTotal / items.length : 0,
+      avgHotScore: 0,
+    },
+    bySourceType: [...bySourceType.entries()].map(([sourceType, row]) => ({
+      sourceType,
+      itemCount: row.itemCount,
+      avgScore: row.itemCount ? row.avgScore / row.itemCount : 0,
+      avgHotScore: row.itemCount ? row.avgHotScore / row.itemCount : 0,
+    })),
+    byVerificationStatus: [...byVerificationStatus.entries()].map(([verificationStatus, itemCount]) => ({
+      verificationStatus,
+      itemCount,
+    })),
+    timeline: [...timeline.entries()]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([bucketDate, itemCount]) => ({ bucketDate, itemCount })),
+    topSources: [...topSources.entries()]
+      .sort((left, right) => right[1] - left[1])
+      .slice(0, 8)
+      .map(([sourceName, itemCount]) => ({ sourceName, itemCount })),
+  };
+}
+
+function buildSourceChart(spec: VisualizeMetrics): FeedChartSpec | null {
   if (!spec || spec.bySourceType.length === 0) {
     return null;
   }
@@ -49,7 +139,7 @@ function buildSourceChart(spec: ReturnType<typeof useVisualizePageState>["collec
   };
 }
 
-function buildTimelineChart(spec: ReturnType<typeof useVisualizePageState>["collectionMetrics"]): FeedChartSpec | null {
+function buildTimelineChart(spec: VisualizeMetrics): FeedChartSpec | null {
   if (!spec || spec.timeline.length === 0) {
     return null;
   }
@@ -58,6 +148,13 @@ function buildTimelineChart(spec: ReturnType<typeof useVisualizePageState>["coll
     labels: spec.timeline.map((row) => row.bucketDate.slice(5)),
     series: [{ name: "Items", data: spec.timeline.map((row) => row.itemCount), color: "#8b5cf6" }],
   };
+}
+
+function withoutChartTitle(spec: FeedChartSpec | null | undefined): FeedChartSpec | null {
+  if (!spec) {
+    return null;
+  }
+  return { ...spec, title: "" };
 }
 
 export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEntry }: VisualizePageProps) {
@@ -70,25 +167,42 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
   const reportRef = useRef<HTMLElement | null>(null);
   const evidenceRef = useRef<HTMLElement | null>(null);
 
-  const sourceChart = buildSourceChart(state.collectionMetrics);
-  const timelineChart = buildTimelineChart(state.collectionMetrics);
-  const qualityScore = Math.max(0, Math.min(100, Math.round(state.collectionMetrics?.totals.avgScore ?? 0)));
   const reportBody = state.reportMarkdown || state.collectionMarkdown;
-
   const reportEntryId = state.selectedReportRun?.collectionEntryId || state.selectedReportRun?.reportEntryId || "";
+  const reportJobId = String(state.collectionPayload?.planned?.job?.jobId ?? "").trim();
   const reportJob = state.collectionPayload?.planned?.job;
   const autoSpec = state.collectionPayload?.reportSpec;
   const questionType = autoSpec?.questionType || "topic_research";
+  const allowedDomains = reportJob?.sourceOptions?.allowed_domains ?? reportJob?.domains ?? [];
+  const shouldFilterEvidence = Boolean(reportJob?.sourceOptions?.strict_domain_isolation || questionType === "genre_ranking");
+  const rawEvidenceItems = state.collectionItems?.items ?? [];
+  const evidenceItems = useMemo(
+    () => filterEvidenceItems(rawEvidenceItems, allowedDomains, shouldFilterEvidence),
+    [allowedDomains, rawEvidenceItems, shouldFilterEvidence],
+  );
+  const evidenceWasFiltered = evidenceItems.length !== rawEvidenceItems.length;
+  const effectiveMetrics = useMemo(
+    () => (evidenceWasFiltered ? buildMetricsFromItems(reportJobId, evidenceItems) : state.collectionMetrics),
+    [evidenceItems, evidenceWasFiltered, reportJobId, state.collectionMetrics],
+  );
+  const evidenceFallbackItems: ResearchReportListItem[] = useMemo(
+    () =>
+      evidenceItems.slice(0, 6).map((item) => ({
+        title: item.title || shorten(item.sourceName || item.sourceType, 32),
+        detail: item.summary || item.url || t("visualize.evidence.noSummary"),
+        badge: `${item.verificationStatus} · ${Math.round(item.score)}`,
+      })),
+    [evidenceItems, t],
+  );
+  const sourceChart = buildSourceChart(effectiveMetrics);
+  const timelineChart = buildTimelineChart(effectiveMetrics);
+  const qualityScore = Math.max(0, Math.min(100, Math.round(effectiveMetrics?.totals.avgScore ?? 0)));
   const leadCopy = firstNarrativeLine(state.reportMarkdown) || firstNarrativeLine(state.collectionMarkdown);
-  const evidenceItems = state.collectionItems?.items ?? [];
-  const popularGenres = state.collectionGenreRankings?.popular.slice(0, 5) ?? [];
-  const qualityGenres = state.collectionGenreRankings?.quality.slice(0, 5) ?? [];
-  const topSources = state.collectionMetrics?.topSources.slice(0, 5) ?? [];
-  const topSteamGames = [...(state.steamMetrics?.items ?? [])]
-    .sort((left, right) => right.totalReviews - left.totalReviews)
-    .slice(0, 5);
-  const mainChartSpec = autoSpec?.widgets?.mainChart?.chart || timelineChart;
-  const secondaryChartSpec = autoSpec?.widgets?.secondaryChart?.chart || sourceChart;
+  const popularGenres = evidenceWasFiltered ? [] : (state.collectionGenreRankings?.popular.slice(0, 5) ?? []);
+  const qualityGenres = evidenceWasFiltered ? [] : (state.collectionGenreRankings?.quality.slice(0, 5) ?? []);
+  const topSources = effectiveMetrics?.topSources.slice(0, 5) ?? [];
+  const mainChartSpec = withoutChartTitle(autoSpec?.widgets ? (autoSpec.widgets.mainChart?.chart ?? null) : timelineChart);
+  const secondaryChartSpec = withoutChartTitle(autoSpec?.widgets ? (autoSpec.widgets.secondaryChart?.chart ?? null) : sourceChart);
   const mainChartTitle =
     questionType === "genre_ranking"
       ? t("visualize.chart.popularGenres")
@@ -129,36 +243,46 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
         : t("visualize.list.representativeTitles");
   const reportTitle = t("visualize.report.title");
   const evidenceTitle = t("visualize.evidence.title");
+  const toolbarTitle = t("visualize.toolbar.title");
+  const sessionTitle = t("visualize.widget.session");
+  const qualityTitle = t("visualize.widget.quality");
+  const allowGenericFallbackLists = !autoSpec?.widgets || questionType === "topic_research";
   const primaryListItems: ResearchReportListItem[] =
-    popularGenres.length
+    (autoSpec?.widgets?.primaryList?.items?.length
+      ? autoSpec.widgets.primaryList.items
+      : null)
+    ?? (popularGenres.length
       ? popularGenres.map((genre) => ({
           title: `${genre.rank}. ${genre.genreLabel}`,
-          detail: genre.representativeTitles.slice(0, 2).join(" · ") || t("visualize.common.representativesPending"),
+          detail: `${t("visualize.common.avgScore")} ${Math.round(genre.avgScore)} · ${genre.representativeTitles.slice(0, 2).join(" · ") || t("visualize.common.representativesPending")}`,
           badge: `P ${Math.round(genre.popularityScore)} · E ${genre.evidenceCount}`,
         }))
-      : topSources.map((source) => ({
-          title: source.sourceName,
-          detail: t("visualize.common.primarySource"),
-          badge: t("visualize.common.itemCount", { count: source.itemCount }),
-        }));
+      : allowGenericFallbackLists
+        ? topSources.map((source) => ({
+            title: source.sourceName,
+            detail: t("visualize.common.primarySource"),
+            badge: t("visualize.common.itemCount", { count: source.itemCount }),
+          }))
+        : []);
   const secondaryListItems: ResearchReportListItem[] =
-    qualityGenres.length
+    (autoSpec?.widgets?.secondaryList?.items?.length
+      ? autoSpec.widgets.secondaryList.items
+      : null)
+    ?? (qualityGenres.length
       ? qualityGenres.map((genre) => ({
           title: `${genre.rank}. ${genre.genreLabel}`,
-          detail: genre.representativeTitles.slice(0, 3).join(" · ") || t("visualize.common.representativesPending"),
+          detail: `${t("visualize.common.avgScore")} ${Math.round(genre.avgScore)} · ${genre.representativeTitles.slice(0, 3).join(" · ") || t("visualize.common.representativesPending")}`,
           badge: `Q ${Math.round(genre.qualityScore)} · ${Math.round(genre.avgScore)}`,
         }))
-      : topSteamGames.map((game) => ({
-          title: game.gameName,
-          detail: t("visualize.common.representativeGame"),
-          badge: `${game.totalReviews} reviews · ${formatPercent(game.positiveRatio)}`,
-        }));
+      : allowGenericFallbackLists
+        ? evidenceFallbackItems
+        : []);
   const summaryMetrics = [
-    { label: t("visualize.metric.evidence"), value: state.collectionMetrics?.totals.items ?? 0, meta: t("visualize.metric.evidence.meta") },
-    { label: t("visualize.metric.verified"), value: state.collectionMetrics?.totals.verified ?? 0, meta: t("visualize.metric.verified.meta") },
-    { label: t("visualize.metric.sources"), value: state.collectionMetrics?.totals.sources ?? 0, meta: t("visualize.metric.sources.meta") },
-    { label: t("visualize.metric.avgScore"), value: state.collectionMetrics?.totals.avgScore ?? 0, meta: t("visualize.metric.avgScore.meta") },
-    { label: t("visualize.metric.warnings"), value: state.collectionMetrics?.totals.warnings ?? 0, meta: t("visualize.metric.warnings.meta") },
+    { label: t("visualize.metric.evidence"), value: effectiveMetrics?.totals.items ?? 0, meta: t("visualize.metric.evidence.meta") },
+    { label: t("visualize.metric.verified"), value: effectiveMetrics?.totals.verified ?? 0, meta: t("visualize.metric.verified.meta") },
+    { label: t("visualize.metric.sources"), value: effectiveMetrics?.totals.sources ?? 0, meta: t("visualize.metric.sources.meta") },
+    { label: t("visualize.metric.avgScore"), value: effectiveMetrics?.totals.avgScore ?? 0, meta: t("visualize.metric.avgScore.meta") },
+    { label: t("visualize.metric.warnings"), value: effectiveMetrics?.totals.warnings ?? 0, meta: t("visualize.metric.warnings.meta") },
   ];
 
   const focusWidget = useCallback((ref: { current: HTMLElement | null }) => {
@@ -180,7 +304,7 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
       <section className="visualize-monitor-shell">
         <header className="visualize-monitor-topbar">
           <div className="visualize-monitor-toolbar-copy">
-            <strong>RESEARCH</strong>
+            <strong>{toolbarTitle}</strong>
             <span>{state.selectedReportRun?.title || t("visualize.toolbar.empty")}</span>
           </div>
           <div className="visualize-monitor-toolbar-actions">
@@ -204,7 +328,7 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
                 className="is-session"
                 maximized={maximizedWidgetId === "session"}
                 onToggleMaximize={toggleMaximize}
-                title="RESEARCH SESSION"
+                title={sessionTitle}
                 widgetId="session"
               >
                 <h1>{state.selectedReportRun?.title || t("visualize.session.emptyTitle")}</h1>
@@ -264,7 +388,7 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
                 className="is-chart-quality"
                 maximized={maximizedWidgetId === "quality"}
                 onToggleMaximize={toggleMaximize}
-                title="QUALITY SCORE"
+                title={qualityTitle}
                 widgetId="quality"
               >
                 <div className="visualize-monitor-quality-panel">
@@ -279,7 +403,7 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
                     {t("visualize.quality.copy")}
                   </p>
                   <div className="visualize-monitor-quality-legend">
-                    {(state.collectionMetrics?.byVerificationStatus ?? []).map((row) => (
+                    {(effectiveMetrics?.byVerificationStatus ?? []).map((row) => (
                       <div className="visualize-monitor-quality-legend-row" key={row.verificationStatus}>
                         <span>{row.verificationStatus}</span>
                         <strong>{row.itemCount}</strong>
@@ -373,22 +497,29 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
                     value={state.itemSearch}
                   />
                 </div>
-                <div className="visualize-monitor-evidence-picker">
-                  {evidenceItems.map((item) => (
-                    <article className="visualize-monitor-evidence-card" key={item.itemFactId}>
-                      <strong>{item.title || shorten(item.sourceName || item.sourceType, 24)}</strong>
-                      <div className="visualize-monitor-chip-row">
-                        <span>{item.sourceName || item.sourceType}</span>
+                <div className="visualize-monitor-evidence-table">
+                  <div className="visualize-monitor-evidence-table-head">
+                    <span>{t("visualize.evidence.column.title")}</span>
+                    <span>{t("visualize.evidence.column.approval")}</span>
+                    <span>{t("visualize.evidence.column.score")}</span>
+                    <span>{t("visualize.evidence.column.summary")}</span>
+                  </div>
+                  <div className="visualize-monitor-evidence-picker">
+                    {evidenceItems.map((item) => (
+                      <article className="visualize-monitor-evidence-row" key={item.itemFactId}>
+                        <strong>{item.title || shorten(item.sourceName || item.sourceType, 32)}</strong>
                         <span>{item.verificationStatus}</span>
-                        <span>SCORE {item.score}</span>
-                      </div>
-                      <p>{item.summary || item.contentExcerpt || t("visualize.evidence.noSummary")}</p>
-                      <a href={item.url} rel="noreferrer" target="_blank">
-                        {item.url}
-                      </a>
-                    </article>
-                  ))}
-                  {evidenceItems.length ? null : <p className="visualize-monitor-empty">{t("visualize.empty.evidence")}</p>}
+                        <span>{item.score}</span>
+                        <div className="visualize-monitor-evidence-summary-cell">
+                          <p>{item.summary || item.contentExcerpt || t("visualize.evidence.noSummary")}</p>
+                          <a href={item.url} rel="noreferrer" target="_blank">
+                            {item.url}
+                          </a>
+                        </div>
+                      </article>
+                    ))}
+                    {evidenceItems.length ? null : <p className="visualize-monitor-empty">{t("visualize.empty.evidence")}</p>}
+                  </div>
                 </div>
               </VisualizeWidgetFrame>
             </div>

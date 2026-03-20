@@ -11,7 +11,6 @@ import { RUNTIME_MODEL_OPTIONS } from "../../features/workflow/runtimeModelOptio
 import { t as translate, useI18n } from "../../i18n";
 import {
   getTaskAgentLabel,
-  getTaskAgentWorkflowStageLabels,
   getThreadStageLabel,
   type ThreadStageId,
 } from "./taskAgentPresets";
@@ -191,6 +190,7 @@ export default function TasksPage(props: TasksPageProps) {
   const [mentionIndex, setMentionIndex] = useState(0);
   const [isMentionMenuHidden, setIsMentionMenuHidden] = useState(false);
   const [isMainSurfaceFullscreen, setIsMainSurfaceFullscreen] = useState(false);
+  const [isDetailPanelCollapsed, setIsDetailPanelCollapsed] = useState(false);
   const title = useMemo(() => displayThreadTitle(state.activeThread?.thread.title), [state.activeThread]);
   const headerTitle = state.activeThread ? title : "";
   const selectedModelOption = useMemo(
@@ -307,14 +307,6 @@ export default function TasksPage(props: TasksPageProps) {
   );
   const liveAgents = useMemo(() => buildLiveAgentCards(state.activeThread, state.liveRoleNotes), [state.activeThread, state.liveRoleNotes]);
   const fileTree = useMemo(() => buildThreadFileTree(state.activeThread?.files ?? []), [state.activeThread?.files]);
-  const workflowRoleMappings = useMemo(
-    () => (state.activeThread?.agents ?? []).map((agent) => ({
-      agentId: agent.id,
-      label: getTaskAgentLabel(agent.roleId),
-      stageLabels: getTaskAgentWorkflowStageLabels(agent.roleId),
-    })),
-    [state.activeThread?.agents],
-  );
   const mentionMatch = useMemo(
     () => (isMentionMenuHidden ? null : getTaskAgentMentionMatch(state.composerDraft, composerCursor)),
     [composerCursor, isMentionMenuHidden, state.composerDraft],
@@ -396,7 +388,9 @@ export default function TasksPage(props: TasksPageProps) {
   }, [state.activeThread?.messages.length, liveAgents.length, state.pendingApprovals.length, state.selectedFileDiff]);
 
   return (
-    <section className={`tasks-thread-layout workspace-tab-panel${isMainSurfaceFullscreen ? " is-main-surface-fullscreen" : ""}`}>
+    <section
+      className={`tasks-thread-layout workspace-tab-panel${isMainSurfaceFullscreen ? " is-main-surface-fullscreen" : ""}${!state.activeThread || isDetailPanelCollapsed ? " is-detail-panel-collapsed" : ""}`}
+    >
       <aside className="tasks-thread-nav">
         <div className="tasks-thread-nav-actions">
           <button className="tasks-thread-new-button" onClick={handleNewThread} type="button">
@@ -546,6 +540,16 @@ export default function TasksPage(props: TasksPageProps) {
             </p>
           </div>
           <div className="tasks-thread-header-actions">
+            {state.activeThread ? (
+              <button
+                aria-label={isDetailPanelCollapsed ? t("tasks.detailPanel.show") : t("tasks.detailPanel.hide")}
+                className="tasks-thread-header-terminal-button"
+                onClick={() => setIsDetailPanelCollapsed((current) => !current)}
+                type="button"
+              >
+                <img alt="" aria-hidden="true" src={isDetailPanelCollapsed ? "/open.svg" : "/close.svg"} />
+              </button>
+            ) : null}
             <button
               aria-label={isMainSurfaceFullscreen ? t("tasks.fullscreen.exit") : t("tasks.fullscreen.enter")}
               className="tasks-thread-header-terminal-button"
@@ -865,6 +869,7 @@ export default function TasksPage(props: TasksPageProps) {
         </div>
       ) : null}
 
+      {!state.activeThread || isDetailPanelCollapsed ? null : (
       <aside className="tasks-thread-detail-panel">
         <div className="tasks-thread-detail-body">
           {state.activeThread ? (
@@ -970,20 +975,6 @@ export default function TasksPage(props: TasksPageProps) {
                 </div>
                 <pre>{selectedStage?.summary || state.activeThread?.workflow.nextAction || t("tasks.workflow.noSummary")}</pre>
               </section>
-              <section className="tasks-thread-detail-text-panel is-inline">
-                <div className="tasks-thread-section-head">
-                  <strong>{t("tasks.workflow.agentMapping")}</strong>
-                  <span>{workflowRoleMappings.length}</span>
-                </div>
-                <div className="tasks-thread-workflow-role-map">
-                  {workflowRoleMappings.map((entry) => (
-                    <article className="tasks-thread-workflow-role-card" key={entry.agentId}>
-                      <strong>{entry.label}</strong>
-                      <span>{entry.stageLabels.length > 0 ? entry.stageLabels.join(" / ") : "-"}</span>
-                    </article>
-                  ))}
-                </div>
-              </section>
               {selectedStage?.id === "integrate" ? (
                 <div className="tasks-thread-workflow-list">
                   {(state.activeThread?.approvals ?? []).length === 0 ? (
@@ -1080,29 +1071,6 @@ export default function TasksPage(props: TasksPageProps) {
                     </div>
                     <pre>{state.selectedAgentDetail.lastPrompt || t("tasks.agent.noRequest")}</pre>
                   </section>
-                  <section className="tasks-thread-artifact-list">
-                    <div className="tasks-thread-section-head">
-                      <strong>{t("tasks.agent.artifacts")}</strong>
-                      <span>{state.selectedAgentDetail.artifactPaths.length}</span>
-                    </div>
-                    {state.selectedAgentDetail.artifactPaths.length === 0 ? (
-                      <p className="tasks-thread-empty-copy">{t("tasks.agent.noArtifacts")}</p>
-                    ) : (
-                      <ul>
-                        {state.selectedAgentDetail.artifactPaths.map((path) => (
-                          <li key={path}>
-                            <button
-                              className="tasks-thread-artifact-link"
-                              onClick={() => state.openKnowledgeEntryForArtifact(path)}
-                              type="button"
-                            >
-                              {path}
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </section>
                 </>
               ) : (
                 <p className="tasks-thread-empty-copy">{t("tasks.agent.detailEmpty")}</p>
@@ -1111,6 +1079,7 @@ export default function TasksPage(props: TasksPageProps) {
           ) : null}
         </div>
       </aside>
+      )}
     </section>
   );
 }

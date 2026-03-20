@@ -10,13 +10,14 @@ describe("settingsLocaleOptions", () => {
   });
 
   it("puts the preferred locale first while preserving the remaining order", () => {
-    expect(orderLocalesByPreference("en")).toEqual(["en", "ko", "jp", "zh"]);
-    expect(orderLocalesByPreference("zh")).toEqual(["zh", "ko", "en", "jp"]);
+    expect(orderLocalesByPreference("en")).toEqual(["en", "ko"]);
+    expect(orderLocalesByPreference("zh")).toEqual(["en", "ko"]);
+    expect(orderLocalesByPreference("ko")).toEqual(["ko", "en"]);
   });
 
   it("builds locale options in preferred order", () => {
     const options = buildSettingsLocaleOptions("jp", (locale) => locale.toUpperCase());
-    expect(options.map((option) => option.value)).toEqual(["jp", "ko", "en", "zh"]);
-    expect(options[0]?.label).toBe("JP");
+    expect(options.map((option) => option.value)).toEqual(["en", "ko"]);
+    expect(options[0]?.label).toBe("EN");
   });
 });

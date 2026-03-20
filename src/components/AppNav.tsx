@@ -50,7 +50,6 @@ export default function AppNav({ activeTab, hidden = false, onSelectTab, renderI
       <nav className="nav-list">
         {NAV_ITEMS.map((item) => {
           const active = activeTab === item.tab;
-          const label = item.label.startsWith("nav.") ? t(item.label) : item.label;
           const ariaLabel = item.ariaLabel.startsWith("nav.") ? t(item.ariaLabel) : item.ariaLabel;
           const title = item.title.startsWith("nav.") ? t(item.title) : item.title;
           return (
@@ -63,7 +62,6 @@ export default function AppNav({ activeTab, hidden = false, onSelectTab, renderI
               type="button"
             >
               <span className="nav-icon">{renderIcon(item.tab, active)}</span>
-              <span className="sr-only">{label}</span>
             </button>
           );
         })}

@@ -553,7 +553,13 @@ export default function TasksPage(props: TasksPageProps) {
             <button
               aria-label={isMainSurfaceFullscreen ? t("tasks.fullscreen.exit") : t("tasks.fullscreen.enter")}
               className="tasks-thread-header-terminal-button"
-              onClick={() => setIsMainSurfaceFullscreen((current) => !current)}
+              disabled={!state.activeThread}
+              onClick={() => {
+                if (!state.activeThread) {
+                  return;
+                }
+                setIsMainSurfaceFullscreen((current) => !current);
+              }}
               type="button"
             >
               <img alt="" aria-hidden="true" src="/canvas-fullscreen.svg" />

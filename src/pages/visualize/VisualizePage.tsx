@@ -255,6 +255,7 @@ export default function VisualizePage({ cwd, hasTauriRuntime }: VisualizePagePro
         <header className="visualize-monitor-topbar">
           <div className="visualize-monitor-toolbar-copy">
             <strong>{toolbarTitle}</strong>
+            <small>{t("visualize.session.emptySubcopy")}</small>
           </div>
           <div className="visualize-monitor-toolbar-actions">
             <button
@@ -293,12 +294,12 @@ export default function VisualizePage({ cwd, hasTauriRuntime }: VisualizePagePro
                     </select>
                   </div>
                 ) : null}
-                <p>
-                  {state.selectedReportRun
-                    ? `${formatStamp(state.selectedReportRun.updatedAt)} · ${reportJob?.label || reportJob?.resolvedSourceType || "AUTO COLLECTION"}`
-                    : t("visualize.session.emptySubcopy")}
-                </p>
-                <p className="visualize-monitor-summary-copy">
+                {state.selectedReportRun ? (
+                  <p>
+                    {`${formatStamp(state.selectedReportRun.updatedAt)} · ${reportJob?.label || reportJob?.resolvedSourceType || "AUTO COLLECTION"}`}
+                  </p>
+                ) : null}
+                <p className="visualize-monitor-summary-copy visualize-monitor-session-summary-copy">
                   {leadCopy || t("visualize.session.emptySummary")}
                 </p>
               </VisualizeWidgetFrame>

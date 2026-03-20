@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
@@ -22,6 +22,7 @@ export function TaskTerminalViewport(props: TaskTerminalViewportProps) {
   const appliedResizeRef = useRef("");
   const writeQueueRef = useRef<string[]>([]);
   const isFlushingRef = useRef(false);
+  const [isReady, setIsReady] = useState(false);
 
   const resetTerminal = () => {
     const terminal = terminalRef.current;
@@ -95,6 +96,7 @@ export function TaskTerminalViewport(props: TaskTerminalViewportProps) {
     if (!host) {
       return;
     }
+    setIsReady(false);
 
     const theme = props.theme === "light"
       ? {
@@ -156,6 +158,9 @@ export function TaskTerminalViewport(props: TaskTerminalViewportProps) {
     const fitAddon = new FitAddon();
     terminal.loadAddon(fitAddon);
     terminal.open(host);
+    window.requestAnimationFrame(() => {
+      setIsReady(true);
+    });
     let disposed = false;
     const fitAndResize = async () => {
       try {
@@ -210,6 +215,7 @@ export function TaskTerminalViewport(props: TaskTerminalViewportProps) {
       renderedBufferRef.current = "";
       fitAddonRef.current = null;
       terminalRef.current = null;
+      setIsReady(false);
       terminal.dispose();
     };
   }, [props.theme]);
@@ -253,7 +259,7 @@ export function TaskTerminalViewport(props: TaskTerminalViewportProps) {
   }, [props.selected]);
 
   return (
-    <div className="tasks-terminal-viewport" data-selected={props.selected ? "true" : "false"}>
+    <div className="tasks-terminal-viewport" data-ready={isReady ? "true" : "false"} data-selected={props.selected ? "true" : "false"}>
       <div
         className="tasks-terminal-host"
         onMouseDown={() => {

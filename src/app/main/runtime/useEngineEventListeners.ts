@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { t as translate } from "../../../i18n";
 
 export function useEngineEventListeners(params: any) {
   useEffect(() => {
@@ -27,7 +28,7 @@ export function useEngineEventListeners(params: any) {
             params.authLoginRequiredProbeCountRef.current = 0;
             params.lastAuthenticatedAtRef.current = Date.now();
             params.setLoginCompleted(true);
-            params.setStatus("로그인 완료 이벤트 수신");
+            params.setStatus(translate("bridge.status.event.loginCompleted"));
             void params.refreshAuthStateFromEngine(true);
           }
 
@@ -39,13 +40,13 @@ export function useEngineEventListeners(params: any) {
                 params.authLoginRequiredProbeCountRef.current = 0;
                 params.lastAuthenticatedAtRef.current = Date.now();
                 params.setLoginCompleted(true);
-                params.setStatus(`계정 상태 갱신 수신 (인증 모드=${mode})`);
+                params.setStatus(translate("bridge.status.event.accountUpdatedMode", { mode }));
               } else {
-                params.setStatus("계정 상태 갱신 수신 (인증 모드 미확인)");
+                params.setStatus(translate("bridge.status.event.accountUpdatedUnknown"));
                 void params.refreshAuthStateFromEngine(true);
               }
             } else {
-              params.setStatus("계정 상태 갱신 수신 (인증 모드 미확인)");
+              params.setStatus(translate("bridge.status.event.accountUpdatedUnknown"));
               void params.refreshAuthStateFromEngine(true);
             }
           }
@@ -68,12 +69,12 @@ export function useEngineEventListeners(params: any) {
               const line = `${prefix}${progressMessage || stage}`;
               params.setWebBridgeLogs((prev: string[]) => [`${new Date().toLocaleTimeString()} ${line}`, ...prev].slice(0, 120));
               if (providerKey && stage === "bridge_queued") {
-                params.setStatus(`${params.webProviderLabel(providerKey)} 작업 대기열 등록됨`);
+                params.setStatus(translate("bridge.status.event.providerQueued", { provider: params.webProviderLabel(providerKey) }));
                 params.scheduleWebBridgeStageWarn(
                   providerKey,
                   params.webBridgeClaimWarnMs,
-                  `${params.webProviderLabel(providerKey)} 탭에서 작업 수신이 지연되고 있습니다.`,
-                  "[WEB] 작업 수신 지연: 해당 서비스 탭이 열려 있고 확장이 활성화되어 있는지 확인하세요.",
+                  translate("bridge.warn.claimDelayed.title", { provider: params.webProviderLabel(providerKey) }),
+                  translate("bridge.warn.claimDelayed.detail"),
                   () => {
                     const prompt = params.activeWebPromptRef.current[providerKey];
                     if (!prompt) {
@@ -84,7 +85,7 @@ export function useEngineEventListeners(params: any) {
                       .then(() => {
                         const activeNodeId = params.activeWebNodeByProviderRef.current[providerKey];
                         if (activeNodeId) {
-                          params.addNodeLog(activeNodeId, "[WEB] 자동 주입 지연으로 프롬프트를 클립보드에 복사했습니다.");
+                          params.addNodeLog(activeNodeId, translate("bridge.warn.copiedPrompt"));
                         }
                       })
                       .catch(() => {
@@ -93,31 +94,31 @@ export function useEngineEventListeners(params: any) {
                   },
                 );
               } else if (providerKey && stage === "bridge_claimed") {
-                params.setStatus(`${params.webProviderLabel(providerKey)} 탭 연결됨, 프롬프트 주입 중`);
+                params.setStatus(translate("bridge.status.event.providerClaimed", { provider: params.webProviderLabel(providerKey) }));
                 params.scheduleWebBridgeStageWarn(
                   providerKey,
                   params.webBridgePromptFilledWarnMs,
-                  `${params.webProviderLabel(providerKey)} 프롬프트 자동 주입이 지연되고 있습니다.`,
-                  "[WEB] 프롬프트 자동 주입 지연: 입력창 탐지 실패 가능성이 있습니다. 웹 탭을 새로고침 후 다시 실행하세요.",
+                  translate("bridge.warn.injectDelayed.title", { provider: params.webProviderLabel(providerKey) }),
+                  translate("bridge.warn.injectDelayed.detail"),
                 );
               } else if (providerKey && stage === "bridge_prompt_filled") {
                 params.clearWebBridgeStageWarnTimer(providerKey);
-                params.setStatus(`${params.webProviderLabel(providerKey)} 프롬프트 자동 주입 완료`);
+                params.setStatus(translate("bridge.status.event.promptFilled", { provider: params.webProviderLabel(providerKey) }));
               } else if (providerKey && stage === "bridge_waiting_user_send") {
                 params.clearWebBridgeStageWarnTimer(providerKey);
-                params.setStatus(`${params.webProviderLabel(providerKey)} 자동 전송 확인 중`);
+                params.setStatus(translate("bridge.status.event.waitingSend", { provider: params.webProviderLabel(providerKey) }));
                 params.scheduleWebBridgeStageWarn(
                   providerKey,
                   1_600,
-                  `${params.webProviderLabel(providerKey)} 탭에서 전송 1회가 필요합니다.`,
-                  "[WEB] 자동 전송이 확인되지 않아 사용자 전송 클릭을 기다립니다.",
+                  translate("bridge.warn.waitingSend.title", { provider: params.webProviderLabel(providerKey) }),
+                  translate("bridge.warn.waitingSend.detail"),
                 );
               } else if (providerKey && stage === "bridge_extension_error") {
                 params.clearWebBridgeStageWarnTimer(providerKey);
-                params.setStatus(`${params.webProviderLabel(providerKey)} 웹 연결 오류 - 확장 연결 상태를 확인하세요.`);
+                params.setStatus(translate("bridge.status.event.extensionError", { provider: params.webProviderLabel(providerKey) }));
               } else if (providerKey && stage === "bridge_done") {
                 params.clearWebBridgeStageWarnTimer(providerKey);
-                params.setStatus(`${params.webProviderLabel(providerKey)} 응답 수집 완료`);
+                params.setStatus(translate("bridge.status.event.providerDone", { provider: params.webProviderLabel(providerKey) }));
               } else if (
                 providerKey &&
                 (stage === "bridge_failed" ||
@@ -166,7 +167,7 @@ export function useEngineEventListeners(params: any) {
               },
             ];
           });
-          params.setStatus(`승인 요청 수신 (${payload.method})`);
+          params.setStatus(translate("bridge.status.event.approvalRequest", { method: payload.method }));
         } catch (handlerError) {
           params.reportSoftError("approval handler failed", handlerError);
         }
@@ -184,13 +185,13 @@ export function useEngineEventListeners(params: any) {
           }
           if (payload.state === "stopped" || payload.state === "disconnected") {
             params.setEngineStarted(false);
-            params.markCodexNodesStatusOnEngineIssue("cancelled", "엔진 중지 또는 연결 끊김");
+            params.markCodexNodesStatusOnEngineIssue("cancelled", translate("bridge.issue.engineDisconnected"));
             params.setUsageInfoText("");
             params.setPendingApprovals([]);
             params.setApprovalSubmitting(false);
           }
           if (payload.state === "parseError" || payload.state === "readError" || payload.state === "stderrError") {
-            params.markCodexNodesStatusOnEngineIssue("failed", "엔진/프로토콜 오류");
+            params.markCodexNodesStatusOnEngineIssue("failed", translate("bridge.issue.engineProtocolError"));
           }
         } catch (handlerError) {
           params.reportSoftError("lifecycle handler failed", handlerError);

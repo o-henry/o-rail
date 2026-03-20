@@ -4,6 +4,7 @@ import {
   type ThreadStageDefinition,
 } from "./taskAgentPresets";
 import type { ApprovalRecord, BackgroundAgentRecord, ThreadDetail, ThreadWorkflow, ThreadWorkflowStage, ThreadWorkflowSummary } from "./threadTypes";
+import { t as translate } from "../../i18n";
 
 function hasArtifactContent(content: string | null | undefined): boolean {
   return String(content ?? "")
@@ -55,33 +56,33 @@ function validationSatisfied(detail: ThreadDetail): boolean {
 
 function buildStageSummary(detail: ThreadDetail, stage: ThreadStageDefinition, readyChecks: number): string {
   if (stage.id === "brief") {
-    return detail.thread.userPrompt || detail.task.goal || "유니티 작업 범위와 대상 시스템을 먼저 정리하세요.";
+    return detail.thread.userPrompt || detail.task.goal || translate("tasks.summary.brief.empty");
   }
   if (stage.id === "design") {
     if (hasArtifactContent(detail.artifacts.findings)) {
-      return "설계 메모와 조사 결과가 정리되었습니다.";
+      return translate("tasks.summary.design.ready");
     }
-    return "시스템 흐름, 씬 의도, 열려 있는 설계 질문을 정리하세요.";
+    return translate("tasks.summary.design.empty");
   }
   if (stage.id === "implement") {
     if (detail.changedFiles.length > 0) {
-      return `검토할 변경 파일 ${detail.changedFiles.length}개가 준비되었습니다.`;
+      return translate("tasks.summary.implement.changed", { count: detail.changedFiles.length });
     }
     if (hasArtifactContent(detail.artifacts.patch)) {
-      return "구현 산출물이 정리되어 있습니다.";
+      return translate("tasks.summary.implement.ready");
     }
-    return "아직 구현 산출물이 없습니다.";
+    return translate("tasks.summary.implement.empty");
   }
   if (stage.id === "integrate") {
     const approvals = pendingApprovalCount(detail.approvals);
     return approvals > 0
-      ? `승인 ${approvals}건 때문에 통합이 막혀 있습니다.`
-      : "통합, 인계, 릴리즈 확인이 현재까지는 문제 없습니다.";
+      ? translate("tasks.summary.integrate.blocked", { count: approvals })
+      : translate("tasks.summary.integrate.ready");
   }
   if (stage.id === "playtest") {
-    return `검증 상태: ${String(detail.validationState || "pending").trim()}.`;
+    return translate("tasks.summary.playtest", { state: String(detail.validationState || translate("tasks.workflow.pending")).trim() });
   }
-  return `마감 준비 항목 ${readyChecks}/3개가 충족되었습니다.`;
+  return translate("tasks.summary.lock", { count: readyChecks });
 }
 
 function buildStage(
@@ -220,21 +221,21 @@ export function deriveThreadWorkflow(detail: ThreadDetail): ThreadWorkflow {
     stages,
     nextAction:
       currentStageId === "brief"
-        ? "유니티 기능 목표, 대상 씬, 제약 조건을 먼저 분명히 하세요."
+        ? translate("tasks.nextAction.brief")
         : currentStageId === "design"
-          ? "설계 메모, 시스템 경계, 열려 있는 질문을 정리하세요."
+          ? translate("tasks.nextAction.design")
           : currentStageId === "implement"
-            ? "코드, 데이터, 프리팹, 에디터 변경을 만들어 검토 가능한 상태로 올리세요."
+            ? translate("tasks.nextAction.implement")
             : currentStageId === "integrate"
               ? approvalsPending > 0
-                ? "대기 중인 승인을 처리해서 통합을 다시 진행하세요."
-                : "에셋, 시스템, 인계 메모를 한 흐름으로 묶으세요."
+                ? translate("tasks.nextAction.integrate.blocked")
+                : translate("tasks.nextAction.integrate")
               : currentStageId === "playtest"
-                ? "마감 전에 검증과 플레이테스트를 진행하세요."
+                ? translate("tasks.nextAction.playtest")
                 : lockReady
-                  ? "이 작업은 인계하거나 머지할 준비가 되었습니다."
-                  : "마감 단계에 들어가려면 검증과 인계 메모를 마무리하세요.",
-    readinessSummary: `마감 ${lockReady ? "준비 완료" : "준비 중"} · ${readyChecks}/3`,
+                  ? translate("tasks.nextAction.lock.ready")
+                  : translate("tasks.nextAction.lock"),
+    readinessSummary: translate(lockReady ? "tasks.readiness.ready" : "tasks.readiness.preparing", { count: readyChecks }),
   };
 }
 

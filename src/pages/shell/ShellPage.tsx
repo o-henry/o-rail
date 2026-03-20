@@ -1,6 +1,7 @@
 import { type DragEvent, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode, useEffect, useMemo, useState } from "react";
 import { TaskTerminalViewport } from "../tasks/TaskTerminalViewport";
 import { useTasksThreadState } from "../tasks/useTasksThreadState";
+import { useI18n } from "../../i18n";
 import { useShellTerminalGrid } from "./useShellTerminalGrid";
 import {
   defaultShellAddDirection,
@@ -47,9 +48,26 @@ function resolveDropDirection(event: DragEvent<HTMLElement>): ShellSplitDirectio
 }
 
 export default function ShellPage(props: ShellPageProps) {
+  const { t } = useI18n();
   const state = useTasksThreadState(props);
+  const [displayThread, setDisplayThread] = useState(state.activeThread);
+  const [initialThreadResolved, setInitialThreadResolved] = useState(Boolean(state.activeThread));
+  useEffect(() => {
+    if (state.activeThread) {
+      setDisplayThread(state.activeThread);
+      return;
+    }
+    if (!state.loading) {
+      setDisplayThread(null);
+    }
+  }, [state.activeThread, state.loading]);
+  useEffect(() => {
+    if (!state.loading) {
+      setInitialThreadResolved(true);
+    }
+  }, [state.loading]);
   const shellGrid = useShellTerminalGrid({
-    thread: state.activeThread,
+    thread: displayThread,
     hasTauriRuntime: props.hasTauriRuntime,
     invokeFn: props.invokeFn,
   });
@@ -269,23 +287,25 @@ export default function ShellPage(props: ShellPageProps) {
     <section className="shell-layout workspace-tab-panel">
       <section className="shell-main-surface">
         <div className="shell-board">
-          {!state.activeThread ? (
+          {!initialThreadResolved && !displayThread ? (
+            <div className="shell-loading-surface" aria-hidden="true" />
+          ) : !displayThread ? (
             <section className="shell-empty-state panel-card">
-              <strong>스레드를 먼저 선택하세요</strong>
-              <p>터미널은 현재 활성 thread의 worktree에 귀속됩니다.</p>
+              <strong>{t("shell.empty.selectThread.title")}</strong>
+              <p>{t("shell.empty.selectThread.body")}</p>
               <div className="shell-empty-actions">
                 <button className="tasks-thread-new-button" onClick={() => void state.openNewThread()} type="button">
-                  NEW THREAD
+                  {t("tasks.thread.new")}
                 </button>
                 <button className="tasks-thread-new-button" onClick={() => void state.openProjectDirectory()} type="button">
-                  프로젝트 열기
+                  {t("shell.empty.openProject")}
                 </button>
               </div>
             </section>
           ) : shellGrid.isUnsupported ? (
             <section className="shell-empty-state panel-card">
-              <strong>터미널은 Tauri 앱에서만 열 수 있습니다</strong>
-              <p>브라우저 미리보기에서는 terminal session이 비활성입니다.</p>
+              <strong>{t("shell.empty.desktopOnly.title")}</strong>
+              <p>{t("shell.empty.desktopOnly.body")}</p>
             </section>
           ) : (
             <div className="shell-terminal-grid">

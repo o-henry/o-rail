@@ -1,3 +1,5 @@
+import { t as translate } from "../../i18n";
+
 export const UNITY_TASK_AGENT_PRESETS = [
   {
     id: "game_designer",
@@ -280,7 +282,15 @@ export function getWorkflowStageDetailTab(stageId: ThreadStageId): "files" | "wo
 
 export function getThreadStageLabel(input: string | ThreadStageId | null | undefined): string {
   const normalized = String(input ?? "").trim().toLowerCase() as ThreadStageId;
-  return UNITY_THREAD_STAGE_DEFINITIONS.find((stage) => stage.id === normalized)?.label ?? String(input ?? "").trim().toUpperCase();
+  const labels: Record<ThreadStageId, string> = {
+    brief: translate("tasks.stageLabel.brief"),
+    design: translate("tasks.stageLabel.design"),
+    implement: translate("tasks.stageLabel.implement"),
+    integrate: translate("tasks.stageLabel.integrate"),
+    playtest: translate("tasks.stageLabel.playtest"),
+    lock: translate("tasks.stageLabel.lock"),
+  };
+  return labels[normalized] ?? UNITY_THREAD_STAGE_DEFINITIONS.find((stage) => stage.id === normalized)?.label ?? String(input ?? "").trim().toUpperCase();
 }
 
 export function getTaskAgentWorkflowStageLabels(input: string | TaskAgentPresetId | null | undefined): string[] {

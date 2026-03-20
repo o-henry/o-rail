@@ -135,9 +135,17 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   const value = useMemo<I18nContextValue>(
     () => ({
       locale,
-      setLocale: (next) => setLocaleState(normalizeLocale(next)),
+      setLocale: (next) => {
+        const normalized = normalizeLocale(next);
+        setCurrentLocale(normalized);
+        setLocaleState(normalized);
+      },
       cycleLocale: () => {
-        setLocaleState((prev) => LOCALE_ORDER[(LOCALE_ORDER.indexOf(prev) + 1) % LOCALE_ORDER.length]);
+        setLocaleState((prev) => {
+          const next = LOCALE_ORDER[(LOCALE_ORDER.indexOf(prev) + 1) % LOCALE_ORDER.length];
+          setCurrentLocale(next);
+          return next;
+        });
       },
       t: (key, vars) => t(key, vars, locale),
       tp: (phrase, vars) => tp(phrase, vars, locale),

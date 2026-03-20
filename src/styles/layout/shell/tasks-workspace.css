@@ -7,7 +7,7 @@
   min-height: 0;
   height: 100%;
   display: grid;
-  grid-template-columns: 220px minmax(0, 1fr) minmax(260px, 300px);
+  grid-template-columns: 220px minmax(0, 1fr);
   gap: 10px;
   padding: 0;
   background: var(--bg-app);
@@ -15,12 +15,16 @@
   overflow: hidden;
 }
 
-.tasks-thread-layout.is-detail-panel-collapsed {
-  grid-template-columns: 220px minmax(0, 1fr);
+.tasks-thread-layout.is-review-pane-open {
+  grid-template-columns: 220px minmax(0, 1fr) minmax(0, 1fr);
 }
 
-.tasks-thread-layout.is-side-panels-collapsed {
+.tasks-thread-layout.is-thread-nav-hidden {
   grid-template-columns: minmax(0, 1fr);
+}
+
+.tasks-thread-layout.is-thread-nav-hidden.is-review-pane-open {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 }
 
 .tasks-thread-layout.workspace-tab-panel {
@@ -37,7 +41,16 @@
 
 .tasks-thread-nav {
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  align-content: start;
+  gap: 10px;
+  padding: 10px;
+  border-radius: var(--tasks-wrapper-radius);
+  background: transparent;
+  overflow: auto;
+}
+
+.tasks-thread-nav-island {
+  display: grid;
   gap: 10px;
   padding: 10px;
   border-radius: var(--tasks-wrapper-radius);
@@ -502,14 +515,14 @@
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto auto;
   gap: 0;
-  background: transparent;
+  background: #ffffff;
+  border-radius: var(--tasks-wrapper-radius);
   overflow: hidden;
 }
 
 .tasks-thread-layout.is-main-surface-fullscreen .tasks-thread-nav,
 .tasks-thread-layout.is-main-surface-fullscreen .tasks-thread-detail-panel,
-.tasks-thread-layout.is-side-panels-collapsed .tasks-thread-nav,
-.tasks-thread-layout.is-side-panels-collapsed .tasks-thread-detail-panel {
+.tasks-thread-layout.is-thread-nav-hidden .tasks-thread-nav {
   display: none;
 }
 
@@ -534,6 +547,13 @@
   border-radius: var(--tasks-wrapper-radius) var(--tasks-wrapper-radius) 0 0;
   background: #ffffff;
   font-family: "DepartureMonoRail", "Galmuri11", monospace;
+}
+
+.tasks-thread-header-leading {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
 }
 
 .tasks-thread-header-actions {
@@ -1345,12 +1365,9 @@
   display: grid;
   grid-template-rows: minmax(0, 1fr);
   min-height: 0;
-  background: transparent;
-  overflow: visible;
-}
-
-.tasks-thread-layout.is-detail-panel-collapsed .tasks-thread-main-surface {
-  grid-column: 2 / -1;
+  background: #ffffff;
+  border-radius: var(--tasks-wrapper-radius);
+  overflow: hidden;
 }
 
 .tasks-thread-detail-tabs {
@@ -1378,6 +1395,107 @@
   border-radius: var(--tasks-wrapper-radius);
   background: transparent;
   scrollbar-gutter: stable;
+}
+
+.tasks-thread-review-panel {
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.tasks-thread-review-shell {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: 12px;
+  padding: 12px;
+  background: #ffffff;
+}
+
+.tasks-thread-review-toolbar,
+.tasks-thread-review-diff-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tasks-thread-review-toolbar small,
+.tasks-thread-review-diff-head span {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.tasks-thread-review-files {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+}
+
+.tasks-thread-review-files button {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  background: #f6f8fa;
+  color: #24292f;
+  text-align: left;
+  font: inherit;
+}
+
+.tasks-thread-review-files button.is-active {
+  background: #ffffff;
+  border-color: #0969da;
+}
+
+.tasks-thread-review-files button span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tasks-thread-review-diff {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 10px;
+}
+
+.tasks-thread-review-diff pre {
+  margin: 0;
+  min-height: 0;
+  height: 100%;
+  overflow: auto;
+  padding: 12px 14px;
+  border: 1px solid #d0d7de;
+  border-radius: 8px;
+  background: #f6f8fa;
+  color: #24292f;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.tasks-thread-review-empty {
+  min-height: 72px;
+  display: grid;
+  place-items: center;
+  border: 1px dashed #d0d7de;
+  border-radius: 8px;
+  background: #f6f8fa;
+  color: #57606a;
+  font-size: 11px;
+  text-align: center;
+  padding: 12px;
 }
 
 .tasks-thread-detail-body > * {

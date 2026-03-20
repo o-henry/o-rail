@@ -172,6 +172,7 @@ export default function VisualizePage({ cwd, hasTauriRuntime }: VisualizePagePro
   const state = useVisualizePageState({ cwd, hasTauriRuntime });
   const [maximizedWidgetId, setMaximizedWidgetId] = useState<VisualizeWidgetId | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [isEvidenceCollapsed, setIsEvidenceCollapsed] = useState(true);
   const mainRef = useRef<HTMLElement | null>(null);
   const sessionRef = useRef<HTMLElement | null>(null);
   const reportRef = useRef<HTMLElement | null>(null);
@@ -441,6 +442,19 @@ export default function VisualizePage({ cwd, hasTauriRuntime }: VisualizePagePro
               <VisualizeWidgetFrame
                 articleRef={evidenceRef}
                 className="is-evidence"
+                headerActions={(
+                  <button
+                    aria-label={isEvidenceCollapsed ? t("visualize.evidence.expand") : t("visualize.evidence.collapse")}
+                    className="visualize-monitor-widget-toggle"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setIsEvidenceCollapsed((current) => !current);
+                    }}
+                    type="button"
+                  >
+                    <img alt="" aria-hidden="true" src={isEvidenceCollapsed ? "/down-arrow.svg" : "/up-arrow.svg"} />
+                  </button>
+                )}
                 maximized={maximizedWidgetId === "evidence"}
                 onToggleMaximize={toggleMaximize}
                 title={evidenceTitle}
@@ -454,29 +468,31 @@ export default function VisualizePage({ cwd, hasTauriRuntime }: VisualizePagePro
                     value={state.itemSearch}
                   />
                 </div>
-                <div className="visualize-monitor-evidence-table">
-                  <div className="visualize-monitor-evidence-table-head">
-                    <span>{t("visualize.evidence.column.title")}</span>
-                    <span>{t("visualize.evidence.column.approval")}</span>
-                    <span>{t("visualize.evidence.column.score")}</span>
-                    <span>{t("visualize.evidence.column.link")}</span>
+                {isEvidenceCollapsed ? null : (
+                  <div className="visualize-monitor-evidence-table">
+                    <div className="visualize-monitor-evidence-table-head">
+                      <span>{t("visualize.evidence.column.title")}</span>
+                      <span>{t("visualize.evidence.column.approval")}</span>
+                      <span>{t("visualize.evidence.column.score")}</span>
+                      <span>{t("visualize.evidence.column.link")}</span>
+                    </div>
+                    <div className="visualize-monitor-evidence-picker">
+                      {evidenceItems.map((item) => (
+                        <article className="visualize-monitor-evidence-row" key={item.itemFactId}>
+                          <strong>{item.title || shorten(item.sourceName || item.sourceType, 32)}</strong>
+                          <span>{item.verificationStatus}</span>
+                          <span>{item.score}</span>
+                          <div className="visualize-monitor-evidence-summary-cell">
+                            <a href={item.url} rel="noreferrer" target="_blank">
+                              {item.url}
+                            </a>
+                          </div>
+                        </article>
+                      ))}
+                      {evidenceItems.length ? null : <p className="visualize-monitor-empty">{t("visualize.empty.evidence")}</p>}
+                    </div>
                   </div>
-                  <div className="visualize-monitor-evidence-picker">
-                    {evidenceItems.map((item) => (
-                      <article className="visualize-monitor-evidence-row" key={item.itemFactId}>
-                        <strong>{item.title || shorten(item.sourceName || item.sourceType, 32)}</strong>
-                        <span>{item.verificationStatus}</span>
-                        <span>{item.score}</span>
-                        <div className="visualize-monitor-evidence-summary-cell">
-                          <a href={item.url} rel="noreferrer" target="_blank">
-                            {item.url}
-                          </a>
-                        </div>
-                      </article>
-                    ))}
-                    {evidenceItems.length ? null : <p className="visualize-monitor-empty">{t("visualize.empty.evidence")}</p>}
-                  </div>
-                </div>
+                )}
               </VisualizeWidgetFrame>
             </div>
           </section>

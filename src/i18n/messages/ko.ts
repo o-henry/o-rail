@@ -234,6 +234,8 @@ export const KO_MESSAGES: Dictionary = {
     "visualize.evidence.column.score": "점수",
     "visualize.evidence.column.summary": "요약",
     "visualize.evidence.column.link": "링크",
+    "visualize.evidence.expand": "근거 스트림 펼치기",
+    "visualize.evidence.collapse": "근거 스트림 접기",
     "visualize.empty.items": "표시할 항목이 없습니다.",
     "visualize.empty.snapshots": "표시할 스냅샷이 아직 없습니다.",
     "visualize.empty.report": "아직 표시할 researcher 문서가 없습니다.",

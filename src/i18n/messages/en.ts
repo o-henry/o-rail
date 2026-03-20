@@ -234,6 +234,8 @@ export const EN_MESSAGES: Dictionary = {
     "visualize.evidence.column.score": "Score",
     "visualize.evidence.column.summary": "Summary",
     "visualize.evidence.column.link": "Link",
+    "visualize.evidence.expand": "Expand evidence stream",
+    "visualize.evidence.collapse": "Collapse evidence stream",
     "visualize.empty.items": "No items to show.",
     "visualize.empty.snapshots": "No snapshots to show yet.",
     "visualize.empty.report": "No researcher document is available yet.",

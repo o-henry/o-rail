@@ -182,6 +182,8 @@ export const ZH_MESSAGES: Dictionary = {
     "visualize.evidence.column.score": "分数",
     "visualize.evidence.column.summary": "摘要",
     "visualize.evidence.column.link": "链接",
+    "visualize.evidence.expand": "展开证据流",
+    "visualize.evidence.collapse": "折叠证据流",
     "visualize.empty.items": "没有可显示的项目。",
     "visualize.empty.snapshots": "还没有可显示的快照。",
     "visualize.empty.report": "还没有 researcher 文档可显示。",

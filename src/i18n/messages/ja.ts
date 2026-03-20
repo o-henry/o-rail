@@ -182,6 +182,8 @@ export const JA_MESSAGES: Dictionary = {
     "visualize.evidence.column.score": "スコア",
     "visualize.evidence.column.summary": "要約",
     "visualize.evidence.column.link": "リンク",
+    "visualize.evidence.expand": "根拠ストリームを展開",
+    "visualize.evidence.collapse": "根拠ストリームを折りたたむ",
     "visualize.empty.items": "表示する項目がありません。",
     "visualize.empty.snapshots": "表示できるスナップショットがまだありません。",
     "visualize.empty.report": "表示できる researcher 文書がまだありません。",

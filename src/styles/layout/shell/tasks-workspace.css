@@ -900,6 +900,16 @@
   justify-items: start;
 }
 
+.tasks-thread-message-row.is-assistant {
+  margin-top: 6px;
+}
+
+.tasks-thread-message-row.is-user + .tasks-thread-message-row.is-assistant,
+.tasks-thread-message-row.is-user + .tasks-thread-message-row.is-assistant.is-live-placeholder,
+.tasks-thread-message-row.is-user + .tasks-thread-message-row.is-process {
+  margin-top: 18px;
+}
+
 .tasks-thread-message-row.is-live-placeholder {
   opacity: 0.8;
 }
@@ -929,6 +939,19 @@
   font-size: 10px;
   color: var(--text-muted);
   word-break: break-all;
+}
+
+.tasks-thread-message-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.tasks-thread-message-time {
+  font-size: 10px;
+  color: var(--text-muted);
+  white-space: nowrap;
 }
 
 .tasks-thread-agent-list {
@@ -1826,10 +1849,25 @@
 }
 
 .tasks-terminal-viewport {
+  position: relative;
   min-height: 260px;
   border-radius: 0;
   overflow: hidden;
   background: #0f1520;
+}
+
+.tasks-terminal-viewport::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: #222438;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+
+.tasks-terminal-viewport[data-ready="false"]::before {
+  opacity: 1;
 }
 
 .tasks-terminal-host {
@@ -1837,6 +1875,7 @@
   height: 100%;
   width: 100%;
   padding: 0;
+  background: #222438;
 }
 
 .tasks-terminal-host .xterm,

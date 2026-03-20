@@ -105,6 +105,18 @@ function resolveTurnText(raw: unknown): string {
     (extractStringByPaths(raw, [
       "text",
       "output_text",
+      "result.output.0.content.0.text",
+      "result.output.0.content.0.output_text",
+      "result.output.0.text",
+      "output.0.content.0.text",
+      "output.0.content.0.output_text",
+      "output.0.text",
+      "response.output.0.content.0.text",
+      "response.output.0.content.0.output_text",
+      "response.output.0.text",
+      "completion.output.0.content.0.text",
+      "completion.output.0.content.0.output_text",
+      "completion.output.0.text",
       "turn.output_text",
       "turn.response.output_text",
       "turn.response.text",
@@ -167,20 +179,33 @@ export async function runTaskRoleWithCodex(input: RunTaskRoleWithCodexInput): Pr
     cwd: context.projectPath,
     sandboxMode,
   });
-  const rawResponse = await input.invokeFn<unknown>("turn_start_blocking", {
-    threadId: threadStart.threadId,
-    text: promptText,
-    reasoningEffort,
-    sandboxMode,
-  });
+  let rawResponse: unknown = null;
+  let turnError: unknown = null;
+  try {
+    rawResponse = await input.invokeFn<unknown>("turn_start_blocking", {
+      threadId: threadStart.threadId,
+      text: promptText,
+      reasoningEffort,
+      sandboxMode,
+    });
+  } catch (error) {
+    turnError = error;
+  }
 
-  const completedStatus = (extractCompletedStatus(rawResponse) ?? "done").toLowerCase();
-  if (["failed", "error", "cancelled", "rejected"].includes(completedStatus)) {
+  const completedStatus = turnError ? "error" : (extractCompletedStatus(rawResponse) ?? "done").toLowerCase();
+  const fallbackSummary = String(researcherCollection.fallbackSummary ?? "").trim();
+  if (["failed", "error", "cancelled", "rejected"].includes(completedStatus) && !fallbackSummary) {
+    if (turnError instanceof Error) {
+      throw turnError;
+    }
     throw new Error(`Codex turn failed (${completedStatus})`);
   }
 
-  const summary = resolveTurnText(rawResponse);
+  const summary = (!turnError ? resolveTurnText(rawResponse) : "") || fallbackSummary;
   if (!summary) {
+    if (turnError instanceof Error) {
+      throw turnError;
+    }
     throw new Error("Codex turn finished without a readable response");
   }
 
@@ -208,6 +233,8 @@ export async function runTaskRoleWithCodex(input: RunTaskRoleWithCodexInput): Pr
         codexThreadId: threadStart.threadId,
         codexTurnId:
           extractStringByPaths(rawResponse, ["turnId", "turn_id", "id", "turn.id", "response.id"]) ?? null,
+        completedStatus,
+        turnError: turnError instanceof Error ? turnError.message : turnError ?? null,
         raw: rawResponse,
       },
       null,

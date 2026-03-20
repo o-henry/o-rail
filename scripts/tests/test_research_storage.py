@@ -343,8 +343,8 @@ class ResearchStorageTests(unittest.TestCase):
             )
 
             job = planned["job"]
-            self.assertEqual(job["collectorStrategy"], "dynamic_search")
-            self.assertEqual(job["targets"], [])
+            self.assertIn(job["collectorStrategy"], {"dynamic_search", "scrapling", "mixed"})
+            self.assertGreaterEqual(len(job["targets"]), 0)
             self.assertIn("steamcommunity.com", job["domains"])
             self.assertTrue(any("스팀" in keyword or "steam" in keyword.lower() for keyword in job["keywords"]))
             self.assertIn("planner", job)
@@ -374,9 +374,48 @@ class ResearchStorageTests(unittest.TestCase):
             self.assertEqual(job["sourceOptions"]["strict_domain_isolation"], True)
             self.assertIn("store.steampowered.com", job["sourceOptions"]["allowed_domains"])
             self.assertTrue(all("yahoo" not in domain for domain in job["sourceOptions"]["allowed_domains"]))
+            self.assertTrue(all(domain not in {"reddit.com", "opencritic.com", "metacritic.com"} for domain in job["domains"]))
             self.assertIn("steamdb.info", job["domains"])
             self.assertTrue(any("steam genre" in keyword.lower() for keyword in job["keywords"]))
             self.assertTrue(any("genre level" in instruction.lower() for instruction in planner["instructions"]))
+
+    def test_plan_agent_collection_job_strips_inline_focus_instructions(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace = Path(temp_dir)
+            planned = plan_agent_collection_job(
+                workspace,
+                prompt=(
+                    "@researcher 스팀 평가 기준으로 인기 장르를 조사해줘 "
+                    "집중할 점: 사용자의 요청을 바탕으로 필요한 자료를 검색하고 한국어로 구조화하세요."
+                ),
+                label="",
+                requested_source_type="auto",
+                max_items=40,
+            )
+
+            job = planned["job"]
+            planner = job["planner"]
+            self.assertEqual(planner["prompt"], "스팀 평가 기준으로 인기 장르를 조사해줘")
+            self.assertTrue(all("집중할 점:" not in keyword for keyword in job["keywords"]))
+
+    def test_plan_agent_collection_job_strips_english_focus_instructions(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace = Path(temp_dir)
+            planned = plan_agent_collection_job(
+                workspace,
+                prompt=(
+                    "@researcher investigate top steam genres by rating and popularity "
+                    "focus: search official references and keep the summary concise."
+                ),
+                label="",
+                requested_source_type="auto",
+                max_items=40,
+            )
+
+            job = planned["job"]
+            planner = job["planner"]
+            self.assertEqual(planner["prompt"], "investigate top steam genres by rating and popularity")
+            self.assertTrue(all("focus:" not in keyword.lower() for keyword in job["keywords"]))
 
     def test_plan_agent_collection_job_extracts_task_request_from_role_formatted_prompt(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

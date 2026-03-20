@@ -30,6 +30,7 @@ import { rememberThreadSelection, resolveThreadSelection } from "./threadSelecti
 import { deriveThreadWorkflow, deriveThreadWorkflowSummary } from "./threadWorkflow";
 import { extractCodexThreadStatus, extractTaskCodexThreadRuntime } from "./taskCodexThreadRuntime";
 import { isLiveBackgroundAgentStatus } from "./liveAgentState";
+import { t as translate } from "../../i18n";
 
 type InvokeFn = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
 
@@ -121,7 +122,7 @@ function writeSessionStorageValue(key: string, value: string | null) {
 
 function truncateTitle(input: string): string {
   const trimmed = String(input ?? "").trim();
-  if (!trimmed) return "NEW THREAD";
+  if (!trimmed) return translate("tasks.thread.new");
   return trimmed.length > 52 ? `${trimmed.slice(0, 52)}…` : trimmed;
 }
 
@@ -156,7 +157,7 @@ function defaultSelectedAgent(detail: ThreadDetail | null): string {
 }
 
 function formatError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error ?? "unknown error");
+  return error instanceof Error ? error.message : String(error ?? translate("common.unknownError"));
 }
 
 function nowIso(): string {
@@ -295,13 +296,13 @@ function buildBrowserFiles(): Array<{ path: string; changed: boolean }> {
 }
 
 function buildBrowserArtifacts(taskId: string, prompt: string): Record<string, string> {
-  const brief = prompt || "Start by describing the change you want to make.";
+  const brief = prompt || translate("tasks.empty.title");
   return {
     brief,
-    findings: "Design pass pending.",
+    findings: translate("tasks.workflow.validationPending"),
     plan: "1. Brief the Unity task\n2. Capture design notes\n3. Implement and integrate\n4. Playtest and lock",
     patch: "No patch yet.",
-    validation: "Validation pending.",
+    validation: translate("tasks.workflow.validationPending"),
     handoff: `Artifacts live under .rail/tasks/${taskId}/...`,
   };
 }
@@ -393,7 +394,7 @@ function buildBrowserThread(
     },
     task: {
       taskId,
-      goal: prompt || "NEW THREAD",
+      goal: prompt || translate("tasks.thread.new"),
       mode: "balanced",
       team: "full-squad",
       isolationRequested: "auto",
@@ -1131,14 +1132,14 @@ export function useTasksThreadState(params: Params) {
       store.details[detail.thread.threadId] = detail;
       store.order = [detail.thread.threadId, ...store.order.filter((id) => id !== detail.thread.threadId)];
       applyBrowserStore(store, detail.thread.threadId);
-      params.setStatus(`Thread created: ${detail.thread.title}`);
+      params.setStatus(`${translate("tasks.thread.new")}: ${detail.thread.title}`);
       return;
     }
     try {
       const detail = withDerivedWorkflow(await params.invokeFn<ThreadDetail>("thread_create", {
         cwd: params.cwd,
         projectPath: selectedProjectPath,
-        prompt: "NEW THREAD",
+        prompt: translate("tasks.thread.new"),
         mode: "balanced",
         team: "full-squad",
         isolation: "worktree",
@@ -1151,11 +1152,11 @@ export function useTasksThreadState(params: Params) {
       rememberSelectedAgent(detail.thread.threadId, defaultSelectedAgent(detail));
       rememberSelectedFile(detail.thread.threadId, defaultSelectedFile(detail));
       await reloadThreads(detail.thread.threadId);
-      params.setStatus(`Thread created: ${truncateTitle(detail.thread.title)}`);
+      params.setStatus(`${translate("tasks.thread.new")}: ${truncateTitle(detail.thread.title)}`);
     } catch (error) {
       setActiveThread(null);
       setActiveThreadId("");
-      params.setStatus(`Failed to create thread: ${formatError(error)}`);
+      params.setStatus(`${translate("tasks.stage.failed")}: ${formatError(error)}`);
       params.appendWorkspaceEvent({
         source: "tasks-thread",
         actor: "system",
@@ -1248,7 +1249,7 @@ export function useTasksThreadState(params: Params) {
       detail.thread.model = model;
       detail.thread.reasoning = reasoning;
       detail.thread.accessMode = accessMode;
-      detail.task.goal = detail.task.goal === "NEW THREAD" ? prompt : detail.task.goal;
+      detail.task.goal = isPlaceholderTitle(detail.task.goal) ? prompt : detail.task.goal;
       detail.task.updatedAt = timestamp;
       detail.messages.push(
         createBrowserMessage(detail.thread.threadId, "user", prompt, timestamp, {

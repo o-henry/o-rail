@@ -1,4 +1,5 @@
 import type { FeedChartSpec } from "../../../features/feed/chartSpec";
+import { t as translate } from "../../../i18n";
 
 type InvokeFn = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
 
@@ -125,6 +126,7 @@ type PrepareResearcherCollectionContextInput = {
 type PrepareResearcherCollectionContextResult = {
   artifactPaths: string[];
   promptContext: string;
+  fallbackSummary?: string;
 };
 
 function extractResearchCollectionPrompt(input: string) {
@@ -140,11 +142,10 @@ function extractResearchCollectionPrompt(input: string) {
   if (roleKbTrimmed && roleKbTrimmed !== normalized) {
     return extractResearchCollectionPrompt(roleKbTrimmed);
   }
-  const defaultInstructionSplit = normalized.split(/\n\s*\n(?=집중할 점:)/);
-  if (defaultInstructionSplit.length > 1) {
-    return (defaultInstructionSplit[0]?.trim() || normalized).replace(/^\s*(?:@[a-z0-9_-]+\s+)+/i, "").trim();
-  }
-  return normalized.replace(/^\s*(?:@[a-z0-9_-]+\s+)+/i, "").trim();
+  const strippedMentions = normalized.replace(/^\s*(?:@[a-z0-9_-]+\s+)+/i, "").trim();
+  const strippedInstructions =
+    strippedMentions.split(/\s+(?:집중할 점:|focus:|focus points?:)\s*/i, 1)[0]?.trim() || strippedMentions;
+  return strippedInstructions;
 }
 
 function isResearcherPack(pack: TaskAgentPromptPack) {
@@ -300,7 +301,7 @@ function classifyResearchQuestionType(
 
 function buildFallbackListItems(items: ResearchCollectionItemResult): ResearchReportListItem[] {
   return items.items.slice(0, 5).map((item) => ({
-    title: item.title || item.sourceName || "Untitled evidence",
+    title: item.title || item.sourceName || translate("visualize.empty.items"),
     detail: item.summary || item.url || "",
     badge: `${item.verificationStatus} · ${Math.round(item.score)}`,
   }));
@@ -318,8 +319,8 @@ function buildAutoReportSpec(params: {
 
   if (questionType === "genre_ranking") {
     const popularItems = params.genreRankings.popular.slice(0, 5).map((row) => ({
-      title: `${row.rank}. ${row.genreLabel}`,
-      detail: row.representativeTitles.slice(0, 3).join(" · ") || "대표 게임 추출 중",
+          title: `${row.rank}. ${row.genreLabel}`,
+      detail: row.representativeTitles.slice(0, 3).join(" · ") || translate("visualize.common.representativesPending"),
       badge: `P ${Math.round(row.popularityScore)} · E ${row.evidenceCount}`,
     }));
     const representativeGames = params.genreRankings.quality.slice(0, 5).flatMap((row) =>
@@ -336,32 +337,32 @@ function buildAutoReportSpec(params: {
       questionType,
       widgets: {
         mainChart: {
-          title: "POPULAR GENRES",
-          description: "리뷰량과 반복 언급을 합쳐 계산한 장르별 인기 점수입니다.",
+          title: translate("visualize.chart.popularGenres"),
+          description: translate("visualize.chart.popularGenres.desc"),
           chart: buildGenreRankingChart(params.genreRankings.popular, "popularity"),
         },
         secondaryChart: {
-          title: "BEST RATED GENRES",
-          description: "긍정 신호와 표본 품질을 합쳐 계산한 장르별 고평가 점수입니다.",
+          title: translate("visualize.chart.bestRatedGenres"),
+          description: translate("visualize.chart.bestRatedGenres.desc"),
           chart: buildGenreRankingChart(params.genreRankings.quality, "quality"),
         },
         primaryList: {
-          title: "GENRE SNAPSHOTS",
-          description: "주요 장르와 대표 게임을 한 번에 확인합니다.",
+          title: translate("visualize.list.genreSnapshots"),
+          description: translate("visualize.chart.popularGenres.desc"),
           items: popularItems,
         },
         secondaryList: {
-          title: "REPRESENTATIVE GAMES",
-          description: "장르별 대표 게임 후보입니다.",
+          title: translate("visualize.list.representativeGames"),
+          description: translate("visualize.common.representativeGame"),
           items: representativeGames.length ? representativeGames : fallbackItems,
         },
         report: {
-          title: "RESEARCH REPORT",
-          description: "질문에 대한 최종 리서치 해석입니다.",
+          title: translate("visualize.report.title"),
+          description: translate("visualize.report.title"),
         },
         evidence: {
-          title: "EVIDENCE STREAM",
-          description: "장르 순위를 만든 실제 근거 목록입니다.",
+          title: translate("visualize.evidence.title"),
+          description: translate("visualize.evidence.title"),
         },
       },
     };
@@ -374,31 +375,31 @@ function buildAutoReportSpec(params: {
       questionType,
       widgets: {
         mainChart: {
-          title: "COMPARISON SIGNALS",
-          description: "비교 대상 근거의 상대 점수 분포입니다.",
+          title: translate("visualize.chart.comparisonSignals"),
+          description: translate("visualize.chart.comparisonSignals.desc"),
           chart: buildVerificationBarChart(params.metrics),
         },
         secondaryChart: {
-          title: "SOURCE MIX",
-          description: "비교에 사용된 출처 유형 비중입니다.",
+          title: translate("visualize.chart.sourceMix"),
+          description: translate("visualize.chart.sourceMix.desc"),
           chart: buildSourceMixPieChart(params.metrics),
         },
         primaryList: {
-          title: "COMPARED TITLES",
-          description: "비교에 직접 등장한 주요 타이틀입니다.",
+          title: translate("visualize.list.comparedTitles"),
+          description: translate("visualize.list.comparedTitles"),
           items: fallbackItems,
         },
         secondaryList: {
-          title: "TOP SOURCES",
-          description: "비교에 가장 많이 기여한 출처입니다.",
+          title: translate("visualize.list.topSources"),
+          description: translate("visualize.common.primarySource"),
           items: params.metrics.topSources.slice(0, 5).map((row) => ({
             title: row.sourceName,
             detail: "비교 근거 공급 출처",
             badge: `${row.itemCount}건`,
           })),
         },
-        report: { title: "RESEARCH REPORT", description: "비교 결과를 해석한 문서입니다." },
-        evidence: { title: "EVIDENCE STREAM", description: "비교 판단의 원본 근거입니다." },
+        report: { title: translate("visualize.report.title"), description: translate("visualize.report.title") },
+        evidence: { title: translate("visualize.evidence.title"), description: translate("visualize.evidence.title") },
       },
     };
   }
@@ -410,31 +411,31 @@ function buildAutoReportSpec(params: {
       questionType,
       widgets: {
         mainChart: {
-          title: "REACTION TIMELINE",
-          description: "커뮤니티 반응이 시간에 따라 어떻게 모였는지 보여줍니다.",
+          title: translate("visualize.chart.reactionTimeline"),
+          description: translate("visualize.chart.reactionTimeline.desc"),
           chart: buildTimelineLineChart(params.metrics),
         },
         secondaryChart: {
-          title: "SOURCE MIX",
-          description: "반응이 어느 커뮤니티/출처에서 왔는지 보여줍니다.",
+          title: translate("visualize.chart.sourceMix"),
+          description: translate("visualize.chart.sourceMix.desc"),
           chart: buildSourceMixPieChart(params.metrics),
         },
         primaryList: {
-          title: "REACTION HIGHLIGHTS",
-          description: "가장 자주 인용된 반응 포인트입니다.",
+          title: translate("visualize.list.reactionHighlights"),
+          description: translate("visualize.list.reactionHighlights"),
           items: fallbackItems,
         },
         secondaryList: {
-          title: "TOP SOURCES",
-          description: "반응을 많이 제공한 출처입니다.",
+          title: translate("visualize.list.topSources"),
+          description: translate("visualize.common.primarySource"),
           items: params.metrics.topSources.slice(0, 5).map((row) => ({
             title: row.sourceName,
             detail: "커뮤니티 신호 출처",
             badge: `${row.itemCount}건`,
           })),
         },
-        report: { title: "RESEARCH REPORT", description: "커뮤니티 반응을 요약한 문서입니다." },
-        evidence: { title: "EVIDENCE STREAM", description: "커뮤니티 원문 근거입니다." },
+        report: { title: translate("visualize.report.title"), description: translate("visualize.report.title") },
+        evidence: { title: translate("visualize.evidence.title"), description: translate("visualize.evidence.title") },
       },
     };
   }
@@ -445,18 +446,18 @@ function buildAutoReportSpec(params: {
     questionType,
     widgets: {
       mainChart: {
-        title: "COLLECTION TIMELINE",
-        description: "수집된 근거가 날짜별로 몇 건 들어왔는지 보여줍니다.",
+        title: translate("visualize.chart.collectionTimeline"),
+        description: translate("visualize.chart.collectionTimeline.desc"),
         chart: buildTimelineLineChart(params.metrics),
       },
       secondaryChart: {
-        title: "SOURCE MIX",
-        description: "현재 세션에 포함된 출처 유형 비중입니다.",
+        title: translate("visualize.chart.sourceMix"),
+        description: translate("visualize.chart.sourceMix.desc"),
         chart: buildSourceMixPieChart(params.metrics),
       },
       primaryList: {
-        title: "TOP SOURCES",
-        description: "이번 조사에 가장 많이 기여한 출처입니다.",
+        title: translate("visualize.list.topSources"),
+        description: translate("visualize.common.primarySource"),
         items: params.metrics.topSources.slice(0, 5).map((row) => ({
           title: row.sourceName,
           detail: "주요 출처",
@@ -464,12 +465,12 @@ function buildAutoReportSpec(params: {
         })),
       },
       secondaryList: {
-        title: "REPRESENTATIVE TITLES",
-        description: "질문과 가장 관련 높은 대표 근거입니다.",
+        title: translate("visualize.list.representativeTitles"),
+        description: translate("visualize.common.representativeGame"),
         items: fallbackItems,
       },
-      report: { title: "RESEARCH REPORT", description: "최종 리서치 문서입니다." },
-      evidence: { title: "EVIDENCE STREAM", description: "정규화된 근거 목록입니다." },
+      report: { title: translate("visualize.report.title"), description: translate("visualize.report.title") },
+      evidence: { title: translate("visualize.evidence.title"), description: translate("visualize.evidence.title") },
     },
   };
 }
@@ -608,11 +609,13 @@ export async function prepareResearcherCollectionContext(
         metrics,
         items,
       }),
+      fallbackSummary: markdown,
     };
   } catch (error) {
     return {
       artifactPaths: [],
-      promptContext: `# 사전 수집 데이터셋\n- 자동 수집 실패: ${String(error ?? "unknown error")}\n- 가능한 범위에서 추론을 이어가되, 수집 실패 사실을 숨기지 마세요`,
+      promptContext: `# 사전 수집 데이터셋\n- 자동 수집 실패: ${String(error ?? translate("common.unknownError"))}\n- 가능한 범위에서 추론을 이어가되, 수집 실패 사실을 숨기지 마세요`,
+      fallbackSummary: "",
     };
   }
 }

@@ -32,8 +32,8 @@ type UseVisualizePageStateParams = {
   hasTauriRuntime: boolean;
 };
 
-function toMessage(error: unknown) {
-  return error instanceof Error ? error.message : String(error ?? "Unknown error");
+function toMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : String(error ?? fallback);
 }
 
 function parseLines(input: string) {
@@ -50,6 +50,38 @@ function isEntryInWorkspace(entry: { sourceFile?: string; markdownPath?: string;
     return true;
   }
   return candidates.some((value) => value.startsWith(root));
+}
+
+function selectedRunStorageKey(cwd: string) {
+  return `rail.visualize.selected-run::${String(cwd ?? "").trim()}`;
+}
+
+function readStoredSelectedRunId(cwd: string) {
+  if (typeof window === "undefined") {
+    return "";
+  }
+  try {
+    return String(window.sessionStorage.getItem(selectedRunStorageKey(cwd)) ?? "").trim();
+  } catch {
+    return "";
+  }
+}
+
+function writeStoredSelectedRunId(cwd: string, runId: string) {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    const key = selectedRunStorageKey(cwd);
+    const normalized = String(runId ?? "").trim();
+    if (normalized) {
+      window.sessionStorage.setItem(key, normalized);
+    } else {
+      window.sessionStorage.removeItem(key);
+    }
+  } catch {
+    // ignore storage failures
+  }
 }
 
 export function useVisualizePageState({ cwd, hasTauriRuntime }: UseVisualizePageStateParams) {
@@ -78,8 +110,21 @@ export function useVisualizePageState({ cwd, hasTauriRuntime }: UseVisualizePage
   const syncReportRuns = useCallback(() => {
     const nextRuns = buildVisualizeResearchRuns(readKnowledgeEntries().filter((entry) => isEntryInWorkspace(entry, cwd)));
     setReportRuns(nextRuns);
-    setSelectedRunId((current) => (current && nextRuns.some((row) => row.runId === current) ? current : (nextRuns[0]?.runId ?? "")));
+    const storedRunId = readStoredSelectedRunId(cwd);
+    setSelectedRunId((current) => {
+      if (current && nextRuns.some((row) => row.runId === current)) {
+        return current;
+      }
+      if (storedRunId && nextRuns.some((row) => row.runId === storedRunId)) {
+        return storedRunId;
+      }
+      return nextRuns.length === 1 ? (nextRuns[0]?.runId ?? "") : "";
+    });
   }, [cwd]);
+
+  useEffect(() => {
+    writeStoredSelectedRunId(cwd, selectedRunId);
+  }, [cwd, selectedRunId]);
 
   useEffect(() => {
     if (!hasTauriRuntime || !cwd.trim()) {
@@ -109,7 +154,7 @@ export function useVisualizePageState({ cwd, hasTauriRuntime }: UseVisualizePage
       })
       .catch((nextError) => {
         if (!cancelled) {
-          setError(toMessage(nextError));
+          setError(toMessage(nextError, t("common.unknownError")));
         }
       })
       .finally(() => {
@@ -159,7 +204,7 @@ export function useVisualizePageState({ cwd, hasTauriRuntime }: UseVisualizePage
         setCollectionPayload(parseResearchCollectionPayload(String(nextCollectionJson ?? "")));
       } catch (nextError) {
         if (!cancelled) {
-          setError(toMessage(nextError));
+          setError(toMessage(nextError, t("common.unknownError")));
         }
       } finally {
         if (!cancelled) {
@@ -204,7 +249,7 @@ export function useVisualizePageState({ cwd, hasTauriRuntime }: UseVisualizePage
       })
       .catch((nextError) => {
         if (!cancelled) {
-          setError(toMessage(nextError));
+          setError(toMessage(nextError, t("common.unknownError")));
         }
       });
     return () => {
@@ -231,12 +276,12 @@ export function useVisualizePageState({ cwd, hasTauriRuntime }: UseVisualizePage
       setSelectedJobId(nextSelectedJobId && nextJobs.items.some((item) => item.jobId === nextSelectedJobId) ? nextSelectedJobId : (nextJobs.items[0]?.jobId ?? ""));
       setStatusText(
         t("visualize.status.storageRefreshed", {
-          reports: buildVisualizeResearchRuns(readKnowledgeEntries()).length,
+          reports: buildVisualizeResearchRuns(readKnowledgeEntries().filter((entry) => isEntryInWorkspace(entry, cwd))).length,
           facts: nextOverview.totals.collectionItems,
         }),
       );
     } catch (nextError) {
-      setError(toMessage(nextError));
+      setError(toMessage(nextError, t("common.unknownError")));
     } finally {
       setRefreshing(false);
     }
@@ -269,7 +314,7 @@ export function useVisualizePageState({ cwd, hasTauriRuntime }: UseVisualizePage
       await refreshAll(planned.job.jobId);
       setStatusText(t("visualize.status.collectionDone", { label: planned.job.label }));
     } catch (nextError) {
-      setError(toMessage(nextError));
+      setError(toMessage(nextError, t("common.unknownError")));
     } finally {
       setBusy(false);
     }
@@ -287,7 +332,7 @@ export function useVisualizePageState({ cwd, hasTauriRuntime }: UseVisualizePage
       await refreshAll();
       setStatusText(t("visualize.status.steamIngestDone", { reviews: result.reviews }));
     } catch (nextError) {
-      setError(toMessage(nextError));
+      setError(toMessage(nextError, t("common.unknownError")));
     } finally {
       setSteamIngesting(false);
     }

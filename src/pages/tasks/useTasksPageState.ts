@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { AgenticAction } from "../../features/orchestration/agentic/actionBus";
+import { t as translate } from "../../i18n";
 import {
   buildTaskAgentPrompt,
   getTaskAgentLabel,
@@ -176,7 +177,7 @@ export function useTasksPageState(params: Params) {
     }
     const goal = createInput.goal.trim();
     if (!goal) {
-      params.setStatus("TASK 목표를 먼저 입력하세요.");
+      params.setStatus(translate("tasks.status.requireGoal"));
       return;
     }
     setLoading(true);

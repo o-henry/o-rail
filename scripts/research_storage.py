@@ -137,6 +137,13 @@ PROMPT_REPRESENTATIVE_HINTS = (
 )
 PROMPT_DATE_HINT_RE = re.compile(r"\b20\d{2}\s*[-./년]\s*\d{1,2}\s*[-./월]\s*\d{1,2}")
 
+STEAM_MARKET_DEFAULT_URLS = [
+    "https://store.steampowered.com/charts/topselling/global",
+    "https://store.steampowered.com/charts/mostplayed",
+    "https://store.steampowered.com/search/?sort_by=Reviews_DESC",
+    "https://steamdb.info/charts/",
+]
+
 DEFAULT_GAMES: list[tuple[int, str]] = [
     (2379780, "Balatro"),
     (413150, "Stardew Valley"),
@@ -626,7 +633,7 @@ def extract_task_request_text(prompt: str) -> str:
         trimmed = normalized.split("[ROLE_KB_INJECT]", 1)[0].strip()
         if trimmed and trimmed != normalized:
             return extract_task_request_text(trimmed)
-    instruction_split = re.split(r"\n\s*\n(?=집중할 점:)", normalized, maxsplit=1)
+    instruction_split = re.split(r"\s+(?:집중할 점:|focus:|focus points?:)\s*", normalized, maxsplit=1, flags=re.IGNORECASE)
     if len(instruction_split) > 1 and instruction_split[0].strip():
         normalized = instruction_split[0].strip()
     normalized = re.sub(r"^\s*(?:@[a-z0-9_-]+\s+)+", "", normalized, flags=re.IGNORECASE).strip()
@@ -646,6 +653,7 @@ def analyze_prompt_collection_plan(prompt: str) -> dict[str, Any]:
     metric_focus: list[str] = []
     additional_keywords: list[str] = []
     additional_domains: list[str] = []
+    additional_urls: list[str] = []
     instructions: list[str] = []
     suggested_source_type = "auto"
     data_scope = "cross_source_topic"
@@ -664,6 +672,7 @@ def analyze_prompt_collection_plan(prompt: str) -> dict[str, Any]:
             metric_focus.append("representatives")
         if mentions_steam:
             additional_domains.extend(["store.steampowered.com", "steamcommunity.com", "steamdb.info"])
+            additional_urls.extend(STEAM_MARKET_DEFAULT_URLS)
             additional_keywords.extend(
                 [
                     "steam genre review volume",
@@ -692,6 +701,7 @@ def analyze_prompt_collection_plan(prompt: str) -> dict[str, Any]:
         "suggestedSourceType": suggested_source_type,
         "additionalKeywords": dedupe_text_items(additional_keywords, limit=6),
         "additionalDomains": dedupe_text_items(additional_domains, limit=8),
+        "additionalUrls": dedupe_text_items(additional_urls, limit=8),
         "instructions": dedupe_text_items(instructions, limit=8),
     }
 
@@ -993,16 +1003,23 @@ def plan_agent_collection_job(
     normalized_prompt = extract_task_request_text(prompt)
     if not normalized_prompt:
         raise RuntimeError("prompt is required")
-    urls = extract_urls_from_prompt(normalized_prompt)
+    prompt_urls = extract_urls_from_prompt(normalized_prompt)
     planner = analyze_prompt_collection_plan(normalized_prompt)
+    urls = dedupe_text_items(prompt_urls + list(planner.get("additionalUrls") or []), limit=MAX_DYNAMIC_JOB_URLS)
     keywords = dedupe_text_items(
         build_prompt_keywords(normalized_prompt) + list(planner.get("additionalKeywords") or []),
         limit=MAX_DYNAMIC_JOB_KEYWORDS,
     )
-    domains = dedupe_text_items(
-        infer_domains_from_prompt(normalized_prompt) + list(planner.get("additionalDomains") or []),
-        limit=24,
-    )
+    planner_scope = str(planner.get("dataScope") or "").strip().lower()
+    planner_domains = list(planner.get("additionalDomains") or [])
+    if planner_scope == "steam_market":
+        explicit_hosts = [parse_host(url) for url in urls if parse_host(url)]
+        domains = dedupe_text_items(planner_domains + explicit_hosts, limit=24)
+    else:
+        domains = dedupe_text_items(
+            infer_domains_from_prompt(normalized_prompt) + planner_domains,
+            limit=24,
+        )
     effective_source_type = str(requested_source_type or "auto").strip().lower() or "auto"
     if effective_source_type == "auto":
         suggested = str(planner.get("suggestedSourceType") or "").strip().lower()

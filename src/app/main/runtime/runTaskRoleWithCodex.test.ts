@@ -341,4 +341,92 @@ describe("runTaskRoleWithCodex", () => {
 
     expect(capturedPrompts[0]).toBe("스팀 장르 인기 순위와 고평가 장르, 대표 게임 리스트를 조사해줘");
   });
+
+  it("falls back to collected researcher markdown when Codex returns no readable text", async () => {
+    const invokeFn = (vi.fn(async (command: string, args?: Record<string, unknown>) => {
+      switch (command) {
+        case "task_agent_pack_read":
+          return {
+            id: "researcher",
+            label: "RESEARCHER",
+            studioRoleId: "research_analyst",
+            model: "gpt-5.4",
+            modelReasoningEffort: "medium",
+            sandboxMode: "workspace-write",
+            outputArtifactName: "research_findings.md",
+            promptDocFile: "researcher.md",
+            developerInstructions: "자료 조사와 웹 리서치를 수행하라.",
+          };
+        case "thread_load":
+          return {
+            thread: { model: "GPT-5.4", reasoning: "중간" },
+            task: { workspacePath: "/tmp/mockking" },
+          };
+        case "research_storage_plan_agent_job":
+          return {
+            job: {
+              jobId: "collect-fallback",
+              label: "Researcher · fallback",
+              resolvedSourceType: "community",
+              collectorStrategy: "dynamic_search",
+              keywords: ["steam genre review volume"],
+              domains: ["store.steampowered.com", "steamcommunity.com"],
+              planner: {
+                analysisMode: "genre_ranking",
+                aggregationUnit: "genre",
+                dataScope: "steam_market",
+                metricFocus: ["popularity", "quality", "representatives"],
+                instructions: [],
+              },
+            },
+          };
+        case "research_storage_execute_job":
+          return { job: { jobId: "collect-fallback" } };
+        case "research_storage_collection_metrics":
+          return {
+            totals: { items: 1, sources: 1, verified: 1, warnings: 0, conflicted: 0, avgScore: 72 },
+            bySourceType: [{ sourceType: "source.community", itemCount: 1 }],
+            byVerificationStatus: [{ verificationStatus: "verified", itemCount: 1 }],
+            timeline: [{ bucketDate: "2026-03-19", itemCount: 1 }],
+            topSources: [{ sourceName: "steamcommunity.com", itemCount: 1 }],
+          };
+        case "research_storage_list_collection_items":
+          return {
+            items: [
+              {
+                title: "대표 근거",
+                sourceName: "steamcommunity.com",
+                verificationStatus: "verified",
+                score: 72,
+                url: "https://steamcommunity.com/app/123/reviews",
+                summary: "대표 스팀 근거입니다.",
+              },
+            ],
+          };
+        case "research_storage_collection_genre_rankings":
+          return { popular: [], quality: [] };
+        case "thread_start":
+          return { threadId: "thread-codex-fallback" };
+        case "turn_start_blocking":
+          return { status: "completed", output: [] };
+        case "workspace_write_text":
+          return `${String(args?.cwd)}/${String(args?.name)}`;
+        default:
+          throw new Error(`unexpected command: ${command}`);
+      }
+    }) as unknown) as <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
+
+    const result = await runTaskRoleWithCodex({
+      invokeFn,
+      storageCwd: "/tmp/rail-storage",
+      taskId: "thread-fallback",
+      studioRoleId: "research_analyst",
+      prompt: "@researcher 스팀 장르 평가를 조사해줘",
+      sourceTab: "tasks-thread",
+      runId: "role-run-fallback",
+    });
+
+    expect(result.summary).toContain("# 리서치 수집 결과");
+    expect(result.artifactPaths).toContain("/tmp/rail-storage/.rail/tasks/thread-fallback/codex_runs/role-run-fallback/research_collection.md");
+  });
 });

@@ -6,11 +6,15 @@ type TasksThreadHeaderBarProps = {
   isEditingThreadTitle: boolean;
   threadTitleDraft: string;
   hasActiveThread: boolean;
+  isReviewPaneOpen: boolean;
   isMainSurfaceFullscreen: boolean;
+  isThreadNavHidden: boolean;
   onStartEditingTitle: () => void;
   onChangeTitleDraft: (value: string) => void;
   onCommitTitle: () => void;
   onCancelTitleEdit: () => void;
+  onToggleReviewPane: () => void;
+  onToggleThreadNav: () => void;
   onToggleMainSurfaceFullscreen: () => void;
 };
 
@@ -55,6 +59,23 @@ export function TasksThreadHeaderBar(props: TasksThreadHeaderBarProps) {
         </div>
       </div>
       <div className="tasks-thread-header-actions">
+        <button
+          aria-label={props.isThreadNavHidden ? t("tasks.detailPanel.show") : t("tasks.detailPanel.hide")}
+          className="tasks-thread-header-terminal-button tasks-thread-header-nav-toggle"
+          onClick={props.onToggleThreadNav}
+          type="button"
+        >
+          <img alt="" aria-hidden="true" src={props.isThreadNavHidden ? "/open-panel.svg" : "/close.svg"} />
+        </button>
+        <button
+          aria-label={t("tasks.diff.title")}
+          className="tasks-thread-header-terminal-button tasks-thread-header-review-button"
+          disabled={!props.hasActiveThread}
+          onClick={props.onToggleReviewPane}
+          type="button"
+        >
+          <img alt="" aria-hidden="true" src="/terminal-svgrepo-com.svg" />
+        </button>
         <button
           aria-label={props.isMainSurfaceFullscreen ? t("tasks.fullscreen.exit") : t("tasks.fullscreen.enter")}
           className="tasks-thread-header-terminal-button"

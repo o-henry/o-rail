@@ -64,7 +64,7 @@ export function TasksThreadComposer(props: TasksThreadComposerProps) {
   const { t } = useI18n();
 
   return (
-    <div className="tasks-thread-composer-shell question-input agents-composer workflow-question-input">
+    <div className="tasks-thread-composer-shell question-input agents-composer">
       {props.mentionMatch ? (
         <div aria-label={t("tasks.aria.agentMentions")} className="tasks-thread-mention-menu" role="listbox">
           {props.mentionMatch.options.map((option, index) => (

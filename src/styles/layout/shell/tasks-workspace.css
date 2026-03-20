@@ -3,7 +3,7 @@
   --tasks-radius: 4px;
   --tasks-wrapper-radius: 10px;
   --tasks-control-height: 34px;
-  --tasks-nav-width: 296px;
+  --tasks-nav-width: 336px;
   position: relative;
   min-height: 0;
   height: 100%;
@@ -18,7 +18,7 @@
 }
 
 .tasks-thread-layout.is-review-pane-open {
-  grid-template-columns: minmax(0, var(--tasks-nav-width)) minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, var(--tasks-nav-width)) minmax(0, 1fr) minmax(260px, 300px);
 }
 
 .tasks-thread-layout.is-thread-nav-hidden {
@@ -26,7 +26,7 @@
 }
 
 .tasks-thread-layout.is-thread-nav-hidden.is-review-pane-open {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 300px);
 }
 
 .tasks-thread-layout.workspace-tab-panel {
@@ -118,7 +118,7 @@
   gap: 8px;
   overflow: auto;
   padding-right: 0;
-  padding-bottom: 8px;
+  padding-bottom: 12px;
 }
 
 .tasks-thread-project-node {
@@ -555,18 +555,22 @@
   min-width: 0;
   width: 100%;
   justify-self: stretch;
+  min-height: 0;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 0;
-  background: #ffffff;
+  background: transparent;
   border-radius: var(--tasks-wrapper-radius);
   overflow: hidden;
 }
 
 .tasks-thread-layout.is-main-surface-fullscreen .tasks-thread-nav,
-.tasks-thread-layout.is-main-surface-fullscreen .tasks-thread-detail-panel,
-.tasks-thread-layout.is-thread-nav-hidden .tasks-thread-detail-panel {
+.tasks-thread-layout.is-main-surface-fullscreen .tasks-thread-detail-panel {
   display: none;
+}
+
+.tasks-thread-layout.is-thread-nav-hidden:not(.is-review-pane-open) .tasks-thread-main-surface {
+  grid-column: 1 / -1;
 }
 
 .tasks-thread-layout.is-main-surface-fullscreen .tasks-thread-main-surface {
@@ -586,6 +590,10 @@
 }
 
 .tasks-thread-header {
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   padding: 12px;
   border-radius: var(--tasks-wrapper-radius) var(--tasks-wrapper-radius) 0 0;
   background: #ffffff;
@@ -593,6 +601,7 @@
 }
 
 .tasks-thread-header-leading {
+  flex: 1 1 auto;
   min-width: 0;
   display: flex;
   align-items: flex-start;
@@ -631,6 +640,9 @@
 
 .tasks-thread-header-copy p {
   color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tasks-thread-header-terminal-button:disabled {
@@ -777,6 +789,10 @@
 
 .tasks-thread-title-button {
   cursor: text;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tasks-thread-title-input {
@@ -816,6 +832,10 @@
 }
 
 .tasks-thread-conversation-scroll {
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   min-height: 0;
   height: 100%;
   overflow: auto;
@@ -1189,19 +1209,20 @@
 
 .tasks-thread-composer-shell {
   position: relative;
-  margin: 0;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  margin: 10px 0 0;
   border: 0;
-  box-shadow: none;
+  border-radius: var(--tasks-wrapper-radius);
+  box-shadow: var(--panel-shadow);
   background: #ffffff;
   gap: 10px;
   align-self: end;
   overflow: visible;
   isolation: isolate;
   z-index: 22;
-}
-
-.tasks-thread-composer-shell.workflow-question-input {
-  margin-bottom: 0;
 }
 
 .tasks-thread-composer-input {
@@ -1469,6 +1490,11 @@
 .tasks-thread-review-diff-head strong,
 .tasks-thread-review-diff-head span {
   font-family: "Departure Mono", "DepartureMonoRail", "Galmuri11", monospace !important;
+}
+
+.tasks-thread-review-diff-head strong {
+  font-family: "BasicallyAMono", "DialogNanumBody1984", sans-serif !important;
+  font-size: 12px;
 }
 
 .tasks-thread-review-toolbar small,

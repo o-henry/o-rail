@@ -322,6 +322,8 @@ export default function TasksPage(props: TasksPageProps) {
           headerTitle={headerTitle}
           isEditingThreadTitle={isEditingThreadTitle}
           isMainSurfaceFullscreen={isMainSurfaceFullscreen}
+          isReviewPaneOpen={isReviewPaneOpen}
+          isThreadNavHidden={isThreadNavHidden}
           threadTitleDraft={threadTitleDraft}
           onCancelTitleEdit={() => {
             setThreadTitleDraft(headerTitle);
@@ -336,6 +338,13 @@ export default function TasksPage(props: TasksPageProps) {
             }
             setIsMainSurfaceFullscreen((current) => !current);
           }}
+          onToggleReviewPane={() => {
+            if (!state.activeThread) {
+              return;
+            }
+            setIsReviewPaneOpen((current) => !current);
+          }}
+          onToggleThreadNav={() => setIsThreadNavHidden((current) => !current)}
         />
 
         {!state.activeThread ? (

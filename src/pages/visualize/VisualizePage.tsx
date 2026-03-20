@@ -38,6 +38,17 @@ function formatPercent(value: number) {
   return `${Math.round(value)}%`;
 }
 
+function splitBadgeColumns(input: string | null | undefined) {
+  const parts = String(input ?? "")
+    .split("·")
+    .map((part) => part.trim())
+    .filter(Boolean);
+  return {
+    approval: parts[0] || "-",
+    score: parts[1] || "-",
+  };
+}
+
 type VisualizeMetrics = ReturnType<typeof useVisualizePageState>["collectionMetrics"];
 type EvidenceItem = NonNullable<ReturnType<typeof useVisualizePageState>["collectionItems"]>["items"][number];
 
@@ -452,17 +463,22 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
                 title={secondaryListTitle}
                 widgetId="steam"
               >
-                <div className="visualize-monitor-ranked-list">
+                <div className="visualize-monitor-ranked-table">
+                  <div className="visualize-monitor-ranked-table-head">
+                    <span>{t("visualize.evidence.column.title")}</span>
+                    <span>{t("visualize.evidence.column.approval")}</span>
+                    <span>{t("visualize.evidence.column.score")}</span>
+                  </div>
+                  <div className="visualize-monitor-ranked-list is-table">
                   {secondaryListItems.map((item, index) => (
-                    <div className="visualize-monitor-ranked-item" key={`${item.title || "item"}-${index}`}>
-                      <div className="visualize-monitor-ranked-item-copy">
-                        <strong>{item.title || "-"}</strong>
-                        <p>{item.detail || "-"}</p>
-                      </div>
-                      <span>{item.badge || "-"}</span>
+                    <div className="visualize-monitor-ranked-item is-table" key={`${item.title || "item"}-${index}`}>
+                      <strong>{item.title || "-"}</strong>
+                      <span>{splitBadgeColumns(item.badge).approval}</span>
+                      <span>{splitBadgeColumns(item.badge).score}</span>
                     </div>
                   ))}
-                  {secondaryListItems.length ? null : <p className="visualize-monitor-empty">{t("visualize.empty.snapshots")}</p>}
+                    {secondaryListItems.length ? null : <p className="visualize-monitor-empty">{t("visualize.empty.snapshots")}</p>}
+                  </div>
                 </div>
               </VisualizeWidgetFrame>
 

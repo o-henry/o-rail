@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { normalizeRunRecord } from "../app/mainAppRuntimeHelpers";
 import type { RunRecord } from "../app/main/types";
+import { useI18n } from "../i18n";
 import {
   addUserMemoryEntry,
   clearUserMemoryEntries,
@@ -13,12 +14,25 @@ import {
 } from "../features/studio/userMemoryStore";
 import { summarizeUserMemoryActivity, type UserMemoryActivityRow } from "../features/studio/userMemoryActivity";
 
-function formatMemoryTimestamp(value: string): string {
+function localeToDateLocale(locale: string): string {
+  if (locale === "en") {
+    return "en-US";
+  }
+  if (locale === "jp") {
+    return "ja-JP";
+  }
+  if (locale === "zh") {
+    return "zh-CN";
+  }
+  return "ko-KR";
+}
+
+function formatMemoryTimestamp(value: string, locale: string): string {
   const parsed = Date.parse(value);
   if (!Number.isFinite(parsed)) {
     return "";
   }
-  return new Date(parsed).toLocaleString("ko-KR", {
+  return new Date(parsed).toLocaleString(localeToDateLocale(locale), {
     month: "2-digit",
     day: "2-digit",
     hour: "2-digit",
@@ -27,6 +41,7 @@ function formatMemoryTimestamp(value: string): string {
 }
 
 export default function UserMemoryPanel() {
+  const { locale, t } = useI18n();
   const [entries, setEntries] = useState<UserMemoryEntry[]>([]);
   const [activityRows, setActivityRows] = useState<UserMemoryActivityRow[]>([]);
   const [draft, setDraft] = useState("");
@@ -80,36 +95,36 @@ export default function UserMemoryPanel() {
     const next = addUserMemoryEntry(draft, "manual");
     setEntries(next);
     setDraft("");
-    setNotice(next.length > 0 ? "메모리를 저장했습니다." : "저장할 메모리가 없습니다.");
+    setNotice(next.length > 0 ? t("memory.notice.saved") : t("memory.notice.empty"));
   };
 
   const onToggleAutoCapture = () => {
     const next = writeUserMemoryAutoCaptureEnabled(!autoCaptureEnabled);
     setAutoCaptureEnabled(next);
-    setNotice(next ? "자동 기억을 켰습니다." : "자동 기억을 껐습니다.");
+    setNotice(next ? t("memory.notice.autoOn") : t("memory.notice.autoOff"));
   };
 
   const onDeleteMemory = (entryId: string) => {
     setEntries(removeUserMemoryEntry(entryId));
-    setNotice("메모리를 삭제했습니다.");
+    setNotice(t("memory.notice.deleted"));
   };
 
   const onClearAll = () => {
     setEntries(clearUserMemoryEntries());
-    setNotice("메모리를 모두 지웠습니다.");
+    setNotice(t("memory.notice.cleared"));
   };
 
   return (
     <section className="controls bridge-memory-panel">
       <div className="web-automation-head">
-        <h2>메모리 관리</h2>
+        <h2>{t("memory.title")}</h2>
         <div className="bridge-head-actions">
           <button
             className="settings-account-button bridge-head-action-button"
             onClick={onToggleAutoCapture}
             type="button"
           >
-            <span className="settings-button-label">{autoCaptureEnabled ? "자동 기억 켜짐" : "자동 기억 꺼짐"}</span>
+            <span className="settings-button-label">{autoCaptureEnabled ? t("memory.toggle.on") : t("memory.toggle.off")}</span>
           </button>
           <button
             className="settings-account-button bridge-head-action-button"
@@ -117,25 +132,24 @@ export default function UserMemoryPanel() {
             onClick={onClearAll}
             type="button"
           >
-            <span className="settings-button-label">전체 삭제</span>
+            <span className="settings-button-label">{t("memory.clearAll")}</span>
           </button>
         </div>
       </div>
       <div className="settings-badges">
         <span className={`status-tag ${autoCaptureEnabled ? "on" : "off"}`}>
-          {autoCaptureEnabled ? "자동 기억 활성화" : "자동 기억 비활성화"}
+          {autoCaptureEnabled ? t("memory.auto.on") : t("memory.auto.off")}
         </span>
-        <span className="status-tag neutral">저장된 메모리 {sortedEntries.length}개</span>
+        <span className="status-tag neutral">{t("memory.count", { count: sortedEntries.length })}</span>
       </div>
       <p className="bridge-provider-meta settings-memory-copy">
-        사용자의 장기 성향, 작업 제약, 선호도를 저장해 이후 에이전트 실행 프롬프트에 관련 있을 때만 반영합니다.
-        현재 요청과 충돌하면 현재 요청이 우선됩니다.
+        {t("memory.copy")}
       </p>
       <div className="settings-memory-composer">
         <textarea
           className="settings-memory-textarea"
           onChange={(event) => setDraft(event.currentTarget.value)}
-          placeholder="예: 나는 1인 인디 게임 개발자이고, 빠른 프로토타이핑과 현실적인 제작 범위를 중요하게 생각한다."
+          placeholder={t("memory.placeholder")}
           rows={3}
           value={draft}
         />
@@ -146,7 +160,7 @@ export default function UserMemoryPanel() {
             onClick={onAddMemory}
             type="button"
           >
-            <span className="settings-button-label">메모리 추가</span>
+            <span className="settings-button-label">{t("memory.add")}</span>
           </button>
         </div>
       </div>
@@ -157,24 +171,24 @@ export default function UserMemoryPanel() {
       ) : null}
       <div className="settings-memory-list">
         {sortedEntries.length === 0 ? (
-          <div className="settings-memory-empty">아직 저장된 사용자 메모리가 없습니다.</div>
+          <div className="settings-memory-empty">{t("memory.empty")}</div>
         ) : (
           sortedEntries.map((entry) => (
             <article className="settings-memory-item" key={entry.id}>
               <div className="settings-memory-item-copy">
                 <div className="settings-memory-item-meta">
-                  <strong>{entry.source === "manual" ? "수동 메모리" : "자동 메모리"}</strong>
-                  <small>{formatMemoryTimestamp(entry.updatedAt)}</small>
+                  <strong>{entry.source === "manual" ? t("memory.source.manual") : t("memory.source.auto")}</strong>
+                  <small>{formatMemoryTimestamp(entry.updatedAt, locale)}</small>
                 </div>
                 <p>{entry.text}</p>
               </div>
               <button
-                aria-label={`메모리 삭제: ${entry.text}`}
+                aria-label={t("memory.deleteAria", { text: entry.text })}
                 className="settings-memory-item-remove"
                 onClick={() => onDeleteMemory(entry.id)}
                 type="button"
               >
-                ×
+                <img alt="" aria-hidden="true" src="/xmark-small-svgrepo-com.svg" />
               </button>
             </article>
           ))
@@ -194,7 +208,7 @@ export default function UserMemoryPanel() {
               <article className="settings-memory-activity-item" key={row.key}>
                 <div className="settings-memory-item-meta">
                   <strong>{row.nodeLabel}</strong>
-                  <small>{formatMemoryTimestamp(row.updatedAt)}</small>
+                  <small>{formatMemoryTimestamp(row.updatedAt, locale)}</small>
                 </div>
                 <p>{row.rememberedSummary || "저장된 실행 메모리 요약 없음"}</p>
                 <div className="settings-memory-activity-tags">

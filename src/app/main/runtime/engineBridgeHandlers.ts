@@ -1,3 +1,5 @@
+import { t as translate } from "../../../i18n";
+
 export function createEngineBridgeHandlers(params: any) {
   function inferLoginStateFromUsage(raw: unknown): boolean | null {
     if (!raw || typeof raw !== "object") {
@@ -22,7 +24,7 @@ export function createEngineBridgeHandlers(params: any) {
     }
     const resolvedCwd = String(params.cwd ?? "").trim();
     if (!resolvedCwd || resolvedCwd === ".") {
-      throw new Error("작업 경로(CWD)를 먼저 선택하세요.");
+      throw new Error(translate("bridge.error.cwdRequired"));
     }
     try {
       await params.invokeFn("engine_start", { cwd: resolvedCwd });
@@ -41,11 +43,11 @@ export function createEngineBridgeHandlers(params: any) {
     try {
       await ensureEngineStarted();
       await refreshAuthStateFromEngine(true);
-      params.setStatus("준비됨");
+      params.setStatus(translate("bridge.status.ready"));
     } catch (e) {
       if (params.isEngineAlreadyStartedError(e)) {
         params.setEngineStarted(true);
-        params.setStatus("준비됨");
+        params.setStatus(translate("bridge.status.ready"));
         return;
       }
       params.setError(params.toErrorText(e));
@@ -57,8 +59,8 @@ export function createEngineBridgeHandlers(params: any) {
     try {
       await params.invokeFn("engine_stop");
       params.setEngineStarted(false);
-      params.markCodexNodesStatusOnEngineIssue("cancelled", "엔진 정지");
-      params.setStatus("중지됨");
+      params.markCodexNodesStatusOnEngineIssue("cancelled", translate("bridge.issue.engineStopped"));
+      params.setStatus(translate("bridge.status.stopped"));
       params.setRunning(false);
       params.setIsGraphRunning(false);
       params.setUsageInfoText("");
@@ -80,7 +82,7 @@ export function createEngineBridgeHandlers(params: any) {
         params.lastAuthenticatedAtRef.current = Date.now();
         params.setLoginCompleted(true);
         if (!silent) {
-          params.setStatus(mode ? `로그인 상태 확인됨 (인증 모드=${mode})` : "로그인 상태 확인됨");
+          params.setStatus(mode ? translate("bridge.status.authCheckedMode", { mode }) : translate("bridge.status.authChecked"));
         }
       } else if (result.state === "login_required") {
         const now = Date.now();
@@ -95,17 +97,17 @@ export function createEngineBridgeHandlers(params: any) {
 
         if (shouldKeepSession) {
           if (!silent) {
-            params.setStatus("로그인 상태 유지 (재확인 대기)");
+            params.setStatus(translate("bridge.status.keepSession"));
           }
           return result;
         }
 
         params.setLoginCompleted(false);
         if (!silent) {
-          params.setStatus("로그인 필요");
+          params.setStatus(translate("bridge.status.loginRequired"));
         }
       } else if (!silent) {
-        params.setStatus("로그인 상태 확인 필요");
+        params.setStatus(translate("bridge.status.authCheckNeeded"));
       }
 
       return result;
@@ -136,17 +138,17 @@ export function createEngineBridgeHandlers(params: any) {
       }
       params.setUsageInfoText(params.formatUsageInfoForDisplay(result.raw));
       params.setUsageResultClosed(false);
-      params.setStatus("사용량 조회 완료");
+      params.setStatus(translate("bridge.status.usageDone"));
     } catch (e) {
       params.setError(params.toUsageCheckErrorMessage(e));
-      params.setStatus("사용량 조회 실패");
+      params.setStatus(translate("bridge.status.usageFailed"));
     }
   }
 
   async function onLoginCodex() {
     params.setError("");
     if (params.codexAuthBusy) {
-      params.setStatus("Codex 인증 요청 처리 중입니다.");
+      params.setStatus(translate("bridge.status.authBusy"));
       return;
     }
     try {
@@ -155,7 +157,7 @@ export function createEngineBridgeHandlers(params: any) {
         const elapsed = now - params.codexLoginLastAttemptAtRef.current;
         if (elapsed < params.codexLoginCooldownMs) {
           const remainSec = Math.ceil((params.codexLoginCooldownMs - elapsed) / 1000);
-          params.setStatus(`Codex 로그인 재시도 대기 ${remainSec}초`);
+          params.setStatus(translate("bridge.status.loginRetry", { seconds: remainSec }));
           return;
         }
         params.codexLoginLastAttemptAtRef.current = now;
@@ -173,7 +175,7 @@ export function createEngineBridgeHandlers(params: any) {
         params.setLoginCompleted(false);
         params.setAuthMode("unknown");
         params.setUsageInfoText("");
-        params.setStatus("Codex 로그아웃 완료");
+        params.setStatus(translate("bridge.status.logoutDone"));
         return;
       }
 
@@ -182,21 +184,21 @@ export function createEngineBridgeHandlers(params: any) {
         params.authLoginRequiredProbeCountRef.current = 0;
         params.lastAuthenticatedAtRef.current = Date.now();
         params.setLoginCompleted(true);
-        params.setStatus("이미 로그인 상태입니다.");
+        params.setStatus(translate("bridge.status.alreadyLoggedIn"));
         return;
       }
       const result = await params.invokeFn("login_chatgpt");
       const authUrl = typeof result?.authUrl === "string" ? result.authUrl.trim() : "";
       if (!authUrl) {
-        throw new Error("로그인 URL을 받지 못했습니다.");
+        throw new Error(translate("bridge.error.loginUrlMissing"));
       }
       await params.openUrlFn(authUrl);
-      params.setStatus("Codex 로그인 창 열림 (재시도 제한 45초)");
+      params.setStatus(translate("bridge.status.loginWindowOpened"));
     } catch (e) {
       if (params.loginCompleted) {
-        params.setError(`Codex 로그아웃 실패: ${String(e)}`);
+        params.setError(translate("bridge.error.logoutFailed", { error: String(e) }));
       } else {
-        params.setError(`Codex 로그인 시작 실패: ${String(e)}`);
+        params.setError(translate("bridge.error.loginStartFailed", { error: String(e) }));
       }
     } finally {
       params.setCodexAuthBusy(false);
@@ -212,9 +214,9 @@ export function createEngineBridgeHandlers(params: any) {
         return;
       }
       params.setCwd(selectedDirectory);
-      params.setStatus(`작업 경로 선택됨: ${selectedDirectory.toLowerCase()}`);
+      params.setStatus(translate("bridge.status.cwdSelected", { path: selectedDirectory.toLowerCase() }));
     } catch (error) {
-      params.setError(`작업 경로 선택 실패: ${String(error)}`);
+      params.setError(translate("bridge.error.cwdSelectFailed", { error: String(error) }));
     }
   }
 
@@ -224,7 +226,7 @@ export function createEngineBridgeHandlers(params: any) {
     }
     try {
       await params.openUrlFn(params.webProviderHomeUrl(params.pendingWebTurn.provider));
-      params.setStatus(`${params.webProviderLabel(params.pendingWebTurn.provider)} 기본 브라우저 열림`);
+      params.setStatus(translate("bridge.status.providerOpened", { provider: params.webProviderLabel(params.pendingWebTurn.provider) }));
     } catch (error) {
       params.setError(String(error));
     }
@@ -236,7 +238,10 @@ export function createEngineBridgeHandlers(params: any) {
     } catch (error) {
       const message = String(error);
       if (!message.includes("provider child view not found")) {
-        params.setError(`${params.webProviderLabel(provider)} 세션 창 숨기기 실패: ${message}`);
+        params.setError(translate("bridge.error.hideSessionWindowFailed", {
+          provider: params.webProviderLabel(provider),
+          error: message,
+        }));
         return;
       }
     }
@@ -248,7 +253,7 @@ export function createEngineBridgeHandlers(params: any) {
     }
 
     params.setProviderChildViewOpen((prev: any) => ({ ...prev, [provider]: false }));
-    params.setStatus(`${params.webProviderLabel(provider)} 세션 창 숨김`);
+    params.setStatus(translate("bridge.status.sessionWindowHidden", { provider: params.webProviderLabel(provider) }));
     void refreshWebWorkerHealth(true);
   }
 
@@ -262,7 +267,7 @@ export function createEngineBridgeHandlers(params: any) {
       return health;
     } catch (error) {
       if (!silent) {
-        params.setError(`웹 워커 상태 조회 실패: ${String(error)}`);
+        params.setError(translate("bridge.error.workerHealthFailed", { error: String(error) }));
       }
       return null;
     }
@@ -295,7 +300,7 @@ export function createEngineBridgeHandlers(params: any) {
         const next = params.toWebBridgeStatus(health.bridge);
         params.setWebBridgeStatus(next);
         if (!silent) {
-          params.setStatus("웹 연결 상태 동기화 완료");
+          params.setStatus(translate("bridge.status.refreshDone"));
         }
         return next;
       }
@@ -306,12 +311,12 @@ export function createEngineBridgeHandlers(params: any) {
       const next = params.toWebBridgeStatus(raw);
       params.setWebBridgeStatus(next);
       if (!silent) {
-        params.setStatus("웹 연결 상태 동기화 완료");
+        params.setStatus(translate("bridge.status.refreshDone"));
       }
       return next;
     } catch (error) {
       if (!silent) {
-        params.setError(`웹 연결 상태 조회 실패: ${String(error)}`);
+        params.setError(translate("bridge.error.statusFailed", { error: String(error) }));
       }
       return null;
     }
@@ -323,9 +328,9 @@ export function createEngineBridgeHandlers(params: any) {
     try {
       const raw = await invokeBridgeRpcWithRecovery("web_bridge_rotate_token");
       params.setWebBridgeStatus(params.toWebBridgeStatus(raw));
-      params.setStatus("웹 연결 토큰을 재발급했습니다.");
+      params.setStatus(translate("bridge.status.tokenRotated"));
     } catch (error) {
-      params.setError(`웹 연결 토큰 재발급 실패: ${String(error)}`);
+      params.setError(translate("bridge.error.rotateFailed", { error: String(error) }));
     } finally {
       params.setWebWorkerBusy(false);
     }
@@ -341,11 +346,19 @@ export function createEngineBridgeHandlers(params: any) {
     }
     try {
       await params.invokeFn("web_worker_start");
-      params.setStatus("웹 연결 워커 재시작 완료");
+      params.setStatus(translate("bridge.status.workerRestarted"));
       await refreshWebBridgeStatus(true, true);
-      await onCopyWebBridgeConnectCode();
+      try {
+        const bundle = await params.invokeFn("web_bridge_connect_code");
+        const maskedCode = typeof bundle?.maskedCode === "string" ? bundle.maskedCode : "";
+        if (maskedCode) {
+          params.setWebBridgeConnectCode(maskedCode);
+        }
+      } catch {
+        // keep restarted state even if connect code refresh is temporarily unavailable
+      }
     } catch (error) {
-      params.setError(`웹 연결 재시작 실패: ${String(error)}`);
+      params.setError(translate("bridge.error.restartFailed", { error: String(error) }));
     } finally {
       params.setWebWorkerBusy(false);
     }
@@ -357,7 +370,7 @@ export function createEngineBridgeHandlers(params: any) {
       const rawCode = typeof bundle?.code === "string" ? bundle.code : "";
       const maskedCode = typeof bundle?.maskedCode === "string" ? bundle.maskedCode : "";
       if (!rawCode) {
-        throw new Error("연결 코드를 생성할 수 없습니다.");
+        throw new Error(translate("bridge.error.connectCodeUnavailable"));
       }
       params.setWebBridgeConnectCode(maskedCode);
       let copied = false;
@@ -386,13 +399,13 @@ export function createEngineBridgeHandlers(params: any) {
       }
 
       if (copied) {
-        params.setStatus("웹 연결 코드 복사 완료");
+        params.setStatus(translate("bridge.status.connectCodeCopied"));
         params.setError("");
       } else {
-        params.setError("자동 복사 권한이 없어 연결 코드를 복사하지 못했습니다.");
+        params.setError(translate("bridge.error.copyDenied"));
       }
     } catch (error) {
-      params.setError(`웹 연결 코드 준비 실패: ${String(error)}`);
+      params.setError(translate("bridge.error.copyFailed", { error: String(error) }));
     }
   }
 
@@ -402,21 +415,21 @@ export function createEngineBridgeHandlers(params: any) {
     try {
       const result = await params.invokeFn("web_provider_open_session", { provider });
       if (result && result.ok === false) {
-        throw new Error(result.error || result.errorCode || "세션 창을 열지 못했습니다.");
+        throw new Error(result.error || result.errorCode || translate("bridge.error.sessionOpenFailed", { provider: params.webProviderLabel(provider), error: "" }));
       }
       await refreshWebWorkerHealth(true);
       window.setTimeout(() => {
         void refreshWebWorkerHealth(true);
       }, 900);
       if (result?.sessionState === "active") {
-        params.setStatus(`${params.webProviderLabel(provider)} 로그인 상태 확인됨`);
+        params.setStatus(translate("bridge.status.sessionAuthenticated", { provider: params.webProviderLabel(provider) }));
       } else if (result?.sessionState === "login_required") {
-        params.setStatus(`${params.webProviderLabel(provider)} 로그인 필요`);
+        params.setStatus(translate("bridge.status.sessionLoginRequired", { provider: params.webProviderLabel(provider) }));
       } else {
-        params.setStatus(`${params.webProviderLabel(provider)} 로그인 세션 창 열림`);
+        params.setStatus(translate("bridge.status.sessionWindowOpened", { provider: params.webProviderLabel(provider) }));
       }
     } catch (error) {
-      params.setError(`${params.webProviderLabel(provider)} 로그인 세션 열기 실패: ${String(error)}`);
+      params.setError(translate("bridge.error.sessionOpenFailed", { provider: params.webProviderLabel(provider), error: String(error) }));
     } finally {
       params.setWebWorkerBusy(false);
     }

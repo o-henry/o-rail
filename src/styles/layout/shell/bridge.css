@@ -158,19 +158,31 @@
   color: #445062;
 }
 
+.bridge-code-head .settings-account-button {
+  width: auto;
+  min-width: 84px;
+  padding-inline: 10px;
+  flex: 0 0 auto;
+}
+
 .bridge-code-textarea {
   width: 100%;
-  resize: vertical;
-  min-height: 96px;
+  resize: none;
+  min-height: 36px;
+  height: 36px;
   border: 0;
   border-radius: 6px;
   background: #ffffff;
   align-content: center;
   color: #1f2730;
-  padding: 8px;
+  padding: 8px 10px;
   font-family: "BasicallyAMono", "Noto Sans KR", monospace;
   font-size: 12px;
-  line-height: 1.35;
+  line-height: 20px;
+  white-space: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  word-break: normal;
 }
 
 .settings-theme-select {

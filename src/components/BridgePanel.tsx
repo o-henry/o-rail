@@ -76,7 +76,7 @@ function BridgePanel({
               type="button"
             >
               <img alt="" aria-hidden="true" className="settings-refresh-icon" src="/reload.svg" />
-              <span className="settings-refresh-label">{t("bridge.refresh.title")}</span>
+              <span className="settings-refresh-label">{t("bridge.refresh.short")}</span>
             </button>
             <button
               className="settings-account-button bridge-head-action-button"
@@ -92,7 +92,7 @@ function BridgePanel({
               onClick={onRestartBridge}
               type="button"
             >
-              <span className="settings-button-label">{t("bridge.restart")}</span>
+              <span className="settings-button-label">{t("bridge.restart.short")}</span>
             </button>
           </div>
         </div>
@@ -128,7 +128,8 @@ function BridgePanel({
               className="bridge-code-textarea"
               onFocus={(event) => event.currentTarget.select()}
               readOnly
-              rows={4}
+              rows={1}
+              wrap="off"
               value={connectCode}
             />
           </div>

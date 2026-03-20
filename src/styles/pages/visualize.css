@@ -52,7 +52,7 @@
 .visualize-monitor-rail-item strong,
 .visualize-monitor-rail-item span,
 .visualize-monitor-rail-action {
-  font-family: "Departure Mono", "DepartureMonoRail", "Galmuri11", monospace;
+  font-family: "DepartureMonoRail", "Galmuri11", monospace;
 }
 
 .visualize-monitor-toolbar-copy strong {
@@ -306,7 +306,7 @@
 .visualize-monitor-evidence-picker span,
 .visualize-monitor-evidence-detail a,
 .visualize-monitor-chip-row span {
-  font-family: "Departure Mono", "DepartureMonoRail", "Galmuri11", monospace;
+  font-family: "DepartureMonoRail", "Galmuri11", monospace;
 }
 
 .visualize-monitor-widget-head-copy strong {
@@ -400,7 +400,7 @@
 }
 
 .visualize-monitor-widget.is-session h1 {
-  font-family: "Departure Mono", "DepartureMonoRail", "Galmuri11", monospace;
+  font-family: "DepartureMonoRail", "Galmuri11", monospace;
   font-size: 1rem;
   line-height: 1.22;
 }
@@ -419,7 +419,7 @@
 
 .visualize-monitor-session-row span,
 .visualize-monitor-session-row select {
-  font-family: "Departure Mono", "DepartureMonoRail", "Galmuri11", monospace;
+  font-family: "DepartureMonoRail", "Galmuri11", monospace;
 }
 
 .visualize-monitor-session-row span {
@@ -626,6 +626,49 @@
   gap: 6px;
 }
 
+.visualize-monitor-ranked-table {
+  display: grid;
+  min-height: 0;
+  flex: 1 1 auto;
+  grid-template-rows: auto minmax(0, 1fr);
+  border: 1px solid rgba(226, 232, 240, 1);
+  background: rgba(255, 255, 255, 0.94);
+}
+
+.visualize-monitor-ranked-table-head,
+.visualize-monitor-ranked-item.is-table {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) 110px 84px;
+  column-gap: 10px;
+  align-items: center;
+}
+
+.visualize-monitor-ranked-table-head {
+  min-height: 34px;
+  padding: 0 10px;
+  border-bottom: 1px solid rgba(226, 232, 240, 1);
+  background: #f8fafc;
+}
+
+.visualize-monitor-ranked-table-head span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  color: #64748b;
+  font-family: "DepartureMonoRail", "Galmuri11", monospace;
+  font-size: 0.74rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.visualize-monitor-ranked-list.is-table {
+  display: grid;
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: auto;
+  gap: 0;
+}
+
 .visualize-monitor-ranked-item {
   display: flex;
   align-items: center;
@@ -636,6 +679,17 @@
 
 .visualize-monitor-ranked-item-copy {
   min-width: 0;
+}
+
+.visualize-monitor-ranked-item.is-table {
+  padding: 10px;
+  border: 0;
+  border-bottom: 1px solid rgba(226, 232, 240, 1);
+  background: rgba(255, 255, 255, 0.95);
+}
+
+.visualize-monitor-ranked-item.is-table:last-child {
+  border-bottom: 0;
 }
 
 .visualize-monitor-ranked-item strong {
@@ -661,6 +715,16 @@
   color: #64748b;
   font-size: 0.74rem;
   white-space: nowrap;
+}
+
+.visualize-monitor-ranked-item.is-table strong,
+.visualize-monitor-ranked-item.is-table span {
+  font-family: "DepartureMonoRail", "Galmuri11", monospace;
+  font-size: 0.74rem;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .visualize-monitor-document {
@@ -726,7 +790,7 @@
   align-items: center;
   min-height: 34px;
   color: #64748b;
-  font-family: "Departure Mono", "DepartureMonoRail", "Galmuri11", monospace;
+  font-family: "DepartureMonoRail", "Galmuri11", monospace;
   font-size: 0.72rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -777,12 +841,20 @@
 .visualize-monitor-evidence-row > span,
 .visualize-monitor-evidence-summary-cell a {
   color: #64748b;
-  font-size: 0.76rem;
 }
 
 .visualize-monitor-evidence-summary-cell {
   display: grid;
   gap: 6px;
+}
+
+.visualize-monitor-evidence-row > strong,
+.visualize-monitor-evidence-row > span,
+.visualize-monitor-evidence-summary-cell p,
+.visualize-monitor-evidence-summary-cell a {
+  font-family: "DepartureMonoRail", "Galmuri11", monospace;
+  font-size: 0.74rem;
+  line-height: 1.35;
 }
 
 .visualize-monitor-evidence-summary-cell a {
@@ -795,11 +867,8 @@
 .visualize-monitor-evidence-summary-cell p {
   min-width: 0;
   overflow: hidden;
-  display: -webkit-box;
-  overflow-wrap: anywhere;
-  word-break: break-word;
-  -webkit-line-clamp: 7;
-  -webkit-box-orient: vertical;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .visualize-monitor-chip-row {

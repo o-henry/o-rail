@@ -177,8 +177,16 @@
 
 .settings-usage-button.settings-account-button,
 .bridge-head-action-button.settings-account-button {
-  height: 30px;
   min-height: 30px;
+}
+
+.settings-usage-button.settings-account-button {
+  height: 36px;
+  min-height: 36px;
+}
+
+.bridge-head-action-button.settings-account-button {
+  height: 30px;
 }
 
 .provider-session-toggle,
@@ -276,7 +284,7 @@
 
 .bridge-head-actions .settings-refresh-icon-button,
 .bridge-head-actions .bridge-head-action-button.settings-account-button {
-  min-width: 98px;
+  min-width: 110px;
   width: auto;
   padding-inline: 7px;
   flex: 0 1 auto;
@@ -285,8 +293,8 @@
 .bridge-head-actions .settings-refresh-label,
 .bridge-head-actions .settings-button-label {
   white-space: nowrap;
-  font-size: 8.5px;
-  letter-spacing: -0.02em;
+  font-size: 12px;
+  letter-spacing: 0;
 }
 
 .web-automation-head h2 {

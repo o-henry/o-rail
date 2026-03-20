@@ -542,7 +542,7 @@
   min-height: 26px;
   padding: 0;
   border: 0;
-  border-radius: 6px;
+  border-radius: 2px;
   background: color-mix(in srgb, var(--surface-soft) 72%, var(--surface-elevated));
   display: inline-grid;
   place-items: center;
@@ -603,7 +603,7 @@
 .tasks-thread-list-stage.is-active,
 .tasks-thread-stage-chip.is-active,
 .tasks-thread-stage-chip.is-selected {
-  background: color-mix(in srgb, #c7d3e6 82%, #c4cfdf);
+  background: color-mix(in srgb, rgb(238, 241, 244) 82%, rgb(196, 207, 223));
   color: #1f344c;
 }
 

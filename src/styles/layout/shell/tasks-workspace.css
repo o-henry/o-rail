@@ -504,16 +504,19 @@
 
 .tasks-thread-layout.is-main-surface-fullscreen .tasks-thread-nav,
 .tasks-thread-layout.is-main-surface-fullscreen .tasks-thread-detail-panel {
-  opacity: 0;
-  pointer-events: none;
-  user-select: none;
+  display: none;
 }
 
 .tasks-thread-layout.is-main-surface-fullscreen .tasks-thread-main-surface {
-  position: absolute;
-  inset: 0;
+  grid-column: 1 / -1;
+  position: relative;
+  inset: auto;
   z-index: 40;
   background: var(--bg-app);
+}
+
+.tasks-thread-layout.is-main-surface-fullscreen {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .tasks-thread-main-surface.is-stage-shell-collapsed {

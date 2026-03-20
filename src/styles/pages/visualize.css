@@ -251,7 +251,7 @@
   display: flex;
   min-height: 0;
   flex-direction: column;
-  border: 0;
+  border: 1px solid rgb(237, 236, 236);
   background: rgba(255, 255, 255, 0.98);
   overflow: hidden;
   box-shadow: 0 10px 26px rgba(15, 23, 42, 0.08);
@@ -739,6 +739,7 @@
   justify-content: space-between;
   gap: 10px;
   padding: 10px;
+  background: #ffffff;
 }
 
 .visualize-monitor-ranked-item-copy {

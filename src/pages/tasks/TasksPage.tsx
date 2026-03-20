@@ -269,53 +269,51 @@ export default function TasksPage(props: TasksPageProps) {
     <section
       className={`tasks-thread-layout workspace-tab-panel${isMainSurfaceFullscreen ? " is-main-surface-fullscreen" : ""}${isThreadNavHidden ? " is-thread-nav-hidden" : ""}${isReviewPaneOpen && state.activeThread ? " is-review-pane-open" : ""}`}
     >
-      {!isThreadNavHidden ? (
-        <TasksThreadNavPane
-          activeThread={state.activeThread}
-          activeThreadId={state.activeThreadId}
-          collapsedDirectories={collapsedDirectories}
-          collapsedProjects={collapsedProjects}
-          currentStageLabel={currentStageLabel}
-          cwd={props.cwd}
-          fileTree={fileTree}
-          hasActiveThread={Boolean(state.activeThread)}
-          isFilesExpanded={isFilesExpanded}
-          isReviewPaneOpen={isReviewPaneOpen}
-          isThreadNavHidden={isThreadNavHidden}
-          loading={state.loading}
-          pendingApprovalsCount={state.pendingApprovals.length}
-          projectGroups={state.projectGroups}
-          projectPath={state.projectPath}
-          selectedAgentDetail={state.selectedAgentDetail}
-          selectedFilePath={state.selectedFilePath}
-          selectedStage={selectedStage}
-          onCompactSelectedAgentCodexThread={() => void state.compactSelectedAgentCodexThread()}
-          onNewThread={handleNewThread}
-          onOpenProjectDirectory={() => void state.openProjectDirectory()}
-          onRequestDeleteProject={setPendingDeleteProjectPath}
-          onRequestDeleteThread={setPendingDeleteThreadId}
-          onSelectFilePath={state.setSelectedFilePath}
-          onSelectProject={state.selectProject}
-          onSelectThread={(threadId) => void state.selectThread(threadId)}
-          onSetSelectedStageId={setSelectedStageId}
-          onToggleReviewPane={() => {
-            if (!state.activeThread) {
-              return;
-            }
-            setIsReviewPaneOpen((current) => !current);
-          }}
-          onToggleThreadNav={() => setIsThreadNavHidden((current) => !current)}
-          onToggleDirectory={(path) => setCollapsedDirectories((current) => ({ ...current, [path]: !current[path] }))}
-          onToggleFilesExpanded={() => setIsFilesExpanded((current) => !current)}
-          onToggleProject={(projectPath) => {
-            const normalized = String(projectPath ?? "").trim();
-            if (!normalized) {
-              return;
-            }
-            setCollapsedProjects((current) => ({ ...current, [normalized]: !current[normalized] }));
-          }}
-        />
-      ) : null}
+      <TasksThreadNavPane
+        activeThread={state.activeThread}
+        activeThreadId={state.activeThreadId}
+        collapsedDirectories={collapsedDirectories}
+        collapsedProjects={collapsedProjects}
+        currentStageLabel={currentStageLabel}
+        cwd={props.cwd}
+        fileTree={fileTree}
+        hasActiveThread={Boolean(state.activeThread)}
+        isFilesExpanded={isFilesExpanded}
+        isReviewPaneOpen={isReviewPaneOpen}
+        isThreadNavHidden={isThreadNavHidden}
+        loading={state.loading}
+        pendingApprovalsCount={state.pendingApprovals.length}
+        projectGroups={state.projectGroups}
+        projectPath={state.projectPath}
+        selectedAgentDetail={state.selectedAgentDetail}
+        selectedFilePath={state.selectedFilePath}
+        selectedStage={selectedStage}
+        onCompactSelectedAgentCodexThread={() => void state.compactSelectedAgentCodexThread()}
+        onNewThread={handleNewThread}
+        onOpenProjectDirectory={() => void state.openProjectDirectory()}
+        onRequestDeleteProject={setPendingDeleteProjectPath}
+        onRequestDeleteThread={setPendingDeleteThreadId}
+        onSelectFilePath={state.setSelectedFilePath}
+        onSelectProject={state.selectProject}
+        onSelectThread={(threadId) => void state.selectThread(threadId)}
+        onSetSelectedStageId={setSelectedStageId}
+        onToggleReviewPane={() => {
+          if (!state.activeThread) {
+            return;
+          }
+          setIsReviewPaneOpen((current) => !current);
+        }}
+        onToggleThreadNav={() => setIsThreadNavHidden((current) => !current)}
+        onToggleDirectory={(path) => setCollapsedDirectories((current) => ({ ...current, [path]: !current[path] }))}
+        onToggleFilesExpanded={() => setIsFilesExpanded((current) => !current)}
+        onToggleProject={(projectPath) => {
+          const normalized = String(projectPath ?? "").trim();
+          if (!normalized) {
+            return;
+          }
+          setCollapsedProjects((current) => ({ ...current, [normalized]: !current[normalized] }));
+        }}
+      />
 
       <section className="tasks-thread-main-surface">
         <TasksThreadHeaderBar

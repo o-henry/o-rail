@@ -53,12 +53,23 @@
   overflow: auto;
 }
 
+.tasks-thread-nav.is-collapsed {
+  width: 52px;
+  min-width: 52px;
+  max-width: 52px;
+}
+
 .tasks-thread-nav-island {
   display: grid;
   gap: 10px;
   padding: 10px 10px 18px;
   border-radius: var(--tasks-wrapper-radius);
   background: #ffffff;
+}
+
+.tasks-thread-nav-island.is-collapsed {
+  padding: 10px 6px;
+  justify-items: center;
 }
 
 .tasks-thread-nav-utility-row,
@@ -79,6 +90,10 @@
 .tasks-thread-nav-utility-actions {
   gap: 8px;
   margin-right: 6px;
+}
+
+.tasks-thread-nav.is-collapsed .tasks-thread-nav-utility-actions {
+  margin-right: 0;
 }
 
 .tasks-thread-nav-copy {
@@ -549,7 +564,7 @@
 
 .tasks-thread-layout.is-main-surface-fullscreen .tasks-thread-nav,
 .tasks-thread-layout.is-main-surface-fullscreen .tasks-thread-detail-panel,
-.tasks-thread-layout.is-thread-nav-hidden .tasks-thread-nav {
+.tasks-thread-layout.is-thread-nav-hidden .tasks-thread-detail-panel {
   display: none;
 }
 

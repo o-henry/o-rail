@@ -117,6 +117,25 @@ function renderFileTree(
 export function TasksThreadNavPane(props: TasksThreadNavPaneProps) {
   const { t } = useI18n();
 
+  if (props.isThreadNavHidden) {
+    return (
+      <aside className="tasks-thread-nav is-collapsed">
+        <section className="tasks-thread-nav-island is-collapsed">
+          <div className="tasks-thread-nav-utility-actions">
+            <button
+              aria-label={t("tasks.detailPanel.show")}
+              className="tasks-thread-header-terminal-button tasks-thread-header-nav-toggle"
+              onClick={props.onToggleThreadNav}
+              type="button"
+            >
+              <img alt="" aria-hidden="true" src="/open-panel.svg" />
+            </button>
+          </div>
+        </section>
+      </aside>
+    );
+  }
+
   return (
     <aside className="tasks-thread-nav">
       <section className="tasks-thread-nav-island">

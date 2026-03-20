@@ -40,7 +40,9 @@
 }
 
 .visualize-monitor-toolbar-copy {
-  display: none;
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
 }
 
 .visualize-monitor-toolbar-copy strong,

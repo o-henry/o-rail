@@ -62,6 +62,7 @@
 .visualize-monitor-toolbar-actions {
   align-items: center;
   gap: 8px;
+  margin-left: auto;
 }
 
 .visualize-monitor-toolbar-icon {

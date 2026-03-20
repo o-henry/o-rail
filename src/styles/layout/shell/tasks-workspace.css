@@ -677,7 +677,7 @@
 
 .tasks-thread-readiness-card {
   display: grid;
-  gap: 6px;
+  gap: 14px;
   border-radius: 10px;
   background: #ffffff;
   padding: 10px 12px;

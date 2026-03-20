@@ -420,15 +420,11 @@
   gap: 4px;
 }
 
-.visualize-monitor-subhead {
-  min-height: 22px;
-  display: inline-flex;
-  align-items: center;
-  color: #64748b;
-  font-family: "BasicallyAMono", "DialogNanumBody1984", sans-serif;
-  font-size: 0.72rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+.visualize-monitor-widget-head-nested {
+  min-height: 28px;
+  padding-inline: 0;
+  border-top: 1px solid rgba(203, 213, 225, 0.9);
+  border-bottom: 1px solid rgba(203, 213, 225, 0.9);
 }
 
 .visualize-monitor-widget h1,

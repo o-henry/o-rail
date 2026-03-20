@@ -386,7 +386,6 @@ export default function VisualizePage({ cwd, hasTauriRuntime }: VisualizePagePro
               >
                 <div className="visualize-monitor-stacked-panels">
                   <section className="visualize-monitor-stacked-section">
-                    <header className="visualize-monitor-subhead">{primaryListTitle}</header>
                     <div className="visualize-monitor-ranked-list">
                       {primaryListItems.map((item, index) => (
                         <div className="visualize-monitor-ranked-item" key={`${item.title || "item"}-${index}`}>
@@ -402,7 +401,13 @@ export default function VisualizePage({ cwd, hasTauriRuntime }: VisualizePagePro
                   </section>
 
                   <section className="visualize-monitor-stacked-section">
-                    <header className="visualize-monitor-subhead">{t("visualize.chart.collectionTimeline")}</header>
+                    <header className="visualize-monitor-widget-head visualize-monitor-widget-head-nested">
+                      <div className="visualize-monitor-widget-head-main">
+                        <div className="visualize-monitor-widget-head-copy">
+                          <strong>{t("visualize.chart.collectionTimeline")}</strong>
+                        </div>
+                      </div>
+                    </header>
                     <div className="visualize-monitor-ranked-table">
                       <div className="visualize-monitor-ranked-table-head">
                         <span>{t("visualize.common.date")}</span>

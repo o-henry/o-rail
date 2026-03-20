@@ -673,14 +673,25 @@
   gap: 6px;
 }
 
-.visualize-monitor-ranked-table {
-  --visualize-ranked-columns: minmax(0, 1.7fr) 110px 84px;
-  display: grid;
+.visualize-monitor-widget-surface.is-ranked-surface,
+.visualize-monitor-widget-surface.is-ranked-table-surface,
+.visualize-monitor-widget-surface.is-evidence-surface {
   min-height: 0;
-  flex: 1 1 auto;
+}
+
+.visualize-monitor-widget-surface.is-ranked-surface {
+  justify-content: flex-start;
+}
+
+.visualize-monitor-widget-surface.is-ranked-table-surface,
+.visualize-monitor-widget-surface.is-evidence-surface {
+  display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-  border: 1px solid rgba(226, 232, 240, 1);
-  background: rgba(255, 255, 255, 0.94);
+  gap: 0;
+}
+
+.visualize-monitor-widget-surface.is-ranked-table-surface {
+  --visualize-ranked-columns: minmax(0, 1.7fr) 110px 84px;
 }
 
 .visualize-monitor-ranked-table-head,
@@ -695,7 +706,6 @@
   min-height: 34px;
   padding: 0 10px;
   border-bottom: 1px solid rgba(226, 232, 240, 1);
-  background: #f8fafc;
 }
 
 .visualize-monitor-ranked-table-head span {
@@ -798,13 +808,11 @@
   text-align: left;
 }
 
-.visualize-monitor-document {
+.visualize-monitor-widget-surface.is-report-surface > .feed-document {
   min-height: 0;
   flex: 1 1 auto;
   overflow: auto;
-  border: 1px solid rgba(226, 232, 240, 1);
-  background: rgba(255, 255, 255, 0.92);
-  padding: 10px;
+  padding: 2px 4px 4px;
 }
 
 .visualize-monitor-search-row {
@@ -832,14 +840,8 @@
   box-shadow: none;
 }
 
-.visualize-monitor-evidence-table {
+.visualize-monitor-widget-surface.is-evidence-surface {
   --visualize-evidence-columns: minmax(220px, 1.3fr) 100px 72px minmax(0, 2.2fr);
-  display: grid;
-  min-height: 0;
-  flex: 1 1 auto;
-  grid-template-rows: auto minmax(0, 1fr);
-  border: 1px solid rgba(226, 232, 240, 1);
-  background: rgba(255, 255, 255, 0.94);
 }
 
 .visualize-monitor-evidence-table-head,
@@ -854,7 +856,6 @@
   min-height: 34px;
   padding: 0 10px;
   border-bottom: 1px solid rgba(226, 232, 240, 1);
-  background: #f8fafc;
 }
 
 .visualize-monitor-evidence-table-head span {
@@ -979,13 +980,13 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .visualize-monitor-evidence-table {
+  .visualize-monitor-widget-surface.is-evidence-surface {
     --visualize-evidence-columns: minmax(180px, 1.1fr) 88px 64px minmax(0, 1.8fr);
   }
 }
 
 @media (max-width: 1440px) {
-  .visualize-monitor-evidence-table {
+  .visualize-monitor-widget-surface.is-evidence-surface {
     --visualize-evidence-columns: minmax(200px, 1.2fr) 92px 68px minmax(0, 2fr);
   }
 }

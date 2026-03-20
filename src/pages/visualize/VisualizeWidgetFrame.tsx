@@ -9,6 +9,7 @@ type VisualizeWidgetFrameProps = {
   maximized?: boolean;
   onToggleMaximize: (widgetId: VisualizeWidgetId) => void;
   className?: string;
+  surfaceClassName?: string;
   headerActions?: ReactNode;
   children: ReactNode;
 };
@@ -21,6 +22,7 @@ export function VisualizeWidgetFrame({
   maximized = false,
   onToggleMaximize,
   className = "",
+  surfaceClassName = "",
   headerActions,
   children,
 }: VisualizeWidgetFrameProps) {
@@ -42,7 +44,7 @@ export function VisualizeWidgetFrame({
         </div>
         {headerActions ? <div className="visualize-monitor-widget-head-actions">{headerActions}</div> : null}
       </header>
-      <div className="visualize-monitor-widget-surface">{children}</div>
+      <div className={`visualize-monitor-widget-surface ${surfaceClassName}`.trim()}>{children}</div>
     </article>
   );
 }

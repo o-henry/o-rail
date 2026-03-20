@@ -380,46 +380,44 @@ export default function VisualizePage({ cwd, hasTauriRuntime }: VisualizePagePro
                 className="is-sources"
                 maximized={maximizedWidgetId === "sources"}
                 onToggleMaximize={toggleMaximize}
+                surfaceClassName="is-ranked-surface"
                 title={primaryListTitle}
                 widgetId="sources"
               >
-                <div className="visualize-monitor-ranked-list">
-                  {primaryListItems.map((item, index) => (
-                    <div className="visualize-monitor-ranked-item" key={`${item.title || "item"}-${index}`}>
-                      <div className="visualize-monitor-ranked-item-copy">
-                        <strong>{item.title || "-"}</strong>
-                        <p>{item.detail || "-"}</p>
-                      </div>
-                      <span>{item.badge || "-"}</span>
+                {primaryListItems.map((item, index) => (
+                  <div className="visualize-monitor-ranked-item" key={`${item.title || "item"}-${index}`}>
+                    <div className="visualize-monitor-ranked-item-copy">
+                      <strong>{item.title || "-"}</strong>
+                      <p>{item.detail || "-"}</p>
                     </div>
-                  ))}
-                  {primaryListItems.length ? null : <p className="visualize-monitor-empty">{t("visualize.empty.items")}</p>}
-                </div>
+                    <span>{item.badge || "-"}</span>
+                  </div>
+                ))}
+                {primaryListItems.length ? null : <p className="visualize-monitor-empty">{t("visualize.empty.items")}</p>}
               </VisualizeWidgetFrame>
 
               <VisualizeWidgetFrame
                 className="is-timeline"
                 maximized={maximizedWidgetId === "steam"}
                 onToggleMaximize={toggleMaximize}
+                surfaceClassName="is-ranked-table-surface"
                 title={t("visualize.chart.collectionTimeline")}
                 widgetId="steam"
               >
-                <div className="visualize-monitor-ranked-table">
-                  <div className="visualize-monitor-ranked-table-head">
-                    <span>{t("visualize.common.date")}</span>
-                    <span>{t("visualize.common.count")}</span>
-                    <span>{t("visualize.common.share")}</span>
-                  </div>
-                  <div className="visualize-monitor-ranked-list is-table">
-                    {timelineRows.map((row) => (
-                      <div className="visualize-monitor-ranked-item is-table" key={row.label}>
-                        <strong>{row.label}</strong>
-                        <span>{row.count}</span>
-                        <span>{formatPercent((row.count / Math.max(effectiveMetrics?.totals.items ?? 0, 1)) * 100)}</span>
-                      </div>
-                    ))}
-                    {timelineRows.length ? null : <p className="visualize-monitor-empty">{t("visualize.empty.snapshots")}</p>}
-                  </div>
+                <div className="visualize-monitor-ranked-table-head">
+                  <span>{t("visualize.common.date")}</span>
+                  <span>{t("visualize.common.count")}</span>
+                  <span>{t("visualize.common.share")}</span>
+                </div>
+                <div className="visualize-monitor-ranked-list is-table">
+                  {timelineRows.map((row) => (
+                    <div className="visualize-monitor-ranked-item is-table" key={row.label}>
+                      <strong>{row.label}</strong>
+                      <span>{row.count}</span>
+                      <span>{formatPercent((row.count / Math.max(effectiveMetrics?.totals.items ?? 0, 1)) * 100)}</span>
+                    </div>
+                  ))}
+                  {timelineRows.length ? null : <p className="visualize-monitor-empty">{t("visualize.empty.snapshots")}</p>}
                 </div>
               </VisualizeWidgetFrame>
 
@@ -428,11 +426,12 @@ export default function VisualizePage({ cwd, hasTauriRuntime }: VisualizePagePro
                 articleRef={reportRef}
                 maximized={maximizedWidgetId === "report"}
                 onToggleMaximize={toggleMaximize}
+                surfaceClassName="is-report-surface"
                 title={reportTitle}
                 widgetId="report"
               >
                 {reportBody ? (
-                  <FeedDocument className="visualize-monitor-document" text={reportBody} />
+                  <FeedDocument text={reportBody} />
                 ) : (
                   <p className="visualize-monitor-empty">{t("visualize.empty.report")}</p>
                 )}
@@ -443,31 +442,30 @@ export default function VisualizePage({ cwd, hasTauriRuntime }: VisualizePagePro
                 className="is-evidence"
                 maximized={maximizedWidgetId === "evidence"}
                 onToggleMaximize={toggleMaximize}
+                surfaceClassName="is-evidence-surface"
                 title={evidenceTitle}
                 widgetId="evidence"
               >
-                <div className="visualize-monitor-evidence-table">
-                  <div className="visualize-monitor-evidence-table-head">
-                    <span>{t("visualize.evidence.column.title")}</span>
-                    <span>{t("visualize.evidence.column.approval")}</span>
-                    <span>{t("visualize.evidence.column.score")}</span>
-                    <span>{t("visualize.evidence.column.link")}</span>
-                  </div>
-                  <div className="visualize-monitor-evidence-picker">
-                    {evidenceItems.map((item) => (
-                      <article className="visualize-monitor-evidence-row" key={item.itemFactId}>
-                        <strong>{item.title || shorten(item.sourceName || item.sourceType, 32)}</strong>
-                        <span>{item.verificationStatus}</span>
-                        <span>{item.score}</span>
-                        <div className="visualize-monitor-evidence-summary-cell">
-                          <a href={item.url} rel="noreferrer" target="_blank">
-                            {item.url}
-                          </a>
-                        </div>
-                      </article>
-                    ))}
-                    {evidenceItems.length ? null : <p className="visualize-monitor-empty">{t("visualize.empty.evidence")}</p>}
-                  </div>
+                <div className="visualize-monitor-evidence-table-head">
+                  <span>{t("visualize.evidence.column.title")}</span>
+                  <span>{t("visualize.evidence.column.approval")}</span>
+                  <span>{t("visualize.evidence.column.score")}</span>
+                  <span>{t("visualize.evidence.column.link")}</span>
+                </div>
+                <div className="visualize-monitor-evidence-picker">
+                  {evidenceItems.map((item) => (
+                    <article className="visualize-monitor-evidence-row" key={item.itemFactId}>
+                      <strong>{item.title || shorten(item.sourceName || item.sourceType, 32)}</strong>
+                      <span>{item.verificationStatus}</span>
+                      <span>{item.score}</span>
+                      <div className="visualize-monitor-evidence-summary-cell">
+                        <a href={item.url} rel="noreferrer" target="_blank">
+                          {item.url}
+                        </a>
+                      </div>
+                    </article>
+                  ))}
+                  {evidenceItems.length ? null : <p className="visualize-monitor-empty">{t("visualize.empty.evidence")}</p>}
                 </div>
               </VisualizeWidgetFrame>
             </div>

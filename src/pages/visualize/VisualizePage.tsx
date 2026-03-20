@@ -338,7 +338,10 @@ export default function VisualizePage({ cwd, hasTauriRuntime }: VisualizePagePro
                   </p>
                   <div className="visualize-monitor-quality-legend">
                     {(effectiveMetrics?.byVerificationStatus ?? []).map((row) => (
-                      <div className="visualize-monitor-quality-legend-row" key={row.verificationStatus}>
+                      <div
+                        className={`visualize-monitor-quality-legend-row${row.verificationStatus === "verified" ? " is-verified" : ""}`}
+                        key={row.verificationStatus}
+                      >
                         <span>{row.verificationStatus}</span>
                         <strong>{row.itemCount}</strong>
                       </div>

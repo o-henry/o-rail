@@ -687,6 +687,10 @@
   padding: 6px 8px;
 }
 
+.visualize-monitor-quality-legend-row.is-verified {
+  border: 0;
+}
+
 .visualize-monitor-ranked-list {
   min-height: 0;
   height: 100%;
@@ -792,6 +796,13 @@
   justify-items: stretch;
   overflow: visible;
   gap: 0;
+}
+
+.visualize-monitor-ranked-list.is-table > .visualize-monitor-empty {
+  min-height: 100%;
+  display: grid;
+  place-items: center;
+  text-align: center;
 }
 
 .visualize-monitor-ranked-item {

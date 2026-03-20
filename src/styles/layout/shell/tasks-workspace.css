@@ -18,7 +18,7 @@
 }
 
 .tasks-thread-layout.is-review-pane-open {
-  grid-template-columns: minmax(0, var(--tasks-nav-width)) minmax(0, 1fr) minmax(260px, 300px);
+  grid-template-columns: minmax(0, var(--tasks-nav-width)) minmax(0, 1fr) minmax(0, 1fr);
 }
 
 .tasks-thread-layout.is-thread-nav-hidden {
@@ -26,7 +26,7 @@
 }
 
 .tasks-thread-layout.is-thread-nav-hidden.is-review-pane-open {
-  grid-template-columns: minmax(0, 1fr) minmax(260px, 300px);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 }
 
 .tasks-thread-layout.workspace-tab-panel {
@@ -1426,6 +1426,8 @@
 
 .tasks-thread-detail-panel {
   min-width: 0;
+  width: 100%;
+  justify-self: stretch;
   display: grid;
   grid-template-rows: minmax(0, 1fr);
   min-height: 0;
@@ -1480,6 +1482,11 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+}
+
+.tasks-thread-review-toolbar .tasks-thread-section-head strong,
+.tasks-thread-review-toolbar .tasks-thread-section-head span {
+  font-size: 12px;
 }
 
 .tasks-thread-review-diff-head {
@@ -1577,7 +1584,7 @@
   display: grid;
   place-items: center;
   border: 1px dashed #d0d7de;
-  border-radius: 8px;
+  border-radius: 4px;
   background: #f6f8fa;
   color: #57606a;
   font-size: 11px;
@@ -1868,7 +1875,7 @@
   }
 
   .tasks-thread-layout.is-review-pane-open {
-    grid-template-columns: minmax(0, var(--tasks-nav-width)) minmax(0, 1fr) minmax(260px, 0.92fr);
+    grid-template-columns: minmax(0, var(--tasks-nav-width)) minmax(0, 1fr) minmax(0, 1fr);
   }
 
   .tasks-thread-stage-rail {

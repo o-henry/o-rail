@@ -278,7 +278,10 @@ export default function TasksPage(props: TasksPageProps) {
           currentStageLabel={currentStageLabel}
           cwd={props.cwd}
           fileTree={fileTree}
+          hasActiveThread={Boolean(state.activeThread)}
           isFilesExpanded={isFilesExpanded}
+          isReviewPaneOpen={isReviewPaneOpen}
+          isThreadNavHidden={isThreadNavHidden}
           loading={state.loading}
           pendingApprovalsCount={state.pendingApprovals.length}
           projectGroups={state.projectGroups}
@@ -295,6 +298,13 @@ export default function TasksPage(props: TasksPageProps) {
           onSelectProject={state.selectProject}
           onSelectThread={(threadId) => void state.selectThread(threadId)}
           onSetSelectedStageId={setSelectedStageId}
+          onToggleReviewPane={() => {
+            if (!state.activeThread) {
+              return;
+            }
+            setIsReviewPaneOpen((current) => !current);
+          }}
+          onToggleThreadNav={() => setIsThreadNavHidden((current) => !current)}
           onToggleDirectory={(path) => setCollapsedDirectories((current) => ({ ...current, [path]: !current[path] }))}
           onToggleFilesExpanded={() => setIsFilesExpanded((current) => !current)}
           onToggleProject={(projectPath) => {
@@ -314,8 +324,6 @@ export default function TasksPage(props: TasksPageProps) {
           headerTitle={headerTitle}
           isEditingThreadTitle={isEditingThreadTitle}
           isMainSurfaceFullscreen={isMainSurfaceFullscreen}
-          isReviewPaneOpen={isReviewPaneOpen}
-          isThreadNavHidden={isThreadNavHidden}
           threadTitleDraft={threadTitleDraft}
           onCancelTitleEdit={() => {
             setThreadTitleDraft(headerTitle);
@@ -330,13 +338,6 @@ export default function TasksPage(props: TasksPageProps) {
             }
             setIsMainSurfaceFullscreen((current) => !current);
           }}
-          onToggleReviewPane={() => {
-            if (!state.activeThread) {
-              return;
-            }
-            setIsReviewPaneOpen((current) => !current);
-          }}
-          onToggleThreadNav={() => setIsThreadNavHidden((current) => !current)}
         />
 
         {!state.activeThread ? (

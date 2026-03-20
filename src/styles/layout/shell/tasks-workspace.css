@@ -7,7 +7,8 @@
   min-height: 0;
   height: 100%;
   display: grid;
-  grid-template-columns: 248px minmax(0, 1fr);
+  width: 100%;
+  grid-template-columns: 280px minmax(0, 1fr);
   gap: 10px;
   padding: 0;
   background: var(--bg-app);
@@ -16,7 +17,7 @@
 }
 
 .tasks-thread-layout.is-review-pane-open {
-  grid-template-columns: 248px minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: 280px minmax(0, 1fr) minmax(0, 1fr);
 }
 
 .tasks-thread-layout.is-thread-nav-hidden {
@@ -52,9 +53,28 @@
 .tasks-thread-nav-island {
   display: grid;
   gap: 10px;
-  padding: 10px;
+  padding: 10px 10px 18px;
   border-radius: var(--tasks-wrapper-radius);
   background: #ffffff;
+}
+
+.tasks-thread-nav-utility-row,
+.tasks-thread-nav-utility-actions {
+  display: flex;
+  align-items: center;
+}
+
+.tasks-thread-nav-utility-row {
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tasks-thread-nav-utility-spacer {
+  flex: 1 1 auto;
+}
+
+.tasks-thread-nav-utility-actions {
+  gap: 8px;
 }
 
 .tasks-thread-nav-copy {
@@ -78,6 +98,7 @@
   gap: 8px;
   overflow: auto;
   padding-right: 0;
+  padding-bottom: 8px;
 }
 
 .tasks-thread-project-node {
@@ -513,6 +534,7 @@
 .tasks-thread-main-surface {
   min-width: 0;
   width: 100%;
+  justify-self: stretch;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto auto;
   gap: 0;
@@ -1796,7 +1818,7 @@
 @media (max-width: 1400px) {
   .tasks-thread-layout {
     font-family: "DepartureMonoRail", "Galmuri11", monospace;
-    grid-template-columns: 228px minmax(0, 1fr) minmax(260px, 0.92fr);
+    grid-template-columns: 248px minmax(0, 1fr) minmax(260px, 0.92fr);
   }
 
   .tasks-thread-stage-rail {
@@ -1807,7 +1829,7 @@
 @media (max-width: 1120px) {
   .tasks-thread-layout {
     font-family: "DepartureMonoRail", "Galmuri11", monospace;
-    grid-template-columns: 228px minmax(0, 1fr);
+    grid-template-columns: 248px minmax(0, 1fr);
   }
 
   .tasks-thread-detail-panel {

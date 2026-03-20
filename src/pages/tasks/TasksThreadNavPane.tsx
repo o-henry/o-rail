@@ -13,8 +13,11 @@ type TasksThreadNavPaneProps = {
   projectPath: string;
   cwd: string;
   loading: boolean;
+  hasActiveThread: boolean;
   activeThreadId: string;
   activeThread: ThreadDetail | null;
+  isReviewPaneOpen: boolean;
+  isThreadNavHidden: boolean;
   selectedFilePath: string;
   selectedStage: ThreadDetail["workflow"]["stages"][number] | null;
   currentStageLabel: string;
@@ -32,6 +35,8 @@ type TasksThreadNavPaneProps = {
   onSelectThread: (threadId: string) => void;
   onRequestDeleteThread: (threadId: string) => void;
   onSetSelectedStageId: (stageId: ThreadStageId) => void;
+  onToggleReviewPane: () => void;
+  onToggleThreadNav: () => void;
   onToggleFilesExpanded: () => void;
   onSelectFilePath: (path: string) => void;
   onToggleDirectory: (path: string) => void;
@@ -115,6 +120,28 @@ export function TasksThreadNavPane(props: TasksThreadNavPaneProps) {
   return (
     <aside className="tasks-thread-nav">
       <section className="tasks-thread-nav-island">
+        <div className="tasks-thread-nav-utility-row">
+          <div className="tasks-thread-nav-utility-spacer" />
+          <div className="tasks-thread-nav-utility-actions">
+            <button
+              aria-label={props.isThreadNavHidden ? t("tasks.detailPanel.show") : t("tasks.detailPanel.hide")}
+              className="tasks-thread-header-terminal-button tasks-thread-header-nav-toggle"
+              onClick={props.onToggleThreadNav}
+              type="button"
+            >
+              <img alt="" aria-hidden="true" src={props.isThreadNavHidden ? "/open-panel.svg" : "/close.svg"} />
+            </button>
+            <button
+              aria-label={t("tasks.diff.title")}
+              className="tasks-thread-header-terminal-button tasks-thread-header-review-button"
+              disabled={!props.hasActiveThread}
+              onClick={props.onToggleReviewPane}
+              type="button"
+            >
+              <img alt="" aria-hidden="true" src="/terminal-svgrepo-com.svg" />
+            </button>
+          </div>
+        </div>
         <div className="tasks-thread-nav-actions">
           <button className="tasks-thread-new-button" onClick={props.onNewThread} type="button">
             {t("tasks.thread.new")}
@@ -127,9 +154,6 @@ export function TasksThreadNavPane(props: TasksThreadNavPaneProps) {
             <span title={props.projectPath || props.cwd}>{props.projectPath || props.cwd}</span>
           </div>
         </div>
-      </section>
-
-      <section className="tasks-thread-nav-island">
         <div className="tasks-thread-nav-copy">
           <strong>{t("tasks.projectTree.label")}</strong>
           <span>{props.loading ? t("tasks.syncing") : t("tasks.count", { count: props.projectGroups.length })}</span>

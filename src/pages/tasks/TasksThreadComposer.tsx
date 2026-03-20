@@ -106,18 +106,26 @@ export function TasksThreadComposer(props: TasksThreadComposerProps) {
   return (
     <div className="tasks-thread-composer-shell question-input agents-composer">
       {props.mentionMatch ? (
-        <div aria-label={t("tasks.aria.agentMentions")} className="tasks-thread-mention-menu" role="listbox">
+        <div
+          aria-label={t("tasks.aria.agentMentions")}
+          className="tasks-thread-mention-menu"
+          data-e2e="tasks-mention-menu"
+          role="listbox"
+        >
           {props.mentionMatch.options.map((option, index) => {
             const startsModeSection = option.kind === "mode" && props.mentionMatch?.options[index - 1]?.kind !== "mode";
             return (
             <button
+              aria-label={`${option.mention} ${option.label} ${option.description}`.trim()}
               aria-selected={index === props.mentionIndex}
               className={`tasks-thread-mention-option${index === props.mentionIndex ? " is-active" : ""}${startsModeSection ? " is-mode-section-start" : ""}`}
+              data-e2e={`tasks-mention-option-${option.mention.replace(/[^a-z0-9_-]+/gi, "").toLowerCase()}`}
               key={option.mention}
               onMouseDown={(event) => {
                 event.preventDefault();
                 props.onSelectMention(option);
               }}
+              title={`${option.mention} · ${option.label}`}
               type="button"
             >
               <strong>{option.mention}</strong>
@@ -130,7 +138,7 @@ export function TasksThreadComposer(props: TasksThreadComposerProps) {
       ) : null}
 
       {props.attachedFiles.length > 0 ? (
-        <div aria-label="Attached files" className="agents-file-list">
+        <div aria-label="Attached files" className="agents-file-list" data-e2e="tasks-attached-files">
           {props.attachedFiles.map((file) => (
             <span className="agents-file-chip" key={file.id}>
               <span className={`agents-file-chip-name${file.enabled === false ? " is-disabled" : ""}`} title={file.path}>
@@ -150,7 +158,7 @@ export function TasksThreadComposer(props: TasksThreadComposerProps) {
       ) : null}
 
       {selectedBadges.length > 0 ? (
-        <div aria-label="Selected agents" className="tasks-thread-selected-mentions">
+        <div aria-label="Selected agents" className="tasks-thread-selected-mentions" data-e2e="tasks-selected-badges">
           {selectedBadges.map((badge) => (
             <span className="tasks-thread-selected-mention-chip" key={badge.key}>
               <span>{badge.label}</span>
@@ -177,6 +185,7 @@ export function TasksThreadComposer(props: TasksThreadComposerProps) {
           ref={props.composerRef}
           aria-label="Tasks composer"
           className="tasks-thread-composer-input"
+          data-e2e="tasks-composer-input"
           onClick={(event) => props.onComposerCursorChange(event.currentTarget.selectionStart ?? 0)}
           onChange={(event) => props.onComposerDraftChange(event.target.value, event.target.selectionStart ?? event.target.value.length)}
           onKeyDown={props.onComposerKeyDown}
@@ -192,6 +201,7 @@ export function TasksThreadComposer(props: TasksThreadComposerProps) {
           <button
             aria-label="Attach code files"
             className="agents-icon-button"
+            data-e2e="tasks-attach-files"
             onClick={props.onOpenAttachmentPicker}
             type="button"
           >
@@ -203,6 +213,7 @@ export function TasksThreadComposer(props: TasksThreadComposerProps) {
               aria-expanded={props.isModelMenuOpen}
               aria-haspopup="listbox"
               className="agents-model-button"
+              data-e2e="tasks-model-trigger"
               onClick={props.onToggleModelMenu}
               type="button"
             >
@@ -210,7 +221,7 @@ export function TasksThreadComposer(props: TasksThreadComposerProps) {
               <img alt="" aria-hidden="true" src="/down-arrow.svg" />
             </button>
             {props.isModelMenuOpen ? (
-              <ul aria-label={t("tasks.aria.modelMenu")} className="agents-model-menu" role="listbox">
+              <ul aria-label={t("tasks.aria.modelMenu")} className="agents-model-menu" data-e2e="tasks-model-menu" role="listbox">
                 {RUNTIME_MODEL_OPTIONS.map((option) => (
                   <li key={option.value}>
                     <button
@@ -233,6 +244,7 @@ export function TasksThreadComposer(props: TasksThreadComposerProps) {
               aria-expanded={props.isReasonMenuOpen}
               aria-haspopup="listbox"
               className="agents-model-button"
+              data-e2e="tasks-reasoning-trigger"
               onClick={props.onToggleReasonMenu}
               type="button"
             >
@@ -240,7 +252,7 @@ export function TasksThreadComposer(props: TasksThreadComposerProps) {
               <img alt="" aria-hidden="true" src="/down-arrow.svg" />
             </button>
             {props.isReasonMenuOpen ? (
-              <ul aria-label={t("tasks.aria.reasoningMenu")} className="agents-model-menu" role="listbox">
+              <ul aria-label={t("tasks.aria.reasoningMenu")} className="agents-model-menu" data-e2e="tasks-reasoning-menu" role="listbox">
                 {TURN_REASONING_LEVEL_OPTIONS.map((option) => (
                   <li key={option}>
                     <button
@@ -264,8 +276,10 @@ export function TasksThreadComposer(props: TasksThreadComposerProps) {
             <button
               aria-label={props.stoppingComposerRun ? t("common.loading") : t("tasks.actions.stop")}
               className="agents-stop-button"
+              data-e2e="tasks-stop-button"
               disabled={props.stoppingComposerRun}
               onClick={props.onStop}
+              title={props.stoppingComposerRun ? t("common.loading") : t("tasks.actions.stop")}
               type="button"
             >
               <img alt="" aria-hidden="true" src="/canvas-stop.svg" />
@@ -274,8 +288,10 @@ export function TasksThreadComposer(props: TasksThreadComposerProps) {
             <button
               aria-label={t("tasks.actions.send")}
               className="agents-send-button"
+              data-e2e="tasks-send-button"
               disabled={!canSubmit}
               onClick={props.onSubmit}
+              title={t("tasks.actions.send")}
               type="button"
             >
               <img alt="" aria-hidden="true" className="question-create-icon" src="/up.svg" />

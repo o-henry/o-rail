@@ -114,6 +114,99 @@ describe("runTaskRoleWithCodex", () => {
     expect(result.artifactPaths[1]).toBe("/tmp/rail-storage/.rail/tasks/thread-2/codex_runs/role-run-2/discussion_critique.md");
   });
 
+  it("prefers final agentMessage text when Codex returns structured items", async () => {
+    const invokeFn = (vi.fn(async (command: string, args?: Record<string, unknown>) => {
+      switch (command) {
+        case "task_agent_pack_read":
+          return {
+            id: "researcher",
+            label: "RESEARCHER",
+            studioRoleId: "research_analyst",
+            model: "gpt-5.4",
+            modelReasoningEffort: "medium",
+            sandboxMode: "workspace-write",
+            outputArtifactName: "research_findings.md",
+            promptDocFile: "researcher.md",
+            developerInstructions: "자료 조사와 웹 리서치를 수행하라.",
+          };
+        case "thread_load":
+          return {
+            thread: { model: "GPT-5.4", reasoning: "중간" },
+            task: { workspacePath: "/tmp/mockking" },
+          };
+        case "research_storage_plan_agent_job":
+          return {
+            job: {
+              jobId: "collect-structured",
+              label: "Researcher · structured",
+              resolvedSourceType: "community",
+              collectorStrategy: "dynamic_search",
+              keywords: [],
+              domains: [],
+              planner: {
+                analysisMode: "topic_research",
+                aggregationUnit: "evidence",
+                dataScope: "cross_source_topic",
+                metricFocus: [],
+                instructions: [],
+              },
+            },
+          };
+        case "research_storage_execute_job":
+          return { job: { jobId: "collect-structured" } };
+        case "research_storage_collection_metrics":
+          return {
+            totals: { items: 0, sources: 0, verified: 0, warnings: 0, conflicted: 0, avgScore: 0 },
+            bySourceType: [],
+            byVerificationStatus: [],
+            timeline: [],
+            topSources: [],
+          };
+        case "research_storage_list_collection_items":
+          return { items: [] };
+        case "research_storage_collection_genre_rankings":
+          return { popular: [], quality: [] };
+        case "thread_start":
+          return { threadId: "thread-codex-structured" };
+        case "turn_start_blocking":
+          return {
+            id: "turn-structured",
+            status: "completed",
+            items: [
+              {
+                id: "item-1",
+                type: "userMessage",
+                content: [{ type: "text", text: "# ROLE\nRESEARCHER\n..." }],
+              },
+              {
+                id: "item-2",
+                type: "agentMessage",
+                phase: "final_answer",
+                text: "## 조사 결론\n- 구조화된 최종 답변을 회수했습니다.",
+              },
+            ],
+          };
+        case "workspace_write_text":
+          return `${String(args?.cwd)}/${String(args?.name)}`;
+        default:
+          throw new Error(`unexpected command: ${command}`);
+      }
+    }) as unknown) as <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
+
+    const result = await runTaskRoleWithCodex({
+      invokeFn,
+      storageCwd: "/tmp/rail-storage",
+      taskId: "thread-structured",
+      studioRoleId: "research_analyst",
+      prompt: "@researcher 상태를 정리해줘",
+      sourceTab: "tasks-thread",
+      runId: "role-run-structured",
+    });
+
+    expect(result.summary).toContain("구조화된 최종 답변");
+    expect(result.summary).not.toContain("# 리서치 수집 결과");
+  });
+
   it("lets researcher roles pre-run the collection pipeline and inject the dataset into the prompt", async () => {
     const capturedPrompts: string[] = [];
     const invokeSpy = vi.fn(async (command: string, args?: Record<string, unknown>) => {
@@ -344,7 +437,7 @@ describe("runTaskRoleWithCodex", () => {
     expect(capturedPrompts[0]).toBe("스팀 장르 인기 순위와 고평가 장르, 대표 게임 리스트를 조사해줘");
   });
 
-  it("falls back to collected researcher markdown when Codex returns no readable text", async () => {
+  it("fails researcher runs without a readable final answer even if collection artifacts exist", async () => {
     const invokeFn = (vi.fn(async (command: string, args?: Record<string, unknown>) => {
       switch (command) {
         case "task_agent_pack_read":
@@ -418,7 +511,7 @@ describe("runTaskRoleWithCodex", () => {
       }
     }) as unknown) as <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
 
-    const result = await runTaskRoleWithCodex({
+    await expect(runTaskRoleWithCodex({
       invokeFn,
       storageCwd: "/tmp/rail-storage",
       taskId: "thread-fallback",
@@ -426,13 +519,13 @@ describe("runTaskRoleWithCodex", () => {
       prompt: "@researcher 스팀 장르 평가를 조사해줘",
       sourceTab: "tasks-thread",
       runId: "role-run-fallback",
-    });
-
-    expect(result.summary).toContain("# 리서치 수집 결과");
-    expect(result.artifactPaths).toContain("/tmp/rail-storage/.rail/tasks/thread-fallback/codex_runs/role-run-fallback/research_collection.md");
+    })).rejects.toThrow("without a readable response");
+    expect(invokeFn).toHaveBeenCalledWith("workspace_write_text", expect.objectContaining({
+      name: "research_collection.md",
+    }));
   });
 
-  it("returns a safe fallback summary for non-research roles when Codex completes without readable text", async () => {
+  it("fails non-research roles that complete without any readable response body", async () => {
     const invokeFn = (vi.fn(async (command: string, args?: Record<string, unknown>) => {
       switch (command) {
         case "task_agent_pack_read":
@@ -466,7 +559,7 @@ describe("runTaskRoleWithCodex", () => {
       }
     }) as unknown) as <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
 
-    const result = await runTaskRoleWithCodex({
+    await expect(runTaskRoleWithCodex({
       invokeFn,
       storageCwd: "/tmp/rail-storage",
       taskId: "thread-empty-architect",
@@ -474,14 +567,7 @@ describe("runTaskRoleWithCodex", () => {
       prompt: "구조 리스크를 검토해줘",
       sourceTab: "tasks-thread",
       runId: "role-run-empty-architect",
-    });
-
-    expect(result.summary).toContain("UNITY ARCHITECT 작업을 완료했습니다.");
-    expect(result.artifactPaths).toEqual([
-      "/tmp/rail-storage/.rail/tasks/thread-empty-architect/codex_runs/role-run-empty-architect/prompt.md",
-      "/tmp/rail-storage/.rail/tasks/thread-empty-architect/codex_runs/role-run-empty-architect/architecture_review.md",
-      "/tmp/rail-storage/.rail/tasks/thread-empty-architect/codex_runs/role-run-empty-architect/response.json",
-    ]);
+    })).rejects.toThrow("without a readable response");
   });
 
   it("waits for codex_thread_read when Codex starts in progress and later completes", async () => {
@@ -579,6 +665,473 @@ describe("runTaskRoleWithCodex", () => {
       threadId: "thread-codex-pending",
       includeTurns: true,
     });
+  });
+
+  it("retries codex_thread_read when the thread is not materialized yet", async () => {
+    let readAttempts = 0;
+    const invokeFn = (vi.fn(async (command: string, args?: Record<string, unknown>) => {
+      switch (command) {
+        case "task_agent_pack_read":
+          return {
+            id: "researcher",
+            label: "RESEARCHER",
+            studioRoleId: "research_analyst",
+            model: "gpt-5.4",
+            modelReasoningEffort: "medium",
+            sandboxMode: "workspace-write",
+            outputArtifactName: "research_findings.md",
+            promptDocFile: "researcher.md",
+            developerInstructions: "자료 조사와 웹 리서치를 수행하라.",
+          };
+        case "thread_load":
+          return {
+            thread: { model: "GPT-5.4", reasoning: "중간" },
+            task: { workspacePath: "/tmp/mockking" },
+          };
+        case "research_storage_plan_agent_job":
+          return {
+            job: {
+              jobId: "collect-pending",
+              label: "Researcher · pending",
+              resolvedSourceType: "community",
+              collectorStrategy: "dynamic_search",
+              keywords: [],
+              domains: [],
+              planner: {
+                analysisMode: "genre_ranking",
+                aggregationUnit: "genre",
+                dataScope: "steam_market",
+                metricFocus: [],
+                instructions: [],
+              },
+            },
+          };
+        case "research_storage_execute_job":
+          return { job: { jobId: "collect-pending" } };
+        case "research_storage_collection_metrics":
+          return {
+            totals: { items: 0, sources: 0, verified: 0, warnings: 0, conflicted: 0, avgScore: 0 },
+            bySourceType: [],
+            byVerificationStatus: [],
+            timeline: [],
+            topSources: [],
+          };
+        case "research_storage_list_collection_items":
+          return { items: [] };
+        case "research_storage_collection_genre_rankings":
+          return { popular: [], quality: [] };
+        case "thread_start":
+          return { threadId: "thread-codex-materializing" };
+        case "turn_start_blocking":
+          return {
+            turn: {
+              id: "turn-pending",
+              items: [],
+              status: "inProgress",
+            },
+          };
+        case "codex_thread_read":
+          readAttempts += 1;
+          if (readAttempts < 3) {
+            throw new Error("rpc error -32600: thread 019d0bf2-ca61-7fd1-b911-f04b9a736eb9 is not materialized yet; includeTurns is unavailable before first user message");
+          }
+          return {
+            thread: { status: "completed" },
+            turns: [
+              {
+                id: "turn-pending",
+                status: "completed",
+                output_text: "자료 수집이 완료되어 장르별 인기 흐름을 정리했습니다.",
+              },
+            ],
+          };
+        case "workspace_write_text":
+          return `${String(args?.cwd)}/${String(args?.name)}`;
+        default:
+          throw new Error(`unexpected command: ${command}`);
+      }
+    }) as unknown) as <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
+
+    const result = await runTaskRoleWithCodex({
+      invokeFn,
+      storageCwd: "/tmp/rail-storage",
+      taskId: "thread-pending",
+      studioRoleId: "research_analyst",
+      prompt: "스팀 장르 평가를 조사해줘",
+      sourceTab: "tasks-thread",
+      runId: "role-run-materializing",
+    });
+
+    expect(result.summary).toContain("장르별 인기 흐름");
+    expect(readAttempts).toBe(3);
+  });
+
+  it("recovers from empty session file turn-start races by reading the thread state", async () => {
+    let readAttempts = 0;
+    const invokeFn = (vi.fn(async (command: string, args?: Record<string, unknown>) => {
+      switch (command) {
+        case "task_agent_pack_read":
+          return {
+            id: "researcher",
+            label: "RESEARCHER",
+            studioRoleId: "research_analyst",
+            model: "gpt-5.4",
+            modelReasoningEffort: "medium",
+            sandboxMode: "workspace-write",
+            outputArtifactName: "research_findings.md",
+            promptDocFile: "researcher.md",
+            developerInstructions: "자료 조사와 웹 리서치를 수행하라.",
+          };
+        case "thread_load":
+          return {
+            thread: { model: "GPT-5.4", reasoning: "중간" },
+            task: { workspacePath: "/tmp/mockking" },
+          };
+        case "research_storage_plan_agent_job":
+          return {
+            job: {
+              jobId: "collect-empty-rollout",
+              label: "Researcher · empty-rollout",
+              resolvedSourceType: "community",
+              collectorStrategy: "dynamic_search",
+              keywords: [],
+              domains: [],
+              planner: {
+                analysisMode: "genre_ranking",
+                aggregationUnit: "genre",
+                dataScope: "steam_market",
+                metricFocus: [],
+                instructions: [],
+              },
+            },
+          };
+        case "research_storage_execute_job":
+          return { job: { jobId: "collect-empty-rollout" } };
+        case "research_storage_collection_metrics":
+          return {
+            totals: { items: 0, sources: 0, verified: 0, warnings: 0, conflicted: 0, avgScore: 0 },
+            bySourceType: [],
+            byVerificationStatus: [],
+            timeline: [],
+            topSources: [],
+          };
+        case "research_storage_list_collection_items":
+          return { items: [] };
+        case "research_storage_collection_genre_rankings":
+          return { popular: [], quality: [] };
+        case "thread_start":
+          return { threadId: "thread-codex-empty-rollout" };
+        case "turn_start_blocking":
+          throw new Error("rpc error -32603: failed to load rollout `/tmp/rollout.jsonl` for thread 019d0c20-f3c0-7800-8f63-7f6d99c2b1a0: empty session file");
+        case "codex_thread_read":
+          readAttempts += 1;
+          if (readAttempts < 2) {
+            throw new Error("rpc error -32603: failed to load rollout `/tmp/rollout.jsonl` for thread 019d0c20-f3c0-7800-8f63-7f6d99c2b1a0: empty session file");
+          }
+          return {
+            thread: { status: "completed" },
+            turns: [
+              {
+                id: "turn-empty-rollout",
+                status: "completed",
+                output_text: "빈 세션 파일 race를 넘기고 결과를 정상 회수했습니다.",
+              },
+            ],
+          };
+        case "workspace_write_text":
+          return `${String(args?.cwd)}/${String(args?.name)}`;
+        default:
+          throw new Error(`unexpected command: ${command}`);
+      }
+    }) as unknown) as <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
+
+    const result = await runTaskRoleWithCodex({
+      invokeFn,
+      storageCwd: "/tmp/rail-storage",
+      taskId: "thread-empty-rollout",
+      studioRoleId: "research_analyst",
+      prompt: "스팀 장르 평가를 조사해줘",
+      sourceTab: "tasks-thread",
+      runId: "role-run-empty-rollout",
+    });
+
+    expect(result.summary).toContain("정상 회수");
+    expect(readAttempts).toBe(2);
+  });
+
+  it("does not mark a failed researcher turn as successful just because collection artifacts exist", async () => {
+    const invokeFn = (vi.fn(async (command: string, args?: Record<string, unknown>) => {
+      switch (command) {
+        case "task_agent_pack_read":
+          return {
+            id: "researcher",
+            label: "RESEARCHER",
+            studioRoleId: "research_analyst",
+            model: "gpt-5.4",
+            modelReasoningEffort: "medium",
+            sandboxMode: "workspace-write",
+            outputArtifactName: "research_findings.md",
+            promptDocFile: "researcher.md",
+            developerInstructions: "자료 조사와 웹 리서치를 수행하라.",
+          };
+        case "thread_load":
+          return {
+            thread: { model: "GPT-5.4", reasoning: "중간" },
+            task: { workspacePath: "/tmp/mockking" },
+          };
+        case "research_storage_plan_agent_job":
+          return {
+            job: {
+              jobId: "collect-failed-turn",
+              label: "Researcher · failed-turn",
+              resolvedSourceType: "community",
+              collectorStrategy: "dynamic_search",
+              keywords: [],
+              domains: [],
+              planner: {
+                analysisMode: "topic_research",
+                aggregationUnit: "evidence",
+                dataScope: "cross_source_topic",
+                metricFocus: [],
+                instructions: [],
+              },
+            },
+          };
+        case "research_storage_execute_job":
+          return { job: { jobId: "collect-failed-turn" } };
+        case "research_storage_collection_metrics":
+          return {
+            totals: { items: 2, sources: 1, verified: 2, warnings: 0, conflicted: 0, avgScore: 74 },
+            bySourceType: [],
+            byVerificationStatus: [],
+            timeline: [],
+            topSources: [],
+          };
+        case "research_storage_list_collection_items":
+          return { items: [] };
+        case "thread_start":
+          return { threadId: "thread-codex-failed" };
+        case "turn_start_blocking":
+          return {
+            id: "turn-failed",
+            status: "failed",
+            error: "upstream failed",
+          };
+        case "workspace_write_text":
+          return `${String(args?.cwd)}/${String(args?.name)}`;
+        default:
+          throw new Error(`unexpected command: ${command}`);
+      }
+    }) as unknown) as <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
+
+    await expect(runTaskRoleWithCodex({
+      invokeFn,
+      storageCwd: "/tmp/rail-storage",
+      taskId: "thread-failed-turn",
+      studioRoleId: "research_analyst",
+      prompt: "실패를 숨기지 말아줘",
+      sourceTab: "tasks-thread",
+      runId: "role-run-failed-turn",
+    })).rejects.toThrow("Codex turn failed");
+  });
+
+  it("fails completed runs that still do not contain a readable final answer", async () => {
+    const invokeFn = (vi.fn(async (command: string) => {
+      switch (command) {
+        case "task_agent_pack_read":
+          return {
+            id: "unity_architect",
+            label: "UNITY ARCHITECT",
+            studioRoleId: "system_programmer",
+            model: "gpt-5.4",
+            modelReasoningEffort: "medium",
+            sandboxMode: "workspace-write",
+            outputArtifactName: "architecture_review.md",
+            promptDocFile: "unity_architect.md",
+            developerInstructions: "검토하라.",
+          };
+        case "thread_load":
+          return {
+            thread: { model: "GPT-5.4", reasoning: "중간" },
+            task: { workspacePath: "/tmp/mockking" },
+          };
+        case "thread_start":
+          return { threadId: "thread-codex-empty" };
+        case "turn_start_blocking":
+          return {
+            id: "turn-empty",
+            status: "completed",
+            items: [{ id: "meta", type: "event", content: [] }],
+          };
+        default:
+          throw new Error(`unexpected command: ${command}`);
+      }
+    }) as unknown) as <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
+
+    await expect(runTaskRoleWithCodex({
+      invokeFn,
+      storageCwd: "/tmp/rail-storage",
+      taskId: "thread-empty",
+      studioRoleId: "system_programmer",
+      prompt: "본문 없는 완료 응답",
+      sourceTab: "tasks-thread",
+      runId: "role-run-empty",
+    })).rejects.toThrow("without a readable response");
+  });
+
+  it("extracts final answer text from nested item content arrays", async () => {
+    const invokeFn = (vi.fn(async (command: string, args?: Record<string, unknown>) => {
+      switch (command) {
+        case "task_agent_pack_read":
+          return {
+            id: "unity_architect",
+            label: "UNITY ARCHITECT",
+            studioRoleId: "system_programmer",
+            model: "gpt-5.4",
+            modelReasoningEffort: "medium",
+            sandboxMode: "workspace-write",
+            outputArtifactName: "architecture_review.md",
+            promptDocFile: "unity_architect.md",
+            developerInstructions: "검토하라.",
+          };
+        case "thread_load":
+          return {
+            thread: { model: "GPT-5.4", reasoning: "중간" },
+            task: { workspacePath: "/tmp/mockking" },
+          };
+        case "thread_start":
+          return { threadId: "thread-codex-content-array" };
+        case "turn_start_blocking":
+          return {
+            id: "turn-content-array",
+            status: "completed",
+            items: [
+              {
+                id: "item-final",
+                type: "agentMessage",
+                phase: "final_answer",
+                content: [
+                  { type: "output_text", text: "## 최종 정리\n- nested content에서도 최종 답변을 읽었습니다." },
+                ],
+              },
+            ],
+          };
+        case "workspace_write_text":
+          return `${String(args?.cwd)}/${String(args?.name)}`;
+        default:
+          throw new Error(`unexpected command: ${command}`);
+      }
+    }) as unknown) as <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
+
+    const result = await runTaskRoleWithCodex({
+      invokeFn,
+      storageCwd: "/tmp/rail-storage",
+      taskId: "thread-content-array",
+      studioRoleId: "system_programmer",
+      prompt: "nested content를 읽어줘",
+      sourceTab: "tasks-thread",
+      runId: "role-run-content-array",
+    });
+
+    expect(result.summary).toContain("nested content에서도 최종 답변");
+  });
+
+  it("fails fast when thread_start never resolves", async () => {
+    vi.useFakeTimers();
+    const invokeFn = (vi.fn(async (command: string) => {
+      switch (command) {
+        case "task_agent_pack_read":
+          return {
+            id: "unity_architect",
+            label: "UNITY ARCHITECT",
+            studioRoleId: "system_programmer",
+            model: "gpt-5.4",
+            modelReasoningEffort: "medium",
+            sandboxMode: "workspace-write",
+            outputArtifactName: "architecture_review.md",
+            promptDocFile: "unity_architect.md",
+            developerInstructions: "검토하라.",
+          };
+        case "thread_load":
+          return {
+            thread: { model: "GPT-5.4", reasoning: "중간" },
+            task: { workspacePath: "/tmp/mockking" },
+          };
+        case "thread_start":
+          return await new Promise<never>(() => {});
+        default:
+          throw new Error(`unexpected command: ${command}`);
+      }
+    }) as unknown) as <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
+
+    try {
+      const promise = runTaskRoleWithCodex({
+        invokeFn,
+        storageCwd: "/tmp/rail-storage",
+        taskId: "thread-timeout-start",
+        studioRoleId: "system_programmer",
+        prompt: "thread_start hang",
+        sourceTab: "tasks-thread",
+        runId: "role-run-timeout-start",
+      });
+      const guarded = promise.catch((error) => error);
+      await vi.advanceTimersByTimeAsync(60000);
+      await expect(guarded).resolves.toBeInstanceOf(Error);
+      await expect(guarded).resolves.toMatchObject({ message: expect.stringContaining("thread_start timed out") });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("fails fast when turn_start_blocking never resolves", async () => {
+    vi.useFakeTimers();
+    const invokeFn = (vi.fn(async (command: string) => {
+      switch (command) {
+        case "task_agent_pack_read":
+          return {
+            id: "unity_architect",
+            label: "UNITY ARCHITECT",
+            studioRoleId: "system_programmer",
+            model: "gpt-5.4",
+            modelReasoningEffort: "medium",
+            sandboxMode: "workspace-write",
+            outputArtifactName: "architecture_review.md",
+            promptDocFile: "unity_architect.md",
+            developerInstructions: "검토하라.",
+          };
+        case "thread_load":
+          return {
+            thread: { model: "GPT-5.4", reasoning: "중간" },
+            task: { workspacePath: "/tmp/mockking" },
+          };
+        case "thread_start":
+          return { threadId: "thread-timeout-turn" };
+        case "turn_start_blocking":
+          return await new Promise<never>(() => {});
+        case "codex_thread_read":
+          throw new Error("rpc error -32600: thread not materialized yet");
+        default:
+          throw new Error(`unexpected command: ${command}`);
+      }
+    }) as unknown) as <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
+
+    try {
+      const promise = runTaskRoleWithCodex({
+        invokeFn,
+        storageCwd: "/tmp/rail-storage",
+        taskId: "thread-timeout-turn",
+        studioRoleId: "system_programmer",
+        prompt: "turn_start hang",
+        sourceTab: "tasks-thread",
+        runId: "role-run-timeout-turn",
+      });
+      const guarded = promise.catch((error) => error);
+      await vi.advanceTimersByTimeAsync(110000);
+      await expect(guarded).resolves.toBeInstanceOf(Error);
+      await expect(guarded).resolves.toMatchObject({ message: expect.stringContaining("turn_start_blocking timed out") });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
 });

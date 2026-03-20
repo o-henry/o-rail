@@ -8,6 +8,7 @@ import DashboardIntelligenceSettings from "../../../pages/settings/DashboardInte
 import SettingsPage from "../../../pages/settings/SettingsPage";
 import TasksPage from "../../../pages/tasks/TasksPage";
 import VisualizePage from "../../../pages/visualize/VisualizePage";
+import { writeStoredSelectedRunId } from "../../../pages/visualize/visualizeSelection";
 
 export function MainAppWorkspaceContent(props: any) {
   const handleInjectContextSources = (entries: any[]) => {
@@ -28,6 +29,18 @@ export function MainAppWorkspaceContent(props: any) {
     }, 0);
   };
 
+  const handleOpenVisualizeEntry = (entry: { runId?: string }) => {
+    const runId = String(entry?.runId ?? "").trim();
+    if (!runId) {
+      return;
+    }
+    writeStoredSelectedRunId(props.cwd, runId);
+    props.onSelectWorkspaceTab("visualize");
+    window.setTimeout(() => {
+      window.dispatchEvent(new CustomEvent("rail:knowledge-selection-changed", { detail: { runId } }));
+    }, 0);
+  };
+
   return (
     <>
       {props.workspaceTab === "feed" && <FeedPage vm={props.feedPageVm} />}
@@ -36,6 +49,7 @@ export function MainAppWorkspaceContent(props: any) {
           cwd={props.cwd}
           posts={props.feedPosts}
           onInjectContextSources={handleInjectContextSources}
+          onOpenInVisualize={handleOpenVisualizeEntry}
         />
       )}
       {props.workspaceTab === "visualize" && (

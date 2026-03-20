@@ -37,6 +37,8 @@ type RoleKnowledgeInjectResult = {
   payload?: Record<string, unknown>;
 };
 
+const ROLE_EXECUTE_TIMEOUT_MS = 300000;
+
 export type AgenticRunRoleInput = {
   runId?: string;
   queueKeyOverride?: string;
@@ -169,6 +171,24 @@ function appendArtifactsFromPaths(params: {
       kind: "raw",
       path: trimmed,
     });
+  }
+}
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  let timer: ReturnType<typeof globalThis.setTimeout> | null = null;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timer = globalThis.setTimeout(() => {
+          reject(new Error(`${label} timed out after ${timeoutMs}ms`));
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer) {
+      globalThis.clearTimeout(timer);
+    }
   }
 }
 
@@ -394,12 +414,16 @@ export async function runRoleWithCoordinator(input: AgenticRunRoleInput): Promis
     emitRunEvent({ context, type: "stage_started", stage: "codex", message: "역할 실행 시작", onEvent: input.onEvent });
 
     try {
-      await input.execute({
-        runId,
-        roleId: input.roleId,
-        taskId: input.taskId,
-        prompt: effectivePrompt,
-      });
+      await withTimeout(
+        input.execute({
+          runId,
+          roleId: input.roleId,
+          taskId: input.taskId,
+          prompt: effectivePrompt,
+        }),
+        ROLE_EXECUTE_TIMEOUT_MS,
+        "role execution",
+      );
       context.envelope = patchRunStage(context.envelope, "codex", "done", "역할 실행 완료");
       context.envelope = patchRunStage(context.envelope, "save", "done", "저장 완료");
       context.envelope = patchRunStatus(context.envelope, "done");

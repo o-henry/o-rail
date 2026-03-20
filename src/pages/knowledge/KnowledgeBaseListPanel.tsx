@@ -17,7 +17,7 @@ type KnowledgeBaseListPanelProps = {
 
 export function KnowledgeBaseListPanel(props: KnowledgeBaseListPanelProps) {
   return (
-    <section className="knowledge-list panel-card knowledge-island">
+    <section aria-label="데이터베이스 산출물 목록" className="knowledge-list panel-card knowledge-island" data-e2e="knowledge-list-panel">
       <header className="knowledge-list-head">
         <strong>산출물 탐색</strong>
         <span>{`표시 ${props.filteredCount}개`}</span>
@@ -31,8 +31,11 @@ export function KnowledgeBaseListPanel(props: KnowledgeBaseListPanelProps) {
             <section key={group.id} className="knowledge-group">
               <div className="knowledge-group-head">
                 <button
+                  aria-label={`${group.taskId} 그룹 ${collapsed ? "펼치기" : "접기"}`}
                   className="knowledge-group-trigger"
+                  data-e2e={`knowledge-group-${group.taskId}`}
                   onClick={() => props.onToggleGroup(group.id)}
+                  title={`${group.taskId} · ${group.entries.length}개`}
                   type="button"
                 >
                   <strong>{group.taskId}</strong>
@@ -47,7 +50,9 @@ export function KnowledgeBaseListPanel(props: KnowledgeBaseListPanelProps) {
                   </span>
                 </button>
                 <button
+                  aria-label={`${group.taskId} 그룹 삭제`}
                   className="knowledge-group-delete"
+                  data-e2e={`knowledge-delete-group-${group.taskId}`}
                   onClick={() => props.onDeleteGroup(group.runId, group.taskId)}
                   type="button"
                 >
@@ -58,9 +63,12 @@ export function KnowledgeBaseListPanel(props: KnowledgeBaseListPanelProps) {
                 <div className="knowledge-group-items">
                   {group.entries.map((entry) => (
                     <button
+                      aria-label={`${entry.title} 문서 선택`}
                       key={entry.id}
                       className={`knowledge-row${props.selectedEntry?.id === entry.id ? " is-selected" : ""}`}
+                      data-e2e={`knowledge-entry-${entry.id}`}
                       onClick={() => props.onSelectEntry(entry.id)}
+                      title={`${entry.title} · ${entry.taskAgentLabel || entry.studioRoleLabel || entry.roleId}`}
                       type="button"
                     >
                       <strong>{entry.title}</strong>

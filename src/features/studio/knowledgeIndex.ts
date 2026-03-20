@@ -90,6 +90,27 @@ function normalizeEntry(raw: unknown): KnowledgeEntry | null {
   };
 }
 
+export function normalizeKnowledgeEntries(rows: unknown): KnowledgeEntry[] {
+  if (!Array.isArray(rows)) {
+    return [];
+  }
+  return rows
+    .map((row) => normalizeEntry(row))
+    .filter((row): row is KnowledgeEntry => row !== null);
+}
+
+export function mergeKnowledgeEntryRows(rows: KnowledgeEntry[]): KnowledgeEntry[] {
+  const deduped = new Map<string, KnowledgeEntry>();
+  for (const row of rows) {
+    const id = String(row.id ?? "").trim();
+    if (!id) {
+      continue;
+    }
+    deduped.set(id, row);
+  }
+  return [...deduped.values()].sort((left, right) => String(right.createdAt).localeCompare(String(left.createdAt)));
+}
+
 export function readKnowledgeEntries(): KnowledgeEntry[] {
   if (typeof window === "undefined") {
     return [];
@@ -100,10 +121,7 @@ export function readKnowledgeEntries(): KnowledgeEntry[] {
   }
   try {
     const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-    return parsed.map((row) => normalizeEntry(row)).filter((row): row is KnowledgeEntry => row !== null);
+    return normalizeKnowledgeEntries(parsed);
   } catch {
     return [];
   }
@@ -113,7 +131,7 @@ export function writeKnowledgeEntries(rows: KnowledgeEntry[]): void {
   if (typeof window === "undefined") {
     return;
   }
-  window.localStorage.setItem(KNOWLEDGE_INDEX_STORAGE_KEY, JSON.stringify(rows));
+  window.localStorage.setItem(KNOWLEDGE_INDEX_STORAGE_KEY, JSON.stringify(mergeKnowledgeEntryRows(rows)));
 }
 
 export function upsertKnowledgeEntry(entry: KnowledgeEntry): KnowledgeEntry[] {
@@ -215,6 +233,31 @@ export function clearHiddenKnowledgeIdsForTest(): void {
     window.localStorage.removeItem(KNOWLEDGE_HIDDEN_ENTRY_IDS_STORAGE_KEY);
   } catch {
     // ignore storage failures
+  }
+}
+
+export async function hydrateKnowledgeEntriesFromWorkspace(params: {
+  cwd: string;
+  invokeFn: <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
+}): Promise<KnowledgeEntry[]> {
+  const cwd = String(params.cwd ?? "").trim().replace(/[\\/]+$/, "");
+  if (!cwd || typeof window === "undefined") {
+    return readKnowledgeEntries();
+  }
+  try {
+    const raw = await params.invokeFn<string>("workspace_read_text", {
+      cwd,
+      path: ".rail/studio_index/knowledge/index.json",
+    });
+    const workspaceRows = normalizeKnowledgeEntries(JSON.parse(String(raw ?? "[]")));
+    if (workspaceRows.length === 0) {
+      return readKnowledgeEntries();
+    }
+    const merged = mergeKnowledgeEntryRows([...readKnowledgeEntries(), ...workspaceRows]);
+    writeKnowledgeEntries(merged);
+    return merged;
+  } catch {
+    return readKnowledgeEntries();
   }
 }
 

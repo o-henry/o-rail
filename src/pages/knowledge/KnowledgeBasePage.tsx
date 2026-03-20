@@ -8,17 +8,19 @@ type KnowledgeBasePageProps = {
   cwd: string;
   posts: KnowledgeSourcePost[];
   onInjectContextSources: (entries: KnowledgeEntry[]) => void;
+  onOpenInVisualize?: (entry: KnowledgeEntry) => void;
 };
 
 export default function KnowledgeBasePage({
   cwd,
   posts,
   onInjectContextSources,
+  onOpenInVisualize,
 }: KnowledgeBasePageProps) {
   const state = useKnowledgeBaseState({ cwd, posts });
 
   return (
-    <section className="panel-card knowledge-view workspace-tab-panel">
+    <section aria-label="데이터베이스 작업공간" className="panel-card knowledge-view workspace-tab-panel" data-e2e="knowledge-page">
       <header className="knowledge-head">
         <h2>데이터베이스</h2>
         <p>역할 실행으로 생성된 산출물(Markdown/JSON)을 탐색하고 에이전트 컨텍스트로 재주입합니다.</p>
@@ -41,6 +43,7 @@ export default function KnowledgeBasePage({
           markdownContent={state.markdownContent}
           onDeleteSelected={state.onDeleteSelected}
           onInjectContextSources={onInjectContextSources}
+          onOpenInVisualize={onOpenInVisualize}
           onRevealPath={state.onRevealPath}
           selected={state.selected}
         />

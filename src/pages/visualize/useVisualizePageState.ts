@@ -19,12 +19,14 @@ import {
   planDynamicResearchCollectionJob,
 } from "../../features/research-storage/runtime/researchStorage";
 import { readKnowledgeEntries } from "../../features/studio/knowledgeIndex";
+import { hydrateKnowledgeEntriesFromWorkspaceSources } from "../../features/studio/workspaceKnowledgeHydration";
 import { invoke } from "../../shared/tauri";
 import {
   buildVisualizeResearchRuns,
   parseResearchCollectionPayload,
   type VisualizeResearchRun,
 } from "./visualizeReportUtils";
+import { dispatchVisualizeSelection, readStoredSelectedRunId, writeStoredSelectedRunId } from "./visualizeSelection";
 import { useI18n } from "../../i18n";
 
 type UseVisualizePageStateParams = {
@@ -50,38 +52,6 @@ function isEntryInWorkspace(entry: { sourceFile?: string; markdownPath?: string;
     return true;
   }
   return candidates.some((value) => value.startsWith(root));
-}
-
-function selectedRunStorageKey(cwd: string) {
-  return `rail.visualize.selected-run::${String(cwd ?? "").trim()}`;
-}
-
-function readStoredSelectedRunId(cwd: string) {
-  if (typeof window === "undefined") {
-    return "";
-  }
-  try {
-    return String(window.sessionStorage.getItem(selectedRunStorageKey(cwd)) ?? "").trim();
-  } catch {
-    return "";
-  }
-}
-
-function writeStoredSelectedRunId(cwd: string, runId: string) {
-  if (typeof window === "undefined") {
-    return;
-  }
-  try {
-    const key = selectedRunStorageKey(cwd);
-    const normalized = String(runId ?? "").trim();
-    if (normalized) {
-      window.sessionStorage.setItem(key, normalized);
-    } else {
-      window.sessionStorage.removeItem(key);
-    }
-  } catch {
-    // ignore storage failures
-  }
 }
 
 export function useVisualizePageState({ cwd, hasTauriRuntime }: UseVisualizePageStateParams) {
@@ -112,19 +82,33 @@ export function useVisualizePageState({ cwd, hasTauriRuntime }: UseVisualizePage
     setReportRuns(nextRuns);
     const storedRunId = readStoredSelectedRunId(cwd);
     setSelectedRunId((current) => {
-      if (current && nextRuns.some((row) => row.runId === current)) {
-        return current;
-      }
       if (storedRunId && nextRuns.some((row) => row.runId === storedRunId)) {
         return storedRunId;
       }
-      return nextRuns.length === 1 ? (nextRuns[0]?.runId ?? "") : "";
+      if (current && nextRuns.some((row) => row.runId === current)) {
+        return current;
+      }
+      return nextRuns[0]?.runId ?? "";
     });
   }, [cwd]);
 
   useEffect(() => {
     writeStoredSelectedRunId(cwd, selectedRunId);
+    dispatchVisualizeSelection(selectedRunId);
   }, [cwd, selectedRunId]);
+
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<{ runId?: string }>).detail;
+      const runId = String(detail?.runId ?? "").trim();
+      if (!runId) {
+        return;
+      }
+      setSelectedRunId(runId);
+    };
+    window.addEventListener("rail:knowledge-selection-changed", handler as EventListener);
+    return () => window.removeEventListener("rail:knowledge-selection-changed", handler as EventListener);
+  }, []);
 
   useEffect(() => {
     if (!hasTauriRuntime || !cwd.trim()) {
@@ -134,12 +118,17 @@ export function useVisualizePageState({ cwd, hasTauriRuntime }: UseVisualizePage
     let cancelled = false;
     setRefreshing(true);
     setError("");
-    syncReportRuns();
-    void Promise.all([loadResearchOverview(cwd), listDynamicResearchCollectionJobs(cwd), loadResearchGameMetrics(cwd)])
-      .then(([nextOverview, nextJobs, nextSteamMetrics]) => {
+    void Promise.all([
+      hydrateKnowledgeEntriesFromWorkspaceSources({ cwd, invokeFn: invoke }),
+      loadResearchOverview(cwd),
+      listDynamicResearchCollectionJobs(cwd),
+      loadResearchGameMetrics(cwd),
+    ])
+      .then(([, nextOverview, nextJobs, nextSteamMetrics]) => {
         if (cancelled) {
           return;
         }
+        syncReportRuns();
         setOverview(nextOverview);
         setJobs(nextJobs.items);
         setSteamMetrics(nextSteamMetrics);

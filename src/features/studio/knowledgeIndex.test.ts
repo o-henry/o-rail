@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   clearHiddenKnowledgeIdsForTest,
+  hydrateKnowledgeEntriesFromWorkspace,
   isKnowledgeEntryIdHidden,
   isKnowledgeRunIdHidden,
   readKnowledgeEntries,
@@ -130,5 +131,31 @@ describe("knowledgeIndex.removeKnowledgeEntriesByRunId", () => {
       orchestratorAgentId: "researcher",
       orchestratorAgentLabel: "RESEARCHER",
     });
+  });
+
+  it("hydrates workspace knowledge index into local storage", async () => {
+    upsertKnowledgeEntry(entry("local-a", "run-local"));
+
+    const hydrated = await hydrateKnowledgeEntriesFromWorkspace({
+      cwd: "/tmp/workspace",
+      invokeFn: (async (command, args) => {
+        expect(command).toBe("workspace_read_text");
+        expect(args).toMatchObject({
+          cwd: "/tmp/workspace",
+          path: ".rail/studio_index/knowledge/index.json",
+        });
+        return JSON.stringify([
+          entry("workspace-a", "run-workspace"),
+          {
+            ...entry("workspace-b", "run-workspace"),
+            taskAgentId: "researcher",
+            taskAgentLabel: "RESEARCHER",
+          },
+        ]);
+      }) as <T>(command: string, args?: Record<string, unknown>) => Promise<T>,
+    });
+
+    expect(hydrated.map((row) => row.id)).toEqual(["local-a", "workspace-a", "workspace-b"]);
+    expect(readKnowledgeEntries().map((row) => row.id)).toEqual(["local-a", "workspace-a", "workspace-b"]);
   });
 });

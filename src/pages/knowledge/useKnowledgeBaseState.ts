@@ -6,6 +6,7 @@ import {
   removeKnowledgeEntry,
   upsertKnowledgeEntry,
 } from "../../features/studio/knowledgeIndex";
+import { hydrateKnowledgeEntriesFromWorkspaceSources } from "../../features/studio/workspaceKnowledgeHydration";
 import type { KnowledgeEntry, KnowledgeSourcePost } from "../../features/studio/knowledgeTypes";
 import { invoke, revealItemInDir } from "../../shared/tauri";
 import {
@@ -20,6 +21,7 @@ import {
   sortKnowledgeEntries,
   type KnowledgeGroup,
 } from "./knowledgeBaseUtils";
+import { writeStoredSelectedRunId } from "../visualize/visualizeSelection";
 
 type UseKnowledgeBaseStateParams = {
   cwd: string;
@@ -78,16 +80,26 @@ export function useKnowledgeBaseState({ cwd, posts }: UseKnowledgeBaseStateParam
   const [pendingGroupDelete, setPendingGroupDelete] = useState<PendingKnowledgeGroupDelete | null>(null);
 
   useEffect(() => {
-    let next = readKnowledgeEntries().filter((row) => !isHiddenKnowledgeEntry(row));
-    for (const post of posts) {
-      const row = toKnowledgeEntry(post);
-      if (!row) {
-        continue;
+    let cancelled = false;
+    void (async () => {
+      await hydrateKnowledgeEntriesFromWorkspaceSources({ cwd, invokeFn: invoke });
+      let next = readKnowledgeEntries().filter((row) => !isHiddenKnowledgeEntry(row));
+      for (const post of posts) {
+        const row = toKnowledgeEntry(post);
+        if (!row) {
+          continue;
+        }
+        next = upsertKnowledgeEntry(row).filter((entry) => !isHiddenKnowledgeEntry(entry));
       }
-      next = upsertKnowledgeEntry(row).filter((entry) => !isHiddenKnowledgeEntry(entry));
-    }
-    setEntries(next);
-    void persistKnowledgeIndexToWorkspace({ cwd, invokeFn: invoke, rows: next });
+      if (cancelled) {
+        return;
+      }
+      setEntries(next);
+      await persistKnowledgeIndexToWorkspace({ cwd, invokeFn: invoke, rows: next });
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [cwd, posts]);
 
   const filtered = useMemo(() => sortKnowledgeEntries(entries), [entries]);
@@ -101,6 +113,20 @@ export function useKnowledgeBaseState({ cwd, posts }: UseKnowledgeBaseStateParam
       setSelectedId("");
     }
   }, [selected, selectedId]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    writeStoredSelectedRunId(cwd, String(selected?.runId ?? "").trim());
+    window.dispatchEvent(new CustomEvent("rail:knowledge-selection-changed", {
+      detail: {
+        entryId: String(selected?.id ?? "").trim(),
+        runId: String(selected?.runId ?? "").trim(),
+        roleId: String(selected?.roleId ?? "").trim(),
+      },
+    }));
+  }, [selected?.id, selected?.roleId, selected?.runId]);
 
   useEffect(() => {
     const handler = (event: Event) => {

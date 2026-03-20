@@ -83,6 +83,7 @@ pub fn run() {
             via_bridge::via_list_artifacts,
             knowledge::knowledge_probe,
             knowledge::knowledge_retrieve,
+            knowledge::knowledge_scan_workspace_artifacts,
             quality::quality_run_checks,
             storage::graph_list,
             storage::graph_save,

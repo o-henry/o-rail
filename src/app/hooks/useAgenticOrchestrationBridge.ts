@@ -12,6 +12,7 @@ import { runTaskRoleWithCodex } from "../main/runtime/runTaskRoleWithCodex";
 import { buildTaskThreadContextSummary } from "../main/runtime/taskThreadContextSummary";
 import { runTaskCollaborationWithCodex } from "../main/runtime/runTaskCollaborationWithCodex";
 import { shouldSkipRecentTaskRoleRun } from "../main/runtime/taskRoleRunDeduper";
+import { shouldDeduplicateTaskRoleRun } from "../main/runtime/taskRoleRunDeduperPolicy";
 import type { AgenticQueue } from "../main/runtime/agenticQueue";
 import {
   bootstrapRoleKnowledgeProfile,
@@ -167,6 +168,16 @@ function dispatchTasksRoleEvent(params: {
       at: new Date().toISOString(),
     },
   }));
+}
+
+function extractRunEnvelopeError(envelope: AgenticRunEnvelope | undefined): string {
+  if (!envelope) {
+    return "";
+  }
+  const stageError = [...envelope.stages]
+    .reverse()
+    .find((stage) => stage.status === "error" && String(stage.error || stage.message || "").trim());
+  return String(stageError?.error || stageError?.message || "").trim();
 }
 
 export function useAgenticOrchestrationBridge(params: {
@@ -371,11 +382,12 @@ export function useAgenticOrchestrationBridge(params: {
   }) => {
     const sourceTab = params.sourceTab;
     const promptText = String(params.prompt ?? "").trim();
-    if (shouldSkipRecentTaskRoleRun({
+    const promptMode = params.promptMode ?? "direct";
+    if (shouldDeduplicateTaskRoleRun(promptMode) && shouldSkipRecentTaskRoleRun({
       taskId: params.taskId,
       roleId: params.roleId,
       prompt: promptText,
-      mode: params.promptMode ?? "direct",
+      mode: promptMode,
     })) {
       dispatchTasksRoleEvent({
         sourceTab,
@@ -538,55 +550,75 @@ export function useAgenticOrchestrationBridge(params: {
       }
     }
 
-    const collaboration = await runTaskCollaborationWithCodex({
-      prompt: String(params.prompt ?? "").trim(),
-      contextSummary,
-      participantRoleIds: params.roleIds,
-      synthesisRoleId: params.synthesisRoleId,
-      criticRoleId: params.criticRoleId,
-      cappedParticipantCount: Boolean(params.cappedParticipantCount),
-      executeRoleRun: async (runParams) => {
-        const result = await executeTaskRoleRun({
-          roleId: runParams.roleId,
-          taskId: params.taskId,
-          prompt: runParams.prompt,
-          sourceTab,
-          internal: runParams.internal,
-          model: runParams.model,
-          reasoning: runParams.reasoning,
-          outputArtifactName: runParams.outputArtifactName,
-          includeRoleKnowledge: runParams.includeRoleKnowledge,
-          promptMode: runParams.promptMode,
-        });
-        if (!result) {
-          throw new Error(`${runParams.roleId} role run was skipped or produced no result`);
-        }
-        if (result.runStatus !== "done") {
-          throw new Error(`${runParams.roleId} role run failed`);
-        }
-        return {
-          roleId: runParams.roleId,
-          runId: result.runId,
-          summary: result.summary,
-          artifactPaths: result.artifactPaths,
-        };
-      },
-      onProgress: (progress) => {
-        const studioRoleId = String(progress.roleId || params.synthesisRoleId || params.primaryRoleId).trim();
-        if (!studioRoleId) {
-          return;
-        }
-        dispatchTasksRoleEvent({
-          sourceTab,
-          taskId: params.taskId,
-          studioRoleId,
-          type: "stage_started",
-          stage: progress.stage,
-          message: progress.message,
-        });
-      },
-    });
-    setStatus(`멀티에이전트 합성 완료: ${collaboration.finalResult.summary.slice(0, 40)}`);
+    try {
+      const collaboration = await runTaskCollaborationWithCodex({
+        prompt: String(params.prompt ?? "").trim(),
+        contextSummary,
+        participantRoleIds: params.roleIds,
+        synthesisRoleId: params.synthesisRoleId,
+        criticRoleId: params.criticRoleId,
+        cappedParticipantCount: Boolean(params.cappedParticipantCount),
+        executeRoleRun: async (runParams) => {
+          const result = await executeTaskRoleRun({
+            roleId: runParams.roleId,
+            taskId: params.taskId,
+            prompt: runParams.prompt,
+            sourceTab,
+            internal: runParams.internal,
+            model: runParams.model,
+            reasoning: runParams.reasoning,
+            outputArtifactName: runParams.outputArtifactName,
+            includeRoleKnowledge: runParams.includeRoleKnowledge,
+            promptMode: runParams.promptMode,
+          });
+          if (!result) {
+            throw new Error(`${runParams.roleId} role run was skipped or produced no result`);
+          }
+          if (result.runStatus !== "done") {
+            const detail = extractRunEnvelopeError(result.envelope);
+            throw new Error(detail ? `${runParams.roleId} role run failed: ${detail}` : `${runParams.roleId} role run failed`);
+          }
+          return {
+            roleId: runParams.roleId,
+            runId: result.runId,
+            summary: result.summary,
+            artifactPaths: result.artifactPaths,
+          };
+        },
+        onProgress: (progress) => {
+          const studioRoleId = String(progress.roleId || params.synthesisRoleId || params.primaryRoleId).trim();
+          if (!studioRoleId) {
+            return;
+          }
+          dispatchTasksRoleEvent({
+            sourceTab,
+            taskId: params.taskId,
+            studioRoleId,
+            type: "stage_started",
+            stage: progress.stage,
+            message: progress.message,
+          });
+        },
+      });
+      setStatus(`멀티에이전트 합성 완료: ${collaboration.finalResult.summary.slice(0, 40)}`);
+    } catch (error) {
+      const errorText = String(error ?? "멀티에이전트 협업에 실패했습니다.").trim();
+      dispatchTasksRoleEvent({
+        sourceTab,
+        taskId: params.taskId,
+        studioRoleId: params.synthesisRoleId || params.primaryRoleId,
+        type: "stage_error",
+        stage: "save",
+        message: errorText,
+      });
+      appendWorkspaceEvent({
+        source: "agentic",
+        message: `멀티에이전트 협업 실패: ${errorText}`,
+        actor: "system",
+        level: "error",
+      });
+      setStatus(`멀티에이전트 협업 실패: ${errorText}`);
+    }
   }, [cwd, executeTaskRoleRun, invokeFn, setStatus]);
 
   const runRoleDirect = useCallback(

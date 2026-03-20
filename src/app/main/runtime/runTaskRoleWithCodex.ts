@@ -74,7 +74,14 @@ const INCOMPLETE_TURN_STATUSES = new Set([
 ]);
 const FAILED_TURN_STATUSES = new Set(["failed", "error", "cancelled", "rejected"]);
 const POLL_INTERVAL_MS = 1500;
-const POLL_TIMEOUT_MS = 45000;
+const POLL_TIMEOUT_MS = 180000;
+const MAX_POLL_READ_ERRORS = 6;
+const MAX_TURN_START_ATTEMPTS = 3;
+const MAX_THREAD_START_ATTEMPTS = 3;
+const TURN_START_RECOVERY_WINDOW_MS = 12000;
+const THREAD_START_TIMEOUT_MS = 15000;
+const TURN_START_TIMEOUT_MS = 30000;
+const THREAD_READ_TIMEOUT_MS = 30000;
 
 function normalizeSandboxMode(value: string | null | undefined): "read-only" | "workspace-write" | "danger-full-access" {
   const normalized = String(value ?? "").trim().toLowerCase();
@@ -113,6 +120,25 @@ function buildRoleTurnPrompt(
 }
 
 function resolveTurnText(raw: unknown): string {
+  if (raw && typeof raw === "object" && Array.isArray((raw as { items?: unknown[] }).items)) {
+    const items = (raw as { items: unknown[] }).items;
+    for (let index = items.length - 1; index >= 0; index -= 1) {
+      const item = items[index];
+      if (!item || typeof item !== "object") {
+        continue;
+      }
+      const record = item as Record<string, unknown>;
+      const type = String(record.type ?? "").trim().toLowerCase();
+      const phase = String(record.phase ?? "").trim().toLowerCase();
+      const text = String(record.text ?? "").trim() || [...new Set(collectNestedText(record.content))].join("\n").trim();
+      if (!text) {
+        continue;
+      }
+      if (type === "agentmessage" || phase === "final_answer") {
+        return text;
+      }
+    }
+  }
   return (
     extractFinalAnswer(raw) ||
     (extractStringByPaths(raw, [
@@ -164,20 +190,52 @@ function collectNestedText(input: unknown, depth = 0): string[] {
   return [...direct, ...nested];
 }
 
-function buildSuccessfulEmptyResponseSummary(pack: TaskAgentPromptPack, raw: unknown): string {
-  const nestedText = [...new Set(collectNestedText(raw))].filter(Boolean).join("\n").trim();
-  if (nestedText) {
-    return nestedText;
-  }
-  return `${pack.label} 작업을 완료했습니다. 응답 본문이 비어 있어 산출물과 response.json을 기준으로 후속 합성을 진행합니다.`;
-}
-
 function normalizeTurnStatus(value: unknown): string | null {
   const normalized = String(value ?? "")
     .trim()
     .toLowerCase()
     .replace(/[^a-z]+/g, "");
   return normalized || null;
+}
+
+function normalizeErrorText(error: unknown): string {
+  return String(error ?? "").trim().toLowerCase();
+}
+
+function isRetryableThreadReadError(error: unknown): boolean {
+  const text = normalizeErrorText(error);
+  return (
+    text.includes("empty session file") ||
+    text.includes("failed to load rollout") ||
+    text.includes("not materialized yet") ||
+    text.includes("includeturns is unavailable before first user message") ||
+    text.includes("temporarily unavailable") ||
+    text.includes("rpc error -32600") ||
+    text.includes("rpc error -32603") ||
+    text.includes("timeout") ||
+    text.includes("network") ||
+    text.includes("busy") ||
+    text.includes("econnreset") ||
+    text.includes("socket hang up")
+  );
+}
+
+function isRetryableTurnStartError(error: unknown): boolean {
+  const text = normalizeErrorText(error);
+  return (
+    text.includes("empty session file") ||
+    text.includes("failed to load rollout") ||
+    text.includes("not materialized yet") ||
+    text.includes("includeturns is unavailable before first user message") ||
+    text.includes("rpc error -32600") ||
+    text.includes("rpc error -32603") ||
+    text.includes("temporarily unavailable") ||
+    text.includes("timeout") ||
+    text.includes("network") ||
+    text.includes("busy") ||
+    text.includes("econnreset") ||
+    text.includes("socket hang up")
+  );
 }
 
 function resolveTurnStatus(raw: unknown): string | null {
@@ -219,6 +277,142 @@ async function sleep(ms: number): Promise<void> {
   await new Promise((resolve) => globalThis.setTimeout(resolve, ms));
 }
 
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  let timer: ReturnType<typeof globalThis.setTimeout> | null = null;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timer = globalThis.setTimeout(() => {
+          reject(new Error(`${label} timed out after ${timeoutMs}ms`));
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer) {
+      globalThis.clearTimeout(timer);
+    }
+  }
+}
+
+async function startCodexThreadWithRecovery(params: {
+  invokeFn: InvokeFn;
+  model: string;
+  cwd: string;
+  sandboxMode: "read-only" | "workspace-write" | "danger-full-access";
+}): Promise<ThreadStartResult> {
+  let lastError: unknown = null;
+  for (let attempt = 1; attempt <= MAX_THREAD_START_ATTEMPTS; attempt += 1) {
+    try {
+      return await withTimeout(
+        params.invokeFn<ThreadStartResult>("thread_start", {
+          model: params.model,
+          cwd: params.cwd,
+          sandboxMode: params.sandboxMode,
+        }),
+        THREAD_START_TIMEOUT_MS,
+        "thread_start",
+      );
+    } catch (error) {
+      lastError = error;
+      if (!isRetryableTurnStartError(error) || attempt >= MAX_THREAD_START_ATTEMPTS) {
+        throw error;
+      }
+      await sleep(POLL_INTERVAL_MS);
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("thread_start failed");
+}
+
+async function recoverThreadStateAfterTurnStartError(params: {
+  invokeFn: InvokeFn;
+  threadId: string;
+}): Promise<unknown | null> {
+  const deadline = Date.now() + TURN_START_RECOVERY_WINDOW_MS;
+  let readErrors = 0;
+  while (Date.now() < deadline) {
+    await sleep(POLL_INTERVAL_MS);
+    try {
+      const threadState = await withTimeout(
+        params.invokeFn<unknown>("codex_thread_read", {
+          threadId: params.threadId,
+          includeTurns: true,
+        }),
+        THREAD_READ_TIMEOUT_MS,
+        "codex_thread_read",
+      );
+      const latestTurn = extractLatestTurn(threadState);
+      const recoveredStatus = resolveTurnStatus(latestTurn) ?? resolveTurnStatus(threadState) ?? "";
+      const recoveredText = resolveTurnText(latestTurn) || resolveTurnText(threadState);
+      if (recoveredStatus || recoveredText) {
+        return latestTurn === threadState ? threadState : latestTurn;
+      }
+    } catch (error) {
+      if (!isRetryableThreadReadError(error) || readErrors >= MAX_POLL_READ_ERRORS) {
+        throw error;
+      }
+      readErrors += 1;
+    }
+  }
+  return null;
+}
+
+async function startCodexTurnWithRecovery(params: {
+  invokeFn: InvokeFn;
+  threadId: string;
+  text: string;
+  reasoningEffort: string;
+  sandboxMode: "read-only" | "workspace-write" | "danger-full-access";
+}): Promise<{
+  rawResponse: unknown;
+  turnError: unknown;
+}> {
+  let lastError: unknown = null;
+  for (let attempt = 1; attempt <= MAX_TURN_START_ATTEMPTS; attempt += 1) {
+    try {
+      const rawResponse = await withTimeout(
+        params.invokeFn<unknown>("turn_start_blocking", {
+          threadId: params.threadId,
+          text: params.text,
+          reasoningEffort: params.reasoningEffort,
+          sandboxMode: params.sandboxMode,
+        }),
+        TURN_START_TIMEOUT_MS,
+        "turn_start_blocking",
+      );
+      return {
+        rawResponse,
+        turnError: null,
+      };
+    } catch (error) {
+      lastError = error;
+      if (!isRetryableTurnStartError(error)) {
+        return {
+          rawResponse: null,
+          turnError: error,
+        };
+      }
+      const recoveredState = await recoverThreadStateAfterTurnStartError({
+        invokeFn: params.invokeFn,
+        threadId: params.threadId,
+      });
+      if (recoveredState) {
+        return {
+          rawResponse: recoveredState,
+          turnError: null,
+        };
+      }
+      if (attempt < MAX_TURN_START_ATTEMPTS) {
+        await sleep(POLL_INTERVAL_MS);
+      }
+    }
+  }
+  return {
+    rawResponse: null,
+    turnError: lastError,
+  };
+}
+
 async function waitForCodexTurnCompletion(params: {
   invokeFn: InvokeFn;
   threadId: string;
@@ -237,12 +431,27 @@ async function waitForCodexTurnCompletion(params: {
   }
 
   const deadline = Date.now() + POLL_TIMEOUT_MS;
+  let readErrors = 0;
   while (Date.now() < deadline) {
     await sleep(POLL_INTERVAL_MS);
-    const threadState = await params.invokeFn<unknown>("codex_thread_read", {
-      threadId: params.threadId,
-      includeTurns: true,
-    });
+    let threadState: unknown;
+    try {
+      threadState = await withTimeout(
+        params.invokeFn<unknown>("codex_thread_read", {
+          threadId: params.threadId,
+          includeTurns: true,
+        }),
+        THREAD_READ_TIMEOUT_MS,
+        "codex_thread_read",
+      );
+      readErrors = 0;
+    } catch (error) {
+      if (!isRetryableThreadReadError(error) || readErrors >= MAX_POLL_READ_ERRORS) {
+        throw error;
+      }
+      readErrors += 1;
+      continue;
+    }
     const latestTurn = extractLatestTurn(threadState);
     const nextStatus = resolveTurnStatus(latestTurn) ?? resolveTurnStatus(threadState) ?? currentStatus;
     const nextText = resolveTurnText(latestTurn) || resolveTurnText(threadState);
@@ -313,23 +522,21 @@ export async function runTaskRoleWithCodex(input: RunTaskRoleWithCodexInput): Pr
   );
   const promptText = buildRoleTurnPrompt(pack, input.prompt ?? "", context.projectPath, researcherCollection.promptContext);
 
-  const threadStart = await input.invokeFn<ThreadStartResult>("thread_start", {
+  const threadStart = await startCodexThreadWithRecovery({
+    invokeFn: input.invokeFn,
     model: modelEngine,
     cwd: context.projectPath,
     sandboxMode,
   });
-  let rawResponse: unknown = null;
-  let turnError: unknown = null;
-  try {
-    rawResponse = await input.invokeFn<unknown>("turn_start_blocking", {
-      threadId: threadStart.threadId,
-      text: promptText,
-      reasoningEffort,
-      sandboxMode,
-    });
-  } catch (error) {
-    turnError = error;
-  }
+  const turnStart = await startCodexTurnWithRecovery({
+    invokeFn: input.invokeFn,
+    threadId: threadStart.threadId,
+    text: promptText,
+    reasoningEffort,
+    sandboxMode,
+  });
+  let rawResponse: unknown = turnStart.rawResponse;
+  let turnError: unknown = turnStart.turnError;
 
   let completedStatus = turnError ? "error" : (resolveTurnStatus(rawResponse) ?? "done");
   if (!turnError && INCOMPLETE_TURN_STATUSES.has(completedStatus)) {
@@ -341,21 +548,14 @@ export async function runTaskRoleWithCodex(input: RunTaskRoleWithCodexInput): Pr
     rawResponse = completion.raw;
     completedStatus = completion.completedStatus;
   }
-  const fallbackSummary = String(researcherCollection.fallbackSummary ?? "").trim();
-  if (FAILED_TURN_STATUSES.has(completedStatus) && !fallbackSummary) {
+  if (FAILED_TURN_STATUSES.has(completedStatus)) {
     if (turnError instanceof Error) {
       throw turnError;
     }
     throw new Error(`Codex turn failed (${completedStatus})`);
   }
 
-  const summary = (
-    (!turnError ? resolveTurnText(rawResponse) : "")
-    || fallbackSummary
-    || (!turnError && !FAILED_TURN_STATUSES.has(completedStatus)
-      ? buildSuccessfulEmptyResponseSummary(pack, rawResponse)
-      : "")
-  ).trim();
+  const summary = (!turnError ? resolveTurnText(rawResponse) : "").trim();
   if (!summary) {
     if (turnError instanceof Error) {
       throw turnError;

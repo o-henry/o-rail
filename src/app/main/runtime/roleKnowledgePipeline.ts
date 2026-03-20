@@ -71,6 +71,8 @@ type RoleKnowledgeInjectResult = {
 const ROLE_KB_TOPIC = "devEcosystem";
 const SCRAPLING_BRIDGE_NOT_READY = "SCRAPLING_BRIDGE_NOT_READY";
 const bridgeReadyPromiseByCwd = new Map<string, Promise<void>>();
+const ROLE_KB_BRIDGE_TIMEOUT_MS = 12000;
+const ROLE_KB_FETCH_TIMEOUT_MS = 10000;
 
 export const ROLE_KB_ALLOWLIST: Record<StudioRoleId, string[]> = {
   pm_planner: [
@@ -145,6 +147,24 @@ function cleanLine(input: unknown): string {
   return String(input ?? "").replace(/\s+/g, " ").trim();
 }
 
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  let timer: ReturnType<typeof globalThis.setTimeout> | null = null;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timer = globalThis.setTimeout(() => {
+          reject(new Error(`${label} timed out after ${timeoutMs}ms`));
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer) {
+      globalThis.clearTimeout(timer);
+    }
+  }
+}
+
 function isBridgeReady(health: ScraplingBridgeHealth | null | undefined): boolean {
   if (!health) {
     return false;
@@ -165,9 +185,13 @@ async function ensureScraplingBridgeReady(params: { cwd: string; invokeFn: Invok
   const task = (async () => {
     let health: ScraplingBridgeHealth | null = null;
     try {
-      health = await params.invokeFn<ScraplingBridgeHealth>("dashboard_scrapling_bridge_start", {
-        cwd: normalizedCwd,
-      });
+      health = await withTimeout(
+        params.invokeFn<ScraplingBridgeHealth>("dashboard_scrapling_bridge_start", {
+          cwd: normalizedCwd,
+        }),
+        ROLE_KB_BRIDGE_TIMEOUT_MS,
+        "dashboard_scrapling_bridge_start",
+      );
     } catch {
       health = null;
     }
@@ -175,13 +199,21 @@ async function ensureScraplingBridgeReady(params: { cwd: string; invokeFn: Invok
       return;
     }
 
-    await params.invokeFn("dashboard_scrapling_bridge_install", {
-      cwd: normalizedCwd,
-    });
+    await withTimeout(
+      params.invokeFn("dashboard_scrapling_bridge_install", {
+        cwd: normalizedCwd,
+      }),
+      ROLE_KB_BRIDGE_TIMEOUT_MS,
+      "dashboard_scrapling_bridge_install",
+    );
 
-    health = await params.invokeFn<ScraplingBridgeHealth>("dashboard_scrapling_bridge_start", {
-      cwd: normalizedCwd,
-    });
+    health = await withTimeout(
+      params.invokeFn<ScraplingBridgeHealth>("dashboard_scrapling_bridge_start", {
+        cwd: normalizedCwd,
+      }),
+      ROLE_KB_BRIDGE_TIMEOUT_MS,
+      "dashboard_scrapling_bridge_start",
+    );
     if (!isBridgeReady(health)) {
       const reason = cleanLine(health?.message);
       throw new Error(
@@ -350,11 +382,15 @@ async function fetchRoleKnowledgeSource(params: {
       cwd: params.cwd,
       invokeFn: params.invokeFn,
     });
-    const result = await params.invokeFn<ScraplingFetchResult>("dashboard_scrapling_fetch_url", {
-      cwd: params.cwd,
-      url: params.url,
-      topic: ROLE_KB_TOPIC,
-    });
+    const result = await withTimeout(
+      params.invokeFn<ScraplingFetchResult>("dashboard_scrapling_fetch_url", {
+        cwd: params.cwd,
+        url: params.url,
+        topic: ROLE_KB_TOPIC,
+      }),
+      ROLE_KB_FETCH_TIMEOUT_MS,
+      "dashboard_scrapling_fetch_url",
+    );
     return {
       url: cleanLine(result.url) || params.url,
       status: "ok",
@@ -376,11 +412,15 @@ async function fetchRoleKnowledgeSource(params: {
           cwd: params.cwd,
           invokeFn: params.invokeFn,
         });
-        const retried = await params.invokeFn<ScraplingFetchResult>("dashboard_scrapling_fetch_url", {
-          cwd: params.cwd,
-          url: params.url,
-          topic: ROLE_KB_TOPIC,
-        });
+        const retried = await withTimeout(
+          params.invokeFn<ScraplingFetchResult>("dashboard_scrapling_fetch_url", {
+            cwd: params.cwd,
+            url: params.url,
+            topic: ROLE_KB_TOPIC,
+          }),
+          ROLE_KB_FETCH_TIMEOUT_MS,
+          "dashboard_scrapling_fetch_url",
+        );
         return {
           url: cleanLine(retried.url) || params.url,
           status: "ok",
@@ -409,16 +449,11 @@ async function fetchRoleKnowledgeSource(params: {
 export async function bootstrapRoleKnowledgeProfile(input: RoleKnowledgeBootstrapInput): Promise<RoleKnowledgeBootstrapResult> {
   const roleTemplate = resolveRoleTemplate(input.roleId);
   const urls = ROLE_KB_ALLOWLIST[input.roleId] ?? [];
-  const sourceResults: RoleKnowledgeSource[] = [];
-
-  for (const url of urls) {
-    const source = await fetchRoleKnowledgeSource({
+  const sourceResults = await Promise.all(urls.map((url) => fetchRoleKnowledgeSource({
       cwd: input.cwd,
       invokeFn: input.invokeFn,
       url,
-    });
-    sourceResults.push(source);
-  }
+    })));
 
   const successfulSources = sourceResults.filter((row) => row.status === "ok");
   const evidencePoints = successfulSources

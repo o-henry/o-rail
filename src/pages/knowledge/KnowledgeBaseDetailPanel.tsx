@@ -13,25 +13,63 @@ type KnowledgeBaseDetailPanelProps = {
   markdownContent: string;
   onDeleteSelected: () => void;
   onInjectContextSources: (entries: KnowledgeEntry[]) => void;
+  onOpenInVisualize?: (entry: KnowledgeEntry) => void;
   onRevealPath: (path: string) => Promise<void>;
   selected: KnowledgeEntry | null;
 };
 
 export function KnowledgeBaseDetailPanel(props: KnowledgeBaseDetailPanelProps) {
   const { selected } = props;
+  const canOpenInVisualize = Boolean(
+    selected
+    && selected.runId
+    && selected.roleId === "research_analyst"
+    && (
+      String(selected.markdownPath ?? "").includes("research_")
+      || String(selected.jsonPath ?? "").includes("research_")
+    ),
+  );
   return (
-    <section className="knowledge-detail panel-card knowledge-island">
+    <section
+      aria-label={selected ? `${selected.title} 상세 정보` : "데이터베이스 상세 정보"}
+      className="knowledge-detail panel-card knowledge-island"
+      data-e2e="knowledge-detail-panel"
+    >
       {selected ? (
         <>
           <header className="knowledge-detail-head">
             <h3>{selected.title}</h3>
             <div className="knowledge-detail-actions">
-              <button type="button" onClick={() => props.onInjectContextSources([selected])}>
+              <button
+                aria-label={`${selected.title} 컨텍스트로 사용`}
+                data-e2e="knowledge-use-as-context"
+                onClick={() => props.onInjectContextSources([selected])}
+                title="컨텍스트로 사용"
+                type="button"
+              >
                 컨텍스트로 사용
               </button>
-              <button type="button" className="danger" onClick={props.onDeleteSelected}>
+              <button
+                aria-label={`${selected.title} 삭제`}
+                className="danger"
+                data-e2e="knowledge-delete-selected"
+                onClick={props.onDeleteSelected}
+                title="삭제"
+                type="button"
+              >
                 삭제
               </button>
+              {canOpenInVisualize ? (
+                <button
+                  aria-label={`${selected.title} 시각화에서 보기`}
+                  data-e2e="knowledge-open-visualize"
+                  onClick={() => props.onOpenInVisualize?.(selected)}
+                  title="시각화에서 보기"
+                  type="button"
+                >
+                  시각화에서 보기
+                </button>
+              ) : null}
             </div>
           </header>
           <p>{selected.summary || "요약 없음"}</p>
@@ -55,15 +93,21 @@ export function KnowledgeBaseDetailPanel(props: KnowledgeBaseDetailPanelProps) {
           </dl>
           <div className="knowledge-artifact-actions">
             <button
+              aria-label={`${selected.title} MARKDOWN 열기`}
+              data-e2e="knowledge-open-markdown"
               disabled={!selected.markdownPath}
               onClick={() => void props.onRevealPath(String(selected.markdownPath ?? ""))}
+              title={selected.markdownPath || "MARKDOWN 열기"}
               type="button"
             >
               MARKDOWN 열기
             </button>
             <button
+              aria-label={`${selected.title} JSON 열기`}
+              data-e2e="knowledge-open-json"
               disabled={!selected.jsonPath}
               onClick={() => void props.onRevealPath(String(selected.jsonPath ?? ""))}
+              title={selected.jsonPath || "JSON 열기"}
               type="button"
             >
               JSON 열기

@@ -594,18 +594,22 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
                       <FancySelect
                         ariaLabel={t("visualize.report.documentPicker")}
                         className="visualize-monitor-select visualize-monitor-report-link-select"
+                        dataE2e="visualize-report-document-picker"
                         onChange={(nextValue) => setSelectedReportDocumentKind(nextValue === "collection" ? "collection" : "report")}
                         options={reportDocumentOptions}
                         value={selectedReportDocumentKind}
                       />
                       <button
+                        aria-label={t("visualize.report.openDatabase")}
                         className="visualize-monitor-report-link-button"
+                        data-e2e="visualize-open-database"
                         disabled={!selectedReportEntryId}
                         onClick={() => {
                           if (selectedReportEntryId) {
                             onOpenKnowledgeEntry?.(selectedReportEntryId);
                           }
                         }}
+                        title={t("visualize.report.openDatabase")}
                         type="button"
                       >
                         {t("visualize.report.openDatabase")}
@@ -667,9 +671,12 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
                     const isSelected = run.runId === state.selectedRunId;
                     return (
                       <button
+                        aria-label={`${run.title || run.taskId} 시각화 세션 선택`}
                         className={`visualize-monitor-rail-item${isSelected ? " is-active" : ""}`}
+                        data-e2e={`visualize-history-run-${run.runId}`}
                         key={run.runId}
                         onClick={() => state.setSelectedRunId(run.runId)}
+                        title={`${run.title || run.taskId} · ${formatStamp(run.updatedAt)}`}
                         type="button"
                       >
                         <strong>{run.title || run.taskId}</strong>
@@ -683,7 +690,15 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
                 )}
               </div>
               <div className="visualize-monitor-rail-footer">
-                <button className="visualize-monitor-rail-action" disabled={state.refreshing} onClick={() => void state.refreshAll()} type="button">
+                <button
+                  aria-label={state.refreshing ? t("visualize.action.sync") : t("visualize.action.refresh")}
+                  className="visualize-monitor-rail-action"
+                  data-e2e="visualize-refresh"
+                  disabled={state.refreshing}
+                  onClick={() => void state.refreshAll()}
+                  title={state.refreshing ? t("visualize.action.sync") : t("visualize.action.refresh")}
+                  type="button"
+                >
                   {state.refreshing ? t("visualize.action.sync") : t("visualize.action.refresh")}
                 </button>
               </div>

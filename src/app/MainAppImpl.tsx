@@ -314,6 +314,7 @@ import {
 import { executeTurnNodeWithContext } from "./main/runtime/executeTurnNode";
 import type { FeedCategory, InternalMemorySnippet, WebProviderRunResult, RunRecord } from "./main";
 const HIDDEN_WORKSPACE_TABS = new Set<WorkspaceTab>(["workbench", "dashboard", "intelligence", "feed", "handoff", "agents"]);
+const DEFAULT_WORKSPACE_TAB: WorkspaceTab = "tasks";
 function App() {
   const USER_BG_IMAGE_STORAGE_KEY = "rail.settings.user_bg_image";
   const USER_BG_OPACITY_STORAGE_KEY = "rail.settings.user_bg_opacity";
@@ -336,7 +337,7 @@ function App() {
     ],
     [t],
   );
-  const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>("tasks");
+  const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>(DEFAULT_WORKSPACE_TAB);
   const [tasksLeftNavHidden, setTasksLeftNavHidden] = useState(false);
   const [workflowRoleId, setWorkflowRoleId] = useState<StudioRoleId>("pm_planner");
   const [, setWorkflowRoleTaskId] = useState("TASK-001");
@@ -669,7 +670,7 @@ function App() {
 
   useEffect(() => {
     if (HIDDEN_WORKSPACE_TABS.has(workspaceTab)) {
-      setWorkspaceTab("workflow");
+      setWorkspaceTab(DEFAULT_WORKSPACE_TAB);
     }
   }, [workspaceTab]);
   useEffect(() => {

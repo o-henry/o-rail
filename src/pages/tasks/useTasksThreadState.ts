@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   blockCoordinationRun,
-  completeCoordinationRun,
   completeDelegateTask,
   createCoordinationState,
   createRuntimeLedgerEvent,
@@ -100,6 +99,7 @@ import {
   type BrowserStore,
 } from "./taskThreadStorageState";
 import { buildPromptWithKnowledgeAttachments, findKnowledgeEntryIdByArtifact } from "./taskKnowledgeAttachments";
+import { applyCoordinationSettlement, settleRunningCoordinationRun } from "./taskCoordinationLifecycle";
 import {
   loadPersistedCoordinationState,
   loadPersistedRuntimeSessionIndex,
@@ -647,9 +647,8 @@ export function useTasksThreadState(params: Params) {
     if (!activeThread || !activeThreadCoordination || activeThreadCoordination.status !== "running") {
       return;
     }
-    const hasLiveAgents = activeThread.agents.some((agent) => isLiveBackgroundAgentStatus(agent.status));
-    const hasPendingApprovals = activeThread.approvals.some((approval) => approval.status === "pending");
-    if (hasLiveAgents || hasPendingApprovals) {
+    const settlement = settleRunningCoordinationRun(activeThread, activeThreadCoordination);
+    if (settlement.kind === "pending") {
       return;
     }
     const nextCoordination = updateThreadCoordination(
@@ -658,11 +657,11 @@ export function useTasksThreadState(params: Params) {
         if (!current) {
           return current;
         }
-        return completeCoordinationRun(current);
+        return applyCoordinationSettlement(current, settlement);
       },
       {
-        kind: "run_completed",
-        summary: "Runtime session completed",
+        kind: settlement.kind === "completed" ? "run_completed" : "run_blocked",
+        summary: settlement.summary,
       },
     );
     if (!nextCoordination) {
@@ -672,15 +671,15 @@ export function useTasksThreadState(params: Params) {
       if (!current || current.thread.threadId !== activeThread.thread.threadId) {
         return current;
       }
-      return withTaskCoordination(
-        {
-          ...current,
-          thread: {
-            ...current.thread,
-            status: "completed",
-            updatedAt: nextCoordination.updatedAt,
+        return withTaskCoordination(
+          {
+            ...current,
+            thread: {
+              ...current.thread,
+              status: settlement.kind === "completed" ? "completed" : nextCoordination.status,
+              updatedAt: nextCoordination.updatedAt,
+            },
           },
-        },
         nextCoordination,
       );
     });

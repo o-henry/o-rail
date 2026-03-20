@@ -1,10 +1,14 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createAgenticQueue } from "./agenticQueue";
 import { runRoleWithCoordinator } from "./agenticRoleCoordinator";
 
 type InvokeFn = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
 
 describe("agenticRoleCoordinator", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("respects a caller-provided run id for explicit child runs", async () => {
     const queue = createAgenticQueue();
     const invokeFn = (vi.fn(async () => "/tmp/write") as unknown) as InvokeFn;
@@ -73,5 +77,28 @@ describe("agenticRoleCoordinator", () => {
     });
 
     expect(result.envelope.record.queueKey).toBe("role:client_programmer:thread:THREAD-001");
+  });
+
+  it("fails the run when execute hangs past the watchdog timeout", async () => {
+    vi.useFakeTimers();
+    const queue = createAgenticQueue();
+    const invokeFn = (vi.fn(async () => "/tmp/write") as unknown) as InvokeFn;
+
+    const runPromise = runRoleWithCoordinator({
+      cwd: "/tmp/workspace",
+      sourceTab: "tasks-thread",
+      roleId: "research_analyst",
+      taskId: "THREAD-HANG",
+      queue,
+      invokeFn,
+      execute: async () => new Promise<never>(() => {}),
+    });
+
+    await vi.advanceTimersByTimeAsync(300001);
+    const result = await runPromise;
+
+    expect(result.envelope.record.status).toBe("error");
+    expect(result.envelope.stages.find((stage) => stage.stage === "codex")?.status).toBe("error");
+    expect(result.events.some((event) => event.type === "run_error")).toBe(true);
   });
 });

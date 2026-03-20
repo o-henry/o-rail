@@ -10,6 +10,7 @@ export type FancySelectOption = {
 type FancySelectProps = {
   ariaLabel?: string;
   className?: string;
+  dataE2e?: string;
   disabled?: boolean;
   emptyMessage?: string;
   onChange: (nextValue: string) => void;
@@ -21,6 +22,7 @@ type FancySelectProps = {
 function FancySelect({
   ariaLabel,
   className,
+  dataE2e,
   disabled = false,
   emptyMessage = "",
   onChange,
@@ -107,6 +109,7 @@ function FancySelect({
         aria-haspopup="listbox"
         aria-label={ariaLabel}
         className="fancy-select-trigger"
+        data-e2e={dataE2e ? `${dataE2e}-trigger` : undefined}
         disabled={disabled}
         onClick={() => {
           if (disabled) {
@@ -114,6 +117,7 @@ function FancySelect({
           }
           setIsOpen((prev) => !prev);
         }}
+        title={selectedLabel}
         type="button"
       >
         <span className={`fancy-select-value ${selected ? "" : "is-placeholder"}`}>
@@ -128,7 +132,13 @@ function FancySelect({
         </span>
       </button>
       {isOpen && (
-        <div className="fancy-select-menu" ref={menuRef} role="listbox">
+        <div
+          aria-label={ariaLabel ? `${ariaLabel} options` : undefined}
+          className="fancy-select-menu"
+          data-e2e={dataE2e ? `${dataE2e}-menu` : undefined}
+          ref={menuRef}
+          role="listbox"
+        >
           {options.length === 0 && (
             <div
               className="fancy-select-empty"
@@ -144,7 +154,9 @@ function FancySelect({
           {options.map((option) => (
             <button
               aria-selected={option.value === value}
+              aria-label={tp(option.label)}
               className={`fancy-select-option ${option.value === value ? "is-selected" : ""}`}
+              data-e2e={dataE2e ? `${dataE2e}-option-${option.value}` : undefined}
               disabled={option.disabled}
               key={option.value}
               onClick={() => {
@@ -155,6 +167,7 @@ function FancySelect({
                 setIsOpen(false);
               }}
               role="option"
+              title={tp(option.label)}
               type="button"
             >
               <span className="fancy-select-option-label">{tp(option.label)}</span>

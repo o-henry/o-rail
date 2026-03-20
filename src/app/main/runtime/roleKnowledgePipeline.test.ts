@@ -58,6 +58,37 @@ describe("roleKnowledgePipeline", () => {
     expect(result.profile.keyPoints.some((point) => point.includes("소스 수집 실패"))).toBe(true);
   });
 
+  it("times out stalled bridge startup and falls back without blocking the role run forever", async () => {
+    vi.useFakeTimers();
+    const invokeFn = vi.fn(async (command: string) => {
+      if (command === "dashboard_scrapling_bridge_start") {
+        return await new Promise<never>(() => {});
+      }
+      if (command === "dashboard_scrapling_bridge_install") {
+        return { installed: true };
+      }
+      throw new Error(`unexpected command: ${command}`);
+    }) as unknown as <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
+
+    try {
+      const promise = bootstrapRoleKnowledgeProfile({
+        cwd: "/tmp/workspace",
+        invokeFn,
+        roleId: "research_analyst",
+        taskId: "TASK-TIMEOUT",
+        runId: "role-timeout",
+        userPrompt: "스팀 장르 시장을 조사해줘",
+      });
+      await vi.advanceTimersByTimeAsync(25000);
+      const result = await promise;
+      expect(result.sourceSuccessCount).toBe(0);
+      expect(result.profile.summary).toContain("외부 근거 수집에 실패했습니다");
+      expect(result.profile.keyPoints.some((point) => point.includes("timed out"))).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("stores and injects role knowledge block into prompt", async () => {
     const invokeFn = vi.fn(async (command: string, args?: Record<string, unknown>) => {
       if (command === "dashboard_scrapling_bridge_start") {

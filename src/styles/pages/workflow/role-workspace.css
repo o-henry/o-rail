@@ -219,7 +219,7 @@
   background: color-mix(in srgb, var(--surface-panel) 84%, var(--surface));
   min-height: 30px;
   height: 30px;
-  padding: 6px 8px;
+  padding: 8px;
   font-size: 11px;
   color: var(--text-main);
   word-break: break-all;

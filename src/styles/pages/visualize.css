@@ -365,6 +365,26 @@
   font-family: "BasicallyAMono", "DialogNanumBody1984", sans-serif;
 }
 
+.visualize-monitor-widget-surface,
+.visualize-monitor-widget.is-session h1,
+.visualize-monitor-session-row span,
+.visualize-monitor-session-row select,
+.visualize-monitor-widget-head-copy strong,
+.visualize-monitor-kpi-copy span,
+.visualize-monitor-kpi-copy small,
+.visualize-monitor-quality-score span,
+.visualize-monitor-quality-legend-row span,
+.visualize-monitor-ranked-table-head span,
+.visualize-monitor-ranked-item span,
+.visualize-monitor-ranked-item.is-table strong,
+.visualize-monitor-ranked-item.is-table span,
+.visualize-monitor-evidence-table-head span,
+.visualize-monitor-evidence-row > strong,
+.visualize-monitor-evidence-row > span,
+.visualize-monitor-evidence-summary-cell a {
+  font-family: "Departure Mono", "DialogNanumBody1984", monospace;
+}
+
 .visualize-monitor-widget.is-session {
   grid-column: 1 / 7;
   grid-row: 1 / span 2;

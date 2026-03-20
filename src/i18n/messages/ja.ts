@@ -203,6 +203,7 @@ export const JA_MESSAGES: Dictionary = {
     "visualize.common.itemCount": "{count}件",
     "visualize.common.date": "日付",
     "visualize.common.count": "件数",
+    "visualize.common.source": "ソース",
     "visualize.common.popularity": "人気",
     "visualize.common.items": "件数",
     "visualize.common.share": "比率",

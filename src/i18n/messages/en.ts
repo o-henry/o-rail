@@ -255,6 +255,7 @@ export const EN_MESSAGES: Dictionary = {
     "visualize.common.itemCount": "{count} items",
     "visualize.common.date": "Date",
     "visualize.common.count": "Count",
+    "visualize.common.source": "Source",
     "visualize.common.popularity": "Popularity",
     "visualize.common.items": "Items",
     "visualize.common.share": "Share",

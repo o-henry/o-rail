@@ -255,6 +255,7 @@ export const KO_MESSAGES: Dictionary = {
     "visualize.common.itemCount": "{count}건",
     "visualize.common.date": "날짜",
     "visualize.common.count": "건수",
+    "visualize.common.source": "출처",
     "visualize.common.popularity": "인기",
     "visualize.common.items": "항목 수",
     "visualize.common.share": "비중",

@@ -5,7 +5,6 @@ import type { FeedChartSpec } from "../../features/feed/chartSpec";
 import { useI18n } from "../../i18n";
 import { useVisualizePageState } from "./useVisualizePageState";
 import { VisualizeWidgetFrame } from "./VisualizeWidgetFrame";
-import type { ResearchReportListItem } from "./visualizeReportUtils";
 import type { VisualizeWidgetId } from "./visualizeWidgetLayout";
 
 type VisualizePageProps = {
@@ -230,7 +229,6 @@ export default function VisualizePage({ cwd, hasTauriRuntime }: VisualizePagePro
   const toolbarTitle = t("visualize.toolbar.title");
   const sessionTitle = t("visualize.widget.session");
   const qualityTitle = t("visualize.widget.quality");
-  const allowGenericFallbackLists = !autoSpec?.widgets || questionType === "topic_research";
   const timelineRows = useMemo(
     () =>
       (effectiveMetrics?.timeline ?? []).map((row) => ({
@@ -239,23 +237,6 @@ export default function VisualizePage({ cwd, hasTauriRuntime }: VisualizePagePro
       })),
     [effectiveMetrics],
   );
-  const primaryListItems: ResearchReportListItem[] =
-    (autoSpec?.widgets?.primaryList?.items?.length
-      ? autoSpec.widgets.primaryList.items
-      : null)
-    ?? (popularGenres.length
-      ? popularGenres.map((genre) => ({
-          title: `${genre.rank}. ${genre.genreLabel}`,
-          detail: `${t("visualize.common.avgScore")} ${Math.round(genre.avgScore)} · ${genre.representativeTitles.slice(0, 2).join(" · ") || t("visualize.common.representativesPending")}`,
-          badge: `P ${Math.round(genre.popularityScore)} · E ${genre.evidenceCount}`,
-        }))
-      : allowGenericFallbackLists
-        ? topSources.map((source) => ({
-            title: source.sourceName,
-            detail: t("visualize.common.primarySource"),
-            badge: t("visualize.common.itemCount", { count: source.itemCount }),
-          }))
-        : []);
   const summaryMetrics = [
     { label: t("visualize.metric.evidence"), value: effectiveMetrics?.totals.items ?? 0, meta: t("visualize.metric.evidence.meta") },
     { label: t("visualize.metric.verified"), value: effectiveMetrics?.totals.verified ?? 0, meta: t("visualize.metric.verified.meta") },
@@ -380,20 +361,25 @@ export default function VisualizePage({ cwd, hasTauriRuntime }: VisualizePagePro
                 className="is-sources"
                 maximized={maximizedWidgetId === "sources"}
                 onToggleMaximize={toggleMaximize}
-                surfaceClassName="is-ranked-surface"
+                surfaceClassName="is-ranked-table-surface"
                 title={primaryListTitle}
                 widgetId="sources"
               >
-                {primaryListItems.map((item, index) => (
-                  <div className="visualize-monitor-ranked-item" key={`${item.title || "item"}-${index}`}>
-                    <div className="visualize-monitor-ranked-item-copy">
-                      <strong>{item.title || "-"}</strong>
-                      <p>{item.detail || "-"}</p>
+                <div className="visualize-monitor-ranked-table-head">
+                  <span>{t("visualize.common.source")}</span>
+                  <span>{t("visualize.common.count")}</span>
+                  <span>{t("visualize.common.share")}</span>
+                </div>
+                <div className="visualize-monitor-ranked-list is-table">
+                  {topSources.map((source) => (
+                    <div className="visualize-monitor-ranked-item is-table" key={source.sourceName}>
+                      <strong>{source.sourceName || "-"}</strong>
+                      <span>{source.itemCount}</span>
+                      <span>{formatPercent((source.itemCount / Math.max(effectiveMetrics?.totals.items ?? 0, 1)) * 100)}</span>
                     </div>
-                    <span>{item.badge || "-"}</span>
-                  </div>
-                ))}
-                {primaryListItems.length ? null : <p className="visualize-monitor-empty">{t("visualize.empty.items")}</p>}
+                  ))}
+                  {topSources.length ? null : <p className="visualize-monitor-empty">{t("visualize.empty.items")}</p>}
+                </div>
               </VisualizeWidgetFrame>
 
               <VisualizeWidgetFrame

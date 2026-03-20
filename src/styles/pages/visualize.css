@@ -692,6 +692,8 @@
 
 .visualize-monitor-widget-surface.is-ranked-table-surface {
   --visualize-ranked-columns: minmax(0, 1.7fr) 110px 84px;
+  overflow: auto;
+  align-content: start;
 }
 
 .visualize-monitor-ranked-table-head,
@@ -703,9 +705,13 @@
 }
 
 .visualize-monitor-ranked-table-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
   min-height: 34px;
   padding: 0 10px;
   border-bottom: 1px solid rgba(226, 232, 240, 1);
+  background: rgba(255, 255, 255, 0.98);
 }
 
 .visualize-monitor-ranked-table-head span {
@@ -738,8 +744,8 @@
 .visualize-monitor-ranked-list.is-table {
   display: grid;
   min-height: 0;
-  flex: 1 1 auto;
-  overflow: auto;
+  align-content: start;
+  overflow: visible;
   gap: 0;
 }
 
@@ -806,6 +812,10 @@
 .visualize-monitor-ranked-item.is-table strong {
   justify-self: start;
   text-align: left;
+}
+
+.visualize-monitor-widget.is-sources .visualize-monitor-ranked-item.is-table strong {
+  text-transform: uppercase;
 }
 
 .visualize-monitor-widget-surface.is-report-surface > .feed-document {

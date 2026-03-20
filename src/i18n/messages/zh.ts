@@ -203,6 +203,7 @@ export const ZH_MESSAGES: Dictionary = {
     "visualize.common.itemCount": "{count} 条",
     "visualize.common.date": "日期",
     "visualize.common.count": "数量",
+    "visualize.common.source": "来源",
     "visualize.common.popularity": "热度",
     "visualize.common.items": "条目数",
     "visualize.common.share": "占比",

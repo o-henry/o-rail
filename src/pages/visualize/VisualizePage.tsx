@@ -38,15 +38,11 @@ function formatPercent(value: number) {
   return `${Math.round(value)}%`;
 }
 
-function splitBadgeColumns(input: string | null | undefined) {
-  const parts = String(input ?? "")
-    .split("·")
-    .map((part) => part.trim())
-    .filter(Boolean);
-  return {
-    approval: parts[0] || "-",
-    score: parts[1] || "-",
-  };
+function formatCompactNumber(value: number) {
+  if (!Number.isFinite(value)) {
+    return "-";
+  }
+  return `${Math.round(value)}`;
 }
 
 type VisualizeMetrics = ReturnType<typeof useVisualizePageState>["collectionMetrics"];
@@ -139,17 +135,6 @@ function buildMetricsFromItems(jobId: string, items: EvidenceItem[]): NonNullabl
   };
 }
 
-function buildSourceChart(spec: VisualizeMetrics): FeedChartSpec | null {
-  if (!spec || spec.bySourceType.length === 0) {
-    return null;
-  }
-  return {
-    type: "pie",
-    labels: spec.bySourceType.map((row) => shorten(row.sourceType.replace("source.", ""))),
-    series: [{ name: "Items", data: spec.bySourceType.map((row) => row.itemCount) }],
-  };
-}
-
 function buildTimelineChart(spec: VisualizeMetrics): FeedChartSpec | null {
   if (!spec || spec.timeline.length === 0) {
     return null;
@@ -168,7 +153,7 @@ function withoutChartTitle(spec: FeedChartSpec | null | undefined): FeedChartSpe
   return { ...spec, title: "" };
 }
 
-export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEntry }: VisualizePageProps) {
+export default function VisualizePage({ cwd, hasTauriRuntime }: VisualizePageProps) {
   const { t } = useI18n();
   const state = useVisualizePageState({ cwd, hasTauriRuntime });
   const [maximizedWidgetId, setMaximizedWidgetId] = useState<VisualizeWidgetId | null>(null);
@@ -179,7 +164,6 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
   const evidenceRef = useRef<HTMLElement | null>(null);
 
   const reportBody = state.reportMarkdown || state.collectionMarkdown;
-  const reportEntryId = state.selectedReportRun?.collectionEntryId || state.selectedReportRun?.reportEntryId || "";
   const reportJobId = String(state.collectionPayload?.planned?.job?.jobId ?? "").trim();
   const reportJob = state.collectionPayload?.planned?.job;
   const autoSpec = state.collectionPayload?.reportSpec;
@@ -196,16 +180,6 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
     () => (evidenceWasFiltered ? buildMetricsFromItems(reportJobId, evidenceItems) : state.collectionMetrics),
     [evidenceItems, evidenceWasFiltered, reportJobId, state.collectionMetrics],
   );
-  const evidenceFallbackItems: ResearchReportListItem[] = useMemo(
-    () =>
-      evidenceItems.slice(0, 6).map((item) => ({
-        title: item.title || shorten(item.sourceName || item.sourceType, 32),
-        detail: item.summary || item.url || t("visualize.evidence.noSummary"),
-        badge: `${item.verificationStatus} · ${Math.round(item.score)}`,
-      })),
-    [evidenceItems, t],
-  );
-  const sourceChart = buildSourceChart(effectiveMetrics);
   const timelineChart = buildTimelineChart(effectiveMetrics);
   const qualityScore = Math.max(0, Math.min(100, Math.round(effectiveMetrics?.totals.avgScore ?? 0)));
   const leadCopy = firstNarrativeLine(state.reportMarkdown) || firstNarrativeLine(state.collectionMarkdown);
@@ -213,7 +187,6 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
   const qualityGenres = evidenceWasFiltered ? [] : (state.collectionGenreRankings?.quality.slice(0, 5) ?? []);
   const topSources = effectiveMetrics?.topSources.slice(0, 5) ?? [];
   const mainChartSpec = withoutChartTitle(autoSpec?.widgets ? (autoSpec.widgets.mainChart?.chart ?? null) : timelineChart);
-  const secondaryChartSpec = withoutChartTitle(autoSpec?.widgets ? (autoSpec.widgets.secondaryChart?.chart ?? null) : sourceChart);
   const mainChartTitle =
     questionType === "genre_ranking"
       ? t("visualize.chart.popularGenres")
@@ -222,10 +195,6 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
         : questionType === "community_sentiment"
           ? t("visualize.chart.reactionTimeline")
           : t("visualize.chart.collectionTimeline");
-  const secondaryChartTitle =
-    questionType === "genre_ranking"
-      ? t("visualize.chart.bestRatedGenres")
-      : t("visualize.chart.sourceMix");
   const mainChartDescription =
     questionType === "genre_ranking"
       ? t("visualize.chart.popularGenres.desc")
@@ -234,10 +203,10 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
         : questionType === "community_sentiment"
           ? t("visualize.chart.reactionTimeline.desc")
           : t("visualize.chart.collectionTimeline.desc");
-  const secondaryChartDescription =
+  const secondaryWidgetTitle =
     questionType === "genre_ranking"
-      ? t("visualize.chart.bestRatedGenres.desc")
-      : t("visualize.chart.sourceMix.desc");
+      ? t("visualize.chart.genreComparison")
+      : t("visualize.chart.verificationMatrix");
   const primaryListTitle =
     questionType === "genre_ranking"
       ? t("visualize.list.genreSnapshots")
@@ -246,18 +215,68 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
         : questionType === "community_sentiment"
           ? t("visualize.list.reactionHighlights")
           : t("visualize.list.topSources");
-  const secondaryListTitle =
-    questionType === "genre_ranking"
-      ? t("visualize.list.representativeGames")
-      : questionType === "game_comparison" || questionType === "community_sentiment"
-        ? t("visualize.list.topSources")
-        : t("visualize.list.representativeTitles");
+  const secondaryListTitle = t("visualize.list.topSources");
   const reportTitle = t("visualize.report.title");
   const evidenceTitle = t("visualize.evidence.title");
   const toolbarTitle = t("visualize.toolbar.title");
   const sessionTitle = t("visualize.widget.session");
   const qualityTitle = t("visualize.widget.quality");
   const allowGenericFallbackLists = !autoSpec?.widgets || questionType === "topic_research";
+  const genreComparisonRows = useMemo(() => {
+    const rows = new Map<
+      string,
+      {
+        genreLabel: string;
+        popularityScore: number;
+        avgScore: number;
+        qualityScore: number;
+      }
+    >();
+
+    for (const genre of popularGenres) {
+      const existing = rows.get(genre.genreLabel) ?? {
+        genreLabel: genre.genreLabel,
+        popularityScore: 0,
+        avgScore: genre.avgScore,
+        qualityScore: 0,
+      };
+      existing.popularityScore = Math.max(existing.popularityScore, genre.popularityScore);
+      existing.avgScore = Math.max(existing.avgScore, genre.avgScore);
+      rows.set(genre.genreLabel, existing);
+    }
+
+    for (const genre of qualityGenres) {
+      const existing = rows.get(genre.genreLabel) ?? {
+        genreLabel: genre.genreLabel,
+        popularityScore: 0,
+        avgScore: genre.avgScore,
+        qualityScore: 0,
+      };
+      existing.qualityScore = Math.max(existing.qualityScore, genre.qualityScore);
+      existing.avgScore = Math.max(existing.avgScore, genre.avgScore);
+      rows.set(genre.genreLabel, existing);
+    }
+
+    return [...rows.values()]
+      .sort((left, right) => (right.popularityScore + right.qualityScore) - (left.popularityScore + left.qualityScore))
+      .slice(0, 6);
+  }, [popularGenres, qualityGenres]);
+  const verificationRows = useMemo(() => {
+    const total = Math.max(effectiveMetrics?.totals.items ?? 0, 1);
+    return (effectiveMetrics?.byVerificationStatus ?? []).map((row) => ({
+      label: row.verificationStatus,
+      count: row.itemCount,
+      share: Math.round((row.itemCount / total) * 100),
+    }));
+  }, [effectiveMetrics]);
+  const sourceCoverageRows = useMemo(() => {
+    const total = Math.max(effectiveMetrics?.totals.items ?? 0, 1);
+    return topSources.map((source) => ({
+      label: source.sourceName,
+      count: source.itemCount,
+      share: Math.round((source.itemCount / total) * 100),
+    }));
+  }, [effectiveMetrics?.totals.items, topSources]);
   const primaryListItems: ResearchReportListItem[] =
     (autoSpec?.widgets?.primaryList?.items?.length
       ? autoSpec.widgets.primaryList.items
@@ -276,18 +295,11 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
           }))
         : []);
   const secondaryListItems: ResearchReportListItem[] =
-    (autoSpec?.widgets?.secondaryList?.items?.length
-      ? autoSpec.widgets.secondaryList.items
-      : null)
-    ?? (qualityGenres.length
-      ? qualityGenres.map((genre) => ({
-          title: `${genre.rank}. ${genre.genreLabel}`,
-          detail: `${t("visualize.common.avgScore")} ${Math.round(genre.avgScore)} · ${genre.representativeTitles.slice(0, 3).join(" · ") || t("visualize.common.representativesPending")}`,
-          badge: `Q ${Math.round(genre.qualityScore)} · ${Math.round(genre.avgScore)}`,
-        }))
-      : allowGenericFallbackLists
-        ? evidenceFallbackItems
-        : []);
+    sourceCoverageRows.map((source) => ({
+      title: source.label,
+      detail: t("visualize.common.itemCount", { count: source.count }),
+      badge: formatPercent(source.share),
+    }));
   const summaryMetrics = [
     { label: t("visualize.metric.evidence"), value: effectiveMetrics?.totals.items ?? 0, meta: t("visualize.metric.evidence.meta") },
     { label: t("visualize.metric.verified"), value: effectiveMetrics?.totals.verified ?? 0, meta: t("visualize.metric.verified.meta") },
@@ -295,16 +307,6 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
     { label: t("visualize.metric.avgScore"), value: effectiveMetrics?.totals.avgScore ?? 0, meta: t("visualize.metric.avgScore.meta") },
     { label: t("visualize.metric.warnings"), value: effectiveMetrics?.totals.warnings ?? 0, meta: t("visualize.metric.warnings.meta") },
   ];
-
-  const focusWidget = useCallback((ref: { current: HTMLElement | null }) => {
-    const container = mainRef.current;
-    const element = ref.current;
-    if (!container || !element) {
-      return;
-    }
-    const top = Math.max(0, element.offsetTop - 16);
-    container.scrollTo({ top, behavior: "smooth" });
-  }, []);
 
   const toggleMaximize = useCallback((widgetId: VisualizeWidgetId) => {
     setMaximizedWidgetId((current) => (current === widgetId ? null : widgetId));
@@ -326,7 +328,7 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
               onClick={() => setHistoryOpen((current) => !current)}
               type="button"
             >
-              <img alt="" aria-hidden="true" src="/open.svg" />
+              <img alt="" aria-hidden="true" src="/open-panel.svg" />
             </button>
           </div>
         </header>
@@ -384,14 +386,43 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
                 className="is-chart-source"
                 maximized={maximizedWidgetId === "sourceMix"}
                 onToggleMaximize={toggleMaximize}
-                title={secondaryChartTitle}
+                title={secondaryWidgetTitle}
                 widgetId="sourceMix"
               >
-                {secondaryChartSpec ? (
-                  <>
-                    <p className="visualize-monitor-chart-copy">{secondaryChartDescription}</p>
-                    <FeedChart spec={secondaryChartSpec} />
-                  </>
+                {questionType === "genre_ranking" && genreComparisonRows.length ? (
+                  <div className="visualize-monitor-ranked-table">
+                    <div className="visualize-monitor-ranked-table-head">
+                      <span>{t("visualize.evidence.column.title")}</span>
+                      <span>{t("visualize.common.popularity")}</span>
+                      <span>{t("visualize.evidence.column.score")}</span>
+                    </div>
+                    <div className="visualize-monitor-ranked-list is-table">
+                      {genreComparisonRows.map((row) => (
+                        <div className="visualize-monitor-ranked-item is-table" key={row.genreLabel}>
+                          <strong>{row.genreLabel}</strong>
+                          <span>{formatCompactNumber(row.popularityScore)}</span>
+                          <span>{formatCompactNumber(row.avgScore)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : verificationRows.length ? (
+                  <div className="visualize-monitor-ranked-table">
+                    <div className="visualize-monitor-ranked-table-head">
+                      <span>{t("visualize.common.status")}</span>
+                      <span>{t("visualize.common.items")}</span>
+                      <span>{t("visualize.common.share")}</span>
+                    </div>
+                    <div className="visualize-monitor-ranked-list is-table">
+                      {verificationRows.map((row) => (
+                        <div className="visualize-monitor-ranked-item is-table" key={row.label}>
+                          <strong>{row.label}</strong>
+                          <span>{row.count}</span>
+                          <span>{formatPercent(row.share)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 ) : <div className="visualize-monitor-placeholder">{t("visualize.placeholder.sourceMix")}</div>}
               </VisualizeWidgetFrame>
 
@@ -466,15 +497,15 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
                 <div className="visualize-monitor-ranked-table">
                   <div className="visualize-monitor-ranked-table-head">
                     <span>{t("visualize.evidence.column.title")}</span>
-                    <span>{t("visualize.evidence.column.approval")}</span>
-                    <span>{t("visualize.evidence.column.score")}</span>
+                    <span>{t("visualize.common.items")}</span>
+                    <span>{t("visualize.common.share")}</span>
                   </div>
                   <div className="visualize-monitor-ranked-list is-table">
                   {secondaryListItems.map((item, index) => (
                     <div className="visualize-monitor-ranked-item is-table" key={`${item.title || "item"}-${index}`}>
                       <strong>{item.title || "-"}</strong>
-                      <span>{splitBadgeColumns(item.badge).approval}</span>
-                      <span>{splitBadgeColumns(item.badge).score}</span>
+                      <span>{item.detail || "-"}</span>
+                      <span>{item.badge || "-"}</span>
                     </div>
                   ))}
                     {secondaryListItems.length ? null : <p className="visualize-monitor-empty">{t("visualize.empty.snapshots")}</p>}
@@ -518,7 +549,7 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
                     <span>{t("visualize.evidence.column.title")}</span>
                     <span>{t("visualize.evidence.column.approval")}</span>
                     <span>{t("visualize.evidence.column.score")}</span>
-                    <span>{t("visualize.evidence.column.summary")}</span>
+                    <span>{t("visualize.evidence.column.link")}</span>
                   </div>
                   <div className="visualize-monitor-evidence-picker">
                     {evidenceItems.map((item) => (
@@ -527,7 +558,6 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
                         <span>{item.verificationStatus}</span>
                         <span>{item.score}</span>
                         <div className="visualize-monitor-evidence-summary-cell">
-                          <p>{item.summary || item.contentExcerpt || t("visualize.evidence.noSummary")}</p>
                           <a href={item.url} rel="noreferrer" target="_blank">
                             {item.url}
                           </a>
@@ -570,20 +600,6 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
               <div className="visualize-monitor-rail-footer">
                 <button className="visualize-monitor-rail-action" disabled={state.refreshing} onClick={() => void state.refreshAll()} type="button">
                   {state.refreshing ? t("visualize.action.sync") : t("visualize.action.refresh")}
-                </button>
-                {reportEntryId && onOpenKnowledgeEntry ? (
-                  <button className="visualize-monitor-rail-action" onClick={() => onOpenKnowledgeEntry(reportEntryId)} type="button">
-                    {t("visualize.action.database")}
-                  </button>
-                ) : null}
-                <button className="visualize-monitor-rail-action subtle" onClick={() => focusWidget(reportRef)} type="button">
-                  {t("visualize.action.jumpReport")}
-                </button>
-                <button className="visualize-monitor-rail-action subtle" onClick={() => focusWidget(evidenceRef)} type="button">
-                  {t("visualize.action.jumpEvidence")}
-                </button>
-                <button className="visualize-monitor-rail-action subtle" onClick={() => focusWidget(sessionRef)} type="button">
-                  {t("visualize.action.jumpSummary")}
                 </button>
               </div>
             </aside>

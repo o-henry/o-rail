@@ -52,7 +52,7 @@
 .visualize-monitor-rail-item strong,
 .visualize-monitor-rail-item span,
 .visualize-monitor-rail-action {
-  font-family: "DepartureMonoRail", "Galmuri11", monospace;
+  font-family: "Departure Mono", "Galmuri11", monospace;
 }
 
 .visualize-monitor-toolbar-copy strong {
@@ -120,7 +120,7 @@
 }
 
 .visualize-monitor-rail-head {
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 8px;
   min-height: 28px;
@@ -130,14 +130,21 @@
 
 .visualize-monitor-rail-head strong {
   color: #0f172a;
-  font-size: 0.84rem;
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  font-size: 0.94rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
 .visualize-monitor-rail-head span {
   color: #64748b;
-  font-size: 0.7rem;
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  font-size: 0.94rem;
+  letter-spacing: 0.08em;
 }
 
 .visualize-monitor-rail-list {
@@ -306,7 +313,7 @@
 .visualize-monitor-evidence-picker span,
 .visualize-monitor-evidence-detail a,
 .visualize-monitor-chip-row span {
-  font-family: "DepartureMonoRail", "Galmuri11", monospace;
+  font-family: "Departure Mono", "Galmuri11", monospace;
 }
 
 .visualize-monitor-widget-head-copy strong {
@@ -400,7 +407,7 @@
 }
 
 .visualize-monitor-widget.is-session h1 {
-  font-family: "DepartureMonoRail", "Galmuri11", monospace;
+  font-family: "Departure Mono", "Galmuri11", monospace;
   font-size: 1rem;
   line-height: 1.22;
 }
@@ -419,7 +426,7 @@
 
 .visualize-monitor-session-row span,
 .visualize-monitor-session-row select {
-  font-family: "DepartureMonoRail", "Galmuri11", monospace;
+  font-family: "Departure Mono", "Galmuri11", monospace;
 }
 
 .visualize-monitor-session-row span {
@@ -655,7 +662,7 @@
   align-items: center;
   min-height: 34px;
   color: #64748b;
-  font-family: "DepartureMonoRail", "Galmuri11", monospace;
+  font-family: "Departure Mono", "Galmuri11", monospace;
   font-size: 0.74rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -719,7 +726,7 @@
 
 .visualize-monitor-ranked-item.is-table strong,
 .visualize-monitor-ranked-item.is-table span {
-  font-family: "DepartureMonoRail", "Galmuri11", monospace;
+  font-family: "Departure Mono", "Galmuri11", monospace;
   font-size: 0.74rem;
   line-height: 1.35;
   white-space: nowrap;
@@ -752,7 +759,7 @@
   padding: 0 12px;
   color: inherit;
   box-sizing: border-box;
-  font-family: "Departure Mono", "DepartureMonoRail", "Galmuri11", monospace;
+  font-family: "Departure Mono", "Galmuri11", monospace;
 }
 
 .visualize-monitor-search-row input:focus,
@@ -790,7 +797,7 @@
   align-items: center;
   min-height: 34px;
   color: #64748b;
-  font-family: "DepartureMonoRail", "Galmuri11", monospace;
+  font-family: "Departure Mono", "Galmuri11", monospace;
   font-size: 0.72rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -850,9 +857,8 @@
 
 .visualize-monitor-evidence-row > strong,
 .visualize-monitor-evidence-row > span,
-.visualize-monitor-evidence-summary-cell p,
 .visualize-monitor-evidence-summary-cell a {
-  font-family: "DepartureMonoRail", "Galmuri11", monospace;
+  font-family: "Departure Mono", "Galmuri11", monospace;
   font-size: 0.74rem;
   line-height: 1.35;
 }

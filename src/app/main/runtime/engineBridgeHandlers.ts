@@ -350,9 +350,9 @@ export function createEngineBridgeHandlers(params: any) {
       await refreshWebBridgeStatus(true, true);
       try {
         const bundle = await params.invokeFn("web_bridge_connect_code");
-        const maskedCode = typeof bundle?.maskedCode === "string" ? bundle.maskedCode : "";
-        if (maskedCode) {
-          params.setWebBridgeConnectCode(maskedCode);
+        const rawCode = typeof bundle?.code === "string" ? bundle.code : "";
+        if (rawCode) {
+          params.setWebBridgeConnectCode(rawCode);
         }
       } catch {
         // keep restarted state even if connect code refresh is temporarily unavailable
@@ -368,11 +368,10 @@ export function createEngineBridgeHandlers(params: any) {
     try {
       const bundle = await params.invokeFn("web_bridge_connect_code");
       const rawCode = typeof bundle?.code === "string" ? bundle.code : "";
-      const maskedCode = typeof bundle?.maskedCode === "string" ? bundle.maskedCode : "";
       if (!rawCode) {
         throw new Error(translate("bridge.error.connectCodeUnavailable"));
       }
-      params.setWebBridgeConnectCode(maskedCode);
+      params.setWebBridgeConnectCode(rawCode);
       let copied = false;
       try {
         if (navigator.clipboard?.writeText) {

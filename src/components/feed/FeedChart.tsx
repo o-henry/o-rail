@@ -36,7 +36,12 @@ function renderBarChart(spec: FeedChartSpec) {
   const barWidth = Math.max(6, (groupWidth * 0.74) / Math.max(1, seriesCount));
 
   return (
-    <svg className="feed-chart-svg" viewBox={`0 0 ${width} ${height}`} xmlns="http://www.w3.org/2000/svg">
+    <svg
+      className="feed-chart-svg"
+      preserveAspectRatio="xMidYMid meet"
+      viewBox={`0 0 ${width} ${height}`}
+      xmlns="http://www.w3.org/2000/svg"
+    >
       <line x1={padding.left} x2={padding.left} y1={padding.top} y2={padding.top + chartHeight} />
       <line
         x1={padding.left}
@@ -86,7 +91,12 @@ function renderLineChart(spec: FeedChartSpec) {
   const stepX = chartWidth / Math.max(1, spec.labels.length - 1);
 
   return (
-    <svg className="feed-chart-svg" viewBox={`0 0 ${width} ${height}`} xmlns="http://www.w3.org/2000/svg">
+    <svg
+      className="feed-chart-svg"
+      preserveAspectRatio="xMidYMid meet"
+      viewBox={`0 0 ${width} ${height}`}
+      xmlns="http://www.w3.org/2000/svg"
+    >
       <line x1={padding.left} x2={padding.left} y1={padding.top} y2={padding.top + chartHeight} />
       <line
         x1={padding.left}
@@ -154,7 +164,12 @@ function renderPieChart(spec: FeedChartSpec) {
   let angle = -Math.PI / 2;
 
   return (
-    <svg className="feed-chart-svg" viewBox={`0 0 ${width} ${height}`} xmlns="http://www.w3.org/2000/svg">
+    <svg
+      className="feed-chart-svg"
+      preserveAspectRatio="xMidYMid meet"
+      viewBox={`0 0 ${width} ${height}`}
+      xmlns="http://www.w3.org/2000/svg"
+    >
       {values.map((value, index) => {
         const ratio = Math.max(0, value) / total;
         const nextAngle = angle + ratio * Math.PI * 2;

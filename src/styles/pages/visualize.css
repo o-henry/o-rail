@@ -382,7 +382,12 @@
 
 .visualize-monitor-widget.is-sources {
   grid-column: 7 / 10;
-  grid-row: 1 / span 2;
+  grid-row: 1 / span 1;
+}
+
+.visualize-monitor-widget.is-timeline {
+  grid-column: 7 / 10;
+  grid-row: 2 / span 1;
 }
 
 .visualize-monitor-widget.is-report {
@@ -403,41 +408,6 @@
 .visualize-monitor-widget.is-report .visualize-monitor-widget-surface,
 .visualize-monitor-widget.is-evidence .visualize-monitor-widget-surface {
   padding: 6px;
-}
-
-.visualize-monitor-stacked-panels {
-  display: grid;
-  min-height: 0;
-  height: 100%;
-  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 6px;
-}
-
-.visualize-monitor-stacked-section {
-  min-height: 0;
-  display: flex;
-}
-
-.visualize-monitor-mini-widget {
-  min-height: 0;
-  flex: 1 1 auto;
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  background: rgba(255, 255, 255, 0.98);
-  border: 1px solid rgba(226, 232, 240, 1);
-}
-
-.visualize-monitor-mini-widget-surface {
-  min-height: 0;
-  display: flex;
-  flex: 1 1 auto;
-  padding: 6px;
-}
-
-.visualize-monitor-widget-head-nested {
-  min-height: 28px;
-  padding-inline: 8px;
-  border-bottom: 1px solid rgba(203, 213, 225, 0.9);
 }
 
 .visualize-monitor-widget h1,
@@ -591,10 +561,13 @@
 }
 
 .visualize-monitor-widget .feed-chart-svg {
-  width: 100%;
+  width: min(100%, 700px);
+  max-width: 100%;
   height: 100%;
   min-height: 0;
   flex: 1 1 auto;
+  display: block;
+  align-self: center;
   margin-inline: auto;
 }
 
@@ -717,10 +690,19 @@
 }
 
 .visualize-monitor-ranked-table-head span:nth-child(2),
-.visualize-monitor-ranked-table-head span:nth-child(3),
-.visualize-monitor-ranked-item.is-table > span {
-  justify-content: flex-end;
-  text-align: right;
+.visualize-monitor-ranked-table-head span:nth-child(3) {
+  justify-self: stretch;
+  justify-content: center;
+  text-align: center;
+}
+
+.visualize-monitor-ranked-item.is-table > span:nth-child(2),
+.visualize-monitor-ranked-item.is-table > span:nth-child(3) {
+  display: inline-flex;
+  justify-self: stretch;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
 }
 
 .visualize-monitor-ranked-list.is-table {

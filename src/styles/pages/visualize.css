@@ -412,6 +412,10 @@
   grid-row: 2 / span 1;
 }
 
+.visualize-monitor-widget.is-timeline .visualize-monitor-widget-surface.is-ranked-table-surface {
+  --visualize-ranked-columns: minmax(0, 1.7fr) 110px;
+}
+
 .visualize-monitor-widget.is-report {
   grid-column: 7 / 13;
   grid-row: 3 / span 5;
@@ -738,6 +742,14 @@
 .visualize-monitor-widget.is-timeline .visualize-monitor-ranked-item.is-table strong,
 .visualize-monitor-widget.is-timeline .visualize-monitor-ranked-item.is-table > span {
   justify-self: start;
+  justify-content: flex-start;
+  text-align: left;
+}
+
+.visualize-monitor-widget.is-timeline .visualize-monitor-ranked-item.is-table > span:nth-child(2) {
+  display: inline-flex;
+  justify-self: start;
+  align-items: center;
   justify-content: flex-start;
   text-align: left;
 }

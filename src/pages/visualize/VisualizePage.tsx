@@ -393,14 +393,12 @@ export default function VisualizePage({ cwd, hasTauriRuntime }: VisualizePagePro
                 <div className="visualize-monitor-ranked-table-head">
                   <span>{t("visualize.common.date")}</span>
                   <span>{t("visualize.common.count")}</span>
-                  <span>{t("visualize.common.share")}</span>
                 </div>
                 <div className="visualize-monitor-ranked-list is-table">
                   {timelineRows.map((row) => (
                     <div className="visualize-monitor-ranked-item is-table" key={row.label}>
                       <strong>{row.label}</strong>
                       <span>{row.count}</span>
-                      <span>{formatPercent((row.count / Math.max(effectiveMetrics?.totals.items ?? 0, 1)) * 100)}</span>
                     </div>
                   ))}
                   {timelineRows.length ? null : <p className="visualize-monitor-empty">{t("visualize.empty.snapshots")}</p>}

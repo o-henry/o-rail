@@ -908,21 +908,10 @@
   margin-top: 6px;
 }
 
-.tasks-thread-message-row.is-user + .tasks-thread-message-row.is-assistant,
-.tasks-thread-message-row.is-user + .tasks-thread-message-row.is-system,
-.tasks-thread-message-row.is-user + .tasks-thread-message-row.is-assistant.is-live-placeholder,
-.tasks-thread-message-row.is-user + .tasks-thread-message-row.is-process {
-  margin-top: 18px;
-}
-
 .tasks-thread-message-row.is-system + .tasks-thread-message-row.is-user,
 .tasks-thread-message-row.is-assistant + .tasks-thread-message-row.is-user,
 .tasks-thread-message-row.is-process + .tasks-thread-message-row.is-user,
 .tasks-thread-message-row.is-live-placeholder + .tasks-thread-message-row.is-user {
-  margin-top: 18px;
-}
-
-.tasks-thread-message-row.is-user:not(:first-child) {
   margin-top: 18px;
 }
 
@@ -1535,7 +1524,7 @@
   max-width: 100%;
   padding: 8px 10px;
   border-radius: 6px;
-  border: 1px solid #d0d7de;
+  border: 0;
   background: #f6f8fa;
   white-space: pre-wrap;
   word-break: break-word;
@@ -1646,7 +1635,7 @@
 .tasks-thread-detail-text-panel.is-inline.is-empty pre {
   padding: 8px 10px;
   border-radius: 6px;
-  border: 1px solid #d0d7de;
+  border: 0;
   background: #f6f8fa;
   color: #57606a;
 }

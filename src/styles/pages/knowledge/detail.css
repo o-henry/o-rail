@@ -34,18 +34,27 @@
 
 .knowledge-detail-head button {
   min-height: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  min-width: max-content;
   border: 0;
   border-radius: 4px;
   background: var(--surface);
   color: var(--text-main);
   font-size: 12px;
   padding: 0 10px;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
 }
 
 .knowledge-detail-actions {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  flex-wrap: nowrap;
 }
 
 .knowledge-detail-head button.danger {
@@ -61,12 +70,18 @@
 
 .knowledge-artifact-actions > button {
   min-height: 30px;
+  min-width: max-content;
   border: 0;
   border-radius: 4px;
   background: color-mix(in srgb, var(--surface-panel) 76%, var(--surface));
   color: var(--text-main);
   font-size: 12px;
   padding: 0 10px;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
 }
 
 .knowledge-artifact-actions > button:disabled {

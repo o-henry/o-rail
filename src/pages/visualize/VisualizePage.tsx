@@ -195,11 +195,9 @@ export default function VisualizePage({ cwd, hasTauriRuntime }: VisualizePagePro
     [evidenceItems, evidenceWasFiltered, reportJobId, state.collectionMetrics],
   );
   const popularGenres = evidenceWasFiltered ? [] : (state.collectionGenreRankings?.popular.slice(0, 5) ?? []);
-  const qualityGenres = evidenceWasFiltered ? [] : (state.collectionGenreRankings?.quality.slice(0, 5) ?? []);
   const topSources = effectiveMetrics?.topSources.slice(0, 5) ?? [];
   const timelineChart = buildTimelineChart(effectiveMetrics);
   const popularGenreChart = buildGenreRankingChart(popularGenres, "popularityScore", "Popularity", "#0f172a");
-  const qualityGenreChart = buildGenreRankingChart(qualityGenres, "avgScore", "Score", "#64748b");
   const qualityScore = Math.max(0, Math.min(100, Math.round(effectiveMetrics?.totals.avgScore ?? 0)));
   const leadCopy = firstNarrativeLine(state.reportMarkdown) || firstNarrativeLine(state.collectionMarkdown);
   const mainChartSpec = withoutChartTitle(
@@ -210,39 +208,29 @@ export default function VisualizePage({ cwd, hasTauriRuntime }: VisualizePagePro
         : timelineChart,
   );
   const mainChartTitle =
-    questionType === "genre_ranking"
+    autoSpec?.widgets?.mainChart?.title
+    || (questionType === "genre_ranking"
       ? t("visualize.chart.popularGenres")
       : questionType === "game_comparison"
         ? t("visualize.chart.comparisonSignals")
         : questionType === "community_sentiment"
           ? t("visualize.chart.reactionTimeline")
-          : t("visualize.chart.generic");
-  const secondaryWidgetTitle =
-    questionType === "genre_ranking"
-      ? t("visualize.chart.bestRatedGenres")
-      : t("visualize.list.topSources");
+          : t("visualize.chart.generic"));
   const primaryListTitle =
-    questionType === "genre_ranking"
+    autoSpec?.widgets?.primaryList?.title
+    || (questionType === "genre_ranking"
       ? t("visualize.list.genreSnapshots")
       : questionType === "game_comparison"
         ? t("visualize.list.comparedTitles")
         : questionType === "community_sentiment"
           ? t("visualize.list.reactionHighlights")
-          : t("visualize.list.topSources");
+          : t("visualize.list.topSources"));
   const reportTitle = t("visualize.report.title");
   const evidenceTitle = t("visualize.evidence.title");
   const toolbarTitle = t("visualize.toolbar.title");
   const sessionTitle = t("visualize.widget.session");
   const qualityTitle = t("visualize.widget.quality");
   const allowGenericFallbackLists = !autoSpec?.widgets || questionType === "topic_research";
-  const sourceCoverageRows = useMemo(() => {
-    const total = Math.max(effectiveMetrics?.totals.items ?? 0, 1);
-    return topSources.map((source) => ({
-      label: source.sourceName,
-      count: source.itemCount,
-      share: Math.round((source.itemCount / total) * 100),
-    }));
-  }, [effectiveMetrics?.totals.items, topSources]);
   const timelineRows = useMemo(
     () =>
       (effectiveMetrics?.timeline ?? []).map((row) => ({
@@ -349,35 +337,6 @@ export default function VisualizePage({ cwd, hasTauriRuntime }: VisualizePagePro
               </VisualizeWidgetFrame>
 
               <VisualizeWidgetFrame
-                className="is-chart-source"
-                maximized={maximizedWidgetId === "sourceMix"}
-                onToggleMaximize={toggleMaximize}
-                title={secondaryWidgetTitle}
-                widgetId="sourceMix"
-              >
-                {questionType === "genre_ranking" && qualityGenreChart ? (
-                  <FeedChart spec={qualityGenreChart} />
-                ) : sourceCoverageRows.length ? (
-                  <div className="visualize-monitor-ranked-table">
-                    <div className="visualize-monitor-ranked-table-head">
-                      <span>{t("visualize.evidence.column.title")}</span>
-                      <span>{t("visualize.common.items")}</span>
-                      <span>{t("visualize.common.share")}</span>
-                    </div>
-                    <div className="visualize-monitor-ranked-list is-table">
-                      {sourceCoverageRows.map((row) => (
-                        <div className="visualize-monitor-ranked-item is-table" key={row.label}>
-                          <strong>{row.label}</strong>
-                          <span>{row.count}</span>
-                          <span>{formatPercent(row.share)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : <div className="visualize-monitor-placeholder">{t("visualize.placeholder.sourceMix")}</div>}
-              </VisualizeWidgetFrame>
-
-              <VisualizeWidgetFrame
                 className="is-chart-quality"
                 maximized={maximizedWidgetId === "quality"}
                 onToggleMaximize={toggleMaximize}
@@ -427,9 +386,9 @@ export default function VisualizePage({ cwd, hasTauriRuntime }: VisualizePagePro
                 <div className="visualize-monitor-ranked-list">
                   {primaryListItems.map((item, index) => (
                     <div className="visualize-monitor-ranked-item" key={`${item.title || "item"}-${index}`}>
-                      <div className="visualize-monitor-ranked-item-copy">
-                        <strong>{item.title || "-"}</strong>
-                        <p>{item.detail || "-"}</p>
+                        <div className="visualize-monitor-ranked-item-copy">
+                          <strong>{item.title || "-"}</strong>
+                          <p>{item.detail || "-"}</p>
                       </div>
                       <span>{item.badge || "-"}</span>
                     </div>
@@ -527,7 +486,7 @@ export default function VisualizePage({ cwd, hasTauriRuntime }: VisualizePagePro
                 <strong>{t("visualize.history.title")}</strong>
                 <span>{t("visualize.session.count", { count: state.reportRuns.length })}</span>
               </header>
-              <div className="visualize-monitor-rail-list">
+              <div className={`visualize-monitor-rail-list${state.reportRuns.length ? "" : " is-empty"}`}>
                 {state.reportRuns.length ? (
                   state.reportRuns.map((run) => {
                     const isSelected = run.runId === state.selectedRunId;

@@ -547,7 +547,7 @@ export default function TasksPage(props: TasksPageProps) {
                 onClick={() => setIsDetailPanelCollapsed((current) => !current)}
                 type="button"
               >
-                <img alt="" aria-hidden="true" src="/open-panel.svg" />
+                <img alt="" aria-hidden="true" src={isDetailPanelCollapsed ? "/open-panel.svg" : "/close.svg"} />
               </button>
             ) : null}
             <button

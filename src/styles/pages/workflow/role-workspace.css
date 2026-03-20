@@ -100,8 +100,8 @@
 }
 
 .workflow-role-run-button {
-  min-height: 30px;
-  height: 30px;
+  min-height: 36px;
+  height: 36px;
 }
 
 .workflow-role-summary {
@@ -131,7 +131,7 @@
 }
 
 .workflow-role-summary-empty {
-  margin: 0;
+  margin: 4px 0 0;
   min-height: 20px;
 }
 
@@ -217,11 +217,13 @@
   margin: 0;
   border-radius: 4px;
   background: color-mix(in srgb, var(--surface-panel) 84%, var(--surface));
-  min-height: 28px;
-  padding: 7px 8px;
+  min-height: 30px;
+  height: 30px;
+  padding: 6px 8px;
   font-size: 11px;
   color: var(--text-main);
   word-break: break-all;
+  box-sizing: border-box;
 }
 
 .workflow-role-summary:last-child {

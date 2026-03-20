@@ -86,6 +86,7 @@
 
 .knowledge-artifact-actions > button:disabled {
   opacity: 0.55;
+  background: color-mix(in srgb, var(--surface-panel) 82%, #dfe3e8);
 }
 
 .knowledge-detail-error {

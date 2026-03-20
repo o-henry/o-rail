@@ -1,4 +1,5 @@
 import type { AgenticFeatureMemory, CompanionEvent, TaskTerminalResult, TaskTerminalSession } from "../types";
+import type { TeamRuntimeSession } from "./coordinationTypes";
 import type { AgenticRunEnvelope, AgenticRunSourceTab } from "./runContract";
 
 export type MissionControlState = {
@@ -12,6 +13,7 @@ export type MissionControlState = {
   terminalSession: TaskTerminalSession;
   terminalResults: TaskTerminalResult[];
   featureMemory: AgenticFeatureMemory;
+  coordination?: TeamRuntimeSession | null;
   bridgePaths: {
     plannerBriefPath: string;
     companionContractPath: string;

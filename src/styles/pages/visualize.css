@@ -175,8 +175,8 @@
 }
 
 .visualize-monitor-rail-item.is-active {
-  border-color: rgba(59, 130, 246, 0.32);
-  background: rgba(239, 246, 255, 0.95);
+  border-color: transparent;
+  background: rgba(249, 250, 253, 1);
 }
 
 .visualize-monitor-rail-item strong {
@@ -212,7 +212,6 @@
   flex-direction: column;
   gap: 6px;
   padding: 8px;
-  border-top: 1px solid rgba(226, 232, 240, 0.9);
 }
 
 .visualize-monitor-rail-action {
@@ -372,7 +371,7 @@
   flex: 1 1 auto;
   flex-direction: column;
   gap: 5px;
-  /* padding: 6px 7px 7px; */
+  padding: 6px;
   /* background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(249, 250, 251, 0.98)); */
   font-family: "BasicallyAMono", "DialogNanumBody1984", sans-serif;
 }
@@ -443,7 +442,7 @@
 
 .visualize-monitor-widget.is-report .visualize-monitor-widget-surface,
 .visualize-monitor-widget.is-evidence .visualize-monitor-widget-surface {
-  /* padding: 6px; */
+  padding: 0;
 }
 
 .visualize-monitor-widget h1,
@@ -798,8 +797,15 @@
   gap: 0;
 }
 
+.visualize-monitor-ranked-list.is-table.is-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .visualize-monitor-ranked-list.is-table > .visualize-monitor-empty {
   min-height: 100%;
+  width: 100%;
   display: grid;
   place-items: center;
   text-align: center;
@@ -878,7 +884,81 @@
   min-height: 0;
   flex: 1 1 auto;
   overflow: auto;
-  padding: 2px 4px 4px;
+  padding: 6px;
+  font-size: 12px;
+}
+
+.visualize-monitor-report-link-panel {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  justify-content: center;
+  gap: 10px;
+  padding: 6px;
+}
+
+.visualize-monitor-report-link-copy {
+  color: #475569;
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.visualize-monitor-report-link-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.visualize-monitor-report-link-select {
+  min-width: 0;
+  flex: 1 1 auto;
+  height: 32px;
+  border: 1px solid rgba(226, 232, 240, 1);
+  background: rgba(248, 250, 252, 0.95);
+  color: #0f172a;
+  padding: 0 10px;
+  font-family: "Departure Mono", "DialogNanumBody1984", monospace;
+  font-size: 0.74rem;
+}
+
+.visualize-monitor-report-link-button {
+  flex: 0 0 auto;
+  min-height: 32px;
+  border: 1px solid rgba(203, 213, 225, 0.95);
+  background: #ffffff;
+  color: #0f172a;
+  padding: 0 10px;
+  font-family: "Departure Mono", "DialogNanumBody1984", monospace;
+  font-size: 0.74rem;
+}
+
+.visualize-monitor-report-link-meta {
+  color: #64748b;
+  font-family: "Departure Mono", "DialogNanumBody1984", monospace;
+  font-size: 0.68rem;
+  line-height: 1.4;
+  word-break: break-all;
+}
+
+.visualize-monitor-widget-surface.is-report-surface > .feed-document .feed-document-paragraph,
+.visualize-monitor-widget-surface.is-report-surface > .feed-document .feed-document-list li,
+.visualize-monitor-widget-surface.is-report-surface > .feed-document .feed-document-table th,
+.visualize-monitor-widget-surface.is-report-surface > .feed-document .feed-document-table td,
+.visualize-monitor-widget-surface.is-report-surface > .feed-document .feed-document-image figcaption {
+  font-size: 12px;
+}
+
+.visualize-monitor-widget-surface.is-report-surface > .feed-document .feed-document-h1 {
+  font-size: 14px;
+}
+
+.visualize-monitor-widget-surface.is-report-surface > .feed-document .feed-document-h2 {
+  font-size: 13px;
+}
+
+.visualize-monitor-widget-surface.is-report-surface > .feed-document .feed-document-h3 {
+  font-size: 12px;
 }
 
 .visualize-monitor-search-row {

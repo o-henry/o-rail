@@ -12,13 +12,14 @@ import {
   type ThreadStageId,
 } from "./taskAgentPresets";
 import {
+  applyTaskAgentMention,
   getTaskAgentMentionMatch,
   stripTaskAgentMentionMatch,
+  type TaskAgentMentionOption,
 } from "./taskAgentMentions";
 import { buildThreadFileTree } from "./threadFileTree";
 import { buildLiveAgentCards } from "./liveAgentState";
 import { useTasksThreadState } from "./useTasksThreadState";
-import { type ThreadRoleId } from "./threadTypes";
 import { TasksThreadNavPane } from "./TasksThreadNavPane";
 import { TasksThreadHeaderBar } from "./TasksThreadHeaderBar";
 import { TasksThreadConversation } from "./TasksThreadConversation";
@@ -203,7 +204,7 @@ export default function TasksPage(props: TasksPageProps) {
       }
       if (event.key === "Enter" || event.key === "Tab") {
         event.preventDefault();
-        selectMention(currentMentionMatch.options[mentionIndex]!.presetId, currentMentionMatch);
+        selectMention(currentMentionMatch.options[mentionIndex]!, currentMentionMatch);
         return;
       }
       if (event.key === "Escape") {
@@ -239,14 +240,30 @@ export default function TasksPage(props: TasksPageProps) {
     setMentionIndex(0);
   }, [mentionMatch?.query]);
 
-  const selectMention = (presetId: ThreadRoleId, matchOverride?: typeof mentionMatch) => {
+  const selectMention = (option: TaskAgentMentionOption, matchOverride?: typeof mentionMatch) => {
     const activeMatch = matchOverride ?? mentionMatch;
     if (!activeMatch) {
       return;
     }
+    if (option.kind === "mode") {
+      const nextValue = applyTaskAgentMention(state.composerDraft, activeMatch, option.mention);
+      const nextCursor = activeMatch.rangeStart + option.mention.length + 1;
+      state.setComposerDraft(nextValue);
+      setComposerCursor(nextCursor);
+      setMentionIndex(0);
+      setIsMentionMenuHidden(true);
+      requestAnimationFrame(() => {
+        composerRef.current?.focus();
+        composerRef.current?.setSelectionRange(nextCursor, nextCursor);
+      });
+      return;
+    }
     const nextValue = stripTaskAgentMentionMatch(state.composerDraft, activeMatch);
     const nextCursor = activeMatch.rangeStart;
-    state.addComposerRole(presetId);
+    if (!option.presetId) {
+      return;
+    }
+    state.addComposerRole(option.presetId);
     state.setComposerDraft(nextValue);
     setComposerCursor(nextCursor);
     setMentionIndex(0);
@@ -264,6 +281,8 @@ export default function TasksPage(props: TasksPageProps) {
     }
     node.scrollTop = node.scrollHeight;
   }, [state.activeThread?.messages.length, liveAgents.length, state.pendingApprovals.length, state.selectedFileDiff]);
+
+  const recentRuntimeSessions = useMemo(() => state.searchRuntimeSessions(""), [state]);
 
   return (
     <section
@@ -361,8 +380,16 @@ export default function TasksPage(props: TasksPageProps) {
             liveAgents={liveAgents}
             liveProcessEvents={state.liveProcessEvents}
             messages={state.activeThread.messages}
+            orchestration={state.activeThreadCoordination}
+            recentRuntimeSessions={recentRuntimeSessions}
             visibleAgentLabels={visibleAgentLabels}
+            onApprovePlan={() => void state.approveActiveCoordinationPlan()}
+            onCancelOrchestration={() => state.cancelActiveCoordination()}
+            onOpenRuntimeSession={(threadId) => void state.selectThread(threadId)}
+            onRequestFollowup={() => state.requestCoordinationFollowup()}
             onResolveApproval={(approval, decision) => void state.resolveApproval(approval, decision)}
+            onResumeOrchestration={() => void state.resumeActiveCoordination()}
+            onVerifyReview={() => state.verifyActiveCoordinationReview()}
           />
         )}
 

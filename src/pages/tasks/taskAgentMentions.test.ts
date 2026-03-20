@@ -18,6 +18,13 @@ describe("getTaskAgentMentionMatch", () => {
     expect(match?.options.some((option) => option.mention === "@researcher")).toBe(true);
   });
 
+  it("surfaces orchestration mode tags with descriptions", () => {
+    const match = getTaskAgentMentionMatch("please use @te", "please use @te".length);
+    const option = match?.options.find((entry) => entry.mention === "@team");
+    expect(option?.label).toBe("TEAM");
+    expect(option?.description).toContain("계획");
+  });
+
   it("returns null when cursor is not inside a mention token", () => {
     expect(getTaskAgentMentionMatch("please ask implementer", 10)).toBeNull();
   });
@@ -29,6 +36,13 @@ describe("applyTaskAgentMention", () => {
     const match = getTaskAgentMentionMatch(input, "@imp".length + "please ask ".length);
     expect(match).not.toBeNull();
     expect(applyTaskAgentMention(input, match!, "@implementer")).toBe("please ask @implementer about this");
+  });
+
+  it("can insert orchestration mode mentions into the draft", () => {
+    const input = "please use @te for this";
+    const match = getTaskAgentMentionMatch(input, "please use @te".length);
+    expect(match).not.toBeNull();
+    expect(applyTaskAgentMention(input, match!, "@team")).toBe("please use @team for this");
   });
 });
 

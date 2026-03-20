@@ -27,6 +27,8 @@ describe("missionControl", () => {
     ]);
     expect(state.parentEnvelope.record.nextAction?.surface).toBe("vscode");
     expect(state.terminalSession.allowedCommands).toContain("npm run build");
+    expect(state.coordination?.status).toBe("running");
+    expect(state.coordination?.lanes.map((lane) => lane.id)).toEqual(["planner", "implementer", "reviewer"]);
   });
 
   it("moves the mission to unity verification after a successful terminal result", () => {
@@ -62,6 +64,7 @@ describe("missionControl", () => {
     expect(next.parentEnvelope.record.nextAction?.surface).toBe("unity");
     expect(next.childEnvelopes.find((row) => row.record.agentRole === "reviewer")?.record.status).toBe("done");
     expect(next.bridgeEvents[0]?.type).toBe("test_passed");
+    expect(next.coordination?.status).toBe("waiting_review");
   });
 
   it("keeps the mission open when unity verification fails", () => {
@@ -85,6 +88,7 @@ describe("missionControl", () => {
     expect(next.parentEnvelope.record.verificationStatus).toBe("failed");
     expect(next.parentEnvelope.record.status).toBe("running");
     expect(next.parentEnvelope.record.nextAction?.surface).toBe("vscode");
+    expect(next.coordination?.status).toBe("needs_resume");
   });
 
   it("builds a preview mission with active cards populated", () => {
@@ -94,5 +98,6 @@ describe("missionControl", () => {
     expect(preview.bridgeEvents[0]?.type).toBe("test_passed");
     expect(preview.terminalResults[0]?.exitCode).toBe(0);
     expect(preview.parentEnvelope.record.nextAction?.surface).toBe("unity");
+    expect(preview.coordination?.status).toBe("waiting_review");
   });
 });

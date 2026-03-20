@@ -6,13 +6,13 @@ import {
 } from "./shellTerminalGridState";
 
 describe("shellTerminalGridState", () => {
-  it("creates a stable terminal pane id and title", () => {
-    expect(createShellTerminalPane({ threadId: "thread_1", cwd: "/repo/.worktrees/thread_1", index: 2 })).toMatchObject({
-      id: "tasks-shell-terminal:thread_1:2",
-      title: "TERMINAL 2",
-      subtitle: "/repo/.worktrees/thread_1",
-      status: "idle",
-    });
+  it("creates a uniquely identified terminal pane with the expected title", () => {
+    const pane = createShellTerminalPane({ threadId: "thread_1", cwd: "/repo/.worktrees/thread_1", index: 2 });
+
+    expect(pane.title).toBe("TERMINAL 2");
+    expect(pane.subtitle).toBe("/repo/.worktrees/thread_1");
+    expect(pane.status).toBe("idle");
+    expect(pane.id).toMatch(/^tasks-shell-terminal:thread_1:2:/);
   });
 
   it("reorders panes by dragged and target ids", () => {

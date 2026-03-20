@@ -4,8 +4,10 @@ import {
   getDefaultRunPresetIds,
   getTaskAgentWorkflowStageLabels,
   getDefaultTaskAgentPresetIds,
+  parseCoordinationModeTag,
   parseTaskAgentTags,
   resolveTaskAgentPresetId,
+  stripCoordinationModeTags,
 } from "./taskAgentPresets";
 
 describe("taskAgentPresets", () => {
@@ -30,6 +32,13 @@ describe("taskAgentPresets", () => {
       "qa_playtester",
       "unity_architect",
     ]);
+  });
+
+  it("supports hidden coordination mode tags without leaking them into the prompt", () => {
+    expect(parseCoordinationModeTag("please investigate this @fanout")).toBe("fanout");
+    expect(parseCoordinationModeTag("@team fix and verify this flow")).toBe("team");
+    expect(stripCoordinationModeTags("please investigate this @fanout")).toBe("please investigate this");
+    expect(stripCoordinationModeTags("@team fix and verify this flow")).toBe("fix and verify this flow");
   });
 
   it("defaults new threads to the full Unity squad and keeps requested run roles in preset order", () => {

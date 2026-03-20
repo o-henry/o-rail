@@ -2,20 +2,9 @@ import type { KeyboardEvent as ReactKeyboardEvent, RefObject } from "react";
 import { TURN_REASONING_LEVEL_OPTIONS } from "../../features/workflow/reasoningLevels";
 import { RUNTIME_MODEL_OPTIONS } from "../../features/workflow/runtimeModelOptions";
 import { useI18n } from "../../i18n";
-import { getTaskAgentLabel } from "./taskAgentPresets";
+import type { TaskAgentMentionMatch, TaskAgentMentionOption } from "./taskAgentMentions";
+import { getTaskAgentLabel, stripCoordinationModeTags } from "./taskAgentPresets";
 import type { ThreadRoleId } from "./threadTypes";
-
-type MentionOption = {
-  presetId: ThreadRoleId;
-  mention: string;
-  label: string;
-};
-
-type MentionMatch = {
-  query: string;
-  rangeStart: number;
-  options: MentionOption[];
-};
 
 type AttachedFile = {
   id: string;
@@ -33,7 +22,7 @@ type TasksThreadComposerProps = {
   composerRef: RefObject<HTMLTextAreaElement | null>;
   modelMenuRef: RefObject<HTMLDivElement | null>;
   reasonMenuRef: RefObject<HTMLDivElement | null>;
-  mentionMatch: MentionMatch | null;
+  mentionMatch: TaskAgentMentionMatch | null;
   mentionIndex: number;
   attachedFiles: AttachedFile[];
   selectedComposerRoleIds: ThreadRoleId[];
@@ -45,7 +34,7 @@ type TasksThreadComposerProps = {
   reasoningLabel: string;
   canInterruptCurrentThread: boolean;
   stoppingComposerRun: boolean;
-  onSelectMention: (presetId: ThreadRoleId) => void;
+  onSelectMention: (option: TaskAgentMentionOption) => void;
   onRemoveAttachedFile: (id: string) => void;
   onRemoveComposerRole: (roleId: ThreadRoleId) => void;
   onComposerKeyDown: (event: ReactKeyboardEvent<HTMLTextAreaElement>) => void;
@@ -60,28 +49,37 @@ type TasksThreadComposerProps = {
   onStop: () => void;
 };
 
+export function canSubmitTasksComposer(input: string | null | undefined): boolean {
+  return Boolean(stripCoordinationModeTags(String(input ?? "")).trim());
+}
+
 export function TasksThreadComposer(props: TasksThreadComposerProps) {
   const { t } = useI18n();
+  const canSubmit = canSubmitTasksComposer(props.composerDraft);
 
   return (
     <div className="tasks-thread-composer-shell question-input agents-composer">
       {props.mentionMatch ? (
         <div aria-label={t("tasks.aria.agentMentions")} className="tasks-thread-mention-menu" role="listbox">
-          {props.mentionMatch.options.map((option, index) => (
+          {props.mentionMatch.options.map((option, index) => {
+            const startsModeSection = option.kind === "mode" && props.mentionMatch?.options[index - 1]?.kind !== "mode";
+            return (
             <button
               aria-selected={index === props.mentionIndex}
-              className={`tasks-thread-mention-option${index === props.mentionIndex ? " is-active" : ""}`}
-              key={option.presetId}
+              className={`tasks-thread-mention-option${index === props.mentionIndex ? " is-active" : ""}${startsModeSection ? " is-mode-section-start" : ""}`}
+              key={option.mention}
               onMouseDown={(event) => {
                 event.preventDefault();
-                props.onSelectMention(option.presetId);
+                props.onSelectMention(option);
               }}
               type="button"
             >
               <strong>{option.mention}</strong>
               <span>{option.label}</span>
+              <small>{option.description}</small>
             </button>
-          ))}
+            );
+          })}
         </div>
       ) : null}
 
@@ -177,13 +175,12 @@ export function TasksThreadComposer(props: TasksThreadComposerProps) {
               </ul>
             ) : null}
           </div>
-
-          <div className={`agents-reason-dropdown${props.isReasonMenuOpen ? " is-open" : ""}`} ref={props.reasonMenuRef}>
+          <div className={`agents-model-dropdown agents-reason-dropdown${props.isReasonMenuOpen ? " is-open" : ""}`} ref={props.reasonMenuRef}>
             <button
               aria-label={t("tasks.aria.reasoningMenu")}
               aria-expanded={props.isReasonMenuOpen}
               aria-haspopup="listbox"
-              className="agents-reason-button"
+              className="agents-model-button"
               onClick={props.onToggleReasonMenu}
               type="button"
             >
@@ -191,17 +188,17 @@ export function TasksThreadComposer(props: TasksThreadComposerProps) {
               <img alt="" aria-hidden="true" src="/down-arrow.svg" />
             </button>
             {props.isReasonMenuOpen ? (
-              <ul aria-label={t("tasks.aria.reasoningMenu")} className="agents-reason-menu" role="listbox">
-                {TURN_REASONING_LEVEL_OPTIONS.map((level) => (
-                  <li key={level}>
+              <ul aria-label={t("tasks.aria.reasoningMenu")} className="agents-model-menu" role="listbox">
+                {TURN_REASONING_LEVEL_OPTIONS.map((option) => (
+                  <li key={option}>
                     <button
-                      aria-selected={level === props.reasoning}
-                      className={level === props.reasoning ? "is-selected" : ""}
-                      onClick={() => props.onSetReasoning(level)}
+                      aria-selected={option === props.reasoning}
+                      className={option === props.reasoning ? "is-selected" : ""}
+                      onClick={() => props.onSetReasoning(option)}
                       role="option"
                       type="button"
                     >
-                      {level}
+                      {option}
                     </button>
                   </li>
                 ))}
@@ -210,21 +207,28 @@ export function TasksThreadComposer(props: TasksThreadComposerProps) {
           </div>
         </div>
 
-        <div className="tasks-thread-composer-actions">
-          <button
-            aria-label={props.canInterruptCurrentThread ? t("tasks.aria.stop") : t("tasks.aria.send")}
-            className="primary-action question-create-button agents-send-button"
-            disabled={props.canInterruptCurrentThread ? props.stoppingComposerRun : !props.composerDraft.trim()}
-            onClick={props.canInterruptCurrentThread ? props.onStop : props.onSubmit}
-            type="button"
-          >
-            <img
-              alt=""
-              aria-hidden="true"
-              className="question-create-icon"
-              src={props.canInterruptCurrentThread ? "/canvas-stop.svg" : "/up.svg"}
-            />
-          </button>
+        <div className="agents-composer-actions">
+          {props.canInterruptCurrentThread ? (
+            <button
+              aria-label={props.stoppingComposerRun ? t("common.loading") : t("tasks.actions.stop")}
+              className="agents-stop-button"
+              disabled={props.stoppingComposerRun}
+              onClick={props.onStop}
+              type="button"
+            >
+              <img alt="" aria-hidden="true" src="/canvas-stop.svg" />
+            </button>
+          ) : (
+            <button
+              aria-label={t("tasks.actions.send")}
+              className="agents-send-button"
+              disabled={!canSubmit}
+              onClick={props.onSubmit}
+              type="button"
+            >
+              <img alt="" aria-hidden="true" className="question-create-icon" src="/up.svg" />
+            </button>
+          )}
         </div>
       </div>
     </div>

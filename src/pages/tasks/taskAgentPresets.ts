@@ -235,6 +235,22 @@ export function parseTaskAgentTags(input: string): TaskAgentPresetId[] {
   return out;
 }
 
+export function parseCoordinationModeTag(input: string): "quick" | "fanout" | "team" | null {
+  const matches = [...String(input ?? "").toLowerCase().matchAll(/(?:^|\s)@(quick|fanout|team)(?=\s|$)/g)];
+  const lastMatch = matches.length > 0 ? matches[matches.length - 1]?.[1] : null;
+  if (lastMatch === "quick" || lastMatch === "fanout" || lastMatch === "team") {
+    return lastMatch;
+  }
+  return null;
+}
+
+export function stripCoordinationModeTags(input: string): string {
+  return String(input ?? "")
+    .replace(/(^|\s)@(quick|fanout|team)(?=\s|$)/gi, "$1")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
 export function orderedTaskAgentPresetIds(ids: Iterable<string>): TaskAgentPresetId[] {
   const normalized = new Set(
     [...ids]

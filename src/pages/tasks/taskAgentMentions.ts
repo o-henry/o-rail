@@ -1,8 +1,12 @@
+import type { CoordinationMode } from "../../features/orchestration/agentic/coordinationTypes";
 import { UNITY_TASK_AGENT_PRESETS, type TaskAgentPresetId } from "./taskAgentPresets";
 
 export type TaskAgentMentionOption = {
-  presetId: TaskAgentPresetId;
+  kind: "agent" | "mode";
+  presetId?: TaskAgentPresetId;
+  mode?: CoordinationMode;
   label: string;
+  description: string;
   mention: string;
   searchText: string;
 };
@@ -20,15 +24,46 @@ export type TaskAgentMentionToken = TaskAgentMentionOption & {
   content: string;
 };
 
-const MENTION_OPTIONS: TaskAgentMentionOption[] = UNITY_TASK_AGENT_PRESETS.map((preset) => {
+const AGENT_MENTION_OPTIONS: TaskAgentMentionOption[] = UNITY_TASK_AGENT_PRESETS.map((preset) => {
   const alias = preset.tagAliases[0] ?? preset.id;
   return {
+    kind: "agent",
     presetId: preset.id,
     label: preset.label,
+    description: preset.defaultSummary,
     mention: `@${alias}`,
     searchText: [preset.id, preset.label, ...preset.tagAliases].join(" ").toLowerCase(),
   };
 });
+
+const MODE_MENTION_OPTIONS: TaskAgentMentionOption[] = [
+  {
+    kind: "mode",
+    mode: "quick",
+    label: "QUICK",
+    description: "가장 단순한 흐름으로 바로 실행합니다.",
+    mention: "@quick",
+    searchText: "quick fast direct simple orchestration mode 빠른 단순 자동",
+  },
+  {
+    kind: "mode",
+    mode: "fanout",
+    label: "FANOUT",
+    description: "여러 관점의 탐색과 조사를 병렬로 진행합니다.",
+    mention: "@fanout",
+    searchText: "fanout parallel research compare explore orchestration mode 병렬 조사 비교",
+  },
+  {
+    kind: "mode",
+    mode: "team",
+    label: "TEAM",
+    description: "계획, 실행, 검토가 포함된 더 긴 흐름으로 진행합니다.",
+    mention: "@team",
+    searchText: "team planner review multi step orchestration mode 계획 검토 단계",
+  },
+];
+
+const MENTION_OPTIONS: TaskAgentMentionOption[] = [...AGENT_MENTION_OPTIONS, ...MODE_MENTION_OPTIONS];
 
 export function getTaskAgentMentionMatch(input: string, cursor: number): TaskAgentMentionMatch | null {
   const safeInput = String(input ?? "");
@@ -79,7 +114,7 @@ export function extractTaskAgentMentionTokens(input: string): TaskAgentMentionTo
     if (!presetId) {
       continue;
     }
-    const option = MENTION_OPTIONS.find((entry) => entry.presetId === presetId);
+    const option = MENTION_OPTIONS.find((entry) => entry.kind === "agent" && entry.presetId === presetId);
     if (!option || typeof match.index !== "number") {
       continue;
     }
@@ -120,7 +155,7 @@ export function findTaskAgentMentionRemovalRange(input: string, cursor: number):
 function resolvePresetId(alias: string): TaskAgentPresetId | null {
   const normalizedAlias = String(alias ?? "").trim().toLowerCase();
   const option = MENTION_OPTIONS.find((entry) =>
-    entry.mention === `@${normalizedAlias}` || entry.searchText.split(" ").includes(normalizedAlias),
+    entry.kind === "agent" && (entry.mention === `@${normalizedAlias}` || entry.searchText.split(" ").includes(normalizedAlias)),
   );
   return option?.presetId ?? null;
 }

@@ -1046,6 +1046,91 @@
   flex-wrap: wrap;
 }
 
+.tasks-thread-orchestration-card {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  margin-bottom: 12px;
+  border-radius: 14px;
+  background: color-mix(in srgb, #ffffff 90%, #f2f5f9);
+  box-shadow: var(--panel-shadow);
+}
+
+.tasks-thread-orchestration-body,
+.tasks-thread-orchestration-search {
+  display: grid;
+  gap: 10px;
+}
+
+.tasks-thread-orchestration-meta {
+  display: inline-flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.tasks-thread-orchestration-meta span,
+.tasks-thread-orchestration-note strong,
+.tasks-thread-orchestration-search span {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.tasks-thread-orchestration-note {
+  display: grid;
+  gap: 4px;
+}
+
+.tasks-thread-orchestration-note span {
+  color: var(--text-main);
+  font-size: 12px;
+}
+
+.tasks-thread-orchestration-list,
+.tasks-thread-orchestration-results,
+.tasks-thread-coordination-search-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tasks-thread-orchestration-list li,
+.tasks-thread-orchestration-results li,
+.tasks-thread-coordination-search-list li {
+  display: grid;
+  gap: 4px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface-soft) 82%, #ffffff);
+}
+
+.tasks-thread-orchestration-list li span,
+.tasks-thread-orchestration-results li span,
+.tasks-thread-coordination-search-list li span {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.tasks-thread-orchestration-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.tasks-thread-orchestration-search-list button {
+  width: 100%;
+  display: grid;
+  gap: 4px;
+  justify-items: start;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  text-align: left;
+}
+
 .tasks-thread-message-time {
   font-size: 10px;
   color: var(--text-muted);
@@ -1281,6 +1366,100 @@
   gap: 6px;
 }
 
+.tasks-thread-coordination-preview {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface-soft) 76%, #ffffff);
+}
+
+.tasks-thread-coordination-preview-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.tasks-thread-coordination-preview-main strong,
+.tasks-thread-coordination-search-list strong {
+  font-size: 12px;
+  color: var(--text-main);
+}
+
+.tasks-thread-coordination-preview-main p,
+.tasks-thread-coordination-empty,
+.tasks-thread-coordination-advanced-copy {
+  margin: 2px 0 0;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.tasks-thread-coordination-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 58px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: #d8dde6;
+  color: var(--text-main);
+}
+
+.tasks-thread-coordination-chip.is-team {
+  background: rgba(204, 146, 79, 0.18);
+}
+
+.tasks-thread-coordination-chip.is-fanout {
+  background: rgba(69, 120, 194, 0.16);
+}
+
+.tasks-thread-coordination-toggle,
+.tasks-thread-coordination-mode-row button {
+  border: 0;
+  border-radius: 10px;
+  background: #ffffff;
+  padding: 8px 10px;
+  color: var(--text-main);
+}
+
+.tasks-thread-coordination-advanced {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 12px;
+  background: color-mix(in srgb, #ffffff 88%, #f4f7fb);
+}
+
+.tasks-thread-coordination-mode-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.tasks-thread-coordination-mode-row button.is-selected {
+  background: color-mix(in srgb, var(--focus-ring) 14%, #ffffff);
+}
+
+.tasks-thread-coordination-search {
+  display: grid;
+  gap: 6px;
+}
+
+.tasks-thread-coordination-search input {
+  width: 100%;
+  border: 0;
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: #ffffff;
+  color: var(--text-main);
+}
+
 .tasks-thread-selected-mention-chip {
   display: inline-flex;
   align-items: center;
@@ -1326,9 +1505,11 @@
 
 .tasks-thread-mention-option {
   display: grid;
-  grid-template-columns: auto 1fr;
-  align-items: center;
-  gap: 8px;
+  grid-template-columns: 118px minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  align-items: start;
+  column-gap: 10px;
+  row-gap: 2px;
   width: 100%;
   padding: 6px 8px;
   border: 0;
@@ -1338,15 +1519,43 @@
   text-align: left;
 }
 
+.tasks-thread-mention-option.is-mode-section-start {
+  margin-top: 6px;
+  padding-top: 10px;
+  border-top: 1px solid #d8dde6;
+}
+
 .tasks-thread-mention-option strong {
+  grid-column: 1;
+  grid-row: 1;
   font-size: 11px;
+  line-height: 1.4;
+  padding-top: 1px;
 }
 
 .tasks-thread-mention-option span {
+  grid-column: 2;
+  grid-row: 1;
   min-width: 0;
+  display: block;
+  font-size: 11px;
+  line-height: 1.35;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.tasks-thread-mention-option small {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  min-width: 0;
+  display: block;
+  font-size: 10px;
+  line-height: 1.35;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .tasks-thread-mention-option.is-active {
@@ -1397,6 +1606,7 @@
 .tasks-thread-composer-shell .agents-model-button,
 .tasks-thread-composer-shell .agents-reason-button,
 .tasks-thread-composer-shell .agents-send-button,
+.tasks-thread-composer-shell .agents-stop-button,
 .tasks-thread-composer-shell .agents-model-menu,
 .tasks-thread-composer-shell .agents-reason-menu {
   border: 0;
@@ -1422,6 +1632,32 @@
 
 .tasks-thread-composer-shell .agents-send-button {
   flex: 0 0 auto;
+  background: #8b8f95;
+}
+
+.tasks-thread-composer-shell .agents-stop-button {
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  min-height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: #d9dde3;
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+}
+
+.tasks-thread-composer-shell .agents-stop-button img {
+  width: 12px;
+  height: 12px;
+  opacity: 0.8;
+}
+
+.tasks-thread-composer-shell .agents-stop-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .tasks-thread-detail-panel {

@@ -90,6 +90,7 @@ function buildDetail(): ThreadDetail {
       readinessSummary: "ready",
       stages: [],
     },
+    orchestration: null,
   };
 }
 
@@ -109,6 +110,32 @@ describe("buildLiveAgentCards", () => {
   it("excludes failed agents from the live placeholder list", () => {
     const cards = buildLiveAgentCards(buildDetail());
     expect(cards.some((card) => card.roleId === "unity_implementer")).toBe(false);
+  });
+
+  it("shows an interrupted summary when orchestration is blocked for resume", () => {
+    const detail = buildDetail();
+    detail.orchestration = {
+      threadId: "thread-1",
+      prompt: "hello",
+      requestedRoleIds: ["game_designer"],
+      recommendedMode: "quick",
+      mode: "quick",
+      intent: "simple",
+      status: "needs_resume",
+      nextAction: "Resume when ready.",
+      blockedReason: "Interrupted by operator.",
+      plan: null,
+      delegateTasks: [],
+      delegateResults: [],
+      teamSession: null,
+      resumePointer: null,
+      guidance: [],
+      updatedAt: "2026-03-18T00:00:00.000Z",
+    };
+
+    const cards = buildLiveAgentCards(detail);
+    expect(cards[0]?.summary).toBe("중단되었습니다.");
+    expect(cards[0]?.latestArtifactPath).toBe("");
   });
 });
 

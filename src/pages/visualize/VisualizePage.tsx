@@ -1,6 +1,5 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import FeedChart from "../../components/feed/FeedChart";
-import FeedDocument from "../../components/feed/FeedDocument";
 import type { FeedChartSpec } from "../../features/feed/chartSpec";
 import { useI18n } from "../../i18n";
 import { useVisualizePageState } from "./useVisualizePageState";
@@ -11,6 +10,7 @@ type VisualizePageProps = {
   cwd: string;
   hasTauriRuntime: boolean;
   onOpenKnowledgeEntry?: (entryId: string) => void;
+  onOpenFeedRun?: (runId: string) => void;
 };
 
 function shorten(label: string, limit = 14) {
@@ -166,11 +166,12 @@ function withoutChartTitle(spec: FeedChartSpec | null | undefined): FeedChartSpe
   return { ...spec, title: "" };
 }
 
-export default function VisualizePage({ cwd, hasTauriRuntime }: VisualizePageProps) {
+export default function VisualizePage({ cwd, hasTauriRuntime, onOpenFeedRun }: VisualizePageProps) {
   const { t } = useI18n();
   const state = useVisualizePageState({ cwd, hasTauriRuntime });
   const [maximizedWidgetId, setMaximizedWidgetId] = useState<VisualizeWidgetId | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [selectedReportDocumentKind, setSelectedReportDocumentKind] = useState<"report" | "collection">("report");
   const mainRef = useRef<HTMLElement | null>(null);
   const sessionRef = useRef<HTMLElement | null>(null);
   const reportRef = useRef<HTMLElement | null>(null);
@@ -249,6 +250,24 @@ export default function VisualizePage({ cwd, hasTauriRuntime }: VisualizePagePro
     setMaximizedWidgetId((current) => (current === widgetId ? null : widgetId));
   }, []);
 
+  const reportDocumentOptions = useMemo(() => {
+    const options: Array<{ value: "report" | "collection"; label: string }> = [];
+    if (state.selectedReportRun?.reportMarkdownPath) {
+      options.push({ value: "report", label: t("visualize.report.findingsDocument") });
+    }
+    if (state.selectedReportRun?.collectionMarkdownPath) {
+      options.push({ value: "collection", label: t("visualize.report.collectionDocument") });
+    }
+    return options;
+  }, [state.selectedReportRun?.collectionMarkdownPath, state.selectedReportRun?.reportMarkdownPath, t]);
+
+  useEffect(() => {
+    if (reportDocumentOptions.some((option) => option.value === selectedReportDocumentKind)) {
+      return;
+    }
+    setSelectedReportDocumentKind(reportDocumentOptions[0]?.value ?? "report");
+  }, [reportDocumentOptions, selectedReportDocumentKind]);
+
   return (
     <section className="panel-card visualize-view workspace-tab-panel">
       <section className="visualize-monitor-shell">
@@ -282,7 +301,7 @@ export default function VisualizePage({ cwd, hasTauriRuntime }: VisualizePagePro
                 widgetId="session"
               >
                 {state.selectedReportRun?.title ? <h1>{state.selectedReportRun.title}</h1> : null}
-                {state.reportRuns.length ? (
+                {state.reportRuns.length > 1 ? (
                   <div className="visualize-monitor-session-row">
                     <span>{t("visualize.session.count", { count: state.reportRuns.length })}</span>
                     <select onChange={(event) => state.setSelectedRunId(event.currentTarget.value)} value={state.selectedRunId}>
@@ -374,7 +393,7 @@ export default function VisualizePage({ cwd, hasTauriRuntime }: VisualizePagePro
                   <span>{t("visualize.common.count")}</span>
                   <span>{t("visualize.common.share")}</span>
                 </div>
-                <div className="visualize-monitor-ranked-list is-table">
+                <div className={`visualize-monitor-ranked-list is-table${topSources.length ? "" : " is-empty"}`}>
                   {topSources.map((source) => (
                     <div className="visualize-monitor-ranked-item is-table" key={source.sourceName}>
                       <strong>{source.sourceName || "-"}</strong>
@@ -398,7 +417,7 @@ export default function VisualizePage({ cwd, hasTauriRuntime }: VisualizePagePro
                   <span>{t("visualize.common.date")}</span>
                   <span>{t("visualize.common.count")}</span>
                 </div>
-                <div className="visualize-monitor-ranked-list is-table">
+                <div className={`visualize-monitor-ranked-list is-table${timelineRows.length ? "" : " is-empty"}`}>
                   {timelineRows.map((row) => (
                     <div className="visualize-monitor-ranked-item is-table" key={row.label}>
                       <strong>{row.label}</strong>
@@ -419,7 +438,42 @@ export default function VisualizePage({ cwd, hasTauriRuntime }: VisualizePagePro
                 widgetId="report"
               >
                 {reportBody ? (
-                  <FeedDocument text={reportBody} />
+                  <div className="visualize-monitor-report-link-panel">
+                    <p className="visualize-monitor-report-link-copy">
+                      {t("visualize.report.databaseOnly")}
+                    </p>
+                    <div className="visualize-monitor-report-link-row">
+                      <select
+                        aria-label={t("visualize.report.documentPicker")}
+                        className="visualize-monitor-report-link-select"
+                        onChange={(event) => setSelectedReportDocumentKind(event.currentTarget.value === "collection" ? "collection" : "report")}
+                        value={selectedReportDocumentKind}
+                      >
+                        {reportDocumentOptions.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        className="visualize-monitor-report-link-button"
+                        disabled={!state.selectedReportRun?.runId}
+                        onClick={() => {
+                          if (state.selectedReportRun?.runId) {
+                            onOpenFeedRun?.(state.selectedReportRun.runId);
+                          }
+                        }}
+                        type="button"
+                      >
+                        {t("visualize.report.openDatabase")}
+                      </button>
+                    </div>
+                    <small className="visualize-monitor-report-link-meta">
+                      {selectedReportDocumentKind === "collection"
+                        ? (state.selectedReportRun?.collectionMarkdownPath ?? "")
+                        : (state.selectedReportRun?.reportMarkdownPath ?? "")}
+                    </small>
+                  </div>
                 ) : (
                   <p className="visualize-monitor-empty">{t("visualize.empty.report")}</p>
                 )}

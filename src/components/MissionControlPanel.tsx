@@ -2,6 +2,7 @@ import { useMemo } from "react";
 
 import { createMissionControlPreviewState, type MissionControlState } from "../features/orchestration/agentic/missionControl";
 import type { CompanionEventType } from "../features/orchestration/types";
+import MissionControlTeamRuntimeSection from "./MissionControlTeamRuntimeSection";
 
 type MissionControlPanelProps = {
   mission: MissionControlState | null;
@@ -50,17 +51,32 @@ function eventButtonLabel(type: Exclude<CompanionEventType, "unity_verification_
 }
 
 function statusLabel(status: string | undefined): string {
+  if (status === "planning") {
+    return "계획 중";
+  }
   if (status === "done") {
     return "완료";
   }
   if (status === "running") {
     return "진행 중";
   }
+  if (status === "review") {
+    return "검토";
+  }
   if (status === "error" || status === "failed") {
     return "실패";
   }
   if (status === "blocked") {
     return "대기";
+  }
+  if (status === "waiting_review") {
+    return "검토 대기";
+  }
+  if (status === "needs_resume") {
+    return "재개 필요";
+  }
+  if (status === "cancelled") {
+    return "취소";
   }
   return "준비";
 }
@@ -108,6 +124,7 @@ export default function MissionControlPanel(props: MissionControlPanelProps) {
   const latestResult = mission.terminalResults[0] ?? null;
   const terminalBusy = !isPreview && mission.terminalSession.status === "running";
   const latestBridgeEvent = mission.bridgeEvents[0] ?? null;
+  const coordination = mission.coordination ?? null;
   const verificationLabel =
     mission.parentEnvelope.record.verificationStatus === "verified"
       ? "완료"
@@ -176,6 +193,8 @@ export default function MissionControlPanel(props: MissionControlPanelProps) {
             ))}
           </div>
         </section>
+
+        {coordination ? <MissionControlTeamRuntimeSection coordination={coordination} statusLabel={statusLabel} /> : null}
 
         <section className="agents-mission-grid">
           <article className="agents-mission-card">

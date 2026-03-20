@@ -1,4 +1,5 @@
 import type { TaskRecord } from "./taskTypes";
+import type { AgenticCoordinationState } from "../../features/orchestration/agentic/coordinationTypes";
 import {
   UNITY_TASK_AGENT_ORDER,
   UNITY_THREAD_STAGE_DEFINITIONS,
@@ -132,6 +133,7 @@ export type ThreadDetail = {
   riskLevel: string;
   files: ThreadFileEntry[];
   workflow: ThreadWorkflow;
+  orchestration?: AgenticCoordinationState | null;
 };
 
 export const THREAD_ROLE_LABELS: Record<ThreadRoleId, string> = Object.fromEntries(

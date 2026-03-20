@@ -36,6 +36,14 @@ export function buildLiveAgentCards(
     return [];
   }
 
+  const interrupted =
+    detail.orchestration?.status === "needs_resume"
+    || detail.orchestration?.status === "cancelled";
+  const interruptedSummary =
+    detail.orchestration?.blockedReason === "Interrupted by operator."
+      ? "중단되었습니다."
+      : String(detail.orchestration?.blockedReason ?? "").trim() || "중단되었습니다.";
+
   return detail.agents
     .filter((agent) => isLiveBackgroundAgentStatus(agent.status))
     .map((agent) => {
@@ -46,10 +54,12 @@ export function buildLiveAgentCards(
         label: agent.label,
         roleId: agent.roleId,
         status: agent.status,
-        summary: String(note?.message ?? "").trim()
-          || String(agent.summary ?? "").trim()
-          || String(roleState?.lastPrompt ?? "").trim(),
-        latestArtifactPath: latestArtifactPath(roleState?.artifactPaths),
+        summary: interrupted
+          ? interruptedSummary
+          : String(note?.message ?? "").trim()
+            || String(agent.summary ?? "").trim()
+            || String(roleState?.lastPrompt ?? "").trim(),
+        latestArtifactPath: interrupted ? "" : latestArtifactPath(roleState?.artifactPaths),
         lastRunId: String(roleState?.lastRunId ?? "").trim(),
         updatedAt: String(note?.updatedAt ?? agent.lastUpdatedAt ?? "").trim(),
       };

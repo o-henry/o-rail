@@ -1,4 +1,6 @@
+import type { AgenticCoordinationState, SessionIndexEntry } from "../../features/orchestration/agentic/coordinationTypes";
 import { useI18n } from "../../i18n";
+import { TasksThreadOrchestrationCard } from "./TasksThreadOrchestrationCard";
 import type { LiveAgentCard } from "./liveAgentState";
 import type { ApprovalRecord, ThreadMessage, ThreadRoleId } from "./threadTypes";
 
@@ -14,13 +16,21 @@ type LiveProcessEvent = {
 };
 
 type TasksThreadConversationProps = {
+  orchestration: AgenticCoordinationState | null;
   messages: ThreadMessage[];
+  recentRuntimeSessions: SessionIndexEntry[];
   visibleAgentLabels: string[];
   liveAgents: LiveAgentCard[];
   liveProcessEvents: LiveProcessEvent[];
   approvals: ApprovalRecord[];
   conversationRef: React.RefObject<HTMLDivElement | null>;
+  onApprovePlan: () => void;
+  onCancelOrchestration: () => void;
+  onOpenRuntimeSession: (threadId: string) => void;
+  onRequestFollowup: () => void;
+  onResumeOrchestration: () => void;
   onResolveApproval: (approval: ApprovalRecord, decision: "approved" | "rejected") => void;
+  onVerifyReview: () => void;
 };
 
 function parseTimelineMessage(content: string, agentLabels: string[]) {
@@ -101,6 +111,16 @@ export function TasksThreadConversation(props: TasksThreadConversationProps) {
 
   return (
     <div className="tasks-thread-conversation-scroll" ref={props.conversationRef}>
+      <TasksThreadOrchestrationCard
+        orchestration={props.orchestration}
+        recentSessions={props.recentRuntimeSessions}
+        onApprovePlan={props.onApprovePlan}
+        onCancel={props.onCancelOrchestration}
+        onOpenSession={props.onOpenRuntimeSession}
+        onRequestFollowup={props.onRequestFollowup}
+        onResume={props.onResumeOrchestration}
+        onVerifyReview={props.onVerifyReview}
+      />
       <section className="tasks-thread-timeline">
         {props.messages.map((message) => {
           const parsed = resolveTimelineMessage(message, props.visibleAgentLabels);
@@ -131,7 +151,7 @@ export function TasksThreadConversation(props: TasksThreadConversationProps) {
         {props.liveAgents.map((agent) => (
           <article className="tasks-thread-message-row is-assistant is-live-placeholder" key={`live:${agent.agentId}`}>
             <span className="tasks-thread-message-label">{agent.label}</span>
-            <div className="tasks-thread-log-line">{t("tasks.live.working")}</div>
+            <div className="tasks-thread-log-line">{agent.summary || t("tasks.live.working")}</div>
             {agent.latestArtifactPath ? (
               <div className="tasks-thread-message-meta">
                 <small className="tasks-thread-message-artifact">{agent.latestArtifactPath}</small>

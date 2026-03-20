@@ -25,6 +25,37 @@ describe("roleKnowledgePipeline", () => {
     expect(result.sourceCount).toBeGreaterThan(0);
     expect(result.sourceSuccessCount).toBe(0);
     expect(result.profile.keyPoints.length).toBeGreaterThan(0);
+    expect(result.profile.summary).toContain("외부 근거 수집에 실패했습니다");
+    expect(result.message).toContain("실패");
+  });
+
+  it("marks unauthorized bridge failures clearly in the profile summary", async () => {
+    const invokeFn = vi.fn(async (command: string) => {
+      if (command === "dashboard_scrapling_bridge_start") {
+        return {
+          running: false,
+          scrapling_ready: false,
+          message: "health check failed (401 Unauthorized): {\"ok\": false, \"errorCode\": \"UNAUTHORIZED\", \"error\": \"unauthorized\"}",
+        };
+      }
+      if (command === "dashboard_scrapling_bridge_install") {
+        return { installed: true };
+      }
+      throw new Error(`unexpected command: ${command}`);
+    }) as unknown as <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
+
+    const result = await bootstrapRoleKnowledgeProfile({
+      cwd: "/tmp/workspace",
+      invokeFn,
+      roleId: "research_analyst",
+      taskId: "TASK-UNAUTHORIZED",
+      runId: "role-unauthorized",
+      userPrompt: "스팀 장르 시장을 조사해줘",
+    });
+
+    expect(result.sourceSuccessCount).toBe(0);
+    expect(result.profile.summary).toContain("인증 실패");
+    expect(result.profile.keyPoints.some((point) => point.includes("소스 수집 실패"))).toBe(true);
   });
 
   it("stores and injects role knowledge block into prompt", async () => {

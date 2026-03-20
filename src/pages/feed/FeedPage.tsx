@@ -1,4 +1,4 @@
-import { Component, useEffect, useMemo, useState, type ErrorInfo, type ReactNode } from "react";
+import { Component, useMemo, useState, type ErrorInfo, type ReactNode } from "react";
 import FancySelect from "../../components/FancySelect";
 import { useI18n } from "../../i18n";
 
@@ -119,29 +119,6 @@ export default function FeedPage({ vm }: FeedPageProps) {
   const groupedFeedRunsForDisplay = useMemo(() => {
     return Array.isArray(groupedFeedRuns) ? groupedFeedRuns : [];
   }, [groupedFeedRuns]);
-
-  useEffect(() => {
-    const handler = (event: Event) => {
-      const detail = (event as CustomEvent<{ runId?: string }>).detail;
-      const runId = String(detail?.runId ?? "").trim();
-      if (!runId) {
-        return;
-      }
-      const targetGroup = groupedFeedRunsForDisplay.find((group: any) => String(group?.runId ?? "").trim() === runId);
-      const targetPost = (Array.isArray(targetGroup?.posts) ? targetGroup.posts : []).find((post: any) => String(post?.id ?? "").trim())
-        ?? currentFeedPosts.find((post: any) => String(post?.runId ?? "").trim() === runId);
-      if (!targetPost) {
-        return;
-      }
-      setFeedGroupExpandedByRunId((prev: any) => ({
-        ...prev,
-        [runId]: true,
-      }));
-      onSelectFeedInspectorPost(targetPost);
-    };
-    window.addEventListener("rail:open-feed-run", handler as EventListener);
-    return () => window.removeEventListener("rail:open-feed-run", handler as EventListener);
-  }, [currentFeedPosts, groupedFeedRunsForDisplay, onSelectFeedInspectorPost, setFeedGroupExpandedByRunId]);
 
   return (
     <section className={`feed-layout workspace-tab-panel${hasFeedEntries ? "" : " no-feed-inspector"}`}>

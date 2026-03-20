@@ -1,16 +1,22 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import FancySelect from "../../components/FancySelect";
 import FeedChart from "../../components/feed/FeedChart";
 import type { FeedChartSpec } from "../../features/feed/chartSpec";
+import type {
+  ResearchCollectionGenreRankingRow,
+  ResearchCollectionItem,
+  ResearchCollectionMetricsResult,
+} from "../../features/research-storage/domain/types";
 import { useI18n } from "../../i18n";
 import { useVisualizePageState } from "./useVisualizePageState";
 import { VisualizeWidgetFrame } from "./VisualizeWidgetFrame";
 import type { VisualizeWidgetId } from "./visualizeWidgetLayout";
+import type { ResearchCollectionPayload } from "./visualizeReportUtils";
 
 type VisualizePageProps = {
   cwd: string;
   hasTauriRuntime: boolean;
   onOpenKnowledgeEntry?: (entryId: string) => void;
-  onOpenFeedRun?: (runId: string) => void;
 };
 
 function shorten(label: string, limit = 14) {
@@ -39,6 +45,12 @@ function formatPercent(value: number) {
 
 type VisualizeMetrics = ReturnType<typeof useVisualizePageState>["collectionMetrics"];
 type EvidenceItem = NonNullable<ReturnType<typeof useVisualizePageState>["collectionItems"]>["items"][number];
+type PayloadMetricsSourceRow = NonNullable<NonNullable<ResearchCollectionPayload["metrics"]>["bySourceType"]>[number];
+type PayloadMetricsVerificationRow = NonNullable<NonNullable<ResearchCollectionPayload["metrics"]>["byVerificationStatus"]>[number];
+type PayloadMetricsTimelineRow = NonNullable<NonNullable<ResearchCollectionPayload["metrics"]>["timeline"]>[number];
+type PayloadMetricsTopSourceRow = NonNullable<NonNullable<ResearchCollectionPayload["metrics"]>["topSources"]>[number];
+type PayloadGenreRankingRow = NonNullable<NonNullable<ResearchCollectionPayload["genreRankings"]>["popular"]>[number];
+type PayloadItemRow = NonNullable<NonNullable<ResearchCollectionPayload["items"]>["items"]>[number];
 
 function parseUrlHost(input: string) {
   try {
@@ -127,6 +139,129 @@ function buildMetricsFromItems(jobId: string, items: EvidenceItem[]): NonNullabl
   };
 }
 
+function hasMetricsData(metrics: VisualizeMetrics | null | undefined) {
+  if (!metrics) {
+    return false;
+  }
+  return (
+    (metrics.totals.items ?? 0) > 0
+    || (metrics.topSources?.length ?? 0) > 0
+    || (metrics.timeline?.length ?? 0) > 0
+    || (metrics.byVerificationStatus?.length ?? 0) > 0
+    || (metrics.bySourceType?.length ?? 0) > 0
+  );
+}
+
+function hasGenreRankingData(rankings: ReturnType<typeof useVisualizePageState>["collectionGenreRankings"] | null | undefined) {
+  if (!rankings) {
+    return false;
+  }
+  return (rankings.popular?.length ?? 0) > 0 || (rankings.quality?.length ?? 0) > 0;
+}
+
+function toPayloadMetrics(payload: ResearchCollectionPayload | null): ResearchCollectionMetricsResult | null {
+  if (!payload?.metrics) {
+    return null;
+  }
+  return {
+    dbPath: "",
+    jobId: String(payload.planned?.job?.jobId ?? payload.metrics.jobId ?? "").trim(),
+    totals: {
+      items: Number(payload.metrics.totals?.items ?? 0),
+      sources: Number(payload.metrics.totals?.sources ?? 0),
+      verified: Number(payload.metrics.totals?.verified ?? 0),
+      warnings: Number(payload.metrics.totals?.warnings ?? 0),
+      conflicted: Number(payload.metrics.totals?.conflicted ?? 0),
+      avgScore: Number(payload.metrics.totals?.avgScore ?? 0),
+      avgHotScore: Number(payload.metrics.totals?.avgHotScore ?? 0),
+    },
+    bySourceType: (payload.metrics.bySourceType ?? []).map((row: PayloadMetricsSourceRow) => ({
+      sourceType: String(row.sourceType ?? ""),
+      itemCount: Number(row.itemCount ?? 0),
+      avgScore: Number(row.avgScore ?? 0),
+      avgHotScore: Number(row.avgHotScore ?? 0),
+    })),
+    byVerificationStatus: (payload.metrics.byVerificationStatus ?? []).map((row: PayloadMetricsVerificationRow) => ({
+      verificationStatus: String(row.verificationStatus ?? ""),
+      itemCount: Number(row.itemCount ?? 0),
+    })),
+    timeline: (payload.metrics.timeline ?? []).map((row: PayloadMetricsTimelineRow) => ({
+      bucketDate: String(row.bucketDate ?? ""),
+      itemCount: Number(row.itemCount ?? 0),
+    })),
+    topSources: (payload.metrics.topSources ?? []).map((row: PayloadMetricsTopSourceRow) => ({
+      sourceName: String(row.sourceName ?? ""),
+      itemCount: Number(row.itemCount ?? 0),
+    })),
+  };
+}
+
+function toPayloadGenreRankings(payload: ResearchCollectionPayload | null) {
+  if (!payload?.genreRankings) {
+    return null;
+  }
+  return {
+    dbPath: "",
+    jobId: String(payload.planned?.job?.jobId ?? payload.genreRankings.jobId ?? "").trim(),
+    popular: (payload.genreRankings.popular ?? []).map((row: PayloadGenreRankingRow): ResearchCollectionGenreRankingRow => ({
+      genreKey: String(row.genreKey ?? ""),
+      genreLabel: String(row.genreLabel ?? ""),
+      rank: Number(row.rank ?? 0),
+      evidenceCount: 0,
+      verifiedCount: 0,
+      sourceDiversity: 0,
+      avgScore: 0,
+      avgHotScore: 0,
+      popularityScore: Number(row.popularityScore ?? 0),
+      qualityScore: Number(row.qualityScore ?? 0),
+      sourceNames: [],
+      representativeTitles: row.representativeTitles ?? [],
+      generatedAt: "",
+    })),
+    quality: (payload.genreRankings.quality ?? []).map((row: PayloadGenreRankingRow): ResearchCollectionGenreRankingRow => ({
+      genreKey: String(row.genreKey ?? ""),
+      genreLabel: String(row.genreLabel ?? ""),
+      rank: Number(row.rank ?? 0),
+      evidenceCount: 0,
+      verifiedCount: 0,
+      sourceDiversity: 0,
+      avgScore: 0,
+      avgHotScore: 0,
+      popularityScore: Number(row.popularityScore ?? 0),
+      qualityScore: Number(row.qualityScore ?? 0),
+      sourceNames: [],
+      representativeTitles: row.representativeTitles ?? [],
+      generatedAt: "",
+    })),
+  };
+}
+
+function toPayloadItems(payload: ResearchCollectionPayload | null): EvidenceItem[] {
+  return (payload?.items?.items ?? []).map((row: PayloadItemRow, index: number): ResearchCollectionItem => ({
+    itemFactId: String(row.itemFactId ?? `payload-item-${index}`),
+    jobId: String(payload?.planned?.job?.jobId ?? ""),
+    jobRunId: "",
+    viaRunId: "",
+    sourceType: String(row.sourceType ?? "source.community"),
+    sourceName: String(row.sourceName ?? ""),
+    country: "",
+    adapter: "",
+    itemKey: String(row.url ?? row.title ?? `payload-item-${index}`),
+    sourceItemId: "",
+    title: String(row.title ?? ""),
+    url: String(row.url ?? ""),
+    verificationStatus: String(row.verificationStatus ?? ""),
+    score: Number(row.score ?? 0),
+    hotScore: 0,
+    contentExcerpt: String(row.summary ?? ""),
+    fetchedAt: String(row.fetchedAt ?? ""),
+    publishedAt: String(row.publishedAt ?? ""),
+    summary: String(row.summary ?? ""),
+    sourceCount: 1,
+    rawExportPath: "",
+  }));
+}
+
 function buildTimelineChart(spec: VisualizeMetrics): FeedChartSpec | null {
   if (!spec || spec.timeline.length === 0) {
     return null;
@@ -166,7 +301,7 @@ function withoutChartTitle(spec: FeedChartSpec | null | undefined): FeedChartSpe
   return { ...spec, title: "" };
 }
 
-export default function VisualizePage({ cwd, hasTauriRuntime, onOpenFeedRun }: VisualizePageProps) {
+export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEntry }: VisualizePageProps) {
   const { t } = useI18n();
   const state = useVisualizePageState({ cwd, hasTauriRuntime });
   const [maximizedWidgetId, setMaximizedWidgetId] = useState<VisualizeWidgetId | null>(null);
@@ -180,21 +315,28 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenFeedRun }: V
   const reportBody = state.reportMarkdown || state.collectionMarkdown;
   const reportJobId = String(state.collectionPayload?.planned?.job?.jobId ?? "").trim();
   const reportJob = state.collectionPayload?.planned?.job;
+  const payloadMetrics = useMemo(() => toPayloadMetrics(state.collectionPayload), [state.collectionPayload]);
+  const payloadGenreRankings = useMemo(() => toPayloadGenreRankings(state.collectionPayload), [state.collectionPayload]);
+  const payloadItems = useMemo(() => toPayloadItems(state.collectionPayload), [state.collectionPayload]);
   const autoSpec = state.collectionPayload?.reportSpec;
   const questionType = autoSpec?.questionType || "topic_research";
   const allowedDomains = reportJob?.sourceOptions?.allowed_domains ?? reportJob?.domains ?? [];
   const shouldFilterEvidence = Boolean(reportJob?.sourceOptions?.strict_domain_isolation || questionType === "genre_ranking");
-  const rawEvidenceItems = state.collectionItems?.items ?? [];
+  const resolvedCollectionMetrics = hasMetricsData(state.collectionMetrics) ? state.collectionMetrics : payloadMetrics;
+  const resolvedCollectionGenreRankings = hasGenreRankingData(state.collectionGenreRankings)
+    ? state.collectionGenreRankings
+    : payloadGenreRankings;
+  const rawEvidenceItems = (state.collectionItems?.items?.length ? state.collectionItems.items : payloadItems) ?? [];
   const evidenceItems = useMemo(
     () => filterEvidenceItems(rawEvidenceItems, allowedDomains, shouldFilterEvidence),
     [allowedDomains, rawEvidenceItems, shouldFilterEvidence],
   );
   const evidenceWasFiltered = evidenceItems.length !== rawEvidenceItems.length;
   const effectiveMetrics = useMemo(
-    () => (evidenceWasFiltered ? buildMetricsFromItems(reportJobId, evidenceItems) : state.collectionMetrics),
-    [evidenceItems, evidenceWasFiltered, reportJobId, state.collectionMetrics],
+    () => (evidenceWasFiltered ? buildMetricsFromItems(reportJobId, evidenceItems) : resolvedCollectionMetrics),
+    [evidenceItems, evidenceWasFiltered, reportJobId, resolvedCollectionMetrics],
   );
-  const popularGenres = evidenceWasFiltered ? [] : (state.collectionGenreRankings?.popular.slice(0, 5) ?? []);
+  const popularGenres = evidenceWasFiltered ? [] : (resolvedCollectionGenreRankings?.popular.slice(0, 5) ?? []);
   const topSources = effectiveMetrics?.topSources.slice(0, 5) ?? [];
   const timelineChart = buildTimelineChart(effectiveMetrics);
   const popularGenreChart = buildGenreRankingChart(popularGenres, "popularityScore", "Popularity", "#0f172a");
@@ -245,6 +387,7 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenFeedRun }: V
     { label: t("visualize.metric.avgScore"), value: effectiveMetrics?.totals.avgScore ?? 0, meta: t("visualize.metric.avgScore.meta") },
     { label: t("visualize.metric.warnings"), value: effectiveMetrics?.totals.warnings ?? 0, meta: t("visualize.metric.warnings.meta") },
   ];
+  const hasCollectedEvidence = (effectiveMetrics?.totals.items ?? 0) > 0 || evidenceItems.length > 0;
 
   const toggleMaximize = useCallback((widgetId: VisualizeWidgetId) => {
     setMaximizedWidgetId((current) => (current === widgetId ? null : widgetId));
@@ -260,6 +403,13 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenFeedRun }: V
     }
     return options;
   }, [state.selectedReportRun?.collectionMarkdownPath, state.selectedReportRun?.reportMarkdownPath, t]);
+
+  const selectedReportEntryId = useMemo(() => {
+    if (selectedReportDocumentKind === "collection") {
+      return String(state.selectedReportRun?.collectionEntryId ?? "").trim();
+    }
+    return String(state.selectedReportRun?.reportEntryId ?? "").trim();
+  }, [selectedReportDocumentKind, state.selectedReportRun?.collectionEntryId, state.selectedReportRun?.reportEntryId]);
 
   useEffect(() => {
     if (reportDocumentOptions.some((option) => option.value === selectedReportDocumentKind)) {
@@ -302,20 +452,18 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenFeedRun }: V
               >
                 {state.selectedReportRun?.title ? <h1>{state.selectedReportRun.title}</h1> : null}
                 {state.reportRuns.length > 1 ? (
-                  <div className="visualize-monitor-session-row">
-                    <span>{t("visualize.session.count", { count: state.reportRuns.length })}</span>
-                    <select onChange={(event) => state.setSelectedRunId(event.currentTarget.value)} value={state.selectedRunId}>
-                      {state.reportRuns.map((run) => (
-                        <option key={run.runId} value={run.runId}>
-                          {run.title || run.taskId}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                  <p className="visualize-monitor-session-switch-hint">
+                    {t("visualize.session.switchHint", { count: state.reportRuns.length })}
+                  </p>
                 ) : null}
                 {state.selectedReportRun ? (
                   <p>
                     {`${formatStamp(state.selectedReportRun.updatedAt)} · ${reportJob?.label || reportJob?.resolvedSourceType || "AUTO COLLECTION"}`}
+                  </p>
+                ) : null}
+                {state.selectedReportRun && !hasCollectedEvidence ? (
+                  <p className="visualize-monitor-session-switch-hint">
+                    {t("visualize.session.noData")}
                   </p>
                 ) : null}
                 <p className="visualize-monitor-summary-copy visualize-monitor-session-summary-copy">
@@ -443,24 +591,19 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenFeedRun }: V
                       {t("visualize.report.databaseOnly")}
                     </p>
                     <div className="visualize-monitor-report-link-row">
-                      <select
-                        aria-label={t("visualize.report.documentPicker")}
-                        className="visualize-monitor-report-link-select"
-                        onChange={(event) => setSelectedReportDocumentKind(event.currentTarget.value === "collection" ? "collection" : "report")}
+                      <FancySelect
+                        ariaLabel={t("visualize.report.documentPicker")}
+                        className="visualize-monitor-select visualize-monitor-report-link-select"
+                        onChange={(nextValue) => setSelectedReportDocumentKind(nextValue === "collection" ? "collection" : "report")}
+                        options={reportDocumentOptions}
                         value={selectedReportDocumentKind}
-                      >
-                        {reportDocumentOptions.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
+                      />
                       <button
                         className="visualize-monitor-report-link-button"
-                        disabled={!state.selectedReportRun?.runId}
+                        disabled={!selectedReportEntryId}
                         onClick={() => {
-                          if (state.selectedReportRun?.runId) {
-                            onOpenFeedRun?.(state.selectedReportRun.runId);
+                          if (selectedReportEntryId) {
+                            onOpenKnowledgeEntry?.(selectedReportEntryId);
                           }
                         }}
                         type="button"
@@ -531,7 +674,7 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenFeedRun }: V
                       >
                         <strong>{run.title || run.taskId}</strong>
                         <span>{formatStamp(run.updatedAt)}</span>
-                        <p>{run.summary || t("visualize.history.noSummary")}</p>
+                        {run.summary && run.summary.trim() !== run.title.trim() ? <p>{run.summary}</p> : null}
                       </button>
                     );
                   })

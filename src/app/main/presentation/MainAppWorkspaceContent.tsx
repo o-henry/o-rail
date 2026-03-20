@@ -28,13 +28,6 @@ export function MainAppWorkspaceContent(props: any) {
     }, 0);
   };
 
-  const handleOpenFeedRun = (runId: string) => {
-    props.onSelectWorkspaceTab("feed");
-    window.setTimeout(() => {
-      window.dispatchEvent(new CustomEvent("rail:open-feed-run", { detail: { runId } }));
-    }, 0);
-  };
-
   return (
     <>
       {props.workspaceTab === "feed" && <FeedPage vm={props.feedPageVm} />}
@@ -49,7 +42,6 @@ export function MainAppWorkspaceContent(props: any) {
         <VisualizePage
           cwd={props.cwd}
           hasTauriRuntime={props.hasTauriRuntime}
-          onOpenFeedRun={handleOpenFeedRun}
           onOpenKnowledgeEntry={handleOpenKnowledgeEntry}
         />
       )}

@@ -43,7 +43,7 @@ export type ResearchAutoReportSpec = {
   };
 };
 
-type ResearchCollectionPayload = {
+export type ResearchCollectionPayload = {
   planned?: {
     job?: {
       jobId?: string;
@@ -59,6 +59,25 @@ type ResearchCollectionPayload = {
     };
   };
   metrics?: {
+    jobId?: string;
+    bySourceType?: Array<{
+      sourceType?: string;
+      itemCount?: number;
+      avgScore?: number;
+      avgHotScore?: number;
+    }>;
+    byVerificationStatus?: Array<{
+      verificationStatus?: string;
+      itemCount?: number;
+    }>;
+    timeline?: Array<{
+      bucketDate?: string;
+      itemCount?: number;
+    }>;
+    topSources?: Array<{
+      sourceName?: string;
+      itemCount?: number;
+    }>;
     totals?: {
       items?: number;
       sources?: number;
@@ -66,19 +85,26 @@ type ResearchCollectionPayload = {
       warnings?: number;
       conflicted?: number;
       avgScore?: number;
+      avgHotScore?: number;
     };
   };
   items?: {
+    total?: number;
     items?: Array<{
+      itemFactId?: string;
+      sourceType?: string;
       title?: string;
       sourceName?: string;
       verificationStatus?: string;
       score?: number;
       url?: string;
       summary?: string;
+      fetchedAt?: string;
+      publishedAt?: string;
     }>;
   };
   genreRankings?: {
+    jobId?: string;
     popular?: Array<{
       genreKey?: string;
       genreLabel?: string;
@@ -148,12 +174,12 @@ export function buildVisualizeResearchRuns(entries: KnowledgeEntry[]): Visualize
       taskId: String(entry.taskId ?? "").trim(),
       createdAt: String(entry.createdAt ?? "").trim(),
       updatedAt: String(entry.createdAt ?? "").trim(),
-      title: String(entry.summary ?? "").trim() || String(entry.title ?? "").trim() || runId,
+      title: String(entry.title ?? "").trim() || String(entry.summary ?? "").trim() || runId,
       summary: String(entry.summary ?? "").trim(),
     };
 
     current.updatedAt = String(entry.createdAt ?? "").trim() || current.updatedAt;
-    current.title = preferTitle(current.title, String(entry.summary ?? entry.title ?? "").trim());
+    current.title = preferTitle(current.title, String(entry.title ?? "").trim());
     current.summary = current.summary || String(entry.summary ?? "").trim();
 
     if (fileName === "research_findings.md") {

@@ -157,7 +157,7 @@ function FancySelect({
               role="option"
               type="button"
             >
-              <span>{tp(option.label)}</span>
+              <span className="fancy-select-option-label">{tp(option.label)}</span>
             </button>
           ))}
         </div>

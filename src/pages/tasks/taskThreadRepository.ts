@@ -89,6 +89,7 @@ type RefreshCurrentThreadParams = {
   threadId: string;
   hasTauriRuntime: boolean;
   cwd: string;
+  projectPath: string;
   invokeFn: InvokeFn;
   hydratePersistedCoordination: (threadId: string) => Promise<AgenticCoordinationState | null>;
   selectedAgentIdsByThread: Record<string, string>;
@@ -221,7 +222,10 @@ export async function reloadThreadList(params: ReloadThreadsParams) {
   }
   params.setLoading(true);
   try {
-    const items = await params.invokeFn<ThreadListItem[]>("thread_list", { cwd: params.cwd });
+    const items = await params.invokeFn<ThreadListItem[]>("thread_list", {
+      cwd: params.cwd,
+      projectPath: params.projectPath || undefined,
+    });
     params.setThreadItems(items);
     const visibleItems = filterThreadListByProject(items, params.projectPath || params.cwd);
     const nextId =
@@ -253,7 +257,10 @@ export async function refreshThreadStateSilently(params: RefreshCurrentThreadPar
   }
   try {
     const [items, detail] = await Promise.all([
-      params.invokeFn<ThreadListItem[]>("thread_list", { cwd: params.cwd }),
+      params.invokeFn<ThreadListItem[]>("thread_list", {
+        cwd: params.cwd,
+        projectPath: params.projectPath || undefined,
+      }),
       params.invokeFn<ThreadDetail>("thread_load", { cwd: params.cwd, threadId: normalizedThreadId }),
     ]);
     const persistedCoordination = await params.hydratePersistedCoordination(normalizedThreadId);

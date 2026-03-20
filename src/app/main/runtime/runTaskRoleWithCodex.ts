@@ -63,6 +63,19 @@ export type TaskRoleCodexRunResult = {
   codexTurnId?: string;
 };
 
+const INCOMPLETE_TURN_STATUSES = new Set([
+  "inprogress",
+  "running",
+  "queued",
+  "pending",
+  "starting",
+  "processing",
+  "streaming",
+]);
+const FAILED_TURN_STATUSES = new Set(["failed", "error", "cancelled", "rejected"]);
+const POLL_INTERVAL_MS = 1500;
+const POLL_TIMEOUT_MS = 45000;
+
 function normalizeSandboxMode(value: string | null | undefined): "read-only" | "workspace-write" | "danger-full-access" {
   const normalized = String(value ?? "").trim().toLowerCase();
   if (normalized === "workspace-write" || normalized === "danger-full-access") {
@@ -124,6 +137,132 @@ function resolveTurnText(raw: unknown): string {
       "response.text",
     ]) ?? extractDeltaText(raw))
   ).trim();
+}
+
+function collectNestedText(input: unknown, depth = 0): string[] {
+  if (depth > 8 || input == null) {
+    return [];
+  }
+  if (typeof input === "string") {
+    const trimmed = input.trim();
+    return trimmed ? [trimmed] : [];
+  }
+  if (Array.isArray(input)) {
+    return input.flatMap((item) => collectNestedText(item, depth + 1));
+  }
+  if (typeof input !== "object") {
+    return [];
+  }
+  const record = input as Record<string, unknown>;
+  const directKeys = ["text", "output_text", "outputText", "summary", "message", "content"];
+  const direct = directKeys.flatMap((key) => {
+    const value = record[key];
+    return typeof value === "string" ? collectNestedText(value, depth + 1) : [];
+  });
+  const nestedKeys = ["output", "outputs", "content", "response", "result", "turn", "completion", "data"];
+  const nested = nestedKeys.flatMap((key) => collectNestedText(record[key], depth + 1));
+  return [...direct, ...nested];
+}
+
+function buildSuccessfulEmptyResponseSummary(pack: TaskAgentPromptPack, raw: unknown): string {
+  const nestedText = [...new Set(collectNestedText(raw))].filter(Boolean).join("\n").trim();
+  if (nestedText) {
+    return nestedText;
+  }
+  return `${pack.label} 작업을 완료했습니다. 응답 본문이 비어 있어 산출물과 response.json을 기준으로 후속 합성을 진행합니다.`;
+}
+
+function normalizeTurnStatus(value: unknown): string | null {
+  const normalized = String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z]+/g, "");
+  return normalized || null;
+}
+
+function resolveTurnStatus(raw: unknown): string | null {
+  const completedStatus = extractCompletedStatus(raw);
+  if (completedStatus) {
+    return completedStatus.toLowerCase();
+  }
+  return normalizeTurnStatus(
+    extractStringByPaths(raw, [
+      "status",
+      "turn.status",
+      "response.status",
+      "result.status",
+      "completion.status",
+    ]),
+  );
+}
+
+function extractLatestTurn(raw: unknown): unknown {
+  if (!raw || typeof raw !== "object") {
+    return raw;
+  }
+  const root = raw as Record<string, unknown>;
+  const candidates = [
+    root.turns,
+    (root.thread as Record<string, unknown> | undefined)?.turns,
+    (root.response as Record<string, unknown> | undefined)?.turns,
+    (root.result as Record<string, unknown> | undefined)?.turns,
+  ];
+  for (const value of candidates) {
+    if (Array.isArray(value) && value.length > 0) {
+      return value[value.length - 1];
+    }
+  }
+  return raw;
+}
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise((resolve) => globalThis.setTimeout(resolve, ms));
+}
+
+async function waitForCodexTurnCompletion(params: {
+  invokeFn: InvokeFn;
+  threadId: string;
+  initialResponse: unknown;
+}): Promise<{
+  raw: unknown;
+  completedStatus: string;
+}> {
+  let currentRaw = params.initialResponse;
+  let currentStatus = resolveTurnStatus(extractLatestTurn(currentRaw)) ?? resolveTurnStatus(currentRaw) ?? "";
+  if (!INCOMPLETE_TURN_STATUSES.has(currentStatus)) {
+    return {
+      raw: currentRaw,
+      completedStatus: currentStatus || "done",
+    };
+  }
+
+  const deadline = Date.now() + POLL_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    await sleep(POLL_INTERVAL_MS);
+    const threadState = await params.invokeFn<unknown>("codex_thread_read", {
+      threadId: params.threadId,
+      includeTurns: true,
+    });
+    const latestTurn = extractLatestTurn(threadState);
+    const nextStatus = resolveTurnStatus(latestTurn) ?? resolveTurnStatus(threadState) ?? currentStatus;
+    const nextText = resolveTurnText(latestTurn) || resolveTurnText(threadState);
+    currentRaw = latestTurn === threadState ? threadState : latestTurn;
+    currentStatus = nextStatus;
+    if (FAILED_TURN_STATUSES.has(currentStatus)) {
+      return {
+        raw: currentRaw,
+        completedStatus: currentStatus,
+      };
+    }
+    if (!INCOMPLETE_TURN_STATUSES.has(currentStatus) && (nextText || currentStatus)) {
+      return {
+        raw: currentRaw,
+        completedStatus: currentStatus,
+      };
+    }
+  }
+
+  throw new Error(`Codex turn did not complete (${currentStatus || "timeout"})`);
 }
 
 async function resolveTaskRunContext(input: RunTaskRoleWithCodexInput): Promise<{
@@ -192,16 +331,31 @@ export async function runTaskRoleWithCodex(input: RunTaskRoleWithCodexInput): Pr
     turnError = error;
   }
 
-  const completedStatus = turnError ? "error" : (extractCompletedStatus(rawResponse) ?? "done").toLowerCase();
+  let completedStatus = turnError ? "error" : (resolveTurnStatus(rawResponse) ?? "done");
+  if (!turnError && INCOMPLETE_TURN_STATUSES.has(completedStatus)) {
+    const completion = await waitForCodexTurnCompletion({
+      invokeFn: input.invokeFn,
+      threadId: threadStart.threadId,
+      initialResponse: rawResponse,
+    });
+    rawResponse = completion.raw;
+    completedStatus = completion.completedStatus;
+  }
   const fallbackSummary = String(researcherCollection.fallbackSummary ?? "").trim();
-  if (["failed", "error", "cancelled", "rejected"].includes(completedStatus) && !fallbackSummary) {
+  if (FAILED_TURN_STATUSES.has(completedStatus) && !fallbackSummary) {
     if (turnError instanceof Error) {
       throw turnError;
     }
     throw new Error(`Codex turn failed (${completedStatus})`);
   }
 
-  const summary = (!turnError ? resolveTurnText(rawResponse) : "") || fallbackSummary;
+  const summary = (
+    (!turnError ? resolveTurnText(rawResponse) : "")
+    || fallbackSummary
+    || (!turnError && !FAILED_TURN_STATUSES.has(completedStatus)
+      ? buildSuccessfulEmptyResponseSummary(pack, rawResponse)
+      : "")
+  ).trim();
   if (!summary) {
     if (turnError instanceof Error) {
       throw turnError;

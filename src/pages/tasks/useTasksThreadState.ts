@@ -212,10 +212,10 @@ export function useTasksThreadState(params: Params) {
   const composerCoordinationPreview = useMemo(
     () => deriveComposerCoordinationPreview({
       prompt: composerDraft,
-      overrideMode: parseCoordinationModeTag(composerDraft),
+      overrideMode: composerCoordinationModeOverride ?? parseCoordinationModeTag(composerDraft),
       roleIds: selectedComposerRoleIds,
     }),
-    [composerDraft, selectedComposerRoleIds],
+    [composerCoordinationModeOverride, composerDraft, selectedComposerRoleIds],
   );
   const runtimeSessionIndex = useMemo(
     () => mergeRuntimeSessionIndexes(buildTasksSessionIndex(orchestrationByThread, activeThread ? [activeThread] : []), persistedRuntimeSessions),
@@ -507,6 +507,7 @@ export function useTasksThreadState(params: Params) {
       threadId,
       hasTauriRuntime: params.hasTauriRuntime,
       cwd: params.cwd,
+      projectPath,
       invokeFn: params.invokeFn,
       hydratePersistedCoordination,
       selectedAgentIdsByThread,
@@ -941,7 +942,7 @@ export function useTasksThreadState(params: Params) {
     if (!rawPrompt) {
       return;
     }
-    const modeTagOverride = parseCoordinationModeTag(rawPrompt);
+    const modeTagOverride = composerCoordinationModeOverride ?? parseCoordinationModeTag(rawPrompt);
     const prompt = stripCoordinationModeTags(rawPrompt);
     if (!prompt) {
       return;
@@ -1150,7 +1151,7 @@ export function useTasksThreadState(params: Params) {
         message: `Thread submit failed: ${formatError(error)}`,
       });
     }
-  }, [accessMode, activeThread, applyBrowserStore, buildPromptWithAttachments, clearAttachedFiles, composerDraft, hydrateThreadDetail, model, params, projectPath, reasoning, selectedComposerRoleIds, syncSpawnedThreadSelection, updateThreadCoordination]);
+  }, [accessMode, activeThread, applyBrowserStore, buildPromptWithAttachments, clearAttachedFiles, composerCoordinationModeOverride, composerDraft, hydrateThreadDetail, model, params, projectPath, reasoning, selectedComposerRoleIds, syncSpawnedThreadSelection, updateThreadCoordination]);
 
   const stopComposerRun = useCallback(async () => {
     if (!activeThread || stoppingComposerRun || !canInterruptCurrentThread) {

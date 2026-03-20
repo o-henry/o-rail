@@ -3,7 +3,9 @@ import { runTaskRoleWithCodex } from "./runTaskRoleWithCodex";
 
 describe("runTaskRoleWithCodex", () => {
   it("uses the task prompt pack and writes role artifacts for thread runs", async () => {
-    const invokeFn = (vi.fn(async (command: string, args?: Record<string, unknown>) => {
+    const writtenArtifacts = ["prompt.md", "implementation_report.md", "response.json"];
+    let artifactIndex = 0;
+    const invokeFn = (vi.fn(async (command: string) => {
       switch (command) {
         case "task_agent_pack_read":
           return {
@@ -31,7 +33,7 @@ describe("runTaskRoleWithCodex", () => {
             usage: { input_tokens: 12, output_tokens: 24, total_tokens: 36 },
           };
         case "workspace_write_text":
-          return `${String(args?.cwd)}/${String(args?.name)}`;
+          return `/tmp/rail-storage/.rail/tasks/thread-1/codex_runs/role-run-1/${writtenArtifacts[artifactIndex++]}`;
         default:
           throw new Error(`unexpected command: ${command}`);
       }
@@ -429,4 +431,154 @@ describe("runTaskRoleWithCodex", () => {
     expect(result.summary).toContain("# 리서치 수집 결과");
     expect(result.artifactPaths).toContain("/tmp/rail-storage/.rail/tasks/thread-fallback/codex_runs/role-run-fallback/research_collection.md");
   });
+
+  it("returns a safe fallback summary for non-research roles when Codex completes without readable text", async () => {
+    const invokeFn = (vi.fn(async (command: string, args?: Record<string, unknown>) => {
+      switch (command) {
+        case "task_agent_pack_read":
+          return {
+            id: "unity_architect",
+            label: "UNITY ARCHITECT",
+            studioRoleId: "system_programmer",
+            model: "gpt-5.4",
+            modelReasoningEffort: "medium",
+            sandboxMode: "workspace-write",
+            outputArtifactName: "architecture_review.md",
+            promptDocFile: "unity_architect.md",
+            developerInstructions: "검토하라.",
+          };
+        case "thread_load":
+          return {
+            thread: { model: "GPT-5.4", reasoning: "중간" },
+            task: { workspacePath: "/tmp/mockking" },
+          };
+        case "thread_start":
+          return { threadId: "thread-codex-empty-architect" };
+        case "turn_start_blocking":
+          return {
+            status: "completed",
+            output: [{ kind: "status", value: "done" }],
+          };
+        case "workspace_write_text":
+          return `${String(args?.cwd)}/${String(args?.name)}`;
+        default:
+          throw new Error(`unexpected command: ${command}`);
+      }
+    }) as unknown) as <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
+
+    const result = await runTaskRoleWithCodex({
+      invokeFn,
+      storageCwd: "/tmp/rail-storage",
+      taskId: "thread-empty-architect",
+      studioRoleId: "system_programmer",
+      prompt: "구조 리스크를 검토해줘",
+      sourceTab: "tasks-thread",
+      runId: "role-run-empty-architect",
+    });
+
+    expect(result.summary).toContain("UNITY ARCHITECT 작업을 완료했습니다.");
+    expect(result.artifactPaths).toEqual([
+      "/tmp/rail-storage/.rail/tasks/thread-empty-architect/codex_runs/role-run-empty-architect/prompt.md",
+      "/tmp/rail-storage/.rail/tasks/thread-empty-architect/codex_runs/role-run-empty-architect/architecture_review.md",
+      "/tmp/rail-storage/.rail/tasks/thread-empty-architect/codex_runs/role-run-empty-architect/response.json",
+    ]);
+  });
+
+  it("waits for codex_thread_read when Codex starts in progress and later completes", async () => {
+    const invokeFn = (vi.fn(async (command: string, args?: Record<string, unknown>) => {
+      switch (command) {
+        case "task_agent_pack_read":
+          return {
+            id: "researcher",
+            label: "RESEARCHER",
+            studioRoleId: "research_analyst",
+            model: "gpt-5.4",
+            modelReasoningEffort: "medium",
+            sandboxMode: "workspace-write",
+            outputArtifactName: "research_findings.md",
+            promptDocFile: "researcher.md",
+            developerInstructions: "자료 조사와 웹 리서치를 수행하라.",
+          };
+        case "thread_load":
+          return {
+            thread: { model: "GPT-5.4", reasoning: "중간" },
+            task: { workspacePath: "/tmp/mockking" },
+          };
+        case "research_storage_plan_agent_job":
+          return {
+            job: {
+              jobId: "collect-pending",
+              label: "Researcher · pending",
+              resolvedSourceType: "community",
+              collectorStrategy: "dynamic_search",
+              keywords: [],
+              domains: [],
+              planner: {
+                analysisMode: "genre_ranking",
+                aggregationUnit: "genre",
+                dataScope: "steam_market",
+                metricFocus: [],
+                instructions: [],
+              },
+            },
+          };
+        case "research_storage_execute_job":
+          return { job: { jobId: "collect-pending" } };
+        case "research_storage_collection_metrics":
+          return {
+            totals: { items: 0, sources: 0, verified: 0, warnings: 0, conflicted: 0, avgScore: 0 },
+            bySourceType: [],
+            byVerificationStatus: [],
+            timeline: [],
+            topSources: [],
+          };
+        case "research_storage_list_collection_items":
+          return { items: [] };
+        case "research_storage_collection_genre_rankings":
+          return { popular: [], quality: [] };
+        case "thread_start":
+          return { threadId: "thread-codex-pending" };
+        case "turn_start_blocking":
+          return {
+            turn: {
+              id: "turn-pending",
+              items: [],
+              status: "inProgress",
+            },
+          };
+        case "codex_thread_read":
+          return {
+            thread: { status: "completed" },
+            turns: [
+              {
+                id: "turn-pending",
+                status: "completed",
+                output_text: "수집된 자료를 기준으로 장르별 흐름을 정리했습니다.",
+              },
+            ],
+          };
+        case "workspace_write_text":
+          return `${String(args?.cwd)}/${String(args?.name)}`;
+        default:
+          throw new Error(`unexpected command: ${command}`);
+      }
+    }) as unknown) as <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
+
+    const result = await runTaskRoleWithCodex({
+      invokeFn,
+      storageCwd: "/tmp/rail-storage",
+      taskId: "thread-pending",
+      studioRoleId: "research_analyst",
+      prompt: "스팀 장르 평가를 조사해줘",
+      sourceTab: "tasks-thread",
+      runId: "role-run-pending",
+    });
+
+    expect(result.summary).toContain("장르별 흐름");
+    expect(invokeFn).toHaveBeenCalledWith("codex_thread_read", {
+      threadId: "thread-codex-pending",
+      includeTurns: true,
+    });
+  });
+
 });

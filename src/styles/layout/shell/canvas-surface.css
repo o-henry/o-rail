@@ -181,6 +181,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  margin-left: auto;
   flex-shrink: 0;
 }
 
@@ -217,15 +218,26 @@
 
 .fancy-select-option {
   width: 100%;
+  min-width: 0;
   border-radius: 4px;
   background: transparent;
   display: inline-flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 10px;
   padding: 9px 10px;
   color: var(--text-main);
   border: 0;
+}
+
+.fancy-select-option-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  text-align: left;
 }
 
 .fancy-select-option:hover {

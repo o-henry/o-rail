@@ -54,6 +54,20 @@ describe("visualizeReportUtils", () => {
     });
   });
 
+  it("keeps the summary separate from the run title so the rail item does not duplicate the same line", () => {
+    const runs = buildVisualizeResearchRuns([
+      makeEntry({
+        id: "findings",
+        markdownPath: "/tmp/run-1/research_findings.md",
+        title: "RESEARCHER · thread-1 · research_findings.md",
+        summary: "스팀 게임 최근 리뷰와 장르별 평가 조사",
+      }),
+    ]);
+
+    expect(runs[0]?.title).toBe("RESEARCHER · thread-1 · research_findings.md");
+    expect(runs[0]?.summary).toBe("스팀 게임 최근 리뷰와 장르별 평가 조사");
+  });
+
   it("parses collection payload JSON", () => {
     const payload = parseResearchCollectionPayload(
       JSON.stringify({

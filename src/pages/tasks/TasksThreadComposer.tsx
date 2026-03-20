@@ -1,4 +1,5 @@
 import type { KeyboardEvent as ReactKeyboardEvent, RefObject } from "react";
+import type { CoordinationMode } from "../../features/orchestration/agentic/coordinationTypes";
 import { TURN_REASONING_LEVEL_OPTIONS } from "../../features/workflow/reasoningLevels";
 import { RUNTIME_MODEL_OPTIONS } from "../../features/workflow/runtimeModelOptions";
 import { useI18n } from "../../i18n";
@@ -26,6 +27,7 @@ type TasksThreadComposerProps = {
   mentionIndex: number;
   attachedFiles: AttachedFile[];
   selectedComposerRoleIds: ThreadRoleId[];
+  composerCoordinationModeOverride: CoordinationMode | null;
   composerDraft: string;
   selectedModelOption: RuntimeModelOption;
   isModelMenuOpen: boolean;
@@ -37,6 +39,7 @@ type TasksThreadComposerProps = {
   onSelectMention: (option: TaskAgentMentionOption) => void;
   onRemoveAttachedFile: (id: string) => void;
   onRemoveComposerRole: (roleId: ThreadRoleId) => void;
+  onClearCoordinationModeOverride: () => void;
   onComposerKeyDown: (event: ReactKeyboardEvent<HTMLTextAreaElement>) => void;
   onComposerDraftChange: (value: string, cursor: number) => void;
   onComposerCursorChange: (cursor: number) => void;
@@ -53,9 +56,52 @@ export function canSubmitTasksComposer(input: string | null | undefined): boolea
   return Boolean(stripCoordinationModeTags(String(input ?? "")).trim());
 }
 
+type SelectedTasksComposerBadge = {
+  key: string;
+  kind: "agent" | "mode";
+  label: string;
+  roleId?: ThreadRoleId;
+  mode?: CoordinationMode;
+};
+
+function coordinationModeLabel(mode: CoordinationMode): string {
+  if (mode === "fanout") {
+    return "FANOUT";
+  }
+  if (mode === "team") {
+    return "TEAM";
+  }
+  return "QUICK";
+}
+
+export function buildSelectedTasksComposerBadges(params: {
+  roleIds: ThreadRoleId[];
+  modeOverride: CoordinationMode | null;
+}): SelectedTasksComposerBadge[] {
+  const badges: SelectedTasksComposerBadge[] = params.roleIds.map((roleId) => ({
+    key: `agent:${roleId}`,
+    kind: "agent",
+    label: getTaskAgentLabel(roleId),
+    roleId,
+  }));
+  if (params.modeOverride) {
+    badges.push({
+      key: `mode:${params.modeOverride}`,
+      kind: "mode",
+      label: coordinationModeLabel(params.modeOverride),
+      mode: params.modeOverride,
+    });
+  }
+  return badges;
+}
+
 export function TasksThreadComposer(props: TasksThreadComposerProps) {
   const { t } = useI18n();
   const canSubmit = canSubmitTasksComposer(props.composerDraft);
+  const selectedBadges = buildSelectedTasksComposerBadges({
+    roleIds: props.selectedComposerRoleIds,
+    modeOverride: props.composerCoordinationModeOverride,
+  });
 
   return (
     <div className="tasks-thread-composer-shell question-input agents-composer">
@@ -103,14 +149,20 @@ export function TasksThreadComposer(props: TasksThreadComposerProps) {
         </div>
       ) : null}
 
-      {props.selectedComposerRoleIds.length > 0 ? (
+      {selectedBadges.length > 0 ? (
         <div aria-label="Selected agents" className="tasks-thread-selected-mentions">
-          {props.selectedComposerRoleIds.map((roleId) => (
-            <span className="tasks-thread-selected-mention-chip" key={roleId}>
-              <span>{getTaskAgentLabel(roleId)}</span>
+          {selectedBadges.map((badge) => (
+            <span className="tasks-thread-selected-mention-chip" key={badge.key}>
+              <span>{badge.label}</span>
               <button
-                aria-label={`Remove ${getTaskAgentLabel(roleId)}`}
-                onClick={() => props.onRemoveComposerRole(roleId)}
+                aria-label={`Remove ${badge.label}`}
+                onClick={() => {
+                  if (badge.kind === "agent" && badge.roleId) {
+                    props.onRemoveComposerRole(badge.roleId);
+                    return;
+                  }
+                  props.onClearCoordinationModeOverride();
+                }}
                 type="button"
               >
                 ×

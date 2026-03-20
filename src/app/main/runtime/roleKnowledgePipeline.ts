@@ -274,8 +274,52 @@ function buildFallbackPoints(roleLabel: string, roleGoal: string): string[] {
   ];
 }
 
-function buildProfileSummary(params: { roleLabel: string; taskId: string; keyPointCount: number; successCount: number }): string {
+function resolveBootstrapFailureReason(sourceResults: RoleKnowledgeSource[]): string {
+  const loweredErrors = sourceResults
+    .map((row) => cleanLine(row.error).toLowerCase())
+    .filter(Boolean);
+  if (loweredErrors.some((row) => row.includes("unauthorized"))) {
+    return "Scrapling bridge 인증 실패로 외부 근거를 수집하지 못했습니다.";
+  }
+  if (loweredErrors.some((row) => row.includes("health check failed") || row.includes(SCRAPLING_BRIDGE_NOT_READY.toLowerCase()))) {
+    return "Scrapling bridge 상태 확인에 실패해 외부 근거를 수집하지 못했습니다.";
+  }
+  return "외부 근거 수집에 실패했습니다.";
+}
+
+function buildProfileSummary(params: {
+  roleLabel: string;
+  taskId: string;
+  keyPointCount: number;
+  successCount: number;
+  sourceCount: number;
+  sourceResults: RoleKnowledgeSource[];
+}): string {
+  if (params.successCount === 0) {
+    return `${params.roleLabel} 기준 ${params.taskId} 실행을 위한 외부 근거 수집에 실패했습니다. ${resolveBootstrapFailureReason(
+      params.sourceResults,
+    )} (수집 성공 ${params.successCount}/${params.sourceCount})`;
+  }
   return `${params.roleLabel} 기준 ${params.taskId} 실행을 위한 핵심 근거 ${params.keyPointCount}개를 정리했습니다. (수집 성공 ${params.successCount}건)`;
+}
+
+function buildBootstrapFailurePoints(params: {
+  roleLabel: string;
+  roleGoal: string;
+  userPromptLine: string;
+  sourceResults: RoleKnowledgeSource[];
+}): string[] {
+  const sourceFailures = params.sourceResults
+    .filter((row) => row.status === "error")
+    .slice(0, 3)
+    .map((row) => `소스 수집 실패: ${row.url} (${truncateText(row.error, 120)})`);
+  return [
+    `${params.roleLabel}의 핵심 목표는 "${params.roleGoal}" 입니다.`,
+    params.userPromptLine ? `이번 요청 핵심: ${params.userPromptLine}` : "",
+    resolveBootstrapFailureReason(params.sourceResults),
+    ...sourceFailures,
+    "외부 근거가 없으므로 현재 응답은 웹 증거가 아니라 요청 문맥과 내부 가이드만 기반으로 작성됩니다.",
+  ].filter(Boolean);
 }
 
 function buildRoleKnowledgeBlock(profile: RoleKnowledgeProfile): string {
@@ -382,11 +426,19 @@ export async function bootstrapRoleKnowledgeProfile(input: RoleKnowledgeBootstra
     .filter(Boolean)
     .slice(0, 6);
   const userPromptLine = truncateText(input.userPrompt, 180);
-  const keyPoints = [
-    ...buildFallbackPoints(roleTemplate.label, roleTemplate.goal),
-    ...(userPromptLine ? [`이번 요청 핵심: ${userPromptLine}`] : []),
-    ...evidencePoints,
-  ].filter(Boolean);
+  const keyPoints =
+    successfulSources.length > 0
+      ? [
+          ...buildFallbackPoints(roleTemplate.label, roleTemplate.goal),
+          ...(userPromptLine ? [`이번 요청 핵심: ${userPromptLine}`] : []),
+          ...evidencePoints,
+        ].filter(Boolean)
+      : buildBootstrapFailurePoints({
+          roleLabel: roleTemplate.label,
+          roleGoal: roleTemplate.goal,
+          userPromptLine,
+          sourceResults,
+        });
 
   const profile: RoleKnowledgeProfile = {
     roleId: input.roleId,
@@ -399,6 +451,8 @@ export async function bootstrapRoleKnowledgeProfile(input: RoleKnowledgeBootstra
       taskId: cleanLine(input.taskId) || roleTemplate.defaultTaskId,
       keyPointCount: keyPoints.length,
       successCount: successfulSources.length,
+      sourceCount: sourceResults.length,
+      sourceResults,
     }),
     keyPoints,
     sources: sourceResults,
@@ -415,7 +469,10 @@ export async function bootstrapRoleKnowledgeProfile(input: RoleKnowledgeBootstra
     sourceCount: sourceResults.length,
     sourceSuccessCount: successfulSources.length,
     artifactPaths,
-    message: `ROLE_KB_BOOTSTRAP 완료 (${successfulSources.length}/${sourceResults.length})`,
+    message:
+      successfulSources.length > 0
+        ? `ROLE_KB_BOOTSTRAP 완료 (${successfulSources.length}/${sourceResults.length})`
+        : `ROLE_KB_BOOTSTRAP 실패 (${successfulSources.length}/${sourceResults.length})`,
   };
 }
 

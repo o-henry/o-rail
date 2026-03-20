@@ -65,6 +65,10 @@ function resolveTimelineMessage(message: ThreadMessage, agentLabels: string[]) {
   };
 }
 
+export function isFinishedThreadMessage(message: ThreadMessage): boolean {
+  return message.role === "assistant" && String(message.eventKind ?? "").trim() === "agent_result";
+}
+
 function formatArtifactStamp(input: string) {
   const normalized = String(input ?? "").trim();
   if (!normalized) {
@@ -127,7 +131,10 @@ export function TasksThreadConversation(props: TasksThreadConversationProps) {
           return (
             <article className={`tasks-thread-message-row is-${message.role}`} key={message.id}>
               {parsed.label ? <span className="tasks-thread-message-label">{parsed.label}</span> : null}
-              <div className="tasks-thread-log-line">{parsed.body}</div>
+              <div className="tasks-thread-log-line">
+                {parsed.body}
+                {isFinishedThreadMessage(message) ? <span className="tasks-thread-finish-badge">FINISH</span> : null}
+              </div>
               {parsed.artifactPath ? (
                 <div className="tasks-thread-message-meta">
                   <small className="tasks-thread-message-artifact">{parsed.artifactPath}</small>

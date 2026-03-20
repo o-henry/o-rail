@@ -559,12 +559,10 @@ export function useAgenticOrchestrationBridge(params: {
           promptMode: runParams.promptMode,
         });
         if (!result) {
-          return {
-            roleId: runParams.roleId,
-            runId: "",
-            summary: "",
-            artifactPaths: [],
-          };
+          throw new Error(`${runParams.roleId} role run was skipped or produced no result`);
+        }
+        if (result.runStatus !== "done") {
+          throw new Error(`${runParams.roleId} role run failed`);
         }
         return {
           roleId: runParams.roleId,

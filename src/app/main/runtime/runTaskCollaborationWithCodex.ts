@@ -28,6 +28,8 @@ export type TaskCollaborationResult = {
   finalResult: CollaborationRoleRunResult;
 };
 
+const BRIEF_MAX_ATTEMPTS = 2;
+
 function clip(value: string, maxChars: number): string {
   const normalized = String(value ?? "").trim();
   if (normalized.length <= maxChars) {
@@ -118,6 +120,24 @@ function buildFinalPrompt(params: {
   ].filter(Boolean).join("\n");
 }
 
+function normalizeErrorText(error: unknown): string {
+  return String(error ?? "").trim().toLowerCase();
+}
+
+function isRetryableBriefError(error: unknown): boolean {
+  const text = normalizeErrorText(error);
+  return (
+    text.includes("did not complete") ||
+    text.includes("timeout") ||
+    text.includes("temporarily") ||
+    text.includes("network") ||
+    text.includes("rate limit") ||
+    text.includes("busy") ||
+    text.includes("econnreset") ||
+    text.includes("socket hang up")
+  );
+}
+
 export async function runTaskCollaborationWithCodex(params: {
   prompt: string;
   contextSummary: string;
@@ -142,23 +162,38 @@ export async function runTaskCollaborationWithCodex(params: {
       stage: "codex",
       message: `${roleId} 브리프 생성`,
     });
-    try {
-      participantResults.push(await params.executeRoleRun({
-        roleId,
-        prompt: briefPrompt,
-        promptMode: "brief",
-        internal: true,
-        model: "GPT-5.4-Mini",
-        reasoning: "낮음",
-        outputArtifactName: "discussion_brief.md",
-        includeRoleKnowledge: false,
-      }));
-    } catch (error) {
-      params.onProgress?.({
-        roleId,
-        stage: "codex",
-        message: `${roleId} 브리프 실패: ${String(error ?? "unknown error")}`,
-      });
+    let lastError: unknown = null;
+    for (let attempt = 1; attempt <= BRIEF_MAX_ATTEMPTS; attempt += 1) {
+      try {
+        participantResults.push(await params.executeRoleRun({
+          roleId,
+          prompt: briefPrompt,
+          promptMode: "brief",
+          internal: true,
+          model: "GPT-5.4-Mini",
+          reasoning: "낮음",
+          outputArtifactName: "discussion_brief.md",
+          includeRoleKnowledge: false,
+        }));
+        lastError = null;
+        break;
+      } catch (error) {
+        lastError = error;
+        const canRetry = attempt < BRIEF_MAX_ATTEMPTS && isRetryableBriefError(error);
+        params.onProgress?.({
+          roleId,
+          stage: "codex",
+          message: canRetry
+            ? `${roleId} 브리프 실패: ${String(error ?? "unknown error")} (재시도 ${attempt}/${BRIEF_MAX_ATTEMPTS - 1})`
+            : `${roleId} 브리프 실패: ${String(error ?? "unknown error")}`,
+        });
+        if (!canRetry) {
+          break;
+        }
+      }
+    }
+    if (lastError) {
+      continue;
     }
   }
 

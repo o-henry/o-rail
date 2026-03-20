@@ -12,7 +12,6 @@ import {
   type ThreadStageId,
 } from "./taskAgentPresets";
 import {
-  applyTaskAgentMention,
   getTaskAgentMentionMatch,
   stripTaskAgentMentionMatch,
   type TaskAgentMentionOption,
@@ -246,8 +245,9 @@ export default function TasksPage(props: TasksPageProps) {
       return;
     }
     if (option.kind === "mode") {
-      const nextValue = applyTaskAgentMention(state.composerDraft, activeMatch, option.mention);
-      const nextCursor = activeMatch.rangeStart + option.mention.length + 1;
+      const nextValue = stripTaskAgentMentionMatch(state.composerDraft, activeMatch);
+      const nextCursor = activeMatch.rangeStart;
+      state.setComposerCoordinationModeOverride(option.mode ?? null);
       state.setComposerDraft(nextValue);
       setComposerCursor(nextCursor);
       setMentionIndex(0);
@@ -396,6 +396,7 @@ export default function TasksPage(props: TasksPageProps) {
         <TasksThreadComposer
           attachedFiles={state.attachedFiles}
           canInterruptCurrentThread={state.canInterruptCurrentThread}
+          composerCoordinationModeOverride={state.composerCoordinationModeOverride}
           composerDraft={state.composerDraft}
           composerRef={composerRef}
           isModelMenuOpen={isModelMenuOpen}
@@ -416,6 +417,7 @@ export default function TasksPage(props: TasksPageProps) {
             state.setComposerDraft(value);
           }}
           onComposerKeyDown={onComposerKeyDown}
+          onClearCoordinationModeOverride={() => state.setComposerCoordinationModeOverride(null)}
           onOpenAttachmentPicker={() => void state.openAttachmentPicker()}
           onRemoveAttachedFile={state.removeAttachedFile}
           onRemoveComposerRole={state.removeComposerRole}

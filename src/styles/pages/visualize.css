@@ -719,10 +719,10 @@
 .visualize-monitor-ranked-item.is-table > span:nth-child(2),
 .visualize-monitor-ranked-item.is-table > span:nth-child(3) {
   display: inline-flex;
-  justify-self: stretch;
+  justify-self: start;
   align-items: center;
-  justify-content: center;
-  text-align: center;
+  justify-content: flex-start;
+  text-align: left;
 }
 
 .visualize-monitor-ranked-list.is-table {

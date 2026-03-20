@@ -45,7 +45,9 @@ export function TasksThreadReviewPane(props: TasksThreadReviewPaneProps) {
             <strong>{props.selectedFilePath || t("tasks.diff.title")}</strong>
             <span>{changedFiles.length > 0 ? t("tasks.files.changed") : t("tasks.files.tracked")}</span>
           </div>
-          <pre>{props.selectedFileDiff.trim() || t("tasks.files.empty")}</pre>
+          <pre className={props.selectedFileDiff.trim() ? "" : "is-empty"}>
+            {props.selectedFileDiff.trim() || t("tasks.files.empty")}
+          </pre>
         </div>
       </div>
     </aside>

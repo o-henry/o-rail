@@ -7,7 +7,7 @@
   min-height: 0;
   height: 100%;
   display: grid;
-  grid-template-columns: 220px minmax(0, 1fr);
+  grid-template-columns: 248px minmax(0, 1fr);
   gap: 10px;
   padding: 0;
   background: var(--bg-app);
@@ -16,7 +16,7 @@
 }
 
 .tasks-thread-layout.is-review-pane-open {
-  grid-template-columns: 220px minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: 248px minmax(0, 1fr) minmax(0, 1fr);
 }
 
 .tasks-thread-layout.is-thread-nav-hidden {
@@ -43,7 +43,7 @@
   display: grid;
   align-content: start;
   gap: 10px;
-  padding: 10px;
+  padding: 0;
   border-radius: var(--tasks-wrapper-radius);
   background: transparent;
   overflow: auto;
@@ -512,6 +512,7 @@
 
 .tasks-thread-main-surface {
   min-width: 0;
+  width: 100%;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto auto;
   gap: 0;
@@ -1418,6 +1419,16 @@
   gap: 8px;
 }
 
+.tasks-thread-review-diff-head {
+  margin-top: 1rem;
+}
+
+.tasks-thread-review-diff-head,
+.tasks-thread-review-diff-head strong,
+.tasks-thread-review-diff-head span {
+  font-family: "Departure Mono", "DepartureMonoRail", "Galmuri11", monospace !important;
+}
+
 .tasks-thread-review-toolbar small,
 .tasks-thread-review-diff-head span {
   font-size: 10px;
@@ -1483,6 +1494,14 @@
   white-space: pre-wrap;
   word-break: break-word;
   overflow-wrap: anywhere;
+}
+
+.tasks-thread-review-diff pre.is-empty {
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  text-align: center;
 }
 
 .tasks-thread-review-empty {
@@ -1776,8 +1795,8 @@
 
 @media (max-width: 1400px) {
   .tasks-thread-layout {
-  font-family: "DepartureMonoRail", "Galmuri11", monospace;
-    grid-template-columns: 200px minmax(0, 1fr) 300px;
+    font-family: "DepartureMonoRail", "Galmuri11", monospace;
+    grid-template-columns: 228px minmax(0, 1fr) minmax(260px, 0.92fr);
   }
 
   .tasks-thread-stage-rail {
@@ -1787,8 +1806,8 @@
 
 @media (max-width: 1120px) {
   .tasks-thread-layout {
-  font-family: "DepartureMonoRail", "Galmuri11", monospace;
-    grid-template-columns: 200px minmax(0, 1fr);
+    font-family: "DepartureMonoRail", "Galmuri11", monospace;
+    grid-template-columns: 228px minmax(0, 1fr);
   }
 
   .tasks-thread-detail-panel {

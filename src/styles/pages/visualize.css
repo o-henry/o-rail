@@ -415,15 +415,28 @@
 
 .visualize-monitor-stacked-section {
   min-height: 0;
+  display: flex;
+}
+
+.visualize-monitor-mini-widget {
+  min-height: 0;
+  flex: 1 1 auto;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-  gap: 4px;
+  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid rgba(226, 232, 240, 1);
+}
+
+.visualize-monitor-mini-widget-surface {
+  min-height: 0;
+  display: flex;
+  flex: 1 1 auto;
+  padding: 6px;
 }
 
 .visualize-monitor-widget-head-nested {
   min-height: 28px;
-  padding-inline: 0;
-  border-top: 1px solid rgba(203, 213, 225, 0.9);
+  padding-inline: 8px;
   border-bottom: 1px solid rgba(203, 213, 225, 0.9);
 }
 

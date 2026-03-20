@@ -386,43 +386,51 @@ export default function VisualizePage({ cwd, hasTauriRuntime }: VisualizePagePro
               >
                 <div className="visualize-monitor-stacked-panels">
                   <section className="visualize-monitor-stacked-section">
-                    <div className="visualize-monitor-ranked-list">
-                      {primaryListItems.map((item, index) => (
-                        <div className="visualize-monitor-ranked-item" key={`${item.title || "item"}-${index}`}>
-                          <div className="visualize-monitor-ranked-item-copy">
-                            <strong>{item.title || "-"}</strong>
-                            <p>{item.detail || "-"}</p>
-                          </div>
-                          <span>{item.badge || "-"}</span>
+                    <div className="visualize-monitor-mini-widget">
+                      <div className="visualize-monitor-mini-widget-surface">
+                        <div className="visualize-monitor-ranked-list">
+                          {primaryListItems.map((item, index) => (
+                            <div className="visualize-monitor-ranked-item" key={`${item.title || "item"}-${index}`}>
+                              <div className="visualize-monitor-ranked-item-copy">
+                                <strong>{item.title || "-"}</strong>
+                                <p>{item.detail || "-"}</p>
+                              </div>
+                              <span>{item.badge || "-"}</span>
+                            </div>
+                          ))}
+                          {primaryListItems.length ? null : <p className="visualize-monitor-empty">{t("visualize.empty.items")}</p>}
                         </div>
-                      ))}
-                      {primaryListItems.length ? null : <p className="visualize-monitor-empty">{t("visualize.empty.items")}</p>}
+                      </div>
                     </div>
                   </section>
 
                   <section className="visualize-monitor-stacked-section">
-                    <header className="visualize-monitor-widget-head visualize-monitor-widget-head-nested">
-                      <div className="visualize-monitor-widget-head-main">
-                        <div className="visualize-monitor-widget-head-copy">
-                          <strong>{t("visualize.chart.collectionTimeline")}</strong>
-                        </div>
-                      </div>
-                    </header>
-                    <div className="visualize-monitor-ranked-table">
-                      <div className="visualize-monitor-ranked-table-head">
-                        <span>{t("visualize.common.date")}</span>
-                        <span>{t("visualize.common.count")}</span>
-                        <span>{t("visualize.common.share")}</span>
-                      </div>
-                      <div className="visualize-monitor-ranked-list is-table">
-                        {timelineRows.map((row) => (
-                          <div className="visualize-monitor-ranked-item is-table" key={row.label}>
-                            <strong>{row.label}</strong>
-                            <span>{row.count}</span>
-                            <span>{formatPercent((row.count / Math.max(effectiveMetrics?.totals.items ?? 0, 1)) * 100)}</span>
+                    <div className="visualize-monitor-mini-widget">
+                      <header className="visualize-monitor-widget-head visualize-monitor-widget-head-nested">
+                        <div className="visualize-monitor-widget-head-main">
+                          <div className="visualize-monitor-widget-head-copy">
+                            <strong>{t("visualize.chart.collectionTimeline")}</strong>
                           </div>
-                        ))}
-                        {timelineRows.length ? null : <p className="visualize-monitor-empty">{t("visualize.empty.snapshots")}</p>}
+                        </div>
+                      </header>
+                      <div className="visualize-monitor-mini-widget-surface">
+                        <div className="visualize-monitor-ranked-table">
+                          <div className="visualize-monitor-ranked-table-head">
+                            <span>{t("visualize.common.date")}</span>
+                            <span>{t("visualize.common.count")}</span>
+                            <span>{t("visualize.common.share")}</span>
+                          </div>
+                          <div className="visualize-monitor-ranked-list is-table">
+                            {timelineRows.map((row) => (
+                              <div className="visualize-monitor-ranked-item is-table" key={row.label}>
+                                <strong>{row.label}</strong>
+                                <span>{row.count}</span>
+                                <span>{formatPercent((row.count / Math.max(effectiveMetrics?.totals.items ?? 0, 1)) * 100)}</span>
+                              </div>
+                            ))}
+                            {timelineRows.length ? null : <p className="visualize-monitor-empty">{t("visualize.empty.snapshots")}</p>}
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </section>

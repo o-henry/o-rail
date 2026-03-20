@@ -134,6 +134,20 @@
   background: #e3e3e3;
 }
 
+.knowledge-delete-group-modal .button-row {
+  padding: 8px;
+  border-radius: 6px;
+  background: #f3f5f8;
+}
+
+.knowledge-delete-group-modal .button-row button:first-child {
+  background: #ececec;
+}
+
+.knowledge-delete-group-modal .button-row button:last-child {
+  background: #f4e0e0;
+}
+
 .stock-disclaimer-modal {
   gap: 10px;
 }

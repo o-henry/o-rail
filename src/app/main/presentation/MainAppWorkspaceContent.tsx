@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import AgentsPage from "../../../pages/agents/AgentsPage";
 import AdaptationPage from "./AdaptationPage";
 import BridgePage from "../../../pages/bridge/BridgePage";
@@ -11,34 +11,9 @@ import TasksPage from "../../../pages/tasks/TasksPage";
 import VisualizePage from "../../../pages/visualize/VisualizePage";
 import { writeStoredSelectedRunId } from "../../../pages/visualize/visualizeSelection";
 
-function WorkspaceTabSkeleton(props: { tab: string }) {
-  const titleByTab: Record<string, string> = {
-    feed: "피드 불러오는 중",
-    knowledge: "데이터베이스 불러오는 중",
-    visualize: "차트 불러오는 중",
-    adaptation: "개선 탭 불러오는 중",
-    tasks: "태스크 불러오는 중",
-    shell: "터미널 불러오는 중",
-    agents: "에이전트 불러오는 중",
-    settings: "설정 불러오는 중",
-    intelligence: "데이터 인사이트 불러오는 중",
-  };
-  const title = titleByTab[String(props.tab ?? "").trim()] ?? "작업공간 불러오는 중";
-
-  return (
-    <section aria-label={title} className="workspace-tab-skeleton workspace-tab-panel">
-      <div className="workspace-tab-skeleton-strip workspace-tab-skeleton-strip-title" />
-      <div className="workspace-tab-skeleton-strip workspace-tab-skeleton-strip-subtitle" />
-      <div className="workspace-tab-skeleton-card" />
-      <div className="workspace-tab-skeleton-card workspace-tab-skeleton-card-large" />
-    </section>
-  );
-}
-
 export function MainAppWorkspaceContent(props: any) {
-  const initialTab = String(props.workspaceTab ?? "tasks");
   const [mountedTabs, setMountedTabs] = useState<Record<string, boolean>>(() => ({
-    [initialTab]: true,
+    [String(props.workspaceTab ?? "tasks")]: true,
   }));
 
   useEffect(() => {
@@ -46,14 +21,8 @@ export function MainAppWorkspaceContent(props: any) {
     if (!nextTab) {
       return;
     }
-    if (mountedTabs[nextTab]) {
-      return;
-    }
-    const rafId = window.requestAnimationFrame(() => {
-      setMountedTabs((current) => (current[nextTab] ? current : { ...current, [nextTab]: true }));
-    });
-    return () => window.cancelAnimationFrame(rafId);
-  }, [mountedTabs, props.workspaceTab]);
+    setMountedTabs((current) => (current[nextTab] ? current : { ...current, [nextTab]: true }));
+  }, [props.workspaceTab]);
 
   const handleInjectContextSources = useCallback((entries: any[]) => {
     const sourceIds = entries.map((entry) => entry.id);
@@ -297,31 +266,53 @@ export function MainAppWorkspaceContent(props: any) {
     props.running,
   ]);
 
-  const activeTab = String(props.workspaceTab ?? "").trim();
-  const renderTab = (tab: string, content: ReactNode) => {
-    const isActive = activeTab === tab;
-    const isMounted = mountedTabs[tab];
-    const isWarming = isActive && !isMounted;
-    if (isWarming) {
-      return <WorkspaceTabSkeleton tab={tab} />;
-    }
-    if (!isMounted) {
-      return null;
-    }
-    return <div hidden={!isActive}>{content}</div>;
-  };
-
   return (
     <>
-      {renderTab("feed", feedTabContent)}
-      {renderTab("knowledge", knowledgeTabContent)}
-      {renderTab("visualize", visualizeTabContent)}
-      {renderTab("adaptation", adaptationTabContent)}
-      {renderTab("tasks", tasksTabContent)}
-      {renderTab("shell", shellTabContent)}
-      {renderTab("agents", agentsTabContent)}
-      {renderTab("settings", settingsTabContent)}
-      {renderTab("intelligence", intelligenceTabContent)}
+      {mountedTabs.feed ? (
+        <div hidden={props.workspaceTab !== "feed"}>
+          {feedTabContent}
+        </div>
+      ) : null}
+      {mountedTabs.knowledge ? (
+        <div hidden={props.workspaceTab !== "knowledge"}>
+          {knowledgeTabContent}
+        </div>
+      ) : null}
+      {mountedTabs.visualize ? (
+        <div hidden={props.workspaceTab !== "visualize"}>
+          {visualizeTabContent}
+        </div>
+      ) : null}
+      {mountedTabs.adaptation ? (
+        <div hidden={props.workspaceTab !== "adaptation"}>
+          {adaptationTabContent}
+        </div>
+      ) : null}
+      {mountedTabs.tasks ? (
+        <div hidden={props.workspaceTab !== "tasks"}>
+          {tasksTabContent}
+        </div>
+      ) : null}
+      {mountedTabs.shell ? (
+        <div hidden={props.workspaceTab !== "shell"}>
+          {shellTabContent}
+        </div>
+      ) : null}
+      {mountedTabs.agents ? (
+        <div hidden={props.workspaceTab !== "agents"}>
+          {agentsTabContent}
+        </div>
+      ) : null}
+      {mountedTabs.settings ? (
+        <div hidden={props.workspaceTab !== "settings"}>
+          {settingsTabContent}
+        </div>
+      ) : null}
+      {mountedTabs.intelligence ? (
+        <div hidden={props.workspaceTab !== "intelligence"}>
+          {intelligenceTabContent}
+        </div>
+      ) : null}
     </>
   );
 }

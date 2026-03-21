@@ -11,7 +11,7 @@ import TasksPage from "../../../pages/tasks/TasksPage";
 import VisualizePage from "../../../pages/visualize/VisualizePage";
 import { writeStoredSelectedRunId } from "../../../pages/visualize/visualizeSelection";
 
-export function WorkspaceTabSkeleton(props: { tab: string }) {
+function WorkspaceTabSkeleton(props: { tab: string }) {
   const titleByTab: Record<string, string> = {
     feed: "피드 불러오는 중",
     knowledge: "데이터베이스 불러오는 중",
@@ -40,15 +40,20 @@ export function MainAppWorkspaceContent(props: any) {
   const [mountedTabs, setMountedTabs] = useState<Record<string, boolean>>(() => ({
     [initialTab]: true,
   }));
-  const actualTab = String(props.workspaceTab ?? "").trim();
-  const displayTab = String(props.displayWorkspaceTab ?? actualTab).trim() || actualTab;
 
   useEffect(() => {
-    if (!actualTab || mountedTabs[actualTab]) {
+    const nextTab = String(props.workspaceTab ?? "").trim();
+    if (!nextTab) {
       return;
     }
-    setMountedTabs((current) => (current[actualTab] ? current : { ...current, [actualTab]: true }));
-  }, [actualTab, mountedTabs]);
+    if (mountedTabs[nextTab]) {
+      return;
+    }
+    const rafId = window.requestAnimationFrame(() => {
+      setMountedTabs((current) => (current[nextTab] ? current : { ...current, [nextTab]: true }));
+    });
+    return () => window.cancelAnimationFrame(rafId);
+  }, [mountedTabs, props.workspaceTab]);
 
   const handleInjectContextSources = useCallback((entries: any[]) => {
     const sourceIds = entries.map((entry) => entry.id);
@@ -292,11 +297,12 @@ export function MainAppWorkspaceContent(props: any) {
     props.running,
   ]);
 
+  const activeTab = String(props.workspaceTab ?? "").trim();
   const renderTab = (tab: string, content: ReactNode) => {
-    const isActive = displayTab === tab;
-    const isMounted = mountedTabs[tab] || actualTab === tab;
-    const isPending = isActive && actualTab !== tab;
-    if (isPending) {
+    const isActive = activeTab === tab;
+    const isMounted = mountedTabs[tab];
+    const isWarming = isActive && !isMounted;
+    if (isWarming) {
       return <WorkspaceTabSkeleton tab={tab} />;
     }
     if (!isMounted) {

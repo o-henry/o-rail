@@ -840,7 +840,7 @@
   min-height: 0;
   height: 100%;
   overflow: auto;
-  padding: 12px clamp(16px, 4vw, 40px) 0;
+  padding: 12px clamp(16px, 4vw, 40px) 28px;
   display: grid;
   align-content: start;
   gap: 12px;

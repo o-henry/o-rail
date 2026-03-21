@@ -995,6 +995,74 @@
   flex-wrap: wrap;
 }
 
+.tasks-thread-message-row.is-assistant .tasks-thread-log-line {
+  display: grid;
+  gap: 8px;
+  width: min(820px, 96%);
+}
+
+.tasks-thread-message-markdown {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  line-height: 1.65;
+  color: var(--text-main);
+}
+
+.tasks-thread-message-markdown > :first-child {
+  margin-top: 0;
+}
+
+.tasks-thread-message-markdown > :last-child {
+  margin-bottom: 0;
+}
+
+.tasks-thread-message-markdown h1,
+.tasks-thread-message-markdown h2,
+.tasks-thread-message-markdown h3 {
+  margin: 0;
+  color: var(--text-main);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.tasks-thread-message-markdown h1,
+.tasks-thread-message-markdown h2 {
+  padding-top: 4px;
+}
+
+.tasks-thread-message-markdown p,
+.tasks-thread-message-markdown ul,
+.tasks-thread-message-markdown ol {
+  margin: 0;
+}
+
+.tasks-thread-message-markdown ul,
+.tasks-thread-message-markdown ol {
+  display: grid;
+  gap: 8px;
+  padding-left: 18px;
+}
+
+.tasks-thread-message-markdown li {
+  line-height: 1.7;
+}
+
+.tasks-thread-message-markdown a {
+  color: #155eef;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  word-break: break-word;
+}
+
+.tasks-thread-message-markdown code {
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: rgba(243, 245, 249, 1);
+  font-family: "DepartureMonoRail", "Galmuri11", monospace;
+  font-size: 11px;
+}
+
 .tasks-thread-message-row {
   display: grid;
   gap: 4px;

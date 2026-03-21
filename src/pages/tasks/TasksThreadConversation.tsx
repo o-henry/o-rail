@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { AgenticCoordinationState, SessionIndexEntry } from "../../features/orchestration/agentic/coordinationTypes";
 import { useI18n } from "../../i18n";
 import { TasksThreadOrchestrationCard } from "./TasksThreadOrchestrationCard";
+import { TasksThreadMessageContent } from "./TasksThreadMessageContent";
 import {
   formatRelativeUpdateAge,
   inferNextLiveAction,
@@ -189,7 +190,7 @@ export function TasksThreadConversation(props: TasksThreadConversationProps) {
             <article className={`tasks-thread-message-row is-${message.role}`} key={message.id}>
               {parsed.label ? <span className="tasks-thread-message-label">{parsed.label}</span> : null}
               <div className="tasks-thread-log-line">
-                {parsed.body}
+                {message.role === "assistant" ? <TasksThreadMessageContent content={parsed.body} /> : parsed.body}
                 {isFinishedThreadMessage(message) ? <span className="tasks-thread-finish-badge">FINISH</span> : null}
               </div>
               {parsed.artifactPath ? (

@@ -25,6 +25,7 @@ export function MainAppShell(props: any) {
     canvasFullscreen,
     canvasNodes,
     canvasZoom,
+    codexAuthCheckPending,
     codexAuthBusy,
     codexMultiAgentMode,
     codexMultiAgentModeOptions,
@@ -53,6 +54,7 @@ export function MainAppShell(props: any) {
     isNodeDragAllowedTarget,
     isWorkflowBusy,
     loginCompleted,
+    codexLoginGateOpen,
     marqueeSelection,
     missionControl,
     nodeAnchorSides,
@@ -215,6 +217,8 @@ export function MainAppShell(props: any) {
               canRunGraphNow={canRunGraphNow}
               canvasFullscreen={canvasFullscreen}
               canvasNodes={canvasNodes}
+              codexAuthCheckPending={codexAuthCheckPending}
+              codexLoginLocked={codexLoginGateOpen}
               graphNodes={graph.nodes}
               canvasZoom={canvasZoom}
               graphViewMode={graphViewMode}
@@ -336,6 +340,7 @@ export function MainAppShell(props: any) {
               status: post.status,
             }))}
           codexAuthBusy={codexAuthBusy}
+          codexAuthCheckPending={codexAuthCheckPending}
           codexMultiAgentMode={codexMultiAgentMode}
           codexMultiAgentModeOptions={codexMultiAgentModeOptions}
           connectedProviderCount={webBridgeStatus.connectedProviders.length}
@@ -412,10 +417,13 @@ export function MainAppShell(props: any) {
         approvalDecisions={approvalDecisions}
         approvalSourceLabel={approvalSourceLabel}
         approvalSubmitting={approvalSubmitting}
+        codexLoginGateOpen={codexLoginGateOpen}
         formatUnknown={formatUnknown}
         onCancelPendingWebTurn={onCancelPendingWebTurn}
         onCopyPendingWebPrompt={onCopyPendingWebPrompt}
         onDismissPendingWebTurn={onDismissPendingWebTurn}
+        onLoginCodex={onLoginCodex}
+        onOpenCodexSettings={() => onSelectWorkspaceTab("settings")}
         onOpenPendingProviderWindow={onOpenPendingProviderWindow}
         onOpenProviderSession={onOpenProviderSession}
         onRespondApproval={onRespondApproval}

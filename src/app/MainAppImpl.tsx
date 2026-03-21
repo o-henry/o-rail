@@ -384,6 +384,7 @@ function App() {
   });
   const [costPreset, setCostPreset] = useState<CostPreset>("balanced");
   const [workflowQuestion, setWorkflowQuestion] = useState("");
+  const [codexAuthCheckPending, setCodexAuthCheckPending] = useState(false);
   const [workflowGraphViewMode, setWorkflowGraphViewMode] = useState<WorkflowGraphViewMode>("graph");
   const [workflowSidePanelsVisible, setWorkflowSidePanelsVisible] = useState(true);
   const [openWorkflowAgentTerminalNodeId, setOpenWorkflowAgentTerminalNodeId] = useState("");
@@ -1040,6 +1041,19 @@ function App() {
   const scraplingAutoPrepareCwdRef = useRef("");
 
   useEffect(() => {
+    if (!hasTauriRuntime) {
+      setCodexAuthCheckPending(false);
+      return;
+    }
+    const resolvedCwd = String(cwd ?? "").trim();
+    if (!resolvedCwd || resolvedCwd === ".") {
+      setCodexAuthCheckPending(false);
+      return;
+    }
+    setCodexAuthCheckPending(true);
+  }, [cwd, hasTauriRuntime]);
+
+  useEffect(() => {
     if (!hasTauriRuntime || engineStarted) {
       return;
     }
@@ -1057,6 +1071,9 @@ function App() {
       .catch((error) => {
         autoEngineStartRequestedRef.current = false;
         setError(toErrorText(error));
+      })
+      .finally(() => {
+        setCodexAuthCheckPending(false);
       });
   }, [cwd, engineStarted, ensureEngineStarted, hasTauriRuntime, refreshAuthStateFromEngine, setError, setStatus]);
 
@@ -1665,6 +1682,8 @@ function App() {
     onCancelGraphRun,
   } = createRunGraphControlHandlers({
     cwd,
+    hasTauriRuntime,
+    loginCompleted,
     setError,
     setStatus,
     collectRequiredWebProviders,
@@ -2032,13 +2051,16 @@ function App() {
   }, [selectedNodeRoleLockId, workflowRoleId]);
   const canClearGraph = !isWorkflowBusy && (graph.nodes.length > 0 || graph.edges.length > 0);
   const isWorkspaceCwdConfigured = String(cwd ?? "").trim().length > 0 && String(cwd ?? "").trim() !== ".";
+  const codexLoginGateOpen = hasTauriRuntime && !codexAuthCheckPending && !loginCompleted;
   const canRunWithoutQuestion = workflowGraphViewMode === "rag";
   const canRunGraphNow =
-    canResumeGraph ||
-    (isWorkspaceCwdConfigured &&
-      !isWorkflowBusy &&
-      graphForCanvas.nodes.length > 0 &&
-      (canRunWithoutQuestion || workflowQuestion.trim().length > 0));
+    !codexAuthCheckPending &&
+    !codexLoginGateOpen &&
+    (canResumeGraph ||
+      (isWorkspaceCwdConfigured &&
+        !isWorkflowBusy &&
+        graphForCanvas.nodes.length > 0 &&
+        (canRunWithoutQuestion || workflowQuestion.trim().length > 0)));
   const {
     currentFeedPosts,
     feedCategoryPosts,
@@ -2678,6 +2700,7 @@ function App() {
       canvasFullscreen={canvasFullscreen}
       canvasNodes={canvasNodes}
       canvasZoom={canvasZoom}
+      codexAuthCheckPending={codexAuthCheckPending}
       codexAuthBusy={codexAuthBusy}
       codexMultiAgentMode={codexMultiAgentMode}
       codexMultiAgentModeOptions={codexMultiAgentModeOptions}
@@ -2709,6 +2732,7 @@ function App() {
       hasTauriRuntime={hasTauriRuntime}
       isWorkflowBusy={isWorkflowBusy}
       loginCompleted={loginCompleted}
+      codexLoginGateOpen={codexLoginGateOpen}
       marqueeSelection={marqueeSelection}
       missionControl={missionControl}
       nodeAnchorSides={NODE_ANCHOR_SIDES}

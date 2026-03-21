@@ -24,6 +24,12 @@ export function createRunGraphControlHandlers(params: any) {
       return null;
     }
 
+    if (params.hasTauriRuntime && !params.loginCompleted) {
+      params.setError("Codex 로그인 후 그래프를 실행할 수 있습니다.");
+      params.setStatus("로그인 필요");
+      return null;
+    }
+
     if (!skipWebConnectPreflight) {
       const requiredWebProviders = params.collectRequiredWebProviders(params.graph.nodes);
       if (requiredWebProviders.length > 0) {

@@ -4,6 +4,8 @@ import { createRunGraphControlHandlers } from "./runGraphControlHandlers";
 function createParams() {
   return {
     cwd: "/tmp/project",
+    hasTauriRuntime: true,
+    loginCompleted: true,
     setError: vi.fn(),
     setStatus: vi.fn(),
     collectRequiredWebProviders: vi.fn(() => []),
@@ -92,5 +94,22 @@ describe("createRunGraphControlHandlers", () => {
     expect(params.setError).toHaveBeenCalledWith(
       "질문 직접 입력으로 시작되는 노드가 없습니다. 최소 1개 노드를 질문에서 시작되게 연결하세요.",
     );
+  });
+
+  it("blocks graph execution when Codex login is missing", async () => {
+    const params = createParams();
+    params.loginCompleted = false;
+    params.graph = {
+      nodes: [{ id: "a", type: "turn", position: { x: 0, y: 0 }, config: {} }],
+      edges: [],
+      knowledge: { files: [], topK: 0, maxChars: 0 },
+    };
+    params.findDirectInputNodeIds = vi.fn(() => ["a"]);
+
+    const { prepareRunGraphStart } = createRunGraphControlHandlers(params);
+    const result = await prepareRunGraphStart(true);
+
+    expect(result).toBeNull();
+    expect(params.setError).toHaveBeenCalledWith("Codex 로그인 후 그래프를 실행할 수 있습니다.");
   });
 });

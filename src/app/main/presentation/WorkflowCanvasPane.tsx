@@ -82,6 +82,8 @@ type WorkflowCanvasPaneProps = {
   setCanvasFullscreen: Dispatch<SetStateAction<boolean>>;
   setPanMode: Dispatch<SetStateAction<boolean>>;
   canRunGraphNow: boolean;
+  codexLoginLocked: boolean;
+  codexAuthCheckPending: boolean;
   onRunGraph: () => Promise<void>;
   isGraphRunning: boolean;
   onCancelGraphRun: () => Promise<void>;
@@ -177,6 +179,8 @@ export default function WorkflowCanvasPane({
   setCanvasFullscreen,
   setPanMode,
   canRunGraphNow,
+  codexLoginLocked,
+  codexAuthCheckPending,
   onRunGraph,
   isGraphRunning,
   onCancelGraphRun,
@@ -473,6 +477,8 @@ export default function WorkflowCanvasPane({
         <WorkflowQuestionComposer
           attachedFiles={attachedFiles}
           canRunGraphNow={canRunGraphNow}
+          codexAuthCheckPending={codexAuthCheckPending}
+          codexLoginLocked={codexLoginLocked}
           isWorkflowBusy={isWorkflowBusy}
           onApplyModelSelection={onApplyModelSelection}
           onOpenKnowledgeFilePicker={onOpenKnowledgeFilePicker}

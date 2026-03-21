@@ -34,6 +34,8 @@ type TasksThreadComposerProps = {
   isReasonMenuOpen: boolean;
   reasoning: string;
   reasoningLabel: string;
+  codexLoginLocked: boolean;
+  codexAuthCheckPending: boolean;
   showStopButton: boolean;
   canUseStopButton: boolean;
   canInterruptCurrentThread: boolean;
@@ -107,6 +109,12 @@ export function buildSelectedTasksComposerBadges(params: {
 export function TasksThreadComposer(props: TasksThreadComposerProps) {
   const { t } = useI18n();
   const canSubmit = canSubmitTasksComposer(props.composerDraft);
+  const composerDisabled = props.codexLoginLocked || props.codexAuthCheckPending;
+  const composerPlaceholder = props.codexAuthCheckPending
+    ? t("tasks.composer.authChecking")
+    : props.codexLoginLocked
+      ? t("tasks.composer.loginRequired")
+      : t("tasks.composer.placeholder");
   const selectedBadges = buildSelectedTasksComposerBadges({
     roleIds: props.selectedComposerRoleIds,
     modeOverride: props.composerCoordinationModeOverride,
@@ -195,11 +203,12 @@ export function TasksThreadComposer(props: TasksThreadComposerProps) {
           aria-label="Tasks composer"
           className="tasks-thread-composer-input"
           data-e2e="tasks-composer-input"
+          disabled={composerDisabled}
           onClick={(event) => props.onComposerCursorChange(event.currentTarget.selectionStart ?? 0)}
           onChange={(event) => props.onComposerDraftChange(event.target.value, event.target.selectionStart ?? event.target.value.length)}
           onKeyDown={props.onComposerKeyDown}
           onKeyUp={(event) => props.onComposerCursorChange(event.currentTarget.selectionStart ?? 0)}
-          placeholder={t("tasks.composer.placeholder")}
+          placeholder={composerPlaceholder}
           rows={1}
           value={props.composerDraft}
         />
@@ -211,6 +220,7 @@ export function TasksThreadComposer(props: TasksThreadComposerProps) {
             aria-label="Attach code files"
             className="agents-icon-button"
             data-e2e="tasks-attach-files"
+            disabled={composerDisabled}
             onClick={props.onOpenAttachmentPicker}
             type="button"
           >
@@ -223,6 +233,7 @@ export function TasksThreadComposer(props: TasksThreadComposerProps) {
               aria-haspopup="listbox"
               className="agents-model-button"
               data-e2e="tasks-model-trigger"
+              disabled={composerDisabled}
               onClick={props.onToggleModelMenu}
               type="button"
             >
@@ -254,6 +265,7 @@ export function TasksThreadComposer(props: TasksThreadComposerProps) {
               aria-haspopup="listbox"
               className="agents-model-button"
               data-e2e="tasks-reasoning-trigger"
+              disabled={composerDisabled}
               onClick={props.onToggleReasonMenu}
               type="button"
             >
@@ -298,7 +310,7 @@ export function TasksThreadComposer(props: TasksThreadComposerProps) {
               aria-label={t("tasks.actions.send")}
               className="agents-send-button"
               data-e2e="tasks-send-button"
-              disabled={!canSubmit}
+              disabled={composerDisabled || !canSubmit}
               onClick={props.onSubmit}
               title={t("tasks.actions.send")}
               type="button"

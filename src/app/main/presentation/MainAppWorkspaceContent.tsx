@@ -122,14 +122,26 @@ export function MainAppWorkspaceContent(props: any) {
   const tasksTabContent = useMemo(() => (
     <TasksPage
       appendWorkspaceEvent={props.appendWorkspaceEvent}
+      codexAuthCheckPending={props.codexAuthCheckPending}
       cwd={props.cwd}
       hasTauriRuntime={props.hasTauriRuntime}
       invokeFn={props.invokeFn}
+      loginCompleted={props.loginCompleted}
       onOpenSettings={handleOpenSettings}
       publishAction={props.publishAction}
       setStatus={props.setStatus}
     />
-  ), [handleOpenSettings, props.appendWorkspaceEvent, props.cwd, props.hasTauriRuntime, props.invokeFn, props.publishAction, props.setStatus]);
+  ), [
+    handleOpenSettings,
+    props.appendWorkspaceEvent,
+    props.codexAuthCheckPending,
+    props.cwd,
+    props.hasTauriRuntime,
+    props.invokeFn,
+    props.loginCompleted,
+    props.publishAction,
+    props.setStatus,
+  ]);
   const shellTabContent = useMemo(() => (
     <ShellPage
       appendWorkspaceEvent={props.appendWorkspaceEvent}

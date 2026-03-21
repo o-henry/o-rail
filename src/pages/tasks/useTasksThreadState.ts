@@ -119,6 +119,8 @@ type InvokeFn = <T>(command: string, args?: Record<string, unknown>) => Promise<
 type Params = {
   cwd: string;
   hasTauriRuntime: boolean;
+  loginCompleted: boolean;
+  codexAuthCheckPending: boolean;
   invokeFn: InvokeFn;
   publishAction: (action: AgenticAction) => void;
   appendWorkspaceEvent: (params: {
@@ -153,6 +155,14 @@ function nowIso(): string {
 
 function nextId(prefix: string): string {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}_${Date.now().toString(36)}`;
+}
+
+export function isTasksCodexExecutionBlocked(params: {
+  hasTauriRuntime: boolean;
+  loginCompleted: boolean;
+  codexAuthCheckPending: boolean;
+}): boolean {
+  return params.hasTauriRuntime && (params.codexAuthCheckPending || !params.loginCompleted);
 }
 
 export function rememberTasksProjectPath(projectPaths: string[], nextPath: string): string[] {
@@ -1032,6 +1042,14 @@ export function useTasksThreadState(params: Params) {
   }, [reloadThreads, rememberSelectedAgent, rememberSelectedFile, selectedAgentIdsByThread, selectedFilePathsByThread]);
 
   const submitComposer = useCallback(async () => {
+    if (isTasksCodexExecutionBlocked(params)) {
+      params.setStatus(
+        params.codexAuthCheckPending
+          ? "Codex 로그인 상태를 확인하는 중입니다. 잠시 후 다시 시도하세요."
+          : "Codex 로그인 후 Tasks에서 메시지를 보낼 수 있습니다.",
+      );
+      return;
+    }
     const rawPrompt = composerDraft.trim();
     if (!rawPrompt) {
       return;

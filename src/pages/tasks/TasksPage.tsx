@@ -18,7 +18,7 @@ import {
 } from "./taskAgentMentions";
 import { buildThreadFileTree } from "./threadFileTree";
 import { buildLiveAgentCards } from "./liveAgentState";
-import { useTasksThreadState } from "./useTasksThreadState";
+import { isTasksCodexExecutionBlocked, useTasksThreadState } from "./useTasksThreadState";
 import { TasksThreadNavPane } from "./TasksThreadNavPane";
 import { TasksThreadHeaderBar } from "./TasksThreadHeaderBar";
 import { TasksThreadConversation } from "./TasksThreadConversation";
@@ -30,6 +30,8 @@ type InvokeFn = <T>(command: string, args?: Record<string, unknown>) => Promise<
 type TasksPageProps = {
   cwd: string;
   hasTauriRuntime: boolean;
+  loginCompleted: boolean;
+  codexAuthCheckPending: boolean;
   invokeFn: InvokeFn;
   publishAction: (action: any) => void;
   appendWorkspaceEvent: (params: {
@@ -125,6 +127,11 @@ export default function TasksPage(props: TasksPageProps) {
     }),
     [state.canInterruptCurrentThread, state.composerSubmitPending],
   );
+  const codexComposerLocked = isTasksCodexExecutionBlocked({
+    hasTauriRuntime: props.hasTauriRuntime,
+    loginCompleted: props.loginCompleted,
+    codexAuthCheckPending: props.codexAuthCheckPending,
+  });
 
   useEffect(() => {
     setThreadTitleDraft(headerTitle);
@@ -404,6 +411,8 @@ export default function TasksPage(props: TasksPageProps) {
 
         <TasksThreadComposer
           attachedFiles={state.attachedFiles}
+          codexAuthCheckPending={props.codexAuthCheckPending}
+          codexLoginLocked={codexComposerLocked}
           canUseStopButton={state.canInterruptCurrentThread}
           canInterruptCurrentThread={state.canInterruptCurrentThread}
           composerCoordinationModeOverride={state.composerCoordinationModeOverride}

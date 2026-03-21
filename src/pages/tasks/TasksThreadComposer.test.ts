@@ -1,7 +1,10 @@
+import { createElement, createRef } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import {
   buildSelectedTasksComposerBadges,
   canSubmitTasksComposer,
+  TasksThreadComposer,
   shouldShowTasksComposerStopButton,
 } from "./TasksThreadComposer";
 
@@ -64,5 +67,51 @@ describe("shouldShowTasksComposerStopButton", () => {
       canInterruptCurrentThread: false,
       composerSubmitPending: false,
     })).toBe(false);
+  });
+});
+
+describe("TasksThreadComposer", () => {
+  it("disables the composer while Codex login is required", () => {
+    const html = renderToStaticMarkup(
+      createElement(TasksThreadComposer, {
+        attachedFiles: [],
+        canInterruptCurrentThread: false,
+        canUseStopButton: false,
+        codexAuthCheckPending: false,
+        codexLoginLocked: true,
+        composerCoordinationModeOverride: null,
+        composerDraft: "",
+        composerRef: createRef<HTMLTextAreaElement>(),
+        isModelMenuOpen: false,
+        isReasonMenuOpen: false,
+        mentionIndex: 0,
+        mentionMatch: null,
+        modelMenuRef: createRef<HTMLDivElement>(),
+        onClearCoordinationModeOverride: () => undefined,
+        onComposerCursorChange: () => undefined,
+        onComposerDraftChange: () => undefined,
+        onComposerKeyDown: () => undefined,
+        onOpenAttachmentPicker: () => undefined,
+        onRemoveAttachedFile: () => undefined,
+        onRemoveComposerRole: () => undefined,
+        onSelectMention: () => undefined,
+        onSetModel: () => undefined,
+        onSetReasoning: () => undefined,
+        onStop: () => undefined,
+        onSubmit: () => undefined,
+        onToggleModelMenu: () => undefined,
+        onToggleReasonMenu: () => undefined,
+        reasonMenuRef: createRef<HTMLDivElement>(),
+        reasoning: "중간",
+        reasoningLabel: "MEDIUM",
+        selectedComposerRoleIds: [],
+        selectedModelOption: { value: "GPT-5.4", label: "GPT-5.4" },
+        showStopButton: false,
+        stoppingComposerRun: false,
+      }),
+    );
+
+    expect(html).toContain("disabled");
+    expect(html).toContain("Codex 로그인 후 Tasks를 사용할 수 있습니다.");
   });
 });

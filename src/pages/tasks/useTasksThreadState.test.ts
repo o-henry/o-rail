@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  isTasksCodexExecutionBlocked,
   rememberTasksProjectPath,
   revealTasksProjectPathState,
 } from "./useTasksThreadState";
@@ -29,5 +30,31 @@ describe("revealTasksProjectPathState", () => {
       hiddenProjectPaths: [],
       projectPaths: ["/repo/other", "/repo/hidden"],
     });
+  });
+});
+
+describe("isTasksCodexExecutionBlocked", () => {
+  it("blocks desktop task execution while auth is still being checked", () => {
+    expect(isTasksCodexExecutionBlocked({
+      hasTauriRuntime: true,
+      loginCompleted: false,
+      codexAuthCheckPending: true,
+    })).toBe(true);
+  });
+
+  it("blocks desktop task execution when login is missing", () => {
+    expect(isTasksCodexExecutionBlocked({
+      hasTauriRuntime: true,
+      loginCompleted: false,
+      codexAuthCheckPending: false,
+    })).toBe(true);
+  });
+
+  it("allows browser-mode task execution without the Codex gate", () => {
+    expect(isTasksCodexExecutionBlocked({
+      hasTauriRuntime: false,
+      loginCompleted: false,
+      codexAuthCheckPending: false,
+    })).toBe(false);
   });
 });

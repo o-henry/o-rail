@@ -13,6 +13,8 @@ type WorkflowQuestionComposerProps = {
   attachedFiles: KnowledgeFileRef[];
   canRunGraphNow: boolean;
   isWorkflowBusy: boolean;
+  codexLoginLocked: boolean;
+  codexAuthCheckPending: boolean;
   onRunGraph: () => Promise<void>;
   onApplyModelSelection: (selection: {
     modelValue: string;
@@ -33,6 +35,8 @@ export default function WorkflowQuestionComposer({
   attachedFiles,
   canRunGraphNow,
   isWorkflowBusy,
+  codexLoginLocked,
+  codexAuthCheckPending,
   onRunGraph,
   onApplyModelSelection,
   onOpenKnowledgeFilePicker,
@@ -54,6 +58,12 @@ export default function WorkflowQuestionComposer({
   const isReasonLevelSelectable = selectedModelOption.allowsReasonLevel;
   const reasonLevelOptions = useMemo(() => [...TURN_REASONING_LEVEL_OPTIONS], []);
   const hasQuestion = workflowQuestion.trim().length > 0;
+  const composerDisabled = isWorkflowBusy || codexLoginLocked || codexAuthCheckPending;
+  const placeholder = codexAuthCheckPending
+    ? t("workflow.question.authChecking")
+    : codexLoginLocked
+      ? t("workflow.question.loginRequired")
+      : t("workflow.question.placeholder");
 
   useEffect(() => {
     if (isReasonLevelSelectable) {
@@ -108,10 +118,10 @@ export default function WorkflowQuestionComposer({
   return (
     <div className="question-input agents-composer workflow-question-input">
       <textarea
-        disabled={isWorkflowBusy}
+        disabled={composerDisabled}
         onChange={(e) => setWorkflowQuestion(e.currentTarget.value)}
         onKeyDown={onComposerKeyDown}
-        placeholder={t("workflow.question.placeholder")}
+        placeholder={placeholder}
         ref={questionInputRef}
         rows={1}
         value={workflowQuestion}
@@ -143,6 +153,7 @@ export default function WorkflowQuestionComposer({
           <button
             aria-label={t("workflow.knowledge.addFile")}
             className="agents-icon-button"
+            disabled={composerDisabled}
             onClick={onOpenKnowledgeFilePicker}
             type="button"
           >
@@ -153,6 +164,7 @@ export default function WorkflowQuestionComposer({
               aria-expanded={isModelMenuOpen}
               aria-haspopup="listbox"
               className="agents-model-button"
+              disabled={composerDisabled}
               onClick={() => setIsModelMenuOpen((prev) => !prev)}
               type="button"
             >
@@ -192,7 +204,7 @@ export default function WorkflowQuestionComposer({
               aria-expanded={isReasonMenuOpen}
               aria-haspopup="listbox"
               className="agents-reason-button"
-              disabled={!isReasonLevelSelectable}
+              disabled={composerDisabled || !isReasonLevelSelectable}
               onClick={() => {
                 if (!isReasonLevelSelectable) {
                   return;
@@ -235,7 +247,7 @@ export default function WorkflowQuestionComposer({
         </div>
         <button
           className="primary-action question-create-button agents-send-button"
-          disabled={!canRunGraphNow || !hasQuestion}
+          disabled={composerDisabled || !canRunGraphNow || !hasQuestion}
           onClick={onSubmitWorkflowComposer}
           type="button"
         >

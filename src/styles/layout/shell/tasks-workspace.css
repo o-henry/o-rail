@@ -560,6 +560,8 @@
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 0;
+  padding-bottom: 14px;
+  box-sizing: border-box;
   background: #ffffff;
   border-radius: var(--tasks-wrapper-radius);
   overflow: hidden;

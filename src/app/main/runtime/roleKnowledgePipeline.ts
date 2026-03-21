@@ -75,6 +75,8 @@ const SCRAPLING_BRIDGE_NOT_READY = "SCRAPLING_BRIDGE_NOT_READY";
 const bridgeReadyPromiseByCwd = new Map<string, Promise<void>>();
 const ROLE_KB_BRIDGE_TIMEOUT_MS = 12000;
 const ROLE_KB_FETCH_TIMEOUT_MS = 10000;
+const ROLE_KB_MIN_SUCCESS_RATIO = 0.5;
+const ROLE_KB_MAX_ATTEMPTS = 3;
 
 function resolveRoleTemplate(roleId: StudioRoleId) {
   return (
@@ -336,19 +338,87 @@ async function fetchRoleKnowledgeSource(params: {
   }
 }
 
+function resolveBootstrapMinSuccessCount(sourceCount: number): number {
+  if (sourceCount <= 0) {
+    return 0;
+  }
+  return Math.max(1, Math.ceil(sourceCount * ROLE_KB_MIN_SUCCESS_RATIO));
+}
+
+function mergeBootstrapSourceResults(
+  previous: RoleKnowledgeSource[] | null,
+  current: RoleKnowledgeSource[],
+): RoleKnowledgeSource[] {
+  if (!previous || previous.length === 0) {
+    return current;
+  }
+  return current.map((row, index) => {
+    const prior = previous[index];
+    if (!prior) {
+      return row;
+    }
+    if (prior.status === "ok" && row.status !== "ok") {
+      return prior;
+    }
+    return row;
+  });
+}
+
+async function fetchBootstrapSourcesWithRetry(params: {
+  cwd: string;
+  invokeFn: InvokeFn;
+  roleId: StudioRoleId;
+  urls: string[];
+}) {
+  const minSuccessCount = resolveBootstrapMinSuccessCount(params.urls.length);
+  let bestResults: RoleKnowledgeSource[] = [];
+  let successfulSources: RoleKnowledgeSource[] = [];
+  let attemptsUsed = 0;
+
+  while (attemptsUsed < ROLE_KB_MAX_ATTEMPTS) {
+    attemptsUsed += 1;
+    const currentResults = await Promise.all(
+      params.urls.map((url) => fetchRoleKnowledgeSource({
+        cwd: params.cwd,
+        invokeFn: params.invokeFn,
+        url,
+      })),
+    );
+    bestResults = mergeBootstrapSourceResults(bestResults, currentResults);
+    successfulSources = bestResults.filter((row) => row.status === "ok");
+    if (successfulSources.length >= minSuccessCount) {
+      break;
+    }
+    if (params.roleId !== "research_analyst") {
+      break;
+    }
+  }
+
+  return {
+    sourceResults: bestResults,
+    successfulSources,
+    attemptsUsed,
+    minSuccessCount,
+  };
+}
+
 export async function bootstrapRoleKnowledgeProfile(input: RoleKnowledgeBootstrapInput): Promise<RoleKnowledgeBootstrapResult> {
   const roleTemplate = resolveRoleTemplate(input.roleId);
   const urls = buildRoleKnowledgeBootstrapCandidates({
     roleId: input.roleId,
     userPrompt: input.userPrompt,
   });
-  const sourceResults = await Promise.all(urls.map((url) => fetchRoleKnowledgeSource({
-      cwd: input.cwd,
-      invokeFn: input.invokeFn,
-      url,
-    })));
-
-  const successfulSources = sourceResults.filter((row) => row.status === "ok");
+  const {
+    sourceResults,
+    successfulSources,
+    attemptsUsed,
+    minSuccessCount,
+  } = await fetchBootstrapSourcesWithRetry({
+    cwd: input.cwd,
+    invokeFn: input.invokeFn,
+    roleId: input.roleId,
+    urls,
+  });
   const evidencePoints = successfulSources
     .map((row) => truncateText(row.summary || row.content, 180))
     .filter(Boolean)
@@ -399,8 +469,8 @@ export async function bootstrapRoleKnowledgeProfile(input: RoleKnowledgeBootstra
     artifactPaths,
     message:
       successfulSources.length > 0
-        ? `ROLE_KB_BOOTSTRAP 완료 (${successfulSources.length}/${sourceResults.length})`
-        : `ROLE_KB_BOOTSTRAP 실패 (${successfulSources.length}/${sourceResults.length})`,
+        ? `ROLE_KB_BOOTSTRAP 완료 (${successfulSources.length}/${sourceResults.length})${attemptsUsed > 1 ? ` · 재시도 ${attemptsUsed}회` : ""}${successfulSources.length < minSuccessCount ? " · 부분 성공" : ""}`
+        : `ROLE_KB_BOOTSTRAP 실패 (${successfulSources.length}/${sourceResults.length})${attemptsUsed > 1 ? ` · 재시도 ${attemptsUsed}회` : ""}`,
   };
 }
 

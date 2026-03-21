@@ -79,7 +79,7 @@ describe("roleKnowledgePipeline", () => {
         runId: "role-timeout",
         userPrompt: "스팀 장르 시장을 조사해줘",
       });
-      await vi.advanceTimersByTimeAsync(25000);
+      await vi.advanceTimersByTimeAsync(90000);
       const result = await promise;
       expect(result.sourceSuccessCount).toBe(0);
       expect(result.profile.summary).toContain("외부 근거 수집에 실패했습니다");
@@ -87,7 +87,7 @@ describe("roleKnowledgePipeline", () => {
     } finally {
       vi.useRealTimers();
     }
-  });
+  }, 15000);
 
   it("stores and injects role knowledge block into prompt", async () => {
     const invokeFn = vi.fn(async (command: string, args?: Record<string, unknown>) => {
@@ -148,7 +148,7 @@ describe("roleKnowledgePipeline", () => {
     expect(injected.prompt).toContain("[ROLE_KB_INJECT]");
     expect(injected.prompt).toContain("<task_request>");
     expect(injected.prompt).toContain("이동 시스템을 구현해줘");
-  });
+  }, 15000);
 
   it("builds search-first bootstrap candidates from the prompt and role profile", () => {
     const urls = buildRoleKnowledgeBootstrapCandidates({
@@ -179,4 +179,49 @@ describe("roleKnowledgePipeline", () => {
       expect(url.includes("notion.so/help")).toBe(false);
     }
   });
+
+  it("retries researcher bootstrap until it reaches at least half successful sources", async () => {
+    const attemptsByUrl = new Map<string, number>();
+    const invokeFn = vi.fn(async (command: string, args?: Record<string, unknown>) => {
+      if (command === "dashboard_scrapling_bridge_start") {
+        return {
+          running: true,
+          scrapling_ready: true,
+          message: "ready",
+        };
+      }
+      if (command === "dashboard_scrapling_fetch_url") {
+        const url = String(args?.url ?? "");
+        const attempt = (attemptsByUrl.get(url) ?? 0) + 1;
+        attemptsByUrl.set(url, attempt);
+        if (attempt === 1) {
+          throw new Error(`temporary timeout for ${url}`);
+        }
+        return {
+          url,
+          fetched_at: "2026-03-21T00:00:00Z",
+          summary: `summary for ${url}`,
+          content: `content for ${url}`,
+          json_path: `/tmp/${attemptsByUrl.size}.json`,
+        };
+      }
+      if (command === "dashboard_scrapling_bridge_install") {
+        return { installed: true };
+      }
+      throw new Error(`unexpected command: ${command}`);
+    }) as unknown as <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
+
+    const result = await bootstrapRoleKnowledgeProfile({
+      cwd: "/tmp/workspace",
+      invokeFn,
+      roleId: "research_analyst",
+      taskId: "TASK-RETRY",
+      runId: "role-retry",
+      userPrompt: "2026년 3월 20일 기준 가장 인기 있는 게임 장르를 조사해줘",
+    });
+
+    expect(result.sourceCount).toBeGreaterThan(0);
+    expect(result.sourceSuccessCount).toBeGreaterThanOrEqual(Math.ceil(result.sourceCount * 0.5));
+    expect(result.message).toContain("재시도");
+  }, 15000);
 });

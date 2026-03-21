@@ -214,6 +214,12 @@ describe("resolveLatestFailureReason", () => {
       { type: "stage_error", stage: "codex", message: "role execution timed out after 300000ms", at: "2026-03-21T00:01:00.000Z" },
     ])).toBe("role execution timed out after 300000ms");
   });
+
+  it("treats bootstrap failure summaries as a failure reason", () => {
+    expect(resolveLatestFailureReason([
+      { type: "stage_done", stage: "crawler", message: "ROLE_KB_BOOTSTRAP 실패 (0/7)", at: "2026-03-21T00:01:00.000Z" },
+    ])).toBe("ROLE_KB_BOOTSTRAP 실패 (0/7)");
+  });
 });
 
 describe("inferNextLiveAction", () => {
@@ -231,5 +237,14 @@ describe("inferNextLiveAction", () => {
       activityState: "active",
       failureReason: "",
     })).toContain("후보 소스");
+  });
+
+  it("flags degraded codex execution when bootstrap found no sources", () => {
+    expect(inferNextLiveAction({
+      stage: "codex",
+      activityState: "active",
+      recentSourceCount: 0,
+      failureReason: "ROLE_KB_BOOTSTRAP 실패 (0/7)",
+    })).toContain("외부 근거 없이");
   });
 });

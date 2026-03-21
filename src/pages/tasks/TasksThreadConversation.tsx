@@ -227,16 +227,23 @@ export function TasksThreadConversation(props: TasksThreadConversationProps) {
               daysAgo: (value) => t("time.daysAgo", { value }),
             });
             const stateLabel =
-              liveState === "stalled"
+              failureReason.includes("ROLE_KB_BOOTSTRAP 실패") && recentSourceCount === 0
+                ? t("tasks.live.state.degraded")
+                : liveState === "stalled"
                 ? t("tasks.live.state.stalled")
                 : liveState === "delayed"
                   ? t("tasks.live.state.delayed")
                   : t("tasks.live.state.active");
+            const currentWorkLabel =
+              failureReason.includes("ROLE_KB_BOOTSTRAP 실패") && recentSourceCount === 0 && String(latestEvent?.stage ?? "").trim().toLowerCase() === "codex"
+                ? t("tasks.live.currentWork.degraded")
+                : latestEvent?.message || agent.summary || t("tasks.live.working");
             const nextAction = inferNextLiveAction({
               stage: latestEvent?.stage,
               activityState: liveState,
               failureReason,
               interrupted: (agent.summary || "").includes("중단"),
+              recentSourceCount,
             });
             return (
               <article className="tasks-thread-message-row is-assistant is-live-placeholder" key={`live:${agent.agentId}`}>
@@ -255,7 +262,7 @@ export function TasksThreadConversation(props: TasksThreadConversationProps) {
                   </span>
                 </div>
                 <div className="tasks-thread-log-line">
-                  {latestEvent?.message || agent.summary || t("tasks.live.working")}
+                  {currentWorkLabel}
                 </div>
                 <div className="tasks-thread-live-detail">
                   {t("tasks.live.lastUpdate", { value: lastSeenLabel })}
@@ -270,7 +277,7 @@ export function TasksThreadConversation(props: TasksThreadConversationProps) {
                   </div>
                   <div>
                     <dt>{t("tasks.live.metric.currentWork")}</dt>
-                    <dd>{latestEvent?.message || agent.summary || t("tasks.live.working")}</dd>
+                    <dd>{currentWorkLabel}</dd>
                   </div>
                   <div>
                     <dt>{t("tasks.live.metric.sourcesSeen")}</dt>

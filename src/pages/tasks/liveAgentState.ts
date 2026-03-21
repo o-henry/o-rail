@@ -148,7 +148,7 @@ export function resolveLatestFailureReason(events: LiveAgentEvent[]): string {
     if (normalizedType === "stage_error" || normalizedType === "run_error") {
       return message;
     }
-    if (/(retry|재시도|timeout|timed out|unauthorized|failed|error|not materialized)/i.test(message)) {
+    if (/(retry|재시도|timeout|timed out|unauthorized|failed|error|not materialized|실패)/i.test(message)) {
       return message;
     }
   }
@@ -160,8 +160,16 @@ export function inferNextLiveAction(params: {
   activityState: LiveActivityState;
   failureReason?: string | null;
   interrupted?: boolean;
+  recentSourceCount?: number | null;
 }): string {
-  if (String(params.failureReason ?? "").trim()) {
+  const failureReason = String(params.failureReason ?? "").trim();
+  if (failureReason.includes("ROLE_KB_BOOTSTRAP 실패")) {
+    return "외부 근거 없이 진행 중이라 품질이 낮을 수 있습니다. 잠시 더 기다리거나 재시도하는 편이 좋습니다.";
+  }
+  if ((params.recentSourceCount ?? null) === 0 && String(params.stage ?? "").trim().toLowerCase() === "codex") {
+    return "외부 근거 없이 응답을 생성 중입니다. 이 질문은 재시도하거나 수집 성공 후 다시 실행하는 편이 좋습니다.";
+  }
+  if (failureReason) {
     return "실패 원인을 정리한 뒤 같은 요청을 재시도합니다.";
   }
   if (params.interrupted) {

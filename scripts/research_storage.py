@@ -1068,6 +1068,7 @@ def build_dynamic_collection_job(
     max_items: int,
     planner_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    job_id = build_run_id("collect")
     normalized_urls = [url for url in urls if url.startswith("http://") or url.startswith("https://")]
     normalized_keywords = [str(value).strip() for value in keywords if str(value).strip()]
     normalized_domains = [str(value or "").strip().lower() for value in (seed_domains or []) if str(value or "").strip()]
@@ -1090,7 +1091,7 @@ def build_dynamic_collection_job(
             domains.append(domain)
     for index, url in enumerate(normalized_urls):
         strategy = resolve_target_strategy(url, resolved_source_type)
-        target_id = sha256_text(f"{url}:{index}")[:20]
+        target_id = sha256_text(f"{job_id}:{url}:{index}")[:20]
         host = str(strategy["host"])
         if host and host not in domains:
             domains.append(host)
@@ -1115,7 +1116,7 @@ def build_dynamic_collection_job(
         preferred_execution_order = ["scrapling", "pinchtab", "rss"]
     return {
         "specVersion": 1,
-        "jobId": build_run_id("collect"),
+        "jobId": job_id,
         "jobKind": "dynamic_url_collection",
         "status": "planned",
         "label": label.strip() or f"Dynamic collection {resolved_source_type}",

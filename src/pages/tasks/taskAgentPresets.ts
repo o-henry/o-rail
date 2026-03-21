@@ -128,7 +128,7 @@ export type ThreadStageDefinition = {
 export type ThreadAgentPreset = (typeof UNITY_TASK_AGENT_PRESETS)[number];
 
 export const UNITY_THREAD_STAGE_DEFINITIONS: ThreadStageDefinition[] = [
-  { id: "brief", label: "요청 정리", ownerPresetIds: ["game_designer"] },
+  { id: "brief", label: "요청 정리", ownerPresetIds: ["researcher", "game_designer"] },
   { id: "design", label: "설계", ownerPresetIds: ["game_designer", "level_designer", "unity_architect"] },
   { id: "implement", label: "구현", ownerPresetIds: ["unity_implementer", "unity_editor_tools"] },
   { id: "integrate", label: "통합", ownerPresetIds: ["unity_architect", "technical_artist", "release_steward"] },

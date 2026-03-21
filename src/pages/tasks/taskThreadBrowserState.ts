@@ -42,7 +42,25 @@ export function defaultSelectedFile(detail: ThreadDetail | null): string {
 
 export function defaultSelectedAgent(detail: ThreadDetail | null): string {
   if (!detail) return "";
-  return detail.agents[0]?.id ?? "";
+  const statusPriority: Record<string, number> = {
+    thinking: 4,
+    awaiting_approval: 3,
+    done: 2,
+    failed: 1,
+    idle: 0,
+  };
+  const ranked = [...detail.agents].sort((left, right) => {
+    const statusDelta = (statusPriority[right.status] ?? -1) - (statusPriority[left.status] ?? -1);
+    if (statusDelta !== 0) {
+      return statusDelta;
+    }
+    const updatedDelta = String(right.lastUpdatedAt ?? "").localeCompare(String(left.lastUpdatedAt ?? ""));
+    if (updatedDelta !== 0) {
+      return updatedDelta;
+    }
+    return left.id.localeCompare(right.id);
+  });
+  return ranked[0]?.id ?? "";
 }
 
 export function withDerivedWorkflow(detail: ThreadDetail): ThreadDetail {

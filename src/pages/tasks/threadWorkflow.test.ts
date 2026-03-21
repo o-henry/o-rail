@@ -71,6 +71,14 @@ function buildDetail(overrides: Partial<ThreadDetail> = {}): ThreadDetail {
 }
 
 describe("deriveThreadWorkflow", () => {
+  it("keeps researcher visible as a brief-stage owner", () => {
+    const workflow = deriveThreadWorkflow(buildDetail());
+    const briefStage = workflow.stages.find((stage) => stage.id === "brief");
+
+    expect(briefStage?.ownerPresetIds[0]).toBe("researcher");
+    expect(briefStage?.ownerPresetIds).toContain("game_designer");
+  });
+
   it("prioritizes active stages ahead of earlier incomplete stages", () => {
     const workflow = deriveThreadWorkflow(buildDetail({
       agents: [

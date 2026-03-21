@@ -349,6 +349,31 @@ class ResearchStorageTests(unittest.TestCase):
             self.assertTrue(any("스팀" in keyword or "steam" in keyword.lower() for keyword in job["keywords"]))
             self.assertIn("planner", job)
 
+    def test_plan_agent_collection_job_allows_repeated_prompts_without_target_collisions(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace = Path(temp_dir)
+
+            first = plan_agent_collection_job(
+                workspace,
+                prompt="@researcher 스팀 게임 최근 리뷰와 장르별 평가를 조사해줘",
+                label="",
+                requested_source_type="auto",
+                max_items=40,
+            )
+            second = plan_agent_collection_job(
+                workspace,
+                prompt="@researcher 스팀 게임 최근 리뷰와 장르별 평가를 조사해줘",
+                label="",
+                requested_source_type="auto",
+                max_items=40,
+            )
+
+            first_targets = [row["targetId"] for row in first["job"]["targets"]]
+            second_targets = [row["targetId"] for row in second["job"]["targets"]]
+
+            self.assertEqual(len(list_collection_jobs(workspace)["items"]), 2)
+            self.assertTrue(set(first_targets).isdisjoint(second_targets))
+
     def test_plan_agent_collection_job_marks_steam_genre_ranking_requests(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace = Path(temp_dir)

@@ -139,7 +139,7 @@ export function applyBrowserStoreSnapshot(params: ApplyBrowserStoreParams): Thre
   params.store.details = normalizedDetails;
   const allItems = params.store.order.map((threadId) => params.store.details[threadId]).filter(Boolean).map(toThreadListItem);
   params.setThreadItems(allItems);
-  const visibleOrder = filterBrowserThreadIdsByProject(params.store.details, params.store.order, params.projectPath || params.cwd);
+  const visibleOrder = filterBrowserThreadIdsByProject(params.store.details, params.store.order, params.projectPath);
   const nextId =
     (params.preferredThreadId && visibleOrder.includes(params.preferredThreadId) ? params.preferredThreadId : "") ||
     (params.activeThreadId && visibleOrder.includes(params.activeThreadId) ? params.activeThreadId : "") ||
@@ -235,7 +235,7 @@ export async function reloadThreadList(params: ReloadThreadsParams) {
       projectPath: params.projectPath || undefined,
     });
     params.setThreadItems(items);
-    const visibleItems = filterThreadListByProject(items, params.projectPath || params.cwd);
+    const visibleItems = filterThreadListByProject(items, params.projectPath);
     const nextId =
       (params.preferredThreadId && visibleItems.some((item) => item.thread.threadId === params.preferredThreadId) ? params.preferredThreadId : "") ||
       (params.activeThreadId && visibleItems.some((item) => item.thread.threadId === params.activeThreadId) ? params.activeThreadId : "") ||

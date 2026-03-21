@@ -133,7 +133,7 @@ export function TasksThreadNavPane(props: TasksThreadNavPaneProps) {
           </button>
           <div className="tasks-thread-project-card">
             <strong>{t("tasks.project.label")}</strong>
-            <span title={props.projectPath || props.cwd}>{props.projectPath || props.cwd}</span>
+            <span title={props.projectPath || ""}>{props.projectPath || "-"}</span>
           </div>
         </div>
         <div className="tasks-thread-nav-copy">

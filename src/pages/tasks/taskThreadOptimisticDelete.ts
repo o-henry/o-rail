@@ -11,7 +11,7 @@ export function buildOptimisticThreadDeleteState(params: {
   const targetThreadId = String(params.targetThreadId ?? "").trim();
   const activeThreadId = String(params.activeThreadId ?? "").trim();
   const nextThreadItems = params.threadItems.filter((item) => item.thread.threadId !== targetThreadId);
-  const visibleItems = filterThreadListByProject(nextThreadItems, params.projectPath || params.cwd);
+  const visibleItems = filterThreadListByProject(nextThreadItems, params.projectPath);
   return {
     nextThreadItems,
     nextActiveThreadId:

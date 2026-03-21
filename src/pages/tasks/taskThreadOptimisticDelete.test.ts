@@ -55,4 +55,17 @@ describe("buildOptimisticThreadDeleteState", () => {
     expect(result.nextThreadItems.map((row) => row.thread.threadId)).toEqual(["a", "b"]);
     expect(result.nextActiveThreadId).toBe("a");
   });
+
+  it("uses all remaining visible threads when no project is selected", () => {
+    const result = buildOptimisticThreadDeleteState({
+      threadItems: [item("a", "/repo/one"), item("b", "/repo/two"), item("c", "/repo/three")],
+      targetThreadId: "b",
+      activeThreadId: "b",
+      projectPath: "",
+      cwd: "/repo/hidden",
+    });
+
+    expect(result.nextThreadItems.map((row) => row.thread.threadId)).toEqual(["a", "c"]);
+    expect(result.nextActiveThreadId).toBe("a");
+  });
 });

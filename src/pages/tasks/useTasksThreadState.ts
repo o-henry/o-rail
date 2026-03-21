@@ -191,6 +191,27 @@ export function revealTasksProjectPathState(params: {
   };
 }
 
+export function resolveTasksProjectSelection(params: {
+  cwd: string;
+  projectPath: string;
+  projectPaths: string[];
+  hiddenProjectPaths: string[];
+}): string {
+  const hiddenSet = new Set(params.hiddenProjectPaths.map((path) => normalizeTasksProjectPath(path)).filter(Boolean));
+  const normalizedCurrent = normalizeTasksProjectPath(params.projectPath);
+  if (normalizedCurrent && !hiddenSet.has(normalizedCurrent)) {
+    return normalizedCurrent;
+  }
+  const firstVisibleProject = params.projectPaths
+    .map((path) => normalizeTasksProjectPath(path))
+    .find((path) => path && !hiddenSet.has(path));
+  if (firstVisibleProject) {
+    return firstVisibleProject;
+  }
+  const normalizedCwd = normalizeTasksProjectPath(params.cwd);
+  return normalizedCwd && !hiddenSet.has(normalizedCwd) ? normalizedCwd : "";
+}
+
 async function writeTextByPath(invokeFn: InvokeFn, path: string, content: string) {
   const normalized = String(path ?? "").trim();
   const slashIndex = Math.max(normalized.lastIndexOf("/"), normalized.lastIndexOf("\\"));
@@ -205,9 +226,17 @@ async function writeTextByPath(invokeFn: InvokeFn, path: string, content: string
 }
 
 export function useTasksThreadState(params: Params) {
-  const initialProjectPath = useMemo(() => loadTasksProjectPath(params.cwd), [params.cwd]);
-  const initialProjectList = useMemo(() => loadTasksProjectList(params.cwd), [params.cwd]);
   const initialHiddenProjectList = useMemo(() => loadHiddenTasksProjectList(), []);
+  const initialProjectList = useMemo(() => loadTasksProjectList(params.cwd), [params.cwd]);
+  const initialProjectPath = useMemo(
+    () => resolveTasksProjectSelection({
+      cwd: params.cwd,
+      projectPath: loadTasksProjectPath(params.cwd),
+      projectPaths: initialProjectList,
+      hiddenProjectPaths: initialHiddenProjectList,
+    }),
+    [initialHiddenProjectList, initialProjectList, params.cwd],
+  );
   const [threadItems, setThreadItems] = useState<ThreadListItem[]>([]);
   const [activeThreadId, setActiveThreadId] = useState("");
   const [activeThread, setActiveThread] = useState<ThreadDetail | null>(null);
@@ -246,9 +275,9 @@ export function useTasksThreadState(params: Params) {
     () => projectPaths.filter((path) => !hiddenProjectPaths.includes(normalizeTasksProjectPath(path))),
     [hiddenProjectPaths, projectPaths],
   );
-  const threads = useMemo(() => filterThreadListByProject(visibleThreadItems, projectPath || params.cwd), [params.cwd, projectPath, visibleThreadItems]);
+  const threads = useMemo(() => filterThreadListByProject(visibleThreadItems, projectPath), [projectPath, visibleThreadItems]);
   const projectGroups = useMemo(
-    () => buildProjectThreadGroups(visibleThreadItems, projectPath || params.cwd, visibleProjectPaths, params.cwd),
+    () => buildProjectThreadGroups(visibleThreadItems, projectPath, visibleProjectPaths, params.cwd),
     [params.cwd, projectPath, visibleProjectPaths, visibleThreadItems],
   );
   const composerCoordinationPreview = useMemo(
@@ -461,18 +490,16 @@ export function useTasksThreadState(params: Params) {
   }, [hiddenProjectPaths]);
 
   useEffect(() => {
-    const normalizedProjectPath = normalizeTasksProjectPath(projectPath);
-    if (!normalizedProjectPath || !hiddenProjectPaths.includes(normalizedProjectPath)) {
-      return;
+    const nextProjectPath = resolveTasksProjectSelection({
+      cwd: params.cwd,
+      projectPath,
+      projectPaths,
+      hiddenProjectPaths,
+    });
+    if (nextProjectPath !== projectPath) {
+      setProjectPath(nextProjectPath);
     }
-    const fallbackProjectPath = visibleProjectPaths.find((path) => normalizeTasksProjectPath(path) !== normalizedProjectPath)
-      || visibleProjectPaths[0]
-      || normalizeTasksProjectPath(params.cwd)
-      || "";
-    if (fallbackProjectPath && fallbackProjectPath !== projectPath) {
-      setProjectPath(fallbackProjectPath);
-    }
-  }, [hiddenProjectPaths, params.cwd, projectPath, visibleProjectPaths]);
+  }, [hiddenProjectPaths, params.cwd, projectPath, projectPaths]);
 
   useEffect(() => {
     const discoveredPaths = threadItems

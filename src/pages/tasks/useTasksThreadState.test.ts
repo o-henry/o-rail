@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   isTasksCodexExecutionBlocked,
   rememberTasksProjectPath,
+  resolveTasksProjectSelection,
   revealTasksProjectPathState,
 } from "./useTasksThreadState";
 
@@ -30,6 +31,26 @@ describe("revealTasksProjectPathState", () => {
       hiddenProjectPaths: [],
       projectPaths: ["/repo/other", "/repo/hidden"],
     });
+  });
+});
+
+describe("resolveTasksProjectSelection", () => {
+  it("does not revive a hidden cwd as the selected project", () => {
+    expect(resolveTasksProjectSelection({
+      cwd: "/repo/rail-docs",
+      projectPath: "/repo/rail-docs",
+      projectPaths: ["/repo/rail-docs"],
+      hiddenProjectPaths: ["/repo/rail-docs"],
+    })).toBe("");
+  });
+
+  it("falls back to the first visible project when the selected one is hidden", () => {
+    expect(resolveTasksProjectSelection({
+      cwd: "/repo/rail-docs",
+      projectPath: "/repo/rail-docs",
+      projectPaths: ["/repo/rail-docs", "/repo/playground"],
+      hiddenProjectPaths: ["/repo/rail-docs"],
+    })).toBe("/repo/playground");
   });
 });
 

@@ -9,11 +9,13 @@ import type {
 } from "../../features/research-storage/domain/types";
 import { useI18n } from "../../i18n";
 import { useVisualizePageState } from "./useVisualizePageState";
+import { VisualizeChartAssistantPane, type VisualizeChartAssistantLogEntry } from "./VisualizeChartAssistantPane";
 import {
   chartRowsFromMarkdownFallback,
   mergeVisualizeMarkdownFallback,
   parseVisualizeMarkdownFallback,
 } from "./visualizeMarkdownFallback";
+import { buildVisualizeChartAssistantResult } from "./visualizeChartAssistant";
 import { VisualizeWidgetFrame } from "./VisualizeWidgetFrame";
 import type { VisualizeWidgetId } from "./visualizeWidgetLayout";
 import type { ResearchCollectionPayload } from "./visualizeReportUtils";
@@ -268,54 +270,15 @@ function toPayloadItems(payload: ResearchCollectionPayload | null): EvidenceItem
   }));
 }
 
-function buildTimelineChart(spec: VisualizeMetrics): FeedChartSpec | null {
-  if (!spec || spec.timeline.length === 0) {
-    return null;
-  }
-  return {
-    type: "line",
-    labels: spec.timeline.map((row) => row.bucketDate.slice(5)),
-    series: [{ name: "Items", data: spec.timeline.map((row) => row.itemCount), color: "#8b5cf6" }],
-  };
-}
-
-function buildSourceMixFallbackChart(rows: Array<{ sourceName: string; itemCount: number }>): FeedChartSpec | null {
-  if (rows.length === 0) {
-    return null;
-  }
-  return {
-    type: "bar",
-    labels: rows.map((row) => row.sourceName),
-    series: [{ name: "Sources", data: rows.map((row) => row.itemCount), color: "#0f172a" }],
-  };
-}
-
-function buildGenreRankingChart(
-  rows: Array<{ genreLabel: string; popularityScore?: number; avgScore?: number; qualityScore?: number }>,
-  metric: "popularityScore" | "avgScore" | "qualityScore",
-  seriesName: string,
-  color: string,
-): FeedChartSpec | null {
-  if (!rows.length) {
-    return null;
-  }
-  const labels = rows.map((row) => row.genreLabel);
-  const data = rows.map((row) => Math.round(Number(row[metric] ?? 0)));
-  if (!data.some((value) => Number.isFinite(value) && value > 0)) {
-    return null;
-  }
-  return {
-    type: "bar",
-    labels,
-    series: [{ name: seriesName, data, color }],
-  };
-}
-
 function withoutChartTitle(spec: FeedChartSpec | null | undefined): FeedChartSpec | null {
   if (!spec) {
     return null;
   }
   return { ...spec, title: "" };
+}
+
+function wait(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
 export default function VisualizePage({ cwd, hasTauriRuntime, isActive, onOpenKnowledgeEntry }: VisualizePageProps) {
@@ -324,6 +287,12 @@ export default function VisualizePage({ cwd, hasTauriRuntime, isActive, onOpenKn
   const [maximizedWidgetId, setMaximizedWidgetId] = useState<VisualizeWidgetId | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [selectedReportDocumentKind, setSelectedReportDocumentKind] = useState<"report" | "collection">("report");
+  const [chartAssistantOpen, setChartAssistantOpen] = useState(false);
+  const [chartAssistantBusy, setChartAssistantBusy] = useState(false);
+  const [chartAssistantDraft, setChartAssistantDraft] = useState("");
+  const [chartAssistantLogs, setChartAssistantLogs] = useState<VisualizeChartAssistantLogEntry[]>([]);
+  const [manualChartSpec, setManualChartSpec] = useState<FeedChartSpec | null>(null);
+  const [manualChartTitle, setManualChartTitle] = useState("");
   const mainRef = useRef<HTMLElement | null>(null);
   const sessionRef = useRef<HTMLElement | null>(null);
   const reportRef = useRef<HTMLElement | null>(null);
@@ -370,30 +339,17 @@ export default function VisualizePage({ cwd, hasTauriRuntime, isActive, onOpenKn
   const topSources = (effectiveMetrics?.topSources.slice(0, 5) ?? []).length
     ? (effectiveMetrics?.topSources.slice(0, 5) ?? [])
     : markdownFallback.topSources.slice(0, 5);
-  const timelineChart = buildTimelineChart(effectiveMetrics) ?? markdownMainChart ?? buildSourceMixFallbackChart(topSources);
-  const popularGenreChart = buildGenreRankingChart(popularGenres, "popularityScore", "Popularity", "#0f172a");
   const qualityScore = Math.max(
     0,
     Math.min(100, Math.round((effectiveMetrics?.totals.avgScore ?? 0) || markdownFallback.metrics.avgScore || 0)),
   );
   const leadCopy = firstNarrativeLine(state.reportMarkdown) || firstNarrativeLine(state.collectionMarkdown) || markdownFallback.conclusions[0]?.title || "";
   const mainChartSpec = withoutChartTitle(
-    (autoSpec?.widgets
-      ? (autoSpec.widgets.mainChart?.chart ?? null)
-      : questionType === "genre_ranking"
-        ? popularGenreChart
-        : timelineChart) ?? markdownMainChart,
+    manualChartSpec,
   );
   const mainChartTitle =
-    autoSpec?.widgets?.mainChart?.title
-    || markdownFallback.charts[0]?.title
-    || (questionType === "genre_ranking"
-      ? t("visualize.chart.popularGenres")
-      : questionType === "game_comparison"
-        ? t("visualize.chart.comparisonSignals")
-        : questionType === "community_sentiment"
-          ? t("visualize.chart.reactionTimeline")
-          : t("visualize.chart.generic"));
+    manualChartTitle
+    || t("visualize.chart.generic");
   const primaryListTitle =
     autoSpec?.widgets?.primaryList?.title
     || (questionType === "genre_ranking"
@@ -482,6 +438,62 @@ export default function VisualizePage({ cwd, hasTauriRuntime, isActive, onOpenKn
     setSelectedReportDocumentKind(reportDocumentOptions[0]?.value ?? "report");
   }, [reportDocumentOptions, selectedReportDocumentKind]);
 
+  useEffect(() => {
+    setChartAssistantBusy(false);
+    setChartAssistantDraft("");
+    setChartAssistantLogs([]);
+    setManualChartSpec(null);
+    setManualChartTitle("");
+    setChartAssistantOpen(false);
+  }, [state.selectedRunId]);
+
+  const runChartAssistant = useCallback(async () => {
+    const prompt = chartAssistantDraft.trim();
+    if (!prompt || chartAssistantBusy) {
+      return;
+    }
+    const result = buildVisualizeChartAssistantResult({
+      prompt,
+      leadCopy,
+      topSources,
+      timelineRows,
+      popularGenres,
+      verificationRows,
+      markdownChart: markdownMainChart,
+    });
+    const requestId = `${Date.now()}`;
+    setChartAssistantBusy(true);
+    setChartAssistantLogs((current) => [
+      ...current,
+      { id: `user-${requestId}`, role: "user", text: prompt },
+    ]);
+    setChartAssistantDraft("");
+    for (const [index, step] of result.steps.entries()) {
+      await wait(120);
+      setChartAssistantLogs((current) => [
+        ...current,
+        { id: `assistant-${requestId}-${index}`, role: "assistant", text: step },
+      ]);
+    }
+    await wait(120);
+    setManualChartSpec(result.chart ? withoutChartTitle(result.chart) : null);
+    setManualChartTitle(result.title);
+    setChartAssistantLogs((current) => [
+      ...current,
+      { id: `assistant-summary-${requestId}`, role: "assistant", text: result.summary },
+    ]);
+    setChartAssistantBusy(false);
+  }, [
+    chartAssistantBusy,
+    chartAssistantDraft,
+    leadCopy,
+    markdownMainChart,
+    popularGenres,
+    timelineRows,
+    topSources,
+    verificationRows,
+  ]);
+
   return (
     <section className="panel-card visualize-view workspace-tab-panel">
       <section className="visualize-monitor-shell">
@@ -559,16 +571,43 @@ export default function VisualizePage({ cwd, hasTauriRuntime, isActive, onOpenKn
 
               <VisualizeWidgetFrame
                 className="is-chart-main"
+                headerActions={(
+                  <button
+                    aria-label={chartAssistantOpen ? "차트 생성 패널 닫기" : "차트 생성 패널 열기"}
+                    className={`visualize-monitor-widget-action-button${chartAssistantOpen ? " is-active" : ""}`}
+                    onClick={() => setChartAssistantOpen((current) => !current)}
+                    type="button"
+                  >
+                    <img alt="" aria-hidden="true" src="/shell-terminal.svg" />
+                  </button>
+                )}
                 maximized={maximizedWidgetId === "timeline"}
                 onToggleMaximize={toggleMaximize}
+                surfaceClassName={`is-chart-builder-surface${chartAssistantOpen ? " is-chart-builder-open" : ""}`}
                 title={mainChartTitle}
                 widgetId="timeline"
               >
-                {mainChartSpec ? (
-                  <>
+                <div className="visualize-chart-builder-main">
+                  {mainChartSpec ? (
                     <FeedChart spec={mainChartSpec} />
-                  </>
-                ) : <div className="visualize-monitor-placeholder">{t("visualize.placeholder.timeline")}</div>}
+                  ) : (
+                    <div className="visualize-monitor-placeholder visualize-chart-builder-placeholder">
+                      <div>
+                        <strong>차트가 아직 없습니다.</strong>
+                        <p>우측 버튼을 눌러서 차트를 생성하세요.</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <VisualizeChartAssistantPane
+                  busy={chartAssistantBusy}
+                  draft={chartAssistantDraft}
+                  logs={chartAssistantLogs}
+                  onDraftChange={setChartAssistantDraft}
+                  onSubmit={() => void runChartAssistant()}
+                  open={chartAssistantOpen}
+                  reportBody={reportBody}
+                />
               </VisualizeWidgetFrame>
 
               <VisualizeWidgetFrame

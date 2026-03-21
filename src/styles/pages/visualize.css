@@ -214,7 +214,7 @@
   flex-direction: column;
   gap: 5px;
   align-items: flex-start;
-  border: 1px solid rgba(226, 232, 240, 1);
+  border: 0;
   background: rgba(248, 250, 252, 0.94);
   padding: 9px 10px;
   text-align: left;
@@ -222,7 +222,7 @@
 
 .visualize-monitor-rail-item.is-active {
   border-color: transparent;
-  background: rgba(249, 250, 253, 1);
+  background: rgba(221, 226, 235, 1);
 }
 
 .visualize-monitor-rail-item strong {
@@ -378,6 +378,27 @@
   justify-content: center;
 }
 
+.visualize-monitor-widget-action-button {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.visualize-monitor-widget-action-button.is-active {
+  background: rgba(226, 232, 240, 0.95);
+}
+
+.visualize-monitor-widget-action-button img {
+  width: 12px;
+  height: 12px;
+  object-fit: contain;
+}
+
 .visualize-monitor-widget-toggle img {
   width: 12px;
   height: 12px;
@@ -484,6 +505,132 @@
 .visualize-monitor-widget.is-chart-main .visualize-monitor-widget-surface,
 .visualize-monitor-widget.is-chart-quality .visualize-monitor-widget-surface {
   padding: 10px;
+}
+
+.visualize-monitor-widget.is-chart-main .visualize-monitor-widget-surface.is-chart-builder-surface {
+  display: flex;
+  flex-direction: row;
+  gap: 10px;
+  align-items: stretch;
+  padding: 10px;
+}
+
+.visualize-monitor-widget.is-chart-main .visualize-monitor-widget-surface.is-chart-builder-surface.is-chart-builder-open {
+  padding-right: 0;
+}
+
+.visualize-chart-builder-main {
+  min-width: 0;
+  flex: 1 1 auto;
+  display: flex;
+  align-items: stretch;
+}
+
+.visualize-chart-builder-placeholder strong,
+.visualize-chart-builder-placeholder p {
+  display: block;
+}
+
+.visualize-chart-builder-placeholder strong {
+  margin-bottom: 6px;
+  color: #0f172a;
+}
+
+.visualize-chart-assistant-pane {
+  width: 300px;
+  min-width: 300px;
+  max-width: 300px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-left: 1px solid rgba(226, 232, 240, 0.95);
+  background: rgba(255, 255, 255, 0.96);
+}
+
+.visualize-chart-assistant-scroll {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: auto;
+  padding: 10px;
+  display: grid;
+  gap: 12px;
+}
+
+.visualize-chart-assistant-section {
+  display: grid;
+  gap: 8px;
+}
+
+.visualize-chart-assistant-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.visualize-chart-assistant-section-head strong,
+.visualize-chart-assistant-section-head span,
+.visualize-chart-assistant-log-item strong {
+  font-family: "Departure Mono", "DialogNanumBody1984", monospace;
+}
+
+.visualize-chart-assistant-section-head strong {
+  color: #0f172a;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+}
+
+.visualize-chart-assistant-section-head span {
+  color: #64748b;
+  font-size: 0.68rem;
+}
+
+.visualize-chart-assistant-document {
+  min-height: 0;
+  max-height: 260px;
+  overflow: auto;
+  padding: 10px;
+  background: rgba(248, 250, 252, 0.94);
+}
+
+.visualize-chart-assistant-document .tasks-thread-message-markdown {
+  font-size: 0.78rem;
+}
+
+.visualize-chart-assistant-log {
+  display: grid;
+  gap: 8px;
+}
+
+.visualize-chart-assistant-log-item {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  background: rgba(248, 250, 252, 0.94);
+}
+
+.visualize-chart-assistant-log-item.is-user {
+  background: rgba(239, 246, 255, 0.92);
+}
+
+.visualize-chart-assistant-log-item strong {
+  color: #0f172a;
+  font-size: 0.66rem;
+  letter-spacing: 0.08em;
+}
+
+.visualize-chart-assistant-log-item p,
+.visualize-chart-assistant-empty {
+  margin: 0;
+  color: #475569;
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+
+.visualize-chart-assistant-composer {
+  width: calc(100% - 20px);
+  max-width: none;
+  margin: 0 10px 10px;
 }
 
 .visualize-monitor-widget.is-report .visualize-monitor-widget-surface,

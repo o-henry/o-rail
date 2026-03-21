@@ -59,6 +59,7 @@ import { buildProjectThreadGroups, filterThreadListByProject } from "./threadTre
 import { rememberThreadSelection, resolveThreadSelection } from "./threadSelectionState";
 import { deriveThreadWorkflow } from "./threadWorkflow";
 import { isLiveBackgroundAgentStatus } from "./liveAgentState";
+import { resolveTasksThreadTerminalCwd } from "./taskThreadTerminalState";
 import {
   buildTasksSessionIndex,
   deriveComposerCoordinationPreview,
@@ -83,6 +84,7 @@ import {
 import {
   applyBrowserStoreSnapshot,
   loadThreadState,
+  refreshThreadListSilently,
   refreshThreadStateSilently,
   reloadThreadList,
 } from "./taskThreadRepository";
@@ -91,6 +93,7 @@ import {
   cloneStore,
   loadBrowserStore,
   loadHiddenTasksProjectList,
+  persistTasksActiveThreadSnapshot,
   loadTasksProjectList,
   loadTasksProjectPath,
   persistHiddenTasksProjectList,
@@ -100,6 +103,7 @@ import {
 } from "./taskThreadStorageState";
 import { buildPromptWithKnowledgeAttachments, findKnowledgeEntryIdByArtifact } from "./taskKnowledgeAttachments";
 import { applyCoordinationSettlement, settleRunningCoordinationRun } from "./taskCoordinationLifecycle";
+import { buildOptimisticThreadDeleteState } from "./taskThreadOptimisticDelete";
 import {
   loadPersistedCoordinationState,
   loadPersistedRuntimeSessionIndex,
@@ -190,6 +194,7 @@ export function useTasksThreadState(params: Params) {
   const [liveRoleNotes, setLiveRoleNotes] = useState<Partial<Record<ThreadRoleId, { message: string; updatedAt: string }>>>({});
   const [liveProcessEvents, setLiveProcessEvents] = useState<LiveProcessEvent[]>([]);
   const [stoppingComposerRun, setStoppingComposerRun] = useState(false);
+  const [composerSubmitPending, setComposerSubmitPending] = useState(false);
   const [composerCoordinationModeOverride, setComposerCoordinationModeOverride] = useState<CoordinationMode | null>(null);
   const [orchestrationByThread, setOrchestrationByThread] = useState<TasksOrchestrationCache>(() => readTasksOrchestrationCache());
   const [persistedRuntimeSessions, setPersistedRuntimeSessions] = useState<SessionIndexEntry[]>([]);
@@ -230,6 +235,30 @@ export function useTasksThreadState(params: Params) {
     orchestrationRef.current = orchestrationByThread;
     writeTasksOrchestrationCache(orchestrationByThread);
   }, [orchestrationByThread]);
+
+  useEffect(() => {
+    const snapshot = activeThread
+      ? {
+          threadId: String(activeThread.thread.threadId ?? "").trim(),
+          cwd: resolveTasksThreadTerminalCwd(activeThread),
+        }
+      : null;
+    persistTasksActiveThreadSnapshot(snapshot);
+    if (typeof window === "undefined") {
+      return;
+    }
+    window.dispatchEvent(
+      new CustomEvent("rail:tasks-active-thread-changed", {
+        detail: snapshot ?? { threadId: "", cwd: "" },
+      }),
+    );
+  }, [
+    activeThread?.task.projectPath,
+    activeThread?.task.workspacePath,
+    activeThread?.task.worktreePath,
+    activeThread?.thread.cwd,
+    activeThread?.thread.threadId,
+  ]);
 
   useEffect(() => {
     if (!params.hasTauriRuntime || !params.cwd) {
@@ -521,6 +550,17 @@ export function useTasksThreadState(params: Params) {
     [hydratePersistedCoordination, params, projectPath, rememberSelectedAgent, rememberSelectedFile, selectedAgentIdsByThread, selectedFilePathsByThread],
   );
 
+  const refreshThreadListMetadataSilently = useCallback(
+    async () => refreshThreadListSilently({
+      hasTauriRuntime: params.hasTauriRuntime,
+      cwd: params.cwd,
+      projectPath,
+      invokeFn: params.invokeFn,
+      setThreadItems,
+    }),
+    [params, projectPath],
+  );
+
   const loadAgentDetail = useCallback(
     async (threadId: string, agentId: string): Promise<ThreadAgentDetail | null> => loadThreadAgentDetail({
       threadId,
@@ -642,6 +682,12 @@ export function useTasksThreadState(params: Params) {
     },
     [activeThread, activeThreadCoordination?.status],
   );
+
+  useEffect(() => {
+    if (canInterruptCurrentThread || stoppingComposerRun) {
+      setComposerSubmitPending(false);
+    }
+  }, [canInterruptCurrentThread, stoppingComposerRun]);
 
   useEffect(() => {
     if (!activeThread || !activeThreadCoordination || activeThreadCoordination.status !== "running") {
@@ -946,105 +992,105 @@ export function useTasksThreadState(params: Params) {
     if (!prompt) {
       return;
     }
+    setComposerSubmitPending(true);
     const selectedProjectPath = String(projectPath || params.cwd || "/workspace").trim();
-    const promptWithAttachments = await buildPromptWithAttachments(prompt);
-
-    if (!params.hasTauriRuntime || !params.cwd) {
-      const store = cloneStore(browserStoreRef.current);
-      const existingDetail = activeThread ? store.details[activeThread.thread.threadId] : undefined;
-      const detail: ThreadDetail = existingDetail
-        ?? buildBrowserThread(params.cwd || "/workspace", selectedProjectPath, prompt, model, reasoning, accessMode);
-      if (!existingDetail) {
-        store.details[detail.thread.threadId] = detail;
-        store.order = [detail.thread.threadId, ...store.order.filter((id) => id !== detail.thread.threadId)];
-      }
-      const timestamp = nowIso();
-      detail.thread.title = shouldAutoReplaceTitle(detail.thread.title, detail.thread.userPrompt)
-        ? truncateTitle(prompt)
-        : detail.thread.title;
-      detail.thread.userPrompt = detail.thread.userPrompt || prompt;
-      detail.thread.status = "running";
-      detail.thread.updatedAt = timestamp;
-      detail.thread.model = model;
-      detail.thread.reasoning = reasoning;
-      detail.thread.accessMode = accessMode;
-      detail.task.goal = isPlaceholderTitle(detail.task.goal) ? prompt : detail.task.goal;
-      detail.task.updatedAt = timestamp;
-      detail.messages.push(
-        createBrowserMessage(detail.thread.threadId, "user", prompt, timestamp, {
-          eventKind: "user_prompt",
-        }),
-      );
-      const taggedRoles = [...new Set([...selectedComposerRoleIds, ...parseTaskAgentTags(prompt)])];
-      const executionPlan = deriveExecutionPlan({
-        enabledRoleIds: detail.agents.map((agent) => agent.roleId),
-        requestedRoleIds: taggedRoles,
-        prompt,
-        selectedMode: modeTagOverride ?? undefined,
-      });
-      const coordination = createCoordinationState({
-        threadId: detail.thread.threadId,
-        prompt: promptWithAttachments,
-        requestedRoleIds: executionPlan.participantRoleIds,
-        overrideMode: modeTagOverride,
-        at: timestamp,
-      });
-      const executableCoordination = readyCoordinationForExecution(coordination, timestamp);
-      detail.artifacts = {
-        ...detail.artifacts,
-        brief: prompt,
-        plan: executableCoordination.plan?.summary || detail.artifacts.plan,
-      };
-      detail.orchestration = updateThreadCoordination(
-        detail.thread.threadId,
-        () => executableCoordination,
-        { kind: "plan_ready", summary: `Prepared ${coordination.mode} plan` },
-      ) ?? executableCoordination;
-      const runningCoordination = updateThreadCoordination(
-        detail.thread.threadId,
-        () => startCoordinationRun(executableCoordination, timestamp),
-        { kind: "run_started", summary: `Started ${coordination.mode} run` },
-      ) ?? executableCoordination;
-      runBrowserExecutionPlan({
-        detail,
-        prompt: promptWithAttachments,
-        plan: executionPlan,
-        timestamp,
-        createId: nextId,
-      });
-      if (coordination.mode === "fanout") {
-        runningCoordination.delegateTasks.forEach((task) => {
-          updateThreadCoordination(detail.thread.threadId, (current) => (
-            current
-              ? completeDelegateTask(current, {
-                  taskId: task.id,
-                  summary: `${task.title} ready`,
-                  at: timestamp,
-                })
-              : current
-          ));
-        });
-      }
-      detail.orchestration = runningCoordination;
-      store.details[detail.thread.threadId] = withTaskCoordination(detail, detail.orchestration);
-      applyBrowserStore(store, detail.thread.threadId);
-      rememberSelectedAgent(detail.thread.threadId, `${detail.thread.threadId}:${executionPlan.participantRoleIds[0]}`);
-      rememberSelectedFile(detail.thread.threadId, detail.changedFiles[0] ?? defaultSelectedFile(detail));
-      setComposerDraft("");
-      setSelectedComposerRoleIds([]);
-      setComposerCoordinationModeOverride(null);
-      clearAttachedFiles();
-      params.appendWorkspaceEvent({
-        source: "tasks-thread",
-        actor: "user",
-        level: "info",
-        message: `Thread ${detail.thread.threadId} · ${executionPlan.participantRoleIds.map((roleId) => getTaskAgentLabel(roleId)).join(", ")} dispatched${executionPlan.cappedParticipantCount ? " (participant cap applied)" : ""}`,
-      });
-      params.setStatus(`Thread updated: ${truncateTitle(detail.thread.title)}`);
-      return;
-    }
-
     try {
+      const promptWithAttachments = await buildPromptWithAttachments(prompt);
+      if (!params.hasTauriRuntime || !params.cwd) {
+        const store = cloneStore(browserStoreRef.current);
+        const existingDetail = activeThread ? store.details[activeThread.thread.threadId] : undefined;
+        const detail: ThreadDetail = existingDetail
+          ?? buildBrowserThread(params.cwd || "/workspace", selectedProjectPath, prompt, model, reasoning, accessMode);
+        if (!existingDetail) {
+          store.details[detail.thread.threadId] = detail;
+          store.order = [detail.thread.threadId, ...store.order.filter((id) => id !== detail.thread.threadId)];
+        }
+        const timestamp = nowIso();
+        detail.thread.title = shouldAutoReplaceTitle(detail.thread.title, detail.thread.userPrompt)
+          ? truncateTitle(prompt)
+          : detail.thread.title;
+        detail.thread.userPrompt = detail.thread.userPrompt || prompt;
+        detail.thread.status = "running";
+        detail.thread.updatedAt = timestamp;
+        detail.thread.model = model;
+        detail.thread.reasoning = reasoning;
+        detail.thread.accessMode = accessMode;
+        detail.task.goal = isPlaceholderTitle(detail.task.goal) ? prompt : detail.task.goal;
+        detail.task.updatedAt = timestamp;
+        detail.messages.push(
+          createBrowserMessage(detail.thread.threadId, "user", prompt, timestamp, {
+            eventKind: "user_prompt",
+          }),
+        );
+        const taggedRoles = [...new Set([...selectedComposerRoleIds, ...parseTaskAgentTags(prompt)])];
+        const executionPlan = deriveExecutionPlan({
+          enabledRoleIds: detail.agents.map((agent) => agent.roleId),
+          requestedRoleIds: taggedRoles,
+          prompt,
+          selectedMode: modeTagOverride ?? undefined,
+        });
+        const coordination = createCoordinationState({
+          threadId: detail.thread.threadId,
+          prompt: promptWithAttachments,
+          requestedRoleIds: executionPlan.participantRoleIds,
+          overrideMode: modeTagOverride,
+          at: timestamp,
+        });
+        const executableCoordination = readyCoordinationForExecution(coordination, timestamp);
+        detail.artifacts = {
+          ...detail.artifacts,
+          brief: prompt,
+          plan: executableCoordination.plan?.summary || detail.artifacts.plan,
+        };
+        detail.orchestration = updateThreadCoordination(
+          detail.thread.threadId,
+          () => executableCoordination,
+          { kind: "plan_ready", summary: `Prepared ${coordination.mode} plan` },
+        ) ?? executableCoordination;
+        const runningCoordination = updateThreadCoordination(
+          detail.thread.threadId,
+          () => startCoordinationRun(executableCoordination, timestamp),
+          { kind: "run_started", summary: `Started ${coordination.mode} run` },
+        ) ?? executableCoordination;
+        runBrowserExecutionPlan({
+          detail,
+          prompt: promptWithAttachments,
+          plan: executionPlan,
+          timestamp,
+          createId: nextId,
+        });
+        if (coordination.mode === "fanout") {
+          runningCoordination.delegateTasks.forEach((task) => {
+            updateThreadCoordination(detail.thread.threadId, (current) => (
+              current
+                ? completeDelegateTask(current, {
+                    taskId: task.id,
+                    summary: `${task.title} ready`,
+                    at: timestamp,
+                  })
+                : current
+            ));
+          });
+        }
+        detail.orchestration = runningCoordination;
+        store.details[detail.thread.threadId] = withTaskCoordination(detail, detail.orchestration);
+        applyBrowserStore(store, detail.thread.threadId);
+        rememberSelectedAgent(detail.thread.threadId, `${detail.thread.threadId}:${executionPlan.participantRoleIds[0]}`);
+        rememberSelectedFile(detail.thread.threadId, detail.changedFiles[0] ?? defaultSelectedFile(detail));
+        setComposerDraft("");
+        setSelectedComposerRoleIds([]);
+        setComposerCoordinationModeOverride(null);
+        clearAttachedFiles();
+        params.appendWorkspaceEvent({
+          source: "tasks-thread",
+          actor: "user",
+          level: "info",
+          message: `Thread ${detail.thread.threadId} · ${executionPlan.participantRoleIds.map((roleId) => getTaskAgentLabel(roleId)).join(", ")} dispatched${executionPlan.cappedParticipantCount ? " (participant cap applied)" : ""}`,
+        });
+        params.setStatus(`Thread updated: ${truncateTitle(detail.thread.title)}`);
+        return;
+      }
+
       let detail = activeThread;
       if (!detail) {
         detail = withDerivedWorkflow(await params.invokeFn<ThreadDetail>("thread_create", {
@@ -1149,6 +1195,8 @@ export function useTasksThreadState(params: Params) {
         level: "error",
         message: `Thread submit failed: ${formatError(error)}`,
       });
+    } finally {
+      setComposerSubmitPending(false);
     }
   }, [accessMode, activeThread, applyBrowserStore, buildPromptWithAttachments, clearAttachedFiles, composerCoordinationModeOverride, composerDraft, hydrateThreadDetail, model, params, projectPath, reasoning, selectedComposerRoleIds, syncSpawnedThreadSelection, updateThreadCoordination]);
 
@@ -1576,24 +1624,64 @@ export function useTasksThreadState(params: Params) {
         params.setStatus(`Thread deleted: ${targetThreadId}`);
         return;
       }
+      const previousSelectedAgentId = selectedAgentId;
+      const previousSelectedAgentDetail = selectedAgentDetail;
+      const previousSelectedFilePath = selectedFilePath;
+      const previousSelectedFileDiff = selectedFileDiff;
+      const previousComposerDraft = composerDraft;
       try {
-        await params.invokeFn<boolean>("thread_delete", { cwd: params.cwd, threadId: targetThreadId });
+        const optimistic = buildOptimisticThreadDeleteState({
+          threadItems,
+          targetThreadId,
+          activeThreadId,
+          projectPath,
+          cwd: params.cwd,
+        });
+        setThreadItems(optimistic.nextThreadItems);
         if (activeThreadId === targetThreadId) {
           setActiveThread(null);
-          setActiveThreadId("");
+          setActiveThreadId(optimistic.nextActiveThreadId);
           setSelectedAgentId("");
           setSelectedAgentDetail(null);
           setSelectedFilePath("");
           setSelectedFileDiff("");
           setComposerDraft("");
         }
-        await reloadThreads();
         params.setStatus(`Thread deleted: ${targetThreadId}`);
+        await params.invokeFn<boolean>("thread_delete", { cwd: params.cwd, threadId: targetThreadId });
+        if (activeThreadId === targetThreadId && optimistic.nextActiveThreadId) {
+          void loadThread(optimistic.nextActiveThreadId);
+        }
+        window.setTimeout(() => {
+          void refreshThreadListMetadataSilently();
+        }, 160);
       } catch (error) {
+        setThreadItems(threadItems);
+        setActiveThread(activeThread);
+        setActiveThreadId(activeThreadId);
+        setSelectedAgentId(previousSelectedAgentId);
+        setSelectedAgentDetail(previousSelectedAgentDetail);
+        setSelectedFilePath(previousSelectedFilePath);
+        setSelectedFileDiff(previousSelectedFileDiff);
+        setComposerDraft(previousComposerDraft);
         params.setStatus(`Failed to delete thread: ${formatError(error)}`);
       }
     },
-    [activeThreadId, applyBrowserStore, params, reloadThreads],
+    [
+      activeThread,
+      activeThreadId,
+      applyBrowserStore,
+      composerDraft,
+      params,
+      projectPath,
+      refreshThreadListMetadataSilently,
+      selectedAgentDetail,
+      selectedAgentId,
+      selectedFileDiff,
+      selectedFilePath,
+      loadThread,
+      threadItems,
+    ],
   );
 
   const updateAgent = useCallback(
@@ -1866,6 +1954,7 @@ export function useTasksThreadState(params: Params) {
     submitComposer,
     stopComposerRun,
     canInterruptCurrentThread,
+    composerSubmitPending,
     stoppingComposerRun,
     openAgent,
     resolveApproval,

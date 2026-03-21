@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { buildSelectedTasksComposerBadges, canSubmitTasksComposer } from "./TasksThreadComposer";
+import {
+  buildSelectedTasksComposerBadges,
+  canSubmitTasksComposer,
+  shouldShowTasksComposerStopButton,
+} from "./TasksThreadComposer";
 
 describe("canSubmitTasksComposer", () => {
   it("returns false for empty or whitespace-only input", () => {
@@ -37,5 +41,28 @@ describe("buildSelectedTasksComposerBadges", () => {
         mode: "fanout",
       },
     ]);
+  });
+});
+
+describe("shouldShowTasksComposerStopButton", () => {
+  it("shows the stop button immediately while a submit is pending", () => {
+    expect(shouldShowTasksComposerStopButton({
+      canInterruptCurrentThread: false,
+      composerSubmitPending: true,
+    })).toBe(true);
+  });
+
+  it("stays visible while a thread is interruptible", () => {
+    expect(shouldShowTasksComposerStopButton({
+      canInterruptCurrentThread: true,
+      composerSubmitPending: false,
+    })).toBe(true);
+  });
+
+  it("hides the stop button when nothing is pending or running", () => {
+    expect(shouldShowTasksComposerStopButton({
+      canInterruptCurrentThread: false,
+      composerSubmitPending: false,
+    })).toBe(false);
   });
 });

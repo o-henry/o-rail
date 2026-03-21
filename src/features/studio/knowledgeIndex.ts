@@ -1,9 +1,19 @@
 import type { KnowledgeEntry } from "./knowledgeTypes";
 
 const KNOWLEDGE_INDEX_STORAGE_KEY = "rail.studio.knowledge.index.v1";
+const KNOWLEDGE_INDEX_CHUNK_PREFIX = "rail.studio.knowledge.index.chunk.v1:";
+const KNOWLEDGE_INDEX_CHUNK_SIZE = 80;
 const KNOWLEDGE_HIDDEN_RUN_IDS_STORAGE_KEY = "rail.studio.knowledge.hiddenRuns.v1";
 const KNOWLEDGE_HIDDEN_ENTRY_IDS_STORAGE_KEY = "rail.studio.knowledge.hiddenEntries.v1";
 
+type StoredKnowledgeIndexMetadata = {
+  version: 2;
+  chunkSize: number;
+  chunkKeys: string[];
+  updatedAt: number;
+};
+
+let memoryKnowledgeEntries: KnowledgeEntry[] | null = null;
 let memoryHiddenRunIds = new Set<string>();
 let memoryHiddenEntryIds = new Set<string>();
 
@@ -112,8 +122,47 @@ export function mergeKnowledgeEntryRows(rows: KnowledgeEntry[]): KnowledgeEntry[
   return [...deduped.values()].sort((left, right) => String(right.createdAt).localeCompare(String(left.createdAt)));
 }
 
-export function readKnowledgeEntries(): KnowledgeEntry[] {
-  if (typeof window === "undefined") {
+function buildChunkKey(chunkIndex: number): string {
+  return `${KNOWLEDGE_INDEX_CHUNK_PREFIX}${chunkIndex}`;
+}
+
+function readStoredMetadata(raw: string | null): StoredKnowledgeIndexMetadata | null {
+  if (!raw) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    if (Array.isArray(parsed)) {
+      return null;
+    }
+    if (Number(parsed.version) !== 2) {
+      return null;
+    }
+    const chunkKeys = Array.isArray(parsed.chunkKeys) ? parsed.chunkKeys.map((row) => String(row ?? "").trim()).filter(Boolean) : [];
+    return {
+      version: 2,
+      chunkSize: Number(parsed.chunkSize ?? KNOWLEDGE_INDEX_CHUNK_SIZE),
+      chunkKeys,
+      updatedAt: Number(parsed.updatedAt ?? 0),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function readChunkRows(chunkKey: string): KnowledgeEntry[] {
+  if (!canUseLocalStorage()) {
+    return [];
+  }
+  try {
+    return normalizeKnowledgeEntries(JSON.parse(window.localStorage.getItem(chunkKey) ?? "[]"));
+  } catch {
+    return [];
+  }
+}
+
+function loadKnowledgeEntriesFromStorage(): KnowledgeEntry[] {
+  if (!canUseLocalStorage()) {
     return [];
   }
   const raw = window.localStorage.getItem(KNOWLEDGE_INDEX_STORAGE_KEY);
@@ -121,18 +170,65 @@ export function readKnowledgeEntries(): KnowledgeEntry[] {
     return [];
   }
   try {
-    const parsed = JSON.parse(raw);
-    return normalizeKnowledgeEntries(parsed);
+    const parsed = JSON.parse(raw) as unknown;
+    if (Array.isArray(parsed)) {
+      return mergeKnowledgeEntryRows(normalizeKnowledgeEntries(parsed));
+    }
   } catch {
     return [];
   }
+  const metadata = readStoredMetadata(raw);
+  if (!metadata) {
+    return [];
+  }
+  return mergeKnowledgeEntryRows(metadata.chunkKeys.flatMap((chunkKey) => readChunkRows(chunkKey)));
+}
+
+function writeChunkedKnowledgeEntries(rows: KnowledgeEntry[]): void {
+  if (!canUseLocalStorage()) {
+    return;
+  }
+  const merged = mergeKnowledgeEntryRows(rows);
+  const previousMetadata = readStoredMetadata(window.localStorage.getItem(KNOWLEDGE_INDEX_STORAGE_KEY));
+  const previousChunkKeys = new Set(previousMetadata?.chunkKeys ?? []);
+  const chunkKeys: string[] = [];
+  for (let index = 0; index < merged.length; index += KNOWLEDGE_INDEX_CHUNK_SIZE) {
+    const chunkKey = buildChunkKey(chunkKeys.length);
+    chunkKeys.push(chunkKey);
+    window.localStorage.setItem(chunkKey, JSON.stringify(merged.slice(index, index + KNOWLEDGE_INDEX_CHUNK_SIZE)));
+    previousChunkKeys.delete(chunkKey);
+  }
+  for (const staleChunkKey of previousChunkKeys) {
+    window.localStorage.removeItem(staleChunkKey);
+  }
+  const metadata: StoredKnowledgeIndexMetadata = {
+    version: 2,
+    chunkSize: KNOWLEDGE_INDEX_CHUNK_SIZE,
+    chunkKeys,
+    updatedAt: Date.now(),
+  };
+  window.localStorage.setItem(KNOWLEDGE_INDEX_STORAGE_KEY, JSON.stringify(metadata));
+}
+
+export function readKnowledgeEntries(): KnowledgeEntry[] {
+  if (memoryKnowledgeEntries) {
+    return memoryKnowledgeEntries;
+  }
+  memoryKnowledgeEntries = loadKnowledgeEntriesFromStorage();
+  return memoryKnowledgeEntries;
 }
 
 export function writeKnowledgeEntries(rows: KnowledgeEntry[]): void {
-  if (typeof window === "undefined") {
+  const merged = mergeKnowledgeEntryRows(rows);
+  memoryKnowledgeEntries = merged;
+  if (!canUseLocalStorage()) {
     return;
   }
-  window.localStorage.setItem(KNOWLEDGE_INDEX_STORAGE_KEY, JSON.stringify(mergeKnowledgeEntryRows(rows)));
+  try {
+    writeChunkedKnowledgeEntries(merged);
+  } catch {
+    // ignore storage failures
+  }
 }
 
 export function upsertKnowledgeEntry(entry: KnowledgeEntry): KnowledgeEntry[] {
@@ -153,8 +249,7 @@ export function removeKnowledgeEntry(entryId: string): KnowledgeEntry[] {
     return readKnowledgeEntries();
   }
   hideKnowledgeEntryId(targetId);
-  const current = readKnowledgeEntries();
-  const next = current.filter((row) => row.id !== targetId);
+  const next = readKnowledgeEntries().filter((row) => row.id !== targetId);
   writeKnowledgeEntries(next);
   return next;
 }
@@ -165,8 +260,7 @@ export function removeKnowledgeEntriesByRunId(runId: string): KnowledgeEntry[] {
     return readKnowledgeEntries();
   }
   hideKnowledgeRunId(targetRunId);
-  const current = readKnowledgeEntries();
-  const next = current.filter((row) => String(row.runId ?? "").trim() !== targetRunId);
+  const next = readKnowledgeEntries().filter((row) => String(row.runId ?? "").trim() !== targetRunId);
   writeKnowledgeEntries(next);
   return next;
 }
@@ -224,6 +318,7 @@ export function isKnowledgeEntryIdHidden(entryId: string): boolean {
 }
 
 export function clearHiddenKnowledgeIdsForTest(): void {
+  memoryKnowledgeEntries = null;
   memoryHiddenRunIds = new Set();
   memoryHiddenEntryIds = new Set();
   if (!canUseLocalStorage()) {
@@ -232,6 +327,22 @@ export function clearHiddenKnowledgeIdsForTest(): void {
   try {
     window.localStorage.removeItem(KNOWLEDGE_HIDDEN_RUN_IDS_STORAGE_KEY);
     window.localStorage.removeItem(KNOWLEDGE_HIDDEN_ENTRY_IDS_STORAGE_KEY);
+  } catch {
+    // ignore storage failures
+  }
+}
+
+export function clearKnowledgeIndexCacheForTest(): void {
+  memoryKnowledgeEntries = null;
+  if (!canUseLocalStorage()) {
+    return;
+  }
+  try {
+    const metadata = readStoredMetadata(window.localStorage.getItem(KNOWLEDGE_INDEX_STORAGE_KEY));
+    for (const chunkKey of metadata?.chunkKeys ?? []) {
+      window.localStorage.removeItem(chunkKey);
+    }
+    window.localStorage.removeItem(KNOWLEDGE_INDEX_STORAGE_KEY);
   } catch {
     // ignore storage failures
   }

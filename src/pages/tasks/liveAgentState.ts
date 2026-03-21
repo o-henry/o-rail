@@ -16,6 +16,8 @@ export type LiveAgentCard = {
   updatedAt: string;
 };
 
+export type LiveActivityState = "active" | "delayed" | "stalled";
+
 function latestArtifactPath(paths: string[] | null | undefined): string {
   const normalized = [...(paths ?? [])]
     .map((value) => String(value ?? "").trim())
@@ -73,4 +75,44 @@ export function displayArtifactName(path: string | null | undefined): string {
   }
   const parts = normalized.split(/[\\/]/).filter(Boolean);
   return parts[parts.length - 1] ?? normalized;
+}
+
+export function resolveLiveActivityState(updatedAt: string | null | undefined, nowMs = Date.now()): LiveActivityState {
+  const parsed = Date.parse(String(updatedAt ?? "").trim());
+  if (!Number.isFinite(parsed)) {
+    return "active";
+  }
+  const ageMs = Math.max(0, nowMs - parsed);
+  if (ageMs >= 2 * 60 * 1000) {
+    return "stalled";
+  }
+  if (ageMs >= 30 * 1000) {
+    return "delayed";
+  }
+  return "active";
+}
+
+export function formatRelativeUpdateAge(updatedAt: string | null | undefined, labels: {
+  justNow: string;
+  minutesAgo: (value: number) => string;
+  hoursAgo: (value: number) => string;
+  daysAgo: (value: number) => string;
+}): string {
+  const parsed = Date.parse(String(updatedAt ?? "").trim());
+  if (!Number.isFinite(parsed)) {
+    return labels.justNow;
+  }
+  const ageMs = Math.max(0, Date.now() - parsed);
+  if (ageMs < 60 * 1000) {
+    return labels.justNow;
+  }
+  const minutes = Math.floor(ageMs / (60 * 1000));
+  if (minutes < 60) {
+    return labels.minutesAgo(minutes);
+  }
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) {
+    return labels.hoursAgo(hours);
+  }
+  return labels.daysAgo(Math.floor(hours / 24));
 }

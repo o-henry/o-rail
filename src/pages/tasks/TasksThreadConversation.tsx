@@ -1,7 +1,8 @@
+import { useEffect, useMemo, useState } from "react";
 import type { AgenticCoordinationState, SessionIndexEntry } from "../../features/orchestration/agentic/coordinationTypes";
 import { useI18n } from "../../i18n";
 import { TasksThreadOrchestrationCard } from "./TasksThreadOrchestrationCard";
-import type { LiveAgentCard } from "./liveAgentState";
+import { formatRelativeUpdateAge, resolveLiveActivityState, type LiveAgentCard } from "./liveAgentState";
 import type { ApprovalRecord, ThreadMessage, ThreadRoleId } from "./threadTypes";
 
 type LiveProcessEvent = {
@@ -110,8 +111,40 @@ function displayProcessEventLabel(type: string, t: (key: string) => string) {
   return t("tasks.processEvent.progress");
 }
 
+function buildLatestProcessEventByRole(events: LiveProcessEvent[]) {
+  const latest = new Map<ThreadRoleId, LiveProcessEvent>();
+  for (const event of events) {
+    const previous = latest.get(event.roleId);
+    if (!previous || Date.parse(event.at || "") >= Date.parse(previous.at || "")) {
+      latest.set(event.roleId, event);
+    }
+  }
+  return latest;
+}
+
+function animatedDots(frame: number) {
+  return [".", "..", "..."][frame % 3] ?? "...";
+}
+
 export function TasksThreadConversation(props: TasksThreadConversationProps) {
   const { t } = useI18n();
+  const [pulseFrame, setPulseFrame] = useState(0);
+  const [liveNowMs, setLiveNowMs] = useState(() => Date.now());
+  const latestProcessEventByRole = useMemo(
+    () => buildLatestProcessEventByRole(props.liveProcessEvents),
+    [props.liveProcessEvents],
+  );
+
+  useEffect(() => {
+    if (props.liveAgents.length === 0 && props.liveProcessEvents.length === 0) {
+      return;
+    }
+    const intervalId = window.setInterval(() => {
+      setPulseFrame((current) => (current + 1) % 3);
+      setLiveNowMs(Date.now());
+    }, 450);
+    return () => window.clearInterval(intervalId);
+  }, [props.liveAgents.length, props.liveProcessEvents.length]);
 
   return (
     <div className="tasks-thread-conversation-scroll" ref={props.conversationRef}>
@@ -156,16 +189,56 @@ export function TasksThreadConversation(props: TasksThreadConversationProps) {
           </article>
         ))}
         {props.liveAgents.map((agent) => (
-          <article className="tasks-thread-message-row is-assistant is-live-placeholder" key={`live:${agent.agentId}`}>
-            <span className="tasks-thread-message-label">{agent.label}</span>
-            <div className="tasks-thread-log-line">{agent.summary || t("tasks.live.working")}</div>
-            {agent.latestArtifactPath ? (
-              <div className="tasks-thread-message-meta">
-                <small className="tasks-thread-message-artifact">{agent.latestArtifactPath}</small>
-                {agent.updatedAt ? <small className="tasks-thread-message-time">{formatArtifactStamp(agent.updatedAt)}</small> : null}
-              </div>
-            ) : null}
-          </article>
+          (() => {
+            const latestEvent = latestProcessEventByRole.get(agent.roleId);
+            const freshestAt = String(latestEvent?.at ?? agent.updatedAt ?? "").trim();
+            const liveState = resolveLiveActivityState(freshestAt, liveNowMs);
+            const lastSeenLabel = formatRelativeUpdateAge(freshestAt, {
+              justNow: t("time.justNow"),
+              minutesAgo: (value) => t("time.minutesAgo", { value }),
+              hoursAgo: (value) => t("time.hoursAgo", { value }),
+              daysAgo: (value) => t("time.daysAgo", { value }),
+            });
+            const stateLabel =
+              liveState === "stalled"
+                ? t("tasks.live.state.stalled")
+                : liveState === "delayed"
+                  ? t("tasks.live.state.delayed")
+                  : t("tasks.live.state.active");
+            return (
+              <article className="tasks-thread-message-row is-assistant is-live-placeholder" key={`live:${agent.agentId}`}>
+                <div className="tasks-thread-live-header">
+                  <span className="tasks-thread-message-label">{agent.label}</span>
+                  {latestEvent?.stage ? (
+                    <span className="tasks-thread-live-stage">
+                      {displayProcessStage(String(latestEvent.stage ?? ""), t)}
+                    </span>
+                  ) : null}
+                  <span className={`tasks-thread-live-state is-${liveState}`}>
+                    {stateLabel}
+                  </span>
+                  <span aria-hidden="true" className="tasks-thread-live-pulse">
+                    {animatedDots(pulseFrame)}
+                  </span>
+                </div>
+                <div className="tasks-thread-log-line">
+                  {latestEvent?.message || agent.summary || t("tasks.live.working")}
+                </div>
+                <div className="tasks-thread-live-detail">
+                  {t("tasks.live.lastUpdate", { value: lastSeenLabel })}
+                </div>
+                {agent.summary && latestEvent?.message && latestEvent.message !== agent.summary ? (
+                  <div className="tasks-thread-live-detail">{agent.summary}</div>
+                ) : null}
+                {agent.latestArtifactPath ? (
+                  <div className="tasks-thread-message-meta">
+                    <small className="tasks-thread-message-artifact">{agent.latestArtifactPath}</small>
+                    {agent.updatedAt ? <small className="tasks-thread-message-time">{formatArtifactStamp(agent.updatedAt)}</small> : null}
+                  </div>
+                ) : null}
+              </article>
+            );
+          })()
         ))}
       </section>
 

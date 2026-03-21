@@ -1016,6 +1016,67 @@
   opacity: 0.8;
 }
 
+.tasks-thread-live-header {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.tasks-thread-live-stage {
+  display: inline-flex;
+  align-items: center;
+  min-height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(243, 245, 249, 1);
+  color: var(--text-muted);
+  font-size: 10px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.tasks-thread-live-state {
+  display: inline-flex;
+  align-items: center;
+  min-height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  letter-spacing: 0.03em;
+}
+
+.tasks-thread-live-state.is-active {
+  background: rgba(237, 247, 241, 1);
+  color: #2f7a4b;
+}
+
+.tasks-thread-live-state.is-delayed {
+  background: rgba(255, 244, 224, 1);
+  color: #9a5d00;
+}
+
+.tasks-thread-live-state.is-stalled {
+  background: rgba(255, 236, 236, 1);
+  color: #b42318;
+}
+
+.tasks-thread-live-pulse {
+  display: inline-flex;
+  min-width: 18px;
+  color: var(--text-muted);
+  font-family: "DepartureMonoRail", "Galmuri11", monospace;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.tasks-thread-live-detail {
+  max-width: min(820px, 96%);
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
 .tasks-thread-message-row.is-process {
   opacity: 0.92;
 }

@@ -50,8 +50,8 @@ const ROLE_PROMPT_SPECS: Record<StudioRoleId, RolePromptSpec> = {
   },
   research_analyst: {
     focus: [
-      "수집된 dataset과 공개 자료를 구분해서 사용하고, 먼저 사실과 출처를 정리합니다.",
-      "리뷰·커뮤니티·평론 점수의 공통 신호와 충돌 신호를 나눠 해석합니다.",
+      "수집된 dataset, 무료 공식 API/피드, 공식 문서, 공개 웹 자료를 구분해서 사용하고 먼저 사실과 출처를 정리합니다.",
+      "질문의 도메인에 맞는 근거를 선택하고, 무료 공식 API나 공개 JSON/RSS가 있으면 HTML 스크래핑보다 우선 사용합니다.",
     ],
     deliverables: ["## 조사 결론", "## 핵심 근거", "## 시사점", "## 추가 수집 포인트"],
   },

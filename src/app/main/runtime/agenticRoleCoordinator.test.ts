@@ -94,11 +94,33 @@ describe("agenticRoleCoordinator", () => {
       execute: async () => new Promise<never>(() => {}),
     });
 
-    await vi.advanceTimersByTimeAsync(300001);
+    await vi.advanceTimersByTimeAsync(900001);
     const result = await runPromise;
 
     expect(result.envelope.record.status).toBe("error");
     expect(result.envelope.stages.find((stage) => stage.stage === "codex")?.status).toBe("error");
     expect(result.events.some((event) => event.type === "run_error")).toBe(true);
+  });
+
+  it("keeps non-research roles on the shorter watchdog timeout", async () => {
+    vi.useFakeTimers();
+    const queue = createAgenticQueue();
+    const invokeFn = (vi.fn(async () => "/tmp/write") as unknown) as InvokeFn;
+
+    const runPromise = runRoleWithCoordinator({
+      cwd: "/tmp/workspace",
+      sourceTab: "tasks-thread",
+      roleId: "client_programmer",
+      taskId: "THREAD-HANG-IMPLEMENTER",
+      queue,
+      invokeFn,
+      execute: async () => new Promise<never>(() => {}),
+    });
+
+    await vi.advanceTimersByTimeAsync(300001);
+    const result = await runPromise;
+
+    expect(result.envelope.record.status).toBe("error");
+    expect(result.events.some((event) => String(event.message ?? "").includes("300000ms"))).toBe(true);
   });
 });

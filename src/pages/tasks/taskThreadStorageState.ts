@@ -5,10 +5,16 @@ export type BrowserStore = {
   details: Record<string, ThreadDetail>;
 };
 
+export type TasksActiveThreadSnapshot = {
+  threadId: string;
+  cwd: string;
+};
+
 const BROWSER_STORE_KEY = "rail.tasks.browser-state.v4";
 const TASKS_PROJECT_PATH_KEY = "rail.tasks.project-path.v1";
 const TASKS_PROJECT_LIST_KEY = "rail.tasks.project-list.v1";
 const TASKS_HIDDEN_PROJECT_LIST_KEY = "rail.tasks.hidden-project-list.v1";
+const TASKS_ACTIVE_THREAD_KEY = "rail.tasks.active-thread.v1";
 
 function readSessionStorageValue(key: string): string | null {
   if (typeof window === "undefined") {
@@ -152,4 +158,44 @@ export function persistHiddenTasksProjectList(paths: string[]) {
   }
   const normalized = [...new Set(paths.map((path) => String(path ?? "").trim()).filter(Boolean))];
   writeSessionStorageValue(TASKS_HIDDEN_PROJECT_LIST_KEY, JSON.stringify(normalized));
+}
+
+export function loadTasksActiveThreadSnapshot(): TasksActiveThreadSnapshot | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  try {
+    const raw = readSessionStorageValue(TASKS_ACTIVE_THREAD_KEY);
+    if (!raw) {
+      return null;
+    }
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const threadId = String(parsed.threadId ?? "").trim();
+    const cwd = String(parsed.cwd ?? "").trim();
+    if (!threadId || !cwd) {
+      return null;
+    }
+    return { threadId, cwd };
+  } catch {
+    return null;
+  }
+}
+
+export function persistTasksActiveThreadSnapshot(snapshot: TasksActiveThreadSnapshot | null) {
+  if (typeof window === "undefined") {
+    return;
+  }
+  const threadId = String(snapshot?.threadId ?? "").trim();
+  const cwd = String(snapshot?.cwd ?? "").trim();
+  if (!threadId || !cwd) {
+    writeSessionStorageValue(TASKS_ACTIVE_THREAD_KEY, null);
+    return;
+  }
+  writeSessionStorageValue(
+    TASKS_ACTIVE_THREAD_KEY,
+    JSON.stringify({
+      threadId,
+      cwd,
+    }),
+  );
 }

@@ -75,6 +75,7 @@ const INCOMPLETE_TURN_STATUSES = new Set([
 const FAILED_TURN_STATUSES = new Set(["failed", "error", "cancelled", "rejected"]);
 const POLL_INTERVAL_MS = 1500;
 const POLL_TIMEOUT_MS = 180000;
+const RESEARCH_POLL_TIMEOUT_MS = 600000;
 const MAX_POLL_READ_ERRORS = 6;
 const MAX_TURN_START_ATTEMPTS = 3;
 const MAX_THREAD_START_ATTEMPTS = 3;
@@ -417,6 +418,7 @@ async function waitForCodexTurnCompletion(params: {
   invokeFn: InvokeFn;
   threadId: string;
   initialResponse: unknown;
+  pollTimeoutMs: number;
 }): Promise<{
   raw: unknown;
   completedStatus: string;
@@ -430,7 +432,7 @@ async function waitForCodexTurnCompletion(params: {
     };
   }
 
-  const deadline = Date.now() + POLL_TIMEOUT_MS;
+  const deadline = Date.now() + params.pollTimeoutMs;
   let readErrors = 0;
   while (Date.now() < deadline) {
     await sleep(POLL_INTERVAL_MS);
@@ -544,6 +546,7 @@ export async function runTaskRoleWithCodex(input: RunTaskRoleWithCodexInput): Pr
       invokeFn: input.invokeFn,
       threadId: threadStart.threadId,
       initialResponse: rawResponse,
+      pollTimeoutMs: pack.studioRoleId === "research_analyst" ? RESEARCH_POLL_TIMEOUT_MS : POLL_TIMEOUT_MS,
     });
     rawResponse = completion.raw;
     completedStatus = completion.completedStatus;

@@ -117,7 +117,7 @@ describe("workspaceKnowledgeHydration", () => {
     expect(readKnowledgeEntries().every((row) => row.workspacePath === "/tmp/workspace")).toBe(true);
   });
 
-  it("reuses fresh workspace artifact cache to avoid repeated scans", async () => {
+  it("reuses fresh workspace artifact cache for the immediate response", async () => {
     const invokeFn = vi.fn(async (command: string) => {
       if (command === "knowledge_scan_workspace_artifacts") {
         return [
@@ -145,10 +145,59 @@ describe("workspaceKnowledgeHydration", () => {
     const second = await hydrateKnowledgeEntriesFromWorkspaceArtifacts({
       cwd: "/tmp/workspace",
       invokeFn,
+      revalidateInBackground: false,
     });
 
     expect(first.map((row) => row.id)).toEqual(["artifact-a"]);
     expect(second.map((row) => row.id)).toEqual(["artifact-a"]);
     expect(invokeFn).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns cached rows immediately and revalidates in the background", async () => {
+    const invokeFn = vi
+      .fn()
+      .mockResolvedValueOnce([
+        {
+          id: "artifact-a",
+          runId: "role-run-1",
+          taskId: "task-1",
+          roleId: "research_analyst",
+          sourceKind: "artifact",
+          title: "리서처 · task-1 · research_collection.json",
+          summary: "복구된 리서치 산출물",
+          createdAt: "2026-03-21T00:00:00.000Z",
+          jsonPath: "/tmp/workspace/.rail/tasks/task-1/codex_runs/role-run-1/research_collection.json",
+          sourceFile: "/tmp/workspace/.rail/tasks/task-1/codex_runs/role-run-1/research_collection.json",
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: "artifact-b",
+          runId: "role-run-2",
+          taskId: "task-2",
+          roleId: "research_analyst",
+          sourceKind: "artifact",
+          title: "리서처 · task-2 · research_collection.json",
+          summary: "복구된 리서치 산출물",
+          createdAt: "2026-03-21T01:00:00.000Z",
+          jsonPath: "/tmp/workspace/.rail/tasks/task-2/codex_runs/role-run-2/research_collection.json",
+          sourceFile: "/tmp/workspace/.rail/tasks/task-2/codex_runs/role-run-2/research_collection.json",
+        },
+      ]) as <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
+
+    await hydrateKnowledgeEntriesFromWorkspaceArtifacts({ cwd: "/tmp/workspace", invokeFn });
+    const onUpdate = vi.fn();
+    const second = await hydrateKnowledgeEntriesFromWorkspaceArtifacts({
+      cwd: "/tmp/workspace",
+      invokeFn,
+      onUpdate,
+    });
+
+    expect(second.map((row) => row.id)).toEqual(["artifact-a"]);
+    await vi.waitFor(() => {
+      expect(onUpdate).toHaveBeenCalledWith(
+        expect.arrayContaining([expect.objectContaining({ id: "artifact-b" })]),
+      );
+    });
   });
 });

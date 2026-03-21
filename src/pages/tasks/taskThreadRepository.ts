@@ -101,6 +101,14 @@ type RefreshCurrentThreadParams = {
   setThreadItems: SetState<ThreadListItem[]>;
 };
 
+type RefreshThreadListSilentlyParams = {
+  hasTauriRuntime: boolean;
+  cwd: string;
+  projectPath: string;
+  invokeFn: InvokeFn;
+  setThreadItems: SetState<ThreadListItem[]>;
+};
+
 function syncSelectedState(params: ThreadSelectionDeps) {
   params.rememberSelectedAgent(
     params.detail.thread.threadId,
@@ -278,6 +286,21 @@ export async function refreshThreadStateSilently(params: RefreshCurrentThreadPar
       rememberSelectedAgent: params.rememberSelectedAgent,
       rememberSelectedFile: params.rememberSelectedFile,
     });
+  } catch {
+    // silent by design
+  }
+}
+
+export async function refreshThreadListSilently(params: RefreshThreadListSilentlyParams) {
+  if (!params.hasTauriRuntime || !params.cwd) {
+    return;
+  }
+  try {
+    const items = await params.invokeFn<ThreadListItem[]>("thread_list", {
+      cwd: params.cwd,
+      projectPath: params.projectPath || undefined,
+    });
+    params.setThreadItems(items);
   } catch {
     // silent by design
   }

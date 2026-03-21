@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import {
-  ROLE_KB_ALLOWLIST,
   bootstrapRoleKnowledgeProfile,
   injectRoleKnowledgePrompt,
   storeRoleKnowledgeProfile,
 } from "./roleKnowledgePipeline";
+import { buildRoleKnowledgeBootstrapCandidates } from "./roleKnowledgeBootstrapSources";
 
 describe("roleKnowledgePipeline", () => {
   it("builds bootstrap profile even when source fetch fails", async () => {
@@ -150,25 +150,33 @@ describe("roleKnowledgePipeline", () => {
     expect(injected.prompt).toContain("이동 시스템을 구현해줘");
   });
 
-  it("keeps role allowlist sources relevant and secure", () => {
-    for (const [roleId, urls] of Object.entries(ROLE_KB_ALLOWLIST)) {
-      expect(urls.length).toBeGreaterThanOrEqual(3);
-      const unique = new Set(urls);
-      expect(unique.size).toBe(urls.length);
-      for (const url of urls) {
-        expect(url.startsWith("https://")).toBe(true);
-        expect(url.includes("notion.so/help")).toBe(false);
-      }
-      if (roleId === "pm_planner") {
-        expect(urls.some((url) => url.includes("gamedeveloper.com/design"))).toBe(true);
-        expect(urls.some((url) => url.includes("gdcvault.com/free"))).toBe(true);
-      }
-      if (roleId === "pm_creative_director") {
-        expect(urls.some((url) => url.includes("howtomarketagame.com"))).toBe(true);
-      }
-      if (roleId === "pm_feasibility_critic") {
-        expect(urls.some((url) => url.includes("gameanalytics.com"))).toBe(true);
-      }
+  it("builds search-first bootstrap candidates from the prompt and role profile", () => {
+    const urls = buildRoleKnowledgeBootstrapCandidates({
+      roleId: "research_analyst",
+      userPrompt:
+        "스팀, 레딧, 메타크리틱 기준으로 2026년 장르 평가를 조사해줘. https://opencritic.com/ 도 참고해줘.",
+    });
+
+    expect(urls.length).toBeGreaterThanOrEqual(4);
+    expect(urls.length).toBeLessThanOrEqual(7);
+    expect(urls[0]).toBe("https://opencritic.com/");
+    expect(urls.some((url) => url.includes("duckduckgo.com/html/?q="))).toBe(true);
+    expect(urls.some((url) => url.includes("bing.com/search?q="))).toBe(true);
+    expect(urls.some((url) => url.includes("site%3Awww.reddit.com"))).toBe(true);
+    expect(urls.some((url) => url.includes("site%3Awww.metacritic.com"))).toBe(true);
+  });
+
+  it("keeps bootstrap candidates on public https pages without duplicates", () => {
+    const urls = buildRoleKnowledgeBootstrapCandidates({
+      roleId: "client_programmer",
+      userPrompt: "Unity 입력 시스템과 상태머신 구현 패턴 조사",
+    });
+
+    expect(urls.length).toBeGreaterThan(0);
+    expect(new Set(urls).size).toBe(urls.length);
+    for (const url of urls) {
+      expect(url.startsWith("https://")).toBe(true);
+      expect(url.includes("notion.so/help")).toBe(false);
     }
   });
 });

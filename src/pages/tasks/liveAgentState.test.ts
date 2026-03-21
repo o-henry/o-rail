@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildLiveAgentCards, displayArtifactName } from "./liveAgentState";
+import { buildLiveAgentCards, displayArtifactName, formatRelativeUpdateAge, resolveLiveActivityState } from "./liveAgentState";
 import type { ThreadDetail } from "./threadTypes";
 
 function buildDetail(): ThreadDetail {
@@ -142,5 +142,51 @@ describe("buildLiveAgentCards", () => {
 describe("displayArtifactName", () => {
   it("returns the file name from a path", () => {
     expect(displayArtifactName(".rail/tasks/thread-1/findings.md")).toBe("findings.md");
+  });
+});
+
+describe("resolveLiveActivityState", () => {
+  it("marks recent updates as active", () => {
+    expect(resolveLiveActivityState("2026-03-21T00:00:20.000Z", Date.parse("2026-03-21T00:00:40.000Z"))).toBe("active");
+  });
+
+  it("marks older updates as delayed", () => {
+    expect(resolveLiveActivityState("2026-03-21T00:00:00.000Z", Date.parse("2026-03-21T00:00:45.000Z"))).toBe("delayed");
+  });
+
+  it("marks long pauses as stalled", () => {
+    expect(resolveLiveActivityState("2026-03-21T00:00:00.000Z", Date.parse("2026-03-21T00:02:10.000Z"))).toBe("stalled");
+  });
+});
+
+describe("formatRelativeUpdateAge", () => {
+  it("formats recent timestamps as just now", () => {
+    const originalNow = Date.now;
+    Date.now = () => Date.parse("2026-03-21T00:00:30.000Z");
+    try {
+      expect(formatRelativeUpdateAge("2026-03-21T00:00:00.000Z", {
+        justNow: "방금",
+        minutesAgo: (value) => `${value}분 전`,
+        hoursAgo: (value) => `${value}시간 전`,
+        daysAgo: (value) => `${value}일 전`,
+      })).toBe("방금");
+    } finally {
+      Date.now = originalNow;
+    }
+  });
+
+  it("formats minute-based timestamps", () => {
+    const originalNow = Date.now;
+    Date.now = () => Date.parse("2026-03-21T00:03:00.000Z");
+    try {
+      expect(formatRelativeUpdateAge("2026-03-21T00:00:00.000Z", {
+        justNow: "방금",
+        minutesAgo: (value) => `${value}분 전`,
+        hoursAgo: (value) => `${value}시간 전`,
+        daysAgo: (value) => `${value}일 전`,
+      })).toBe("3분 전");
+    } finally {
+      Date.now = originalNow;
+    }
   });
 });

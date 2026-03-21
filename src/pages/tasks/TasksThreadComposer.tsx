@@ -34,6 +34,8 @@ type TasksThreadComposerProps = {
   isReasonMenuOpen: boolean;
   reasoning: string;
   reasoningLabel: string;
+  showStopButton: boolean;
+  canUseStopButton: boolean;
   canInterruptCurrentThread: boolean;
   stoppingComposerRun: boolean;
   onSelectMention: (option: TaskAgentMentionOption) => void;
@@ -54,6 +56,13 @@ type TasksThreadComposerProps = {
 
 export function canSubmitTasksComposer(input: string | null | undefined): boolean {
   return Boolean(stripCoordinationModeTags(String(input ?? "")).trim());
+}
+
+export function shouldShowTasksComposerStopButton(params: {
+  canInterruptCurrentThread: boolean;
+  composerSubmitPending: boolean;
+}): boolean {
+  return Boolean(params.canInterruptCurrentThread || params.composerSubmitPending);
 }
 
 type SelectedTasksComposerBadge = {
@@ -272,12 +281,12 @@ export function TasksThreadComposer(props: TasksThreadComposerProps) {
         </div>
 
         <div className="agents-composer-actions">
-          {props.canInterruptCurrentThread ? (
+          {props.showStopButton ? (
             <button
               aria-label={props.stoppingComposerRun ? t("common.loading") : t("tasks.actions.stop")}
               className="agents-stop-button"
               data-e2e="tasks-stop-button"
-              disabled={props.stoppingComposerRun}
+              disabled={!props.canUseStopButton || props.stoppingComposerRun}
               onClick={props.onStop}
               title={props.stoppingComposerRun ? t("common.loading") : t("tasks.actions.stop")}
               type="button"

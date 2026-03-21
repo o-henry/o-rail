@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import AgentsPage from "../../../pages/agents/AgentsPage";
 import AdaptationPage from "./AdaptationPage";
 import BridgePage from "../../../pages/bridge/BridgePage";
@@ -11,6 +12,18 @@ import VisualizePage from "../../../pages/visualize/VisualizePage";
 import { writeStoredSelectedRunId } from "../../../pages/visualize/visualizeSelection";
 
 export function MainAppWorkspaceContent(props: any) {
+  const [mountedTabs, setMountedTabs] = useState<Record<string, boolean>>(() => ({
+    [String(props.workspaceTab ?? "tasks")]: true,
+  }));
+
+  useEffect(() => {
+    const nextTab = String(props.workspaceTab ?? "").trim();
+    if (!nextTab) {
+      return;
+    }
+    setMountedTabs((current) => (current[nextTab] ? current : { ...current, [nextTab]: true }));
+  }, [props.workspaceTab]);
+
   const handleInjectContextSources = (entries: any[]) => {
     const sourceIds = entries.map((entry) => entry.id);
     props.publishAction({
@@ -44,21 +57,25 @@ export function MainAppWorkspaceContent(props: any) {
   return (
     <>
       {props.workspaceTab === "feed" && <FeedPage vm={props.feedPageVm} />}
-      {props.workspaceTab === "knowledge" && (
-        <KnowledgeBasePage
-          cwd={props.cwd}
-          posts={props.feedPosts}
-          onInjectContextSources={handleInjectContextSources}
-          onOpenInVisualize={handleOpenVisualizeEntry}
-        />
-      )}
-      {props.workspaceTab === "visualize" && (
-        <VisualizePage
-          cwd={props.cwd}
-          hasTauriRuntime={props.hasTauriRuntime}
-          onOpenKnowledgeEntry={handleOpenKnowledgeEntry}
-        />
-      )}
+      {mountedTabs.knowledge ? (
+        <div hidden={props.workspaceTab !== "knowledge"}>
+          <KnowledgeBasePage
+            cwd={props.cwd}
+            posts={props.feedPosts}
+            onInjectContextSources={handleInjectContextSources}
+            onOpenInVisualize={handleOpenVisualizeEntry}
+          />
+        </div>
+      ) : null}
+      {mountedTabs.visualize ? (
+        <div hidden={props.workspaceTab !== "visualize"}>
+          <VisualizePage
+            cwd={props.cwd}
+            hasTauriRuntime={props.hasTauriRuntime}
+            onOpenKnowledgeEntry={handleOpenKnowledgeEntry}
+          />
+        </div>
+      ) : null}
       {props.workspaceTab === "adaptation" && (
         <AdaptationPage
           data={props.adaptiveWorkspaceData}
@@ -68,27 +85,31 @@ export function MainAppWorkspaceContent(props: any) {
           onReset={props.onResetAdaptiveWorkspace}
         />
       )}
-      {props.workspaceTab === "tasks" && (
-        <TasksPage
-          appendWorkspaceEvent={props.appendWorkspaceEvent}
-          cwd={props.cwd}
-          hasTauriRuntime={props.hasTauriRuntime}
-          invokeFn={props.invokeFn}
-          onOpenSettings={() => props.onSelectWorkspaceTab("settings")}
-          publishAction={props.publishAction}
-          setStatus={props.setStatus}
-        />
-      )}
-      {props.workspaceTab === "shell" && (
-        <ShellPage
-          appendWorkspaceEvent={props.appendWorkspaceEvent}
-          cwd={props.cwd}
-          hasTauriRuntime={props.hasTauriRuntime}
-          invokeFn={props.invokeFn}
-          publishAction={props.publishAction}
-          setStatus={props.setStatus}
-        />
-      )}
+      {mountedTabs.tasks ? (
+        <div hidden={props.workspaceTab !== "tasks"}>
+          <TasksPage
+            appendWorkspaceEvent={props.appendWorkspaceEvent}
+            cwd={props.cwd}
+            hasTauriRuntime={props.hasTauriRuntime}
+            invokeFn={props.invokeFn}
+            onOpenSettings={() => props.onSelectWorkspaceTab("settings")}
+            publishAction={props.publishAction}
+            setStatus={props.setStatus}
+          />
+        </div>
+      ) : null}
+      {mountedTabs.shell ? (
+        <div hidden={props.workspaceTab !== "shell"}>
+          <ShellPage
+            appendWorkspaceEvent={props.appendWorkspaceEvent}
+            cwd={props.cwd}
+            hasTauriRuntime={props.hasTauriRuntime}
+            invokeFn={props.invokeFn}
+            publishAction={props.publishAction}
+            setStatus={props.setStatus}
+          />
+        </div>
+      ) : null}
       {props.workspaceTab === "agents" && (
         <AgentsPage
           codexMultiAgentMode={props.codexMultiAgentMode}

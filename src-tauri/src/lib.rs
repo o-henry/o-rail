@@ -1,6 +1,7 @@
 pub mod dashboard_crawler;
 mod engine;
 mod knowledge;
+mod knowledge_artifacts;
 mod quality;
 mod research_storage;
 mod storage;

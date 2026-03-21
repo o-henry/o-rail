@@ -1,8 +1,8 @@
 import { type DragEvent, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode, useEffect, useMemo, useState } from "react";
 import { TaskTerminalViewport } from "../tasks/TaskTerminalViewport";
-import { useTasksThreadState } from "../tasks/useTasksThreadState";
 import { useI18n } from "../../i18n";
 import { useShellTerminalGrid } from "./useShellTerminalGrid";
+import { useShellActiveThreadSnapshot } from "./useShellActiveThreadSnapshot";
 import {
   defaultShellAddDirection,
   type ShellSplitDirection,
@@ -49,23 +49,19 @@ function resolveDropDirection(event: DragEvent<HTMLElement>): ShellSplitDirectio
 
 export default function ShellPage(props: ShellPageProps) {
   const { t } = useI18n();
-  const state = useTasksThreadState(props);
-  const [displayThread, setDisplayThread] = useState(state.activeThread);
-  const [initialThreadResolved, setInitialThreadResolved] = useState(Boolean(state.activeThread));
+  const activeThreadSnapshot = useShellActiveThreadSnapshot();
+  const [displayThread, setDisplayThread] = useState(activeThreadSnapshot);
+  const [initialThreadResolved, setInitialThreadResolved] = useState(Boolean(activeThreadSnapshot));
   useEffect(() => {
-    if (state.activeThread) {
-      setDisplayThread(state.activeThread);
+    if (activeThreadSnapshot) {
+      setDisplayThread(activeThreadSnapshot);
       return;
     }
-    if (!state.loading) {
-      setDisplayThread(null);
-    }
-  }, [state.activeThread, state.loading]);
+    setDisplayThread(null);
+  }, [activeThreadSnapshot]);
   useEffect(() => {
-    if (!state.loading) {
-      setInitialThreadResolved(true);
-    }
-  }, [state.loading]);
+    setInitialThreadResolved(true);
+  }, [activeThreadSnapshot]);
   const shellGrid = useShellTerminalGrid({
     thread: displayThread,
     hasTauriRuntime: props.hasTauriRuntime,
@@ -293,14 +289,6 @@ export default function ShellPage(props: ShellPageProps) {
             <section className="shell-empty-state panel-card">
               <strong>{t("shell.empty.selectThread.title")}</strong>
               <p>{t("shell.empty.selectThread.body")}</p>
-              <div className="shell-empty-actions">
-                <button className="tasks-thread-new-button" onClick={() => void state.openNewThread()} type="button">
-                  {t("tasks.thread.new")}
-                </button>
-                <button className="tasks-thread-new-button" onClick={() => void state.openProjectDirectory()} type="button">
-                  {t("shell.empty.openProject")}
-                </button>
-              </div>
             </section>
           ) : shellGrid.isUnsupported ? (
             <section className="shell-empty-state panel-card">

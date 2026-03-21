@@ -1,13 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { listen } from "../../shared/tauri";
-import { resolveTasksThreadTerminalCwd } from "../tasks/taskThreadTerminalState";
 import type { TaskTerminalPane, TaskTerminalPaneStatus } from "../tasks/taskTerminalTypes";
 import {
   appendTerminalBuffer,
   clearTerminalBuffer,
   removeTerminalBuffer,
 } from "../tasks/taskTerminalBufferStore";
-import type { ThreadDetail } from "../tasks/threadTypes";
 import {
   createShellTerminalPane,
   renameShellTerminalPaneTitle,
@@ -37,13 +35,18 @@ type WorkspaceTerminalStateEvent = {
   message?: string;
 };
 
+type ShellThreadTarget = {
+  threadId: string;
+  cwd: string;
+};
+
 export function useShellTerminalGrid(params: {
-  thread: ThreadDetail | null;
+  thread: ShellThreadTarget | null;
   hasTauriRuntime: boolean;
   invokeFn: InvokeFn;
 }) {
-  const threadId = String(params.thread?.thread.threadId ?? "").trim();
-  const cwd = useMemo(() => resolveTasksThreadTerminalCwd(params.thread), [params.thread]);
+  const threadId = String(params.thread?.threadId ?? "").trim();
+  const cwd = useMemo(() => String(params.thread?.cwd ?? "").trim(), [params.thread?.cwd]);
   const [panes, setPanes] = useState<TaskTerminalPane[]>([]);
   const [layout, setLayout] = useState<ShellTerminalLayoutNode | null>(null);
   const [selectedPaneId, setSelectedPaneId] = useState("");

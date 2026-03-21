@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  mergeKnowledgeEntryRows,
   persistKnowledgeIndexToWorkspace,
   readKnowledgeEntries,
   removeKnowledgeEntriesByRunId,
   removeKnowledgeEntry,
-  upsertKnowledgeEntry,
+  writeKnowledgeEntries,
 } from "../../features/studio/knowledgeIndex";
 import { hydrateKnowledgeEntriesFromWorkspaceSources } from "../../features/studio/workspaceKnowledgeHydration";
 import type { KnowledgeEntry, KnowledgeSourcePost } from "../../features/studio/knowledgeTypes";
@@ -102,23 +103,36 @@ export function useKnowledgeBaseState({ cwd, posts }: UseKnowledgeBaseStateParam
   const [detailError, setDetailError] = useState("");
   const [pendingGroupDelete, setPendingGroupDelete] = useState<PendingKnowledgeGroupDelete | null>(null);
 
+  const mergePostEntries = (rows: KnowledgeEntry[]) => {
+    const postRows = posts.map((post) => toKnowledgeEntry(post)).filter((row): row is KnowledgeEntry => row !== null);
+    const merged = mergeKnowledgeEntryRows([...rows, ...postRows]);
+    writeKnowledgeEntries(merged);
+    return merged.filter((row) => !isHiddenKnowledgeEntry(row));
+  };
+
   useEffect(() => {
     let cancelled = false;
+    const initialRows = mergePostEntries(readKnowledgeEntries());
+    setEntries(initialRows);
     void (async () => {
-      await hydrateKnowledgeEntriesFromWorkspaceSources({ cwd, invokeFn: invoke });
-      let next = readKnowledgeEntries().filter((row) => !isHiddenKnowledgeEntry(row));
-      for (const post of posts) {
-        const row = toKnowledgeEntry(post);
-        if (!row) {
-          continue;
-        }
-        next = upsertKnowledgeEntry(row).filter((entry) => !isHiddenKnowledgeEntry(entry));
-      }
+      const next = await hydrateKnowledgeEntriesFromWorkspaceSources({
+        cwd,
+        invokeFn: invoke,
+        onUpdate: (rows) => {
+          if (cancelled) {
+            return;
+          }
+          const merged = mergePostEntries(rows);
+          setEntries(merged);
+          void persistKnowledgeIndexToWorkspace({ cwd, invokeFn: invoke, rows: merged });
+        },
+      });
       if (cancelled) {
         return;
       }
-      setEntries(next);
-      await persistKnowledgeIndexToWorkspace({ cwd, invokeFn: invoke, rows: next });
+      const merged = mergePostEntries(next);
+      setEntries(merged);
+      await persistKnowledgeIndexToWorkspace({ cwd, invokeFn: invoke, rows: merged });
     })();
     return () => {
       cancelled = true;

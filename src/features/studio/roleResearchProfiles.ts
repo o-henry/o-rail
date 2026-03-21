@@ -116,37 +116,34 @@ export const ROLE_RESEARCH_PROFILES: Record<StudioRoleId, RoleResearchProfile> =
     ],
   },
   research_analyst: {
-    focusLabel: "시장·커뮤니티 리서치",
+    focusLabel: "질문 적응형 공개 리서치",
     synthesisPrompt:
-      "수집된 리뷰, 커뮤니티 반응, 평론가 시그널을 합쳐 실제 아이디어 판단에 쓸 수 있는 근거와 패턴만 남깁니다.",
+      "질문의 도메인에 맞춰 수집된 공식 근거, 무료 공개 데이터, 커뮤니티 반응, 기사·문서를 종합해 의사결정에 직접 필요한 사실과 패턴만 남깁니다.",
     verificationPrompt:
-      "출처별 편향과 중복을 줄이고, 점수/반응/서술형 근거가 서로 어긋나는 지점을 따로 표시해 과한 일반화를 막습니다.",
+      "출처별 편향과 중복을 줄이고, 공식 자료·무료 공개 API·문서형 근거·커뮤니티 반응이 서로 어긋나는 지점을 따로 표시해 과한 일반화를 막습니다.",
     lanes: [
       {
-        label: "프로젝트 리서치 목표 정리",
+        label: "질문과 조사 범위 정리",
         executor: "codex",
         prompt:
-          "현재 요청에서 어떤 장르, 어떤 플레이어 반응, 어떤 평가 신호를 확인해야 하는지 조사 목적과 판단 질문을 정리합니다.",
+          "현재 요청에서 무엇을 사실로 확인해야 하는지, 어떤 기준으로 비교하거나 검증해야 하는지 조사 목적과 판단 질문을 정리합니다.",
       },
       {
-        label: "커뮤니티·평가 신호 조사",
-        executor: "via_flow",
-        viaNodeType: "source.community",
+        label: "공식 문서·무료 공식 API·공개 피드 조사",
+        executor: "web_perplexity",
         prompt:
-          "리뷰, 커뮤니티 토론, 평론가 평점 주변의 공개 반응을 모아 반복되는 호평·악평 패턴을 정리합니다.",
-        keywords: "steam review, community sentiment, game criticism, player feedback, genre reception",
-        countries: COMMON_REGION,
-        sites: "store.steampowered.com, steamcommunity.com, reddit.com, opencritic.com, metacritic.com",
+          "질문 도메인에 맞는 공식 문서, 공식 웹사이트, 무료 공식 API, 공개 JSON/RSS/Atom 피드, 오픈 데이터를 우선 조사합니다.",
+        keywords: "official documentation public api open data rss atom json reference",
         maxItems: 24,
       },
       {
-        label: "보조 검색 검증",
-        executor: "web_perplexity",
+        label: "보조 검색·공개 웹 검증",
+        executor: "via_flow",
+        viaNodeType: "source.community",
         prompt:
-          "수집된 신호를 보조 검색으로 교차 확인해 장르, 시장성, 플레이어 평가와 관련된 외부 근거를 보강합니다.",
-        keywords: "game genre trend, player review pattern, critic score reception, indie market signal",
+          "수집된 공식 근거를 보조 검색과 공개 웹페이지로 교차 확인하고, 필요한 경우 커뮤니티·기사·포럼 반응을 보강 근거로 정리합니다.",
+        keywords: "public web corroboration community discussion independent reporting open references",
         countries: COMMON_REGION,
-        sites: "gamedeveloper.com, howtomarketagame.com, opencritic.com, metacritic.com",
         maxItems: 18,
       },
     ],

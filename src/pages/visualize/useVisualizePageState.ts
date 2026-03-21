@@ -118,17 +118,21 @@ export function useVisualizePageState({ cwd, hasTauriRuntime }: UseVisualizePage
     let cancelled = false;
     setRefreshing(true);
     setError("");
-    void Promise.all([
-      hydrateKnowledgeEntriesFromWorkspaceSources({ cwd, invokeFn: invoke }),
-      loadResearchOverview(cwd),
-      listDynamicResearchCollectionJobs(cwd),
-      loadResearchGameMetrics(cwd),
-    ])
-      .then(([, nextOverview, nextJobs, nextSteamMetrics]) => {
+    syncReportRuns();
+    void hydrateKnowledgeEntriesFromWorkspaceSources({
+      cwd,
+      invokeFn: invoke,
+      onUpdate: () => {
+        if (!cancelled) {
+          syncReportRuns();
+        }
+      },
+    }).catch(() => undefined);
+    void Promise.all([loadResearchOverview(cwd), listDynamicResearchCollectionJobs(cwd), loadResearchGameMetrics(cwd)])
+      .then(([nextOverview, nextJobs, nextSteamMetrics]) => {
         if (cancelled) {
           return;
         }
-        syncReportRuns();
         setOverview(nextOverview);
         setJobs(nextJobs.items);
         setSteamMetrics(nextSteamMetrics);

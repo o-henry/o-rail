@@ -94,6 +94,19 @@ function cacheWorkspaceRows(cwd: string, rows: KnowledgeEntry[]): void {
   writeWorkspaceHydrationCache(persisted);
 }
 
+async function refreshWorkspaceArtifactRows(params: {
+  cwd: string;
+  invokeFn: InvokeFn;
+}): Promise<KnowledgeEntry[]> {
+  const raw = await params.invokeFn<unknown[]>("knowledge_scan_workspace_artifacts", { cwd: params.cwd });
+  const workspaceRows = normalizeWorkspaceRows(params.cwd, normalizeKnowledgeEntries(raw));
+  if (workspaceRows.length === 0) {
+    return readKnowledgeEntries();
+  }
+  cacheWorkspaceRows(params.cwd, workspaceRows);
+  return mergeAndPersist([...readKnowledgeEntries(), ...workspaceRows]);
+}
+
 export function clearWorkspaceKnowledgeHydrationCacheForTest(): void {
   workspaceKnowledgeCache.clear();
   if (!canUseLocalStorage()) {
@@ -109,6 +122,8 @@ export function clearWorkspaceKnowledgeHydrationCacheForTest(): void {
 export async function hydrateKnowledgeEntriesFromWorkspaceArtifacts(params: {
   cwd: string;
   invokeFn: InvokeFn;
+  onUpdate?: (rows: KnowledgeEntry[]) => void;
+  revalidateInBackground?: boolean;
 }): Promise<KnowledgeEntry[]> {
   const cwd = normalizeCwd(params.cwd);
   if (!cwd) {
@@ -116,16 +131,20 @@ export async function hydrateKnowledgeEntriesFromWorkspaceArtifacts(params: {
   }
   const cachedRows = readCachedWorkspaceRows(cwd);
   if (cachedRows) {
-    return mergeAndPersist([...readKnowledgeEntries(), ...cachedRows]);
+    const merged = mergeAndPersist([...readKnowledgeEntries(), ...cachedRows]);
+    if (params.revalidateInBackground !== false) {
+      void refreshWorkspaceArtifactRows({ cwd, invokeFn: params.invokeFn })
+        .then((rows) => {
+          params.onUpdate?.(rows);
+        })
+        .catch(() => undefined);
+    }
+    return merged;
   }
   try {
-    const raw = await params.invokeFn<unknown[]>("knowledge_scan_workspace_artifacts", { cwd });
-    const workspaceRows = normalizeWorkspaceRows(cwd, normalizeKnowledgeEntries(raw));
-    if (workspaceRows.length === 0) {
-      return readKnowledgeEntries();
-    }
-    cacheWorkspaceRows(cwd, workspaceRows);
-    return mergeAndPersist([...readKnowledgeEntries(), ...workspaceRows]);
+    const rows = await refreshWorkspaceArtifactRows({ cwd, invokeFn: params.invokeFn });
+    params.onUpdate?.(rows);
+    return rows;
   } catch {
     return readKnowledgeEntries();
   }
@@ -134,6 +153,8 @@ export async function hydrateKnowledgeEntriesFromWorkspaceArtifacts(params: {
 export async function hydrateKnowledgeEntriesFromWorkspaceSources(params: {
   cwd: string;
   invokeFn: InvokeFn;
+  onUpdate?: (rows: KnowledgeEntry[]) => void;
+  revalidateInBackground?: boolean;
 }): Promise<KnowledgeEntry[]> {
   const cwd = normalizeCwd(params.cwd);
   if (!cwd) {
@@ -152,5 +173,10 @@ export async function hydrateKnowledgeEntriesFromWorkspaceSources(params: {
   } catch {
     // ignore workspace index hydrate failures
   }
-  return hydrateKnowledgeEntriesFromWorkspaceArtifacts({ cwd, invokeFn: params.invokeFn });
+  return hydrateKnowledgeEntriesFromWorkspaceArtifacts({
+    cwd,
+    invokeFn: params.invokeFn,
+    onUpdate: params.onUpdate,
+    revalidateInBackground: params.revalidateInBackground,
+  });
 }

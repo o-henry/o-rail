@@ -23,7 +23,7 @@ import { TasksThreadNavPane } from "./TasksThreadNavPane";
 import { TasksThreadHeaderBar } from "./TasksThreadHeaderBar";
 import { TasksThreadConversation } from "./TasksThreadConversation";
 import { TasksThreadReviewPane } from "./TasksThreadReviewPane";
-import { TasksThreadComposer } from "./TasksThreadComposer";
+import { shouldShowTasksComposerStopButton, TasksThreadComposer } from "./TasksThreadComposer";
 
 type InvokeFn = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
 
@@ -118,6 +118,13 @@ export default function TasksPage(props: TasksPageProps) {
       ?? null;
   }, [selectedStageId, state.activeThread]);
   const currentStageLabel = selectedStage ? getThreadStageLabel(selectedStage.id) : t("tasks.workflow.title");
+  const showStopButton = useMemo(
+    () => shouldShowTasksComposerStopButton({
+      canInterruptCurrentThread: state.canInterruptCurrentThread,
+      composerSubmitPending: state.composerSubmitPending,
+    }),
+    [state.canInterruptCurrentThread, state.composerSubmitPending],
+  );
 
   useEffect(() => {
     setThreadTitleDraft(headerTitle);
@@ -217,8 +224,10 @@ export default function TasksPage(props: TasksPageProps) {
       return;
     }
     event.preventDefault();
-    if (state.canInterruptCurrentThread) {
-      void state.stopComposerRun();
+    if (showStopButton) {
+      if (state.canInterruptCurrentThread) {
+        void state.stopComposerRun();
+      }
       return;
     }
     void state.submitComposer();
@@ -395,6 +404,7 @@ export default function TasksPage(props: TasksPageProps) {
 
         <TasksThreadComposer
           attachedFiles={state.attachedFiles}
+          canUseStopButton={state.canInterruptCurrentThread}
           canInterruptCurrentThread={state.canInterruptCurrentThread}
           composerCoordinationModeOverride={state.composerCoordinationModeOverride}
           composerDraft={state.composerDraft}
@@ -409,6 +419,7 @@ export default function TasksPage(props: TasksPageProps) {
           reasoningLabel={displayReasoningLabel(state.reasoning)}
           selectedComposerRoleIds={state.selectedComposerRoleIds}
           selectedModelOption={selectedModelOption}
+          showStopButton={showStopButton}
           stoppingComposerRun={state.stoppingComposerRun}
           onComposerCursorChange={setComposerCursor}
           onComposerDraftChange={(value, cursor) => {

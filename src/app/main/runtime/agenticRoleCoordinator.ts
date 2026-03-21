@@ -38,6 +38,7 @@ type RoleKnowledgeInjectResult = {
 };
 
 const ROLE_EXECUTE_TIMEOUT_MS = 300000;
+const RESEARCH_ROLE_EXECUTE_TIMEOUT_MS = 900000;
 
 export type AgenticRunRoleInput = {
   runId?: string;
@@ -172,6 +173,12 @@ function appendArtifactsFromPaths(params: {
       path: trimmed,
     });
   }
+}
+
+function resolveRoleExecuteTimeoutMs(roleId: string): number {
+  return String(roleId ?? "").trim() === "research_analyst"
+    ? RESEARCH_ROLE_EXECUTE_TIMEOUT_MS
+    : ROLE_EXECUTE_TIMEOUT_MS;
 }
 
 async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
@@ -421,7 +428,7 @@ export async function runRoleWithCoordinator(input: AgenticRunRoleInput): Promis
           taskId: input.taskId,
           prompt: effectivePrompt,
         }),
-        ROLE_EXECUTE_TIMEOUT_MS,
+        resolveRoleExecuteTimeoutMs(input.roleId),
         "role execution",
       );
       context.envelope = patchRunStage(context.envelope, "codex", "done", "역할 실행 완료");

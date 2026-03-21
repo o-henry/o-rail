@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  clearKnowledgeIndexCacheForTest,
   clearHiddenKnowledgeIdsForTest,
   hydrateKnowledgeEntriesFromWorkspace,
   isKnowledgeEntryIdHidden,
@@ -11,6 +12,7 @@ import {
 } from "./knowledgeIndex";
 
 const STORAGE_KEY = "rail.studio.knowledge.index.v1";
+const CHUNK_PREFIX = "rail.studio.knowledge.index.chunk.v1:";
 
 function createLocalStorageMock() {
   const store = new Map<string, string>();
@@ -57,6 +59,7 @@ describe("knowledgeIndex.removeKnowledgeEntriesByRunId", () => {
   });
 
   afterEach(() => {
+    clearKnowledgeIndexCacheForTest();
     clearHiddenKnowledgeIdsForTest();
     vi.unstubAllGlobals();
   });
@@ -91,8 +94,11 @@ describe("knowledgeIndex.removeKnowledgeEntriesByRunId", () => {
     const serialized = window.localStorage.getItem(STORAGE_KEY);
     expect(serialized).toBeTruthy();
     const parsed = JSON.parse(String(serialized));
-    expect(parsed).toHaveLength(1);
-    expect(parsed[0]?.runId).toBe("run-1");
+    expect(parsed.version).toBe(2);
+    expect(Array.isArray(parsed.chunkKeys)).toBe(true);
+    const firstChunk = JSON.parse(String(window.localStorage.getItem(parsed.chunkKeys[0])));
+    expect(firstChunk).toHaveLength(1);
+    expect(firstChunk[0]?.runId).toBe("run-1");
   });
 
   it("marks run id hidden when removing a run group", () => {
@@ -159,5 +165,19 @@ describe("knowledgeIndex.removeKnowledgeEntriesByRunId", () => {
 
     expect(hydrated.map((row) => row.id)).toEqual(["local-a", "workspace-a", "workspace-b"]);
     expect(readKnowledgeEntries().map((row) => row.id)).toEqual(["local-a", "workspace-a", "workspace-b"]);
+  });
+
+  it("loads legacy array storage and rewrites into chunked storage on next write", () => {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify([entry("legacy-a", "run-legacy")]));
+
+    expect(readKnowledgeEntries().map((row) => row.id)).toEqual(["legacy-a"]);
+
+    upsertKnowledgeEntry(entry("legacy-b", "run-legacy"));
+
+    const metadata = JSON.parse(String(window.localStorage.getItem(STORAGE_KEY)));
+    expect(metadata.version).toBe(2);
+    expect(metadata.chunkKeys[0]).toContain(CHUNK_PREFIX);
+    const chunk = JSON.parse(String(window.localStorage.getItem(metadata.chunkKeys[0])));
+    expect(chunk.map((row: { id: string }) => row.id)).toEqual(["legacy-a", "legacy-b"]);
   });
 });

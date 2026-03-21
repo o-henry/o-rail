@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { refreshThreadStateSilently, reloadThreadList } from "./taskThreadRepository";
+import { refreshThreadListSilently, refreshThreadStateSilently, reloadThreadList } from "./taskThreadRepository";
 
 describe("taskThreadRepository", () => {
   it("passes the selected project path to thread_list during reload", async () => {
@@ -64,6 +64,29 @@ describe("taskThreadRepository", () => {
       setThreadItems: vi.fn(),
     });
 
+    expect(invokeFn).toHaveBeenCalledWith("thread_list", {
+      cwd: "/workspace/root",
+      projectPath: "/workspace/projects/rail-docs",
+    });
+  });
+
+  it("refreshes only thread metadata without loading the active thread again", async () => {
+    const invokeFn = vi.fn(async (command: string) => {
+      if (command === "thread_list") {
+        return [];
+      }
+      throw new Error(`unexpected command: ${command}`);
+    }) as unknown as <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
+
+    await refreshThreadListSilently({
+      hasTauriRuntime: true,
+      cwd: "/workspace/root",
+      projectPath: "/workspace/projects/rail-docs",
+      invokeFn,
+      setThreadItems: vi.fn(),
+    });
+
+    expect(invokeFn).toHaveBeenCalledTimes(1);
     expect(invokeFn).toHaveBeenCalledWith("thread_list", {
       cwd: "/workspace/root",
       projectPath: "/workspace/projects/rail-docs",

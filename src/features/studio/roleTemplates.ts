@@ -21,7 +21,7 @@ export const STUDIO_ROLE_TEMPLATES: StudioRoleTemplate[] = [
     goal: "기획안을 냉철하게 비평하고 현실성·비용·리스크를 점수화해 평가",
     defaultTaskId: "PM-CRITIC-001",
   },
-  { id: "research_analyst", label: "리서처", goal: "웹 자료·평가·커뮤니티 반응 조사", defaultTaskId: "RESEARCH-001" },
+  { id: "research_analyst", label: "리서처", goal: "질문 적응형 공개 자료 조사와 근거 검증", defaultTaskId: "RESEARCH-001" },
   { id: "client_programmer", label: "클라이언트", goal: "게임플레이/UX 구현", defaultTaskId: "CLIENT-001" },
   { id: "system_programmer", label: "시스템", goal: "아키텍처/데이터 흐름 안정화", defaultTaskId: "SYSTEM-001" },
   { id: "tooling_engineer", label: "툴링", goal: "개발 자동화/에디터 유틸 구축", defaultTaskId: "TOOL-001" },

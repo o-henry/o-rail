@@ -8,6 +8,8 @@ import {
 } from "../../../features/studio/roleKnowledgeStore";
 import { buildStudioRolePromptEnvelope } from "../../../features/studio/rolePromptGuidance";
 import { STUDIO_ROLE_TEMPLATES } from "../../../features/studio/roleTemplates";
+import { buildRoleKnowledgeBootstrapCandidates } from "./roleKnowledgeBootstrapSources";
+import { toCompactTimestamp, toRoleShortToken } from "./roleKnowledgePathUtils";
 
 type InvokeFn = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
 
@@ -73,64 +75,6 @@ const SCRAPLING_BRIDGE_NOT_READY = "SCRAPLING_BRIDGE_NOT_READY";
 const bridgeReadyPromiseByCwd = new Map<string, Promise<void>>();
 const ROLE_KB_BRIDGE_TIMEOUT_MS = 12000;
 const ROLE_KB_FETCH_TIMEOUT_MS = 10000;
-
-export const ROLE_KB_ALLOWLIST: Record<StudioRoleId, string[]> = {
-  pm_planner: [
-    "https://www.gamedeveloper.com/design",
-    "https://www.gdcvault.com/free",
-    "https://www.gamedeveloper.com/business",
-  ],
-  pm_creative_director: [
-    "https://www.gamedeveloper.com/design",
-    "https://www.gdcvault.com/free",
-    "https://howtomarketagame.com/",
-  ],
-  pm_feasibility_critic: [
-    "https://www.gamedeveloper.com/business",
-    "https://gameanalytics.com/blog/",
-    "https://howtomarketagame.com/",
-  ],
-  research_analyst: [
-    "https://store.steampowered.com/",
-    "https://steamcommunity.com/",
-    "https://www.reddit.com/",
-  ],
-  client_programmer: [
-    "https://docs.unity3d.com/Manual/index.html",
-    "https://learn.unity.com/",
-    "https://gamedev.stackexchange.com/questions/tagged/unity",
-  ],
-  system_programmer: [
-    "https://gameprogrammingpatterns.com/contents.html",
-    "https://docs.unity3d.com/Manual/performance.html",
-    "https://docs.unity3d.com/ScriptReference/",
-  ],
-  tooling_engineer: [
-    "https://docs.unity3d.com/Manual/AssetDatabaseCustomizingWorkflow.html",
-    "https://docs.unity3d.com/Packages/com.unity.test-framework@latest",
-    "https://docs.unity3d.com/Manual/CIIntegration.html",
-  ],
-  art_pipeline: [
-    "https://docs.unity3d.com/Manual/ImportingAssets.html",
-    "https://docs.unity3d.com/Manual/class-TextureImporter.html",
-    "https://docs.unity3d.com/Manual/ModelingOptimizedCharacters.html",
-  ],
-  qa_engineer: [
-    "https://docs.unity3d.com/Packages/com.unity.test-framework@latest",
-    "https://learn.microsoft.com/en-us/gaming/playfab/",
-    "https://martinfowler.com/articles/practical-test-pyramid.html",
-  ],
-  build_release: [
-    "https://docs.unity3d.com/Manual/BuildSettings.html",
-    "https://docs.unity3d.com/Manual/PlatformDependentCompilation.html",
-    "https://docs.github.com/en/actions",
-  ],
-  technical_writer: [
-    "https://www.writethedocs.org/guide/",
-    "https://developers.google.com/style",
-    "https://www.markdownguide.org/basic-syntax/",
-  ],
-};
 
 function resolveRoleTemplate(roleId: StudioRoleId) {
   return (
@@ -231,60 +175,6 @@ async function ensureScraplingBridgeReady(params: { cwd: string; invokeFn: Invok
     bridgeReadyPromiseByCwd.delete(cacheKey);
     throw error;
   }
-}
-
-function sanitizeToken(raw: string): string {
-  const normalized = cleanLine(raw)
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "");
-  return normalized || "role";
-}
-
-function toRoleShortToken(rawRoleId: string): string {
-  if (rawRoleId === "pm_planner") {
-    return "pm";
-  }
-  if (rawRoleId === "pm_creative_director") {
-    return "pm_idea";
-  }
-  if (rawRoleId === "pm_feasibility_critic") {
-    return "pm_critic";
-  }
-  if (rawRoleId === "client_programmer") {
-    return "client";
-  }
-  if (rawRoleId === "system_programmer") {
-    return "system";
-  }
-  if (rawRoleId === "tooling_engineer") {
-    return "tooling";
-  }
-  if (rawRoleId === "art_pipeline") {
-    return "art";
-  }
-  if (rawRoleId === "qa_engineer") {
-    return "qa";
-  }
-  if (rawRoleId === "build_release") {
-    return "release";
-  }
-  if (rawRoleId === "technical_writer") {
-    return "docs";
-  }
-  return sanitizeToken(rawRoleId);
-}
-
-function toCompactTimestamp(rawIso: string): string {
-  const parsed = new Date(rawIso);
-  const date = Number.isNaN(parsed.getTime()) ? new Date() : parsed;
-  const yyyy = String(date.getFullYear());
-  const mm = String(date.getMonth() + 1).padStart(2, "0");
-  const dd = String(date.getDate()).padStart(2, "0");
-  const hh = String(date.getHours()).padStart(2, "0");
-  const mi = String(date.getMinutes()).padStart(2, "0");
-  const ss = String(date.getSeconds()).padStart(2, "0");
-  return `${yyyy}${mm}${dd}_${hh}${mi}${ss}`;
 }
 
 function truncateText(input: unknown, max = 220): string {
@@ -448,7 +338,10 @@ async function fetchRoleKnowledgeSource(params: {
 
 export async function bootstrapRoleKnowledgeProfile(input: RoleKnowledgeBootstrapInput): Promise<RoleKnowledgeBootstrapResult> {
   const roleTemplate = resolveRoleTemplate(input.roleId);
-  const urls = ROLE_KB_ALLOWLIST[input.roleId] ?? [];
+  const urls = buildRoleKnowledgeBootstrapCandidates({
+    roleId: input.roleId,
+    userPrompt: input.userPrompt,
+  });
   const sourceResults = await Promise.all(urls.map((url) => fetchRoleKnowledgeSource({
       cwd: input.cwd,
       invokeFn: input.invokeFn,

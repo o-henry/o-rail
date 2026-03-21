@@ -53,6 +53,23 @@ type BuildTaskRoleLearningPromptContextInput = {
   prompt?: string;
 };
 
+export type TaskRoleLearningMemoryModuleKind =
+  | "success_pattern"
+  | "failure_signature"
+  | "failure_avoidance"
+  | "working_rule";
+
+export type TaskRoleLearningMemoryModule = {
+  id: string;
+  roleId: string;
+  kind: TaskRoleLearningMemoryModuleKind;
+  title: string;
+  body: string;
+  score: number;
+  sourceRunId?: string;
+  createdAt: string;
+};
+
 type TaskRoleLearningPromptBudget = {
   maxPromptContextChars: number;
   maxSimilarRows: number;
@@ -454,14 +471,65 @@ function trimPromptContextWithBudget(context: string, maxChars: number): string 
   return `${normalized.slice(0, Math.max(0, maxChars - 1)).trimEnd()}…`;
 }
 
-export function buildTaskRoleLearningPromptContext(input: BuildTaskRoleLearningPromptContextInput): string {
+function createSuccessModule(row: TaskRoleLearningRecord, score: number, budget: TaskRoleLearningPromptBudget): TaskRoleLearningMemoryModule {
+  return {
+    id: `success:${row.id}`,
+    roleId: row.roleId,
+    kind: "success_pattern",
+    title: "비슷한 성공 패턴",
+    body: trimLine(row.summaryExcerpt || row.promptExcerpt, budget.successLineMaxChars),
+    score,
+    sourceRunId: row.runId,
+    createdAt: row.createdAt,
+  };
+}
+
+function createFailureSignatureModule(row: TaskRoleLearningRecord, score: number, budget: TaskRoleLearningPromptBudget): TaskRoleLearningMemoryModule {
+  return {
+    id: `failure:${row.id}`,
+    roleId: row.roleId,
+    kind: "failure_signature",
+    title: "반복 금지",
+    body: trimLine(formatFailureGuidance(row), budget.failureLineMaxChars),
+    score,
+    sourceRunId: row.runId,
+    createdAt: row.createdAt,
+  };
+}
+
+function createFailureAvoidanceModule(row: TaskRoleLearningRecord, score: number, budget: TaskRoleLearningPromptBudget): TaskRoleLearningMemoryModule {
+  return {
+    id: `avoid:${row.id}`,
+    roleId: row.roleId,
+    kind: "failure_avoidance",
+    title: "회피 전략",
+    body: trimLine(failureAvoidanceHint(row.failureKind), budget.failureLineMaxChars + 20),
+    score,
+    sourceRunId: row.runId,
+    createdAt: row.createdAt,
+  };
+}
+
+function createWorkingRuleModule(roleId: string): TaskRoleLearningMemoryModule {
+  return {
+    id: `rule:${roleId}`,
+    roleId,
+    kind: "working_rule",
+    title: "작동 규칙",
+    body: "같은 유형의 성공 경로를 우선하되, 현재 요청 범위를 넘겨 일반화하지 않는다.",
+    score: 1,
+    createdAt: nowIso(),
+  };
+}
+
+export function retrieveTaskRoleLearningMemoryModules(input: BuildTaskRoleLearningPromptContextInput): TaskRoleLearningMemoryModule[] {
   const budget = resolvePromptBudget(input.roleId);
   const promptTerms = normalizeTerms(input.prompt);
   const rows = readTaskRoleLearningData(input.cwd).runs
     .filter((row) => row.roleId === input.roleId)
     .filter((row) => ageInDays(row.createdAt) <= budget.maxAgeDays);
   if (rows.length === 0) {
-    return "";
+    return [];
   }
   const scored = rows
     .map((row) => ({
@@ -477,11 +545,11 @@ export function buildTaskRoleLearningPromptContext(input: BuildTaskRoleLearningP
     .filter(({ row }) => row.status === "done")
     .map(({ row }) => ageInDays(row.createdAt))
     .sort((left, right) => left - right)[0];
-  const successes = fallbackScored
+  const successModules = fallbackScored
     .filter(({ row }) => row.status === "done")
     .slice(0, budget.maxSimilarRows)
-    .map(({ row }) => `- 비슷한 성공 패턴: ${trimLine(row.summaryExcerpt || row.promptExcerpt, budget.successLineMaxChars)}`);
-  const failures = fallbackScored
+    .map(({ row, score }) => createSuccessModule(row, score, budget));
+  const failureSignatureModules = fallbackScored
     .filter(({ row }) => row.status === "error")
     .filter(({ row }) => {
       if (!Number.isFinite(mostRecentSuccessAge)) {
@@ -490,8 +558,8 @@ export function buildTaskRoleLearningPromptContext(input: BuildTaskRoleLearningP
       return ageInDays(row.createdAt) <= mostRecentSuccessAge + budget.keepFailureIfOlderThanRecentSuccessDays;
     })
     .slice(0, budget.maxSimilarRows)
-    .map(({ row }) => `- 반복 금지: ${formatFailureGuidance(row)}`);
-  const avoidances = fallbackScored
+    .map(({ row, score }) => createFailureSignatureModule(row, score, budget));
+  const failureAvoidanceModules = fallbackScored
     .filter(({ row }) => row.status === "error")
     .filter(({ row }) => {
       if (!Number.isFinite(mostRecentSuccessAge)) {
@@ -500,16 +568,28 @@ export function buildTaskRoleLearningPromptContext(input: BuildTaskRoleLearningP
       return ageInDays(row.createdAt) <= mostRecentSuccessAge + budget.keepFailureIfOlderThanRecentSuccessDays;
     })
     .slice(0, 1)
-    .map(({ row }) => `- 회피 전략: ${failureAvoidanceHint(row.failureKind)}`);
-  if (successes.length === 0 && failures.length === 0) {
+    .map(({ row, score }) => createFailureAvoidanceModule(row, score, budget));
+  const modules = [
+    ...successModules,
+    ...failureSignatureModules,
+    ...failureAvoidanceModules,
+  ];
+  if (modules.length === 0) {
+    return [];
+  }
+  modules.push(createWorkingRuleModule(input.roleId));
+  return modules;
+}
+
+export function buildTaskRoleLearningPromptContext(input: BuildTaskRoleLearningPromptContextInput): string {
+  const budget = resolvePromptBudget(input.roleId);
+  const modules = retrieveTaskRoleLearningMemoryModules(input);
+  if (modules.length === 0) {
     return "";
   }
   return trimPromptContextWithBudget([
     "# TASK LEARNING MEMORY",
-    ...successes,
-    ...failures,
-    ...avoidances,
-    "- 같은 유형의 성공 경로를 우선하되, 학습 메모리는 짧게 반영하고 현재 요청 범위를 넘겨 일반화하지 않는다.",
+    ...modules.map((module) => `- [${module.kind}] ${module.title}: ${module.body}`),
   ].join("\n"), budget.maxPromptContextChars);
 }
 

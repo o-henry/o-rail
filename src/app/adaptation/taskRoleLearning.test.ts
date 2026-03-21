@@ -4,6 +4,7 @@ import {
   clearTaskRoleLearningDataForTest,
   loadTaskRoleLearningData,
   recordTaskRoleLearningOutcome,
+  retrieveTaskRoleLearningMemoryModules,
   summarizeTaskRoleLearningImprovementByRole,
   summarizeTaskRoleLearningByRole,
 } from "./taskRoleLearning";
@@ -46,6 +47,42 @@ describe("taskRoleLearning", () => {
     expect(context).toContain("외부 근거 수집 실패");
     expect(context).toContain("회피 전략");
     expect(context.length).toBeLessThanOrEqual(440);
+  });
+
+  it("retrieves memory modules instead of expanding raw prompt text indefinitely", async () => {
+    await recordTaskRoleLearningOutcome({
+      cwd: "/tmp/rail-docs",
+      runId: "run-success",
+      roleId: "research_analyst",
+      prompt: "스팀 메타크리틱 커뮤니티 장르 조사",
+      summary: "Steam, Metacritic, 커뮤니티 비교 축을 먼저 정리하고 장르별 대표작을 분리했다.",
+      artifactPaths: ["a.md", "b.json"],
+      runStatus: "done",
+    });
+    await recordTaskRoleLearningOutcome({
+      cwd: "/tmp/rail-docs",
+      runId: "run-failure",
+      roleId: "research_analyst",
+      prompt: "스팀 메타크리틱 커뮤니티 장르 조사",
+      summary: "",
+      artifactPaths: [],
+      runStatus: "error",
+      failureReason: "ROLE_KB_BOOTSTRAP 실패 (0/7)",
+    });
+
+    const modules = retrieveTaskRoleLearningMemoryModules({
+      cwd: "/tmp/rail-docs",
+      roleId: "research_analyst",
+      prompt: "스팀 메타크리틱 장르 조사와 대표작 비교",
+    });
+
+    expect(modules.map((module) => module.kind)).toEqual([
+      "success_pattern",
+      "failure_signature",
+      "failure_avoidance",
+      "working_rule",
+    ]);
+    expect(modules[0]?.title).toBe("비슷한 성공 패턴");
   });
 
   it("persists task role learning to workspace storage without failing local cache updates", async () => {

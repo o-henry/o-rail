@@ -12,6 +12,7 @@ import type { KnowledgeEntry, KnowledgeSourcePost } from "../../features/studio/
 import { invoke, revealItemInDir } from "../../shared/tauri";
 import {
   isHiddenKnowledgeEntry,
+  isRuntimeNoiseKnowledgeEntry,
   toKnowledgeEntry,
   toReadableJsonInfo,
 } from "./knowledgeEntryMapping";
@@ -91,10 +92,36 @@ function resolveEntryWorkspaceCwd(entry: KnowledgeEntry | null, fallbackCwd: str
   return normalizeWorkspacePath(fromAbsolutePath.slice(0, index));
 }
 
+function isEntryInWorkspace(entry: KnowledgeEntry, cwd: string): boolean {
+  const root = normalizeWorkspacePath(cwd);
+  if (!root) {
+    return true;
+  }
+  const preferred = normalizeWorkspacePath(String(entry.workspacePath ?? ""));
+  if (preferred) {
+    return preferred === root;
+  }
+  const candidates = [entry.sourceFile, entry.markdownPath, entry.jsonPath]
+    .map((value) => String(value ?? "").trim())
+    .filter(Boolean);
+  if (candidates.length === 0) {
+    return true;
+  }
+  return candidates.some((value) => value.startsWith(root));
+}
+
+function toVisibleKnowledgeRows(rows: KnowledgeEntry[], cwd: string): KnowledgeEntry[] {
+  return rows.filter((row) =>
+    !isHiddenKnowledgeEntry(row)
+    && !isRuntimeNoiseKnowledgeEntry(row)
+    && isEntryInWorkspace(row, cwd),
+  );
+}
+
 export function useKnowledgeBaseState({ cwd, posts }: UseKnowledgeBaseStateParams) {
   const [selectedId, setSelectedId] = useState("");
   const [entries, setEntries] = useState<KnowledgeEntry[]>(() =>
-    readKnowledgeEntries().filter((row) => !isHiddenKnowledgeEntry(row)),
+    toVisibleKnowledgeRows(readKnowledgeEntries(), cwd),
   );
   const [collapsedByGroup, setCollapsedByGroup] = useState<Record<string, boolean>>({});
   const [markdownContent, setMarkdownContent] = useState("");
@@ -107,7 +134,7 @@ export function useKnowledgeBaseState({ cwd, posts }: UseKnowledgeBaseStateParam
     const postRows = posts.map((post) => toKnowledgeEntry(post)).filter((row): row is KnowledgeEntry => row !== null);
     const merged = mergeKnowledgeEntryRows([...rows, ...postRows]);
     writeKnowledgeEntries(merged);
-    return merged.filter((row) => !isHiddenKnowledgeEntry(row));
+    return toVisibleKnowledgeRows(merged, cwd);
   };
 
   useEffect(() => {

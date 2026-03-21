@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { KnowledgeSourcePost } from "../../features/studio/knowledgeTypes";
-import { toKnowledgeEntry } from "./knowledgeEntryMapping";
+import { isRuntimeNoiseKnowledgeEntry, toKnowledgeEntry } from "./knowledgeEntryMapping";
 
 function makePost(overrides: Partial<KnowledgeSourcePost> = {}): KnowledgeSourcePost {
   return {
@@ -64,5 +64,11 @@ describe("KnowledgeBasePage toKnowledgeEntry", () => {
     expect(entry).not.toBeNull();
     expect(entry?.taskId).toContain("주식");
     expect(entry?.title).toBe("주식/마켓");
+  });
+
+  it("treats run.json artifacts as runtime noise", () => {
+    expect(isRuntimeNoiseKnowledgeEntry({ title: "리서처 · task-1 · run.json" })).toBe(true);
+    expect(isRuntimeNoiseKnowledgeEntry({ jsonPath: ".rail/studio_runs/role-1/run.json" })).toBe(true);
+    expect(isRuntimeNoiseKnowledgeEntry({ jsonPath: "/tmp/export.json" })).toBe(false);
   });
 });

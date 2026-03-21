@@ -45,6 +45,13 @@ export function isHiddenKnowledgeEntry(entry: Pick<KnowledgeEntry, "runId" | "ta
   );
 }
 
+export function isRuntimeNoiseKnowledgeEntry(entry: Partial<Pick<KnowledgeEntry, "title" | "markdownPath" | "jsonPath" | "sourceFile">>): boolean {
+  const candidates = [entry.title, entry.markdownPath, entry.jsonPath, entry.sourceFile]
+    .map((value) => String(value ?? "").trim().toLowerCase())
+    .filter(Boolean);
+  return candidates.some((value) => value.endsWith("run.json"));
+}
+
 function findAttachmentPath(post: KnowledgeSourcePost, kind: string): string | undefined {
   const match = post.attachments.find((row) => row.kind === kind);
   const path = String(match?.filePath ?? "").trim();

@@ -1188,13 +1188,6 @@
   border-radius: 12px 0 12px 12px;
 }
 
-.tasks-thread-message-head {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
 .tasks-thread-message-label {
   font-size: 10px;
   color: var(--text-muted);
@@ -1219,7 +1212,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  align-self: center;
+  align-self: start;
   min-height: 20px;
   padding: 0 8px;
   border-radius: 4px;
@@ -1230,8 +1223,7 @@
   letter-spacing: 0.04em;
   line-height: 1;
   white-space: nowrap;
-  width: auto;
-  max-width: max-content;
+  width: fit-content;
   flex: 0 0 auto;
 }
 

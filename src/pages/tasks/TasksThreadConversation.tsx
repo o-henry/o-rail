@@ -188,15 +188,11 @@ export function TasksThreadConversation(props: TasksThreadConversationProps) {
           const parsed = resolveTimelineMessage(message, props.visibleAgentLabels);
           return (
             <article className={`tasks-thread-message-row is-${message.role}`} key={message.id}>
-              {parsed.label || isFinishedThreadMessage(message) ? (
-                <div className="tasks-thread-message-head">
-                  {parsed.label ? <span className="tasks-thread-message-label">{parsed.label}</span> : null}
-                  {isFinishedThreadMessage(message) ? <span className="tasks-thread-finish-badge">FINISH</span> : null}
-                </div>
-              ) : null}
+              {parsed.label ? <span className="tasks-thread-message-label">{parsed.label}</span> : null}
               <div className="tasks-thread-log-line">
                 {message.role === "assistant" ? <TasksThreadMessageContent content={parsed.body} /> : parsed.body}
               </div>
+              {isFinishedThreadMessage(message) ? <span className="tasks-thread-finish-badge">FINISH</span> : null}
               {parsed.artifactPath ? (
                 <div className="tasks-thread-message-meta">
                   <small className="tasks-thread-message-artifact">{parsed.artifactPath}</small>

@@ -14,7 +14,7 @@
 .knowledge-detail::after {
   content: "";
   display: block;
-  min-height: 28px;
+  min-height: 0px;
   flex: 0 0 auto;
 }
 

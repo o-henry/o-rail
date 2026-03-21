@@ -27,6 +27,7 @@
 }
 
 .codex-login-required-modal {
+  width: min(420px, calc(100vw - 24px));
   box-shadow: 0 16px 40px rgba(8, 19, 38, 0.22);
 }
 
@@ -37,10 +38,6 @@
 
 .codex-login-required-modal .button-row .codex-login-required-modal-login {
   background: #d9dee6;
-}
-
-.codex-login-required-modal .button-row .codex-login-required-modal-settings {
-  background: #eceff3;
 }
 
 .web-turn-modal-layer {

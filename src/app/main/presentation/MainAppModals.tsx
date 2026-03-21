@@ -9,7 +9,6 @@ export function MainAppModals(props: any) {
     <>
       <CodexLoginRequiredModal
         onLogin={props.onLoginCodex}
-        onOpenSettings={props.onOpenCodexSettings}
         open={Boolean(props.codexLoginGateOpen)}
       />
 

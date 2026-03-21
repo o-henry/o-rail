@@ -423,7 +423,6 @@ export function MainAppShell(props: any) {
         onCopyPendingWebPrompt={onCopyPendingWebPrompt}
         onDismissPendingWebTurn={onDismissPendingWebTurn}
         onLoginCodex={onLoginCodex}
-        onOpenCodexSettings={() => onSelectWorkspaceTab("settings")}
         onOpenPendingProviderWindow={onOpenPendingProviderWindow}
         onOpenProviderSession={onOpenProviderSession}
         onRespondApproval={onRespondApproval}

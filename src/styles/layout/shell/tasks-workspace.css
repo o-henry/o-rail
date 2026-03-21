@@ -5,6 +5,7 @@
   --tasks-control-height: 34px;
   --tasks-nav-width: 336px;
   --tasks-reading-width: 860px;
+  --tasks-main-gutter: clamp(16px, 4vw, 40px);
   position: relative;
   min-height: 0;
   height: 100%;
@@ -842,7 +843,7 @@
   min-height: 0;
   height: 100%;
   overflow: auto;
-  padding: 12px clamp(16px, 4vw, 40px) 28px;
+  padding: 12px var(--tasks-main-gutter) 28px;
   display: grid;
   align-content: start;
   gap: 12px;
@@ -1488,7 +1489,7 @@
 .tasks-thread-composer-shell {
   position: relative;
   min-width: 0;
-  width: min(100%, var(--tasks-reading-width));
+  width: min(var(--tasks-reading-width), calc(100% - (var(--tasks-main-gutter) * 2)));
   max-width: var(--tasks-reading-width);
   box-sizing: border-box;
   margin: 12px auto 0;

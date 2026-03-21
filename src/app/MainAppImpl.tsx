@@ -1837,21 +1837,36 @@ function App() {
     markCodexNodesStatusOnEngineIssue,
     cleanupRunGraphExecutionState,
   });
-  const edgeLines = buildCanvasEdgeLines({
-    entries: canvasDisplayEdges,
-    nodeMap: canvasNodeMap,
-    getNodeVisualSize,
-  });
-  const connectPreviewLine = buildConnectPreviewLine({
-    connectFromNodeId,
-    connectPreviewPoint,
-    connectPreviewStartPoint,
-    connectFromSide,
-    canvasNodeMap,
-    getNodeVisualSize,
-    getNodeAnchorPointFn: getNodeAnchorPoint,
-    buildRoundedEdgePathFn: buildRoundedEdgePath,
-  });
+  const edgeLines = useMemo(
+    () =>
+      buildCanvasEdgeLines({
+        entries: canvasDisplayEdges,
+        nodeMap: canvasNodeMap,
+        getNodeVisualSize,
+      }),
+    [canvasDisplayEdges, canvasNodeMap, getNodeVisualSize],
+  );
+  const connectPreviewLine = useMemo(
+    () =>
+      buildConnectPreviewLine({
+        connectFromNodeId,
+        connectPreviewPoint,
+        connectPreviewStartPoint,
+        connectFromSide,
+        canvasNodeMap,
+        getNodeVisualSize,
+        getNodeAnchorPointFn: getNodeAnchorPoint,
+        buildRoundedEdgePathFn: buildRoundedEdgePath,
+      }),
+    [
+      canvasNodeMap,
+      connectFromNodeId,
+      connectFromSide,
+      connectPreviewPoint,
+      connectPreviewStartPoint,
+      getNodeVisualSize,
+    ],
+  );
 
   const selectedTurnConfig: TurnConfig | null =
     selectedNode?.type === "turn" ? (selectedNode.config as TurnConfig) : null;
@@ -2059,6 +2074,46 @@ function App() {
       !isWorkflowBusy &&
       graphForCanvas.nodes.length > 0 &&
       (canRunWithoutQuestion || workflowQuestion.trim().length > 0));
+  const feedDerivedState = useMemo(
+    () =>
+      computeFeedDerivedState({
+        activeFeedRunMeta,
+        graph,
+        nodeStates,
+        feedPosts,
+        feedStatusFilter,
+        feedExecutorFilter,
+        feedPeriodFilter,
+        feedTopicFilter,
+        feedKeyword,
+        feedCategory,
+        feedRunCache: feedRunCacheRef.current,
+        feedInspectorPostId,
+        feedInspectorSnapshotNode,
+        cwd: resolveNodeCwd(cwd, cwd),
+        nodeTypeLabelFn: nodeTypeLabel,
+        turnRoleLabelFn: turnRoleLabel,
+        turnModelLabelFn: turnModelLabel,
+      }),
+    [
+      activeFeedRunMeta,
+      graph,
+      nodeStates,
+      feedPosts,
+      feedStatusFilter,
+      feedExecutorFilter,
+      feedPeriodFilter,
+      feedTopicFilter,
+      feedKeyword,
+      feedCategory,
+      feedInspectorPostId,
+      feedInspectorSnapshotNode,
+      cwd,
+      nodeTypeLabel,
+      turnRoleLabel,
+      turnModelLabel,
+    ],
+  );
   const {
     currentFeedPosts,
     feedCategoryPosts,
@@ -2077,25 +2132,7 @@ function App() {
     feedInspectorTurnExecutor,
     feedInspectorTurnNode,
     groupedFeedRuns,
-  } = computeFeedDerivedState({
-    activeFeedRunMeta,
-    graph,
-    nodeStates,
-    feedPosts,
-    feedStatusFilter,
-    feedExecutorFilter,
-    feedPeriodFilter,
-    feedTopicFilter,
-    feedKeyword,
-    feedCategory,
-    feedRunCache: feedRunCacheRef.current,
-    feedInspectorPostId,
-    feedInspectorSnapshotNode,
-    cwd: resolveNodeCwd(cwd, cwd),
-    nodeTypeLabelFn: nodeTypeLabel,
-    turnRoleLabelFn: turnRoleLabel,
-    turnModelLabelFn: turnModelLabel,
-  });
+  } = feedDerivedState;
 
   const feedCategoryMeta: Array<{ key: FeedCategory; label: string }> = [
     { key: "all_posts", label: t("feed.category.all_posts") },

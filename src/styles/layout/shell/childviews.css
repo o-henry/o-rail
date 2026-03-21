@@ -53,7 +53,6 @@
   border-radius: 12px;
 }
 
-.workflow-layout.workspace-tab-panel,
 .history-layout.workspace-tab-panel,
 .feed-layout.workspace-tab-panel,
 .visualize-view.workspace-tab-panel,
@@ -66,6 +65,15 @@
 .childview-view.workspace-tab-panel,
 .dev-layout.workspace-tab-panel {
   margin: 0 10px 10px;
+  min-height: 0;
+  height: 100%;
+  box-sizing: border-box;
+  padding-bottom: 0;
+}
+
+.workflow-layout.workspace-tab-panel {
+  /* margin: 0 10px 10px; */
+  margin: 0;
   min-height: 0;
   height: 100%;
   box-sizing: border-box;

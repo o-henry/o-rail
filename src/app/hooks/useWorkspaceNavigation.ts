@@ -28,18 +28,10 @@ export function useWorkspaceNavigation(params: UseWorkspaceNavigationParams) {
       if (nextTab !== params.workspaceTab) {
         workspaceForwardStackRef.current = [];
       }
-      if (nextTab !== params.workspaceTab) {
-        params.appendWorkspaceEvent({
-          source: "navigation",
-          message: `탭 이동: ${params.workspaceTab} -> ${nextTab}`,
-          actor: "user",
-          level: "info",
-        });
-      }
       params.setWorkspaceTab(nextTab);
       params.setDashboardDetailTopic(null);
     },
-    [params],
+    [params.setDashboardDetailTopic, params.setWorkspaceTab, params.workspaceTab],
   );
 
   useEffect(() => {

@@ -41,7 +41,7 @@ export function useWorkspaceEventPersistence(params: UseWorkspaceEventPersistenc
       actor: "ai",
       level: "info",
     });
-  }, [params]);
+  }, [params.appendWorkspaceEvent, params.status]);
 
   useEffect(() => {
     const next = String(params.error ?? "").trim();
@@ -55,7 +55,7 @@ export function useWorkspaceEventPersistence(params: UseWorkspaceEventPersistenc
       actor: "system",
       level: "error",
     });
-  }, [params]);
+  }, [params.appendWorkspaceEvent, params.error]);
 
   useEffect(() => {
     if (!params.hasTauriRuntime) {
@@ -87,5 +87,5 @@ export function useWorkspaceEventPersistence(params: UseWorkspaceEventPersistenc
         workspaceEventPersistTimerRef.current = null;
       }
     };
-  }, [params]);
+  }, [params.cwd, params.hasTauriRuntime, params.invokeFn, params.workspaceEvents]);
 }

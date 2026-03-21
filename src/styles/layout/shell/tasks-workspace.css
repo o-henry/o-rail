@@ -845,7 +845,7 @@
   align-content: start;
   gap: 12px;
   border-radius: 0;
-  background: transparent;
+  background: #ffffff;
 }
 
 .tasks-thread-conversation-scroll > .tasks-thread-orchestration-card,

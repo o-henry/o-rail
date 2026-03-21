@@ -45,7 +45,7 @@ describe("taskRoleLearning", () => {
     expect(context).toContain("반복 금지");
     expect(context).toContain("외부 근거 수집 실패");
     expect(context).toContain("회피 전략");
-    expect(context.length).toBeLessThanOrEqual(640);
+    expect(context.length).toBeLessThanOrEqual(440);
   });
 
   it("persists task role learning to workspace storage without failing local cache updates", async () => {
@@ -155,14 +155,20 @@ describe("taskRoleLearning", () => {
       roleId: "research_analyst",
     }));
 
-    const context = buildTaskRoleLearningPromptContext({
+    const sparseContext = buildTaskRoleLearningPromptContext({
       cwd: "/tmp/rail-docs",
       roleId: "research_analyst",
       prompt: "유럽 공개 커뮤니티 조사",
     });
-    expect(context).toContain("인증/권한 실패");
-    expect(context).toContain("근거 희소/출처 부족");
-    expect(context).toContain("동의어·영문명·지역명으로 질의를 넓히고");
+    expect(sparseContext).toContain("근거 희소/출처 부족");
+    expect(sparseContext).toContain("동의어·영문명·지역명으로 질의를 넓히고");
+
+    const authContext = buildTaskRoleLearningPromptContext({
+      cwd: "/tmp/rail-docs",
+      roleId: "research_analyst",
+      prompt: "공개 커뮤니티 권한 실패 조사",
+    });
+    expect(authContext).toContain("인증/권한 실패");
   });
 
   it("summarizes recent success-rate improvement by role", async () => {
@@ -203,5 +209,65 @@ describe("taskRoleLearning", () => {
         previousSampleSize: 6,
       }),
     ]);
+  });
+
+  it("drops stale failures when a newer success already supersedes them", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-01T00:00:00.000Z"));
+    await recordTaskRoleLearningOutcome({
+      cwd: "/tmp/rail-docs",
+      runId: "old-failure",
+      roleId: "research_analyst",
+      prompt: "스팀 장르 조사",
+      summary: "",
+      artifactPaths: [],
+      runStatus: "error",
+      failureReason: "ROLE_KB_BOOTSTRAP 실패 (0/7)",
+    });
+    vi.setSystemTime(new Date("2026-03-12T00:00:00.000Z"));
+    await recordTaskRoleLearningOutcome({
+      cwd: "/tmp/rail-docs",
+      runId: "new-success",
+      roleId: "research_analyst",
+      prompt: "스팀 장르 조사",
+      summary: "공식 통계와 커뮤니티 축을 나눠 정리했다.",
+      artifactPaths: ["a.md"],
+      runStatus: "done",
+    });
+    vi.setSystemTime(new Date("2026-03-21T00:00:00.000Z"));
+
+    const context = buildTaskRoleLearningPromptContext({
+      cwd: "/tmp/rail-docs",
+      roleId: "research_analyst",
+      prompt: "스팀 장르 조사",
+    });
+
+    expect(context).toContain("비슷한 성공 패턴");
+    expect(context).not.toContain("외부 근거 수집 실패");
+    vi.useRealTimers();
+  });
+
+  it("expires learning memory that is too old for the role budget", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-02-01T00:00:00.000Z"));
+    await recordTaskRoleLearningOutcome({
+      cwd: "/tmp/rail-docs",
+      runId: "expired-success",
+      roleId: "research_analyst",
+      prompt: "시장 조사",
+      summary: "오래된 성공",
+      artifactPaths: ["a.md"],
+      runStatus: "done",
+    });
+    vi.setSystemTime(new Date("2026-03-21T00:00:00.000Z"));
+
+    const context = buildTaskRoleLearningPromptContext({
+      cwd: "/tmp/rail-docs",
+      roleId: "research_analyst",
+      prompt: "시장 조사",
+    });
+
+    expect(context).toBe("");
+    vi.useRealTimers();
   });
 });

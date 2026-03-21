@@ -16,6 +16,10 @@ const TASKS_PROJECT_LIST_KEY = "rail.tasks.project-list.v1";
 const TASKS_HIDDEN_PROJECT_LIST_KEY = "rail.tasks.hidden-project-list.v1";
 const TASKS_ACTIVE_THREAD_KEY = "rail.tasks.active-thread.v1";
 
+export function normalizeTasksProjectPath(value: string | null | undefined): string {
+  return String(value ?? "").trim().replace(/\\/g, "/").replace(/\/+$/, "");
+}
+
 function readSessionStorageValue(key: string): string | null {
   if (typeof window === "undefined") {
     return null;
@@ -90,14 +94,14 @@ export function persistBrowserStore(store: BrowserStore) {
 
 export function loadTasksProjectPath(defaultValue: string): string {
   if (typeof window === "undefined") {
-    return defaultValue;
+    return normalizeTasksProjectPath(defaultValue);
   }
   try {
     const raw = readSessionStorageValue(TASKS_PROJECT_PATH_KEY);
-    const value = String(raw ?? "").trim();
-    return value || defaultValue;
+    const value = normalizeTasksProjectPath(raw);
+    return value || normalizeTasksProjectPath(defaultValue);
   } catch {
-    return defaultValue;
+    return normalizeTasksProjectPath(defaultValue);
   }
 }
 
@@ -105,7 +109,7 @@ export function persistTasksProjectPath(path: string) {
   if (typeof window === "undefined") {
     return;
   }
-  const normalized = String(path ?? "").trim();
+  const normalized = normalizeTasksProjectPath(path);
   if (!normalized) {
     writeSessionStorageValue(TASKS_PROJECT_PATH_KEY, null);
     return;
@@ -115,19 +119,22 @@ export function persistTasksProjectPath(path: string) {
 
 export function loadTasksProjectList(defaultValue: string): string[] {
   if (typeof window === "undefined") {
-    return defaultValue.trim() ? [defaultValue.trim()] : [];
+    const normalizedDefault = normalizeTasksProjectPath(defaultValue);
+    return normalizedDefault ? [normalizedDefault] : [];
   }
   try {
     const raw = readSessionStorageValue(TASKS_PROJECT_LIST_KEY);
     const parsed = raw ? (JSON.parse(raw) as unknown) : [];
     const values = Array.isArray(parsed) ? parsed : [];
-    const normalized = values.map((value) => String(value ?? "").trim()).filter(Boolean);
-    if (defaultValue.trim() && !normalized.includes(defaultValue.trim())) {
-      normalized.push(defaultValue.trim());
+    const normalized = [...new Set(values.map((value) => normalizeTasksProjectPath(String(value ?? ""))).filter(Boolean))];
+    const normalizedDefault = normalizeTasksProjectPath(defaultValue);
+    if (normalizedDefault && !normalized.includes(normalizedDefault)) {
+      normalized.push(normalizedDefault);
     }
     return normalized;
   } catch {
-    return defaultValue.trim() ? [defaultValue.trim()] : [];
+    const normalizedDefault = normalizeTasksProjectPath(defaultValue);
+    return normalizedDefault ? [normalizedDefault] : [];
   }
 }
 
@@ -135,7 +142,7 @@ export function persistTasksProjectList(paths: string[]) {
   if (typeof window === "undefined") {
     return;
   }
-  const normalized = [...new Set(paths.map((path) => String(path ?? "").trim()).filter(Boolean))];
+  const normalized = [...new Set(paths.map((path) => normalizeTasksProjectPath(path)).filter(Boolean))];
   writeSessionStorageValue(TASKS_PROJECT_LIST_KEY, JSON.stringify(normalized));
 }
 
@@ -146,7 +153,9 @@ export function loadHiddenTasksProjectList(): string[] {
   try {
     const raw = readSessionStorageValue(TASKS_HIDDEN_PROJECT_LIST_KEY);
     const parsed = raw ? (JSON.parse(raw) as unknown) : [];
-    return Array.isArray(parsed) ? parsed.map((value) => String(value ?? "").trim()).filter(Boolean) : [];
+    return Array.isArray(parsed)
+      ? [...new Set(parsed.map((value) => normalizeTasksProjectPath(String(value ?? ""))).filter(Boolean))]
+      : [];
   } catch {
     return [];
   }
@@ -156,7 +165,7 @@ export function persistHiddenTasksProjectList(paths: string[]) {
   if (typeof window === "undefined") {
     return;
   }
-  const normalized = [...new Set(paths.map((path) => String(path ?? "").trim()).filter(Boolean))];
+  const normalized = [...new Set(paths.map((path) => normalizeTasksProjectPath(path)).filter(Boolean))];
   writeSessionStorageValue(TASKS_HIDDEN_PROJECT_LIST_KEY, JSON.stringify(normalized));
 }
 

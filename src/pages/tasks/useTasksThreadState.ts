@@ -93,6 +93,7 @@ import {
   cloneStore,
   loadBrowserStore,
   loadHiddenTasksProjectList,
+  normalizeTasksProjectPath,
   persistTasksActiveThreadSnapshot,
   loadTasksProjectList,
   loadTasksProjectPath,
@@ -202,11 +203,11 @@ export function useTasksThreadState(params: Params) {
   const orchestrationRef = useRef(orchestrationByThread);
   const orchestrationLedgerRef = useRef<Record<string, RuntimeLedgerEvent[]>>({});
   const visibleThreadItems = useMemo(
-    () => threadItems.filter((item) => !hiddenProjectPaths.includes(String(item.projectPath || item.thread.cwd || "").trim())),
+    () => threadItems.filter((item) => !hiddenProjectPaths.includes(normalizeTasksProjectPath(item.projectPath || item.thread.cwd || ""))),
     [hiddenProjectPaths, threadItems],
   );
   const visibleProjectPaths = useMemo(
-    () => projectPaths.filter((path) => !hiddenProjectPaths.includes(String(path ?? "").trim())),
+    () => projectPaths.filter((path) => !hiddenProjectPaths.includes(normalizeTasksProjectPath(path))),
     [hiddenProjectPaths, projectPaths],
   );
   const threads = useMemo(() => filterThreadListByProject(visibleThreadItems, projectPath || params.cwd), [params.cwd, projectPath, visibleThreadItems]);
@@ -313,7 +314,7 @@ export function useTasksThreadState(params: Params) {
   }, [orchestrationByThread]);
 
   const rememberProjectPath = useCallback((nextPath: string) => {
-    const normalized = String(nextPath ?? "").trim();
+    const normalized = normalizeTasksProjectPath(nextPath);
     if (!normalized) {
       return;
     }
@@ -417,7 +418,7 @@ export function useTasksThreadState(params: Params) {
 
   useEffect(() => {
     const discoveredPaths = threadItems
-      .map((item) => String(item.projectPath || item.thread.cwd || "").trim())
+      .map((item) => normalizeTasksProjectPath(item.projectPath || item.thread.cwd || ""))
       .filter(Boolean);
     if (discoveredPaths.length === 0) {
       return;
@@ -429,7 +430,7 @@ export function useTasksThreadState(params: Params) {
   }, [threadItems]);
 
   const removeProject = useCallback((targetProjectPath: string) => {
-    const normalized = String(targetProjectPath ?? "").trim();
+    const normalized = normalizeTasksProjectPath(targetProjectPath);
     if (!normalized) {
       return;
     }

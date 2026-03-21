@@ -53,12 +53,87 @@ type BuildTaskRoleLearningPromptContextInput = {
   prompt?: string;
 };
 
+type TaskRoleLearningPromptBudget = {
+  maxPromptContextChars: number;
+  maxSimilarRows: number;
+  maxAgeDays: number;
+  successLineMaxChars: number;
+  failureLineMaxChars: number;
+  keepFailureIfOlderThanRecentSuccessDays: number;
+};
+
 const TASK_ROLE_LEARNING_STORAGE_KEY_PREFIX = "rail.studio.taskRoleLearning.v1";
 const TASK_ROLE_LEARNING_FILE_NAME = "task_role_learning.json";
 const MAX_STORED_RUNS = 160;
 const MAX_SIMILAR_ROWS = 2;
 const MAX_PROMPT_CONTEXT_CHARS = 640;
 const IMPROVEMENT_WINDOW_SIZE = 6;
+const DEFAULT_PROMPT_BUDGET: TaskRoleLearningPromptBudget = {
+  maxPromptContextChars: MAX_PROMPT_CONTEXT_CHARS,
+  maxSimilarRows: MAX_SIMILAR_ROWS,
+  maxAgeDays: 30,
+  successLineMaxChars: 140,
+  failureLineMaxChars: 120,
+  keepFailureIfOlderThanRecentSuccessDays: 5,
+};
+const TASK_ROLE_PROMPT_BUDGETS: Record<string, TaskRoleLearningPromptBudget> = {
+  research_analyst: {
+    maxPromptContextChars: 440,
+    maxSimilarRows: 1,
+    maxAgeDays: 14,
+    successLineMaxChars: 130,
+    failureLineMaxChars: 110,
+    keepFailureIfOlderThanRecentSuccessDays: 3,
+  },
+  system_programmer: {
+    maxPromptContextChars: 360,
+    maxSimilarRows: 1,
+    maxAgeDays: 21,
+    successLineMaxChars: 120,
+    failureLineMaxChars: 110,
+    keepFailureIfOlderThanRecentSuccessDays: 4,
+  },
+  qa_engineer: {
+    maxPromptContextChars: 340,
+    maxSimilarRows: 1,
+    maxAgeDays: 21,
+    successLineMaxChars: 110,
+    failureLineMaxChars: 110,
+    keepFailureIfOlderThanRecentSuccessDays: 4,
+  },
+  pm_planner: {
+    maxPromptContextChars: 420,
+    maxSimilarRows: 2,
+    maxAgeDays: 21,
+    successLineMaxChars: 130,
+    failureLineMaxChars: 110,
+    keepFailureIfOlderThanRecentSuccessDays: 4,
+  },
+  pm_creative_director: {
+    maxPromptContextChars: 520,
+    maxSimilarRows: 2,
+    maxAgeDays: 28,
+    successLineMaxChars: 150,
+    failureLineMaxChars: 120,
+    keepFailureIfOlderThanRecentSuccessDays: 5,
+  },
+  art_pipeline: {
+    maxPromptContextChars: 380,
+    maxSimilarRows: 1,
+    maxAgeDays: 21,
+    successLineMaxChars: 120,
+    failureLineMaxChars: 110,
+    keepFailureIfOlderThanRecentSuccessDays: 4,
+  },
+  tooling_engineer: {
+    maxPromptContextChars: 380,
+    maxSimilarRows: 1,
+    maxAgeDays: 21,
+    successLineMaxChars: 120,
+    failureLineMaxChars: 110,
+    keepFailureIfOlderThanRecentSuccessDays: 4,
+  },
+};
 const STOP_WORDS = new Set([
   "the",
   "and",
@@ -359,17 +434,32 @@ function formatFailureGuidance(row: TaskRoleLearningRecord): string {
   return `${kind}${detail}`;
 }
 
-function trimPromptContext(context: string): string {
+function resolvePromptBudget(roleId: string): TaskRoleLearningPromptBudget {
+  return TASK_ROLE_PROMPT_BUDGETS[String(roleId ?? "").trim()] ?? DEFAULT_PROMPT_BUDGET;
+}
+
+function ageInDays(createdAt: string): number {
+  const time = Date.parse(String(createdAt ?? ""));
+  if (!Number.isFinite(time)) {
+    return Number.POSITIVE_INFINITY;
+  }
+  return Math.max(0, (Date.now() - time) / 86_400_000);
+}
+
+function trimPromptContextWithBudget(context: string, maxChars: number): string {
   const normalized = String(context ?? "").trim();
-  if (!normalized || normalized.length <= MAX_PROMPT_CONTEXT_CHARS) {
+  if (!normalized || normalized.length <= maxChars) {
     return normalized;
   }
-  return `${normalized.slice(0, MAX_PROMPT_CONTEXT_CHARS - 1).trimEnd()}…`;
+  return `${normalized.slice(0, Math.max(0, maxChars - 1)).trimEnd()}…`;
 }
 
 export function buildTaskRoleLearningPromptContext(input: BuildTaskRoleLearningPromptContextInput): string {
+  const budget = resolvePromptBudget(input.roleId);
   const promptTerms = normalizeTerms(input.prompt);
-  const rows = readTaskRoleLearningData(input.cwd).runs.filter((row) => row.roleId === input.roleId);
+  const rows = readTaskRoleLearningData(input.cwd).runs
+    .filter((row) => row.roleId === input.roleId)
+    .filter((row) => ageInDays(row.createdAt) <= budget.maxAgeDays);
   if (rows.length === 0) {
     return "";
   }
@@ -383,28 +473,44 @@ export function buildTaskRoleLearningPromptContext(input: BuildTaskRoleLearningP
     ? scored.filter(({ score }) => score > 0)
     : scored;
   const fallbackScored = relevantScored.length > 0 ? relevantScored : scored;
+  const mostRecentSuccessAge = fallbackScored
+    .filter(({ row }) => row.status === "done")
+    .map(({ row }) => ageInDays(row.createdAt))
+    .sort((left, right) => left - right)[0];
   const successes = fallbackScored
     .filter(({ row }) => row.status === "done")
-    .slice(0, MAX_SIMILAR_ROWS)
-    .map(({ row }) => `- 비슷한 성공 패턴: ${row.summaryExcerpt || row.promptExcerpt}`);
+    .slice(0, budget.maxSimilarRows)
+    .map(({ row }) => `- 비슷한 성공 패턴: ${trimLine(row.summaryExcerpt || row.promptExcerpt, budget.successLineMaxChars)}`);
   const failures = fallbackScored
     .filter(({ row }) => row.status === "error")
-    .slice(0, MAX_SIMILAR_ROWS)
+    .filter(({ row }) => {
+      if (!Number.isFinite(mostRecentSuccessAge)) {
+        return true;
+      }
+      return ageInDays(row.createdAt) <= mostRecentSuccessAge + budget.keepFailureIfOlderThanRecentSuccessDays;
+    })
+    .slice(0, budget.maxSimilarRows)
     .map(({ row }) => `- 반복 금지: ${formatFailureGuidance(row)}`);
   const avoidances = fallbackScored
     .filter(({ row }) => row.status === "error")
+    .filter(({ row }) => {
+      if (!Number.isFinite(mostRecentSuccessAge)) {
+        return true;
+      }
+      return ageInDays(row.createdAt) <= mostRecentSuccessAge + budget.keepFailureIfOlderThanRecentSuccessDays;
+    })
     .slice(0, 1)
     .map(({ row }) => `- 회피 전략: ${failureAvoidanceHint(row.failureKind)}`);
   if (successes.length === 0 && failures.length === 0) {
     return "";
   }
-  return trimPromptContext([
+  return trimPromptContextWithBudget([
     "# TASK LEARNING MEMORY",
     ...successes,
     ...failures,
     ...avoidances,
     "- 같은 유형의 성공 경로를 우선하되, 학습 메모리는 짧게 반영하고 현재 요청 범위를 넘겨 일반화하지 않는다.",
-  ].join("\n"));
+  ].join("\n"), budget.maxPromptContextChars);
 }
 
 export async function recordTaskRoleLearningOutcome(input: RecordTaskRoleLearningOutcomeInput): Promise<TaskRoleLearningData> {

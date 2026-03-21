@@ -86,6 +86,46 @@ const THREAD_START_TIMEOUT_MS = 15000;
 const TURN_START_TIMEOUT_MS = 30000;
 const THREAD_READ_TIMEOUT_MS = 30000;
 
+type RoleContextLayerBudget = {
+  researchChars: number;
+  learningChars: number;
+  totalChars: number;
+};
+
+const DEFAULT_ROLE_CONTEXT_LAYER_BUDGET: RoleContextLayerBudget = {
+  researchChars: 1600,
+  learningChars: 360,
+  totalChars: 1900,
+};
+
+const ROLE_CONTEXT_LAYER_BUDGETS: Record<string, RoleContextLayerBudget> = {
+  research_analyst: {
+    researchChars: 1800,
+    learningChars: 440,
+    totalChars: 2200,
+  },
+  pm_planner: {
+    researchChars: 0,
+    learningChars: 420,
+    totalChars: 420,
+  },
+  pm_creative_director: {
+    researchChars: 0,
+    learningChars: 520,
+    totalChars: 520,
+  },
+  system_programmer: {
+    researchChars: 0,
+    learningChars: 360,
+    totalChars: 360,
+  },
+  qa_engineer: {
+    researchChars: 0,
+    learningChars: 340,
+    totalChars: 340,
+  },
+};
+
 function normalizeSandboxMode(value: string | null | undefined): "read-only" | "workspace-write" | "danger-full-access" {
   const normalized = String(value ?? "").trim().toLowerCase();
   if (normalized === "workspace-write" || normalized === "danger-full-access") {
@@ -120,6 +160,33 @@ function buildRoleTurnPrompt(
     `- 실제로 수정한 파일이 있으면 파일 경로와 변경 이유를 짧게 적는다.`,
     `- 작업을 못 했다면 못 한 이유를 숨기지 않는다.`,
   ].join("\n");
+}
+
+function resolveRoleContextLayerBudget(roleId: string): RoleContextLayerBudget {
+  return ROLE_CONTEXT_LAYER_BUDGETS[String(roleId ?? "").trim()] ?? DEFAULT_ROLE_CONTEXT_LAYER_BUDGET;
+}
+
+function trimContextLayer(value: string, maxChars: number): string {
+  const normalized = String(value ?? "").trim();
+  if (!normalized || maxChars <= 0) {
+    return "";
+  }
+  if (normalized.length <= maxChars) {
+    return normalized;
+  }
+  return `${normalized.slice(0, maxChars - 1).trimEnd()}…`;
+}
+
+function buildRolePromptContextLayers(params: {
+  roleId: string;
+  researchPromptContext?: string;
+  learningPromptContext?: string;
+}): string {
+  const budget = resolveRoleContextLayerBudget(params.roleId);
+  const researchLayer = trimContextLayer(params.researchPromptContext ?? "", budget.researchChars);
+  const learningLayer = trimContextLayer(params.learningPromptContext ?? "", budget.learningChars);
+  const joined = [researchLayer, learningLayer].filter(Boolean).join("\n\n");
+  return trimContextLayer(joined, budget.totalChars);
 }
 
 function resolveTurnText(raw: unknown): string {
@@ -529,11 +596,16 @@ export async function runTaskRoleWithCodex(input: RunTaskRoleWithCodexInput): Pr
     roleId: pack.studioRoleId || input.studioRoleId,
     prompt: input.prompt ?? "",
   });
+  const layeredPromptContext = buildRolePromptContextLayers({
+    roleId: pack.studioRoleId || input.studioRoleId,
+    researchPromptContext: researcherCollection.promptContext,
+    learningPromptContext,
+  });
   const promptText = buildRoleTurnPrompt(
     pack,
     input.prompt ?? "",
     context.projectPath,
-    [researcherCollection.promptContext, learningPromptContext].filter(Boolean).join("\n\n"),
+    layeredPromptContext,
   );
 
   const threadStart = await startCodexThreadWithRecovery({

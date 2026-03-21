@@ -423,7 +423,7 @@
 }
 
 .visualize-monitor-widget-action-button.is-active {
-  background: rgba(226, 232, 240, 0.95);
+  background: transparent;
 }
 
 .visualize-monitor-widget-action-button img {
@@ -585,7 +585,7 @@
   padding: 12px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 30px;
 }
 
 .visualize-chart-assistant-section {
@@ -621,16 +621,23 @@
 
 .visualize-chart-assistant-document {
   min-height: 180px;
-  max-height: 280px;
+  height: 100%;
+  max-height: none;
   overflow: auto;
   padding: 10px;
   background: rgba(248, 250, 252, 0.94);
-  border: 1px solid rgba(226, 232, 240, 0.95);
+  border: 0;
   border-radius: 10px;
 }
 
 .visualize-chart-assistant-document .tasks-thread-message-markdown {
   font-size: 0.78rem;
+}
+
+.visualize-chart-assistant-document .tasks-thread-message-markdown ul,
+.visualize-chart-assistant-document .tasks-thread-message-markdown ol {
+  /* margin-left: 8px; */
+  margin-left: 0;
 }
 
 .visualize-chart-assistant-log {
@@ -639,7 +646,7 @@
   gap: 8px;
   min-height: 180px;
   padding: 10px;
-  border: 1px solid rgba(226, 232, 240, 0.95);
+  border: 0;
   border-radius: 10px;
   background: rgba(248, 250, 252, 0.82);
 }

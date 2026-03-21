@@ -67,6 +67,29 @@ async function deleteIfExists(
   }
 }
 
+function normalizeWorkspacePath(value: string): string {
+  return String(value ?? "").trim().replace(/[\\/]+$/, "");
+}
+
+function resolveEntryWorkspaceCwd(entry: KnowledgeEntry | null, fallbackCwd: string): string {
+  const preferred = normalizeWorkspacePath(String(entry?.workspacePath ?? ""));
+  if (preferred) {
+    return preferred;
+  }
+  const fromAbsolutePath = [entry?.markdownPath, entry?.jsonPath, entry?.sourceFile]
+    .map((value) => String(value ?? "").trim())
+    .find((value) => value.startsWith("/") || /^[A-Za-z]:[\\/]/.test(value));
+  if (!fromAbsolutePath) {
+    return fallbackCwd;
+  }
+  const marker = `${String.raw`.rail`}${String.raw`/`}`;
+  const index = fromAbsolutePath.indexOf(marker);
+  if (index <= 0) {
+    return fallbackCwd;
+  }
+  return normalizeWorkspacePath(fromAbsolutePath.slice(0, index));
+}
+
 export function useKnowledgeBaseState({ cwd, posts }: UseKnowledgeBaseStateParams) {
   const [selectedId, setSelectedId] = useState("");
   const [entries, setEntries] = useState<KnowledgeEntry[]>(() =>
@@ -172,11 +195,12 @@ export function useKnowledgeBaseState({ cwd, posts }: UseKnowledgeBaseStateParam
     setDetailError("");
     void (async () => {
       const errors: string[] = [];
+      const readCwd = resolveEntryWorkspaceCwd(selected, cwd);
       try {
         if (selectedMarkdownPath) {
           try {
             const markdownText = await invoke<string>("workspace_read_text", {
-              cwd,
+              cwd: readCwd,
               path: selectedMarkdownPath,
             });
             if (cancelled) {
@@ -194,7 +218,7 @@ export function useKnowledgeBaseState({ cwd, posts }: UseKnowledgeBaseStateParam
         if (selectedJsonPath) {
           try {
             const jsonText = await invoke<string>("workspace_read_text", {
-              cwd,
+              cwd: readCwd,
               path: selectedJsonPath,
             });
             if (cancelled) {

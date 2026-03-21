@@ -74,6 +74,7 @@ function normalizeEntry(raw: unknown): KnowledgeEntry | null {
     runId,
     taskId,
     roleId: roleId as KnowledgeEntry["roleId"],
+    workspacePath: String(row.workspacePath ?? "").trim() || undefined,
     taskAgentId: String(row.taskAgentId ?? "").trim() || undefined,
     taskAgentLabel: String(row.taskAgentLabel ?? "").trim() || undefined,
     studioRoleLabel: String(row.studioRoleLabel ?? "").trim() || undefined,

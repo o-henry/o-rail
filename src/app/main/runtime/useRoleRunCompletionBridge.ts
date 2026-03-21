@@ -47,6 +47,7 @@ export function useRoleRunCompletionBridge(params: Params) {
         runId: payload.runId,
         taskId: normalizedTaskId,
         roleId: knowledgeRoleId,
+        workspacePath: cwd,
         taskAgentId: taskAgentMetadata.taskAgentId,
         taskAgentLabel: taskAgentMetadata.taskAgentLabel,
         studioRoleLabel: taskAgentMetadata.studioRoleLabel,

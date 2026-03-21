@@ -8,6 +8,15 @@ import {
 
 type InvokeFn = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
 
+type WorkspaceKnowledgeCacheRecord = {
+  cachedAt: number;
+  rows: KnowledgeEntry[];
+};
+
+const WORKSPACE_KNOWLEDGE_CACHE_STORAGE_KEY = "rail.studio.workspaceKnowledgeHydration.v1";
+const WORKSPACE_KNOWLEDGE_CACHE_TTL_MS = 60_000;
+const workspaceKnowledgeCache = new Map<string, WorkspaceKnowledgeCacheRecord>();
+
 function normalizeCwd(cwd: string): string {
   return String(cwd ?? "").trim().replace(/[\\/]+$/, "");
 }
@@ -18,6 +27,85 @@ function mergeAndPersist(rows: KnowledgeEntry[]): KnowledgeEntry[] {
   return merged;
 }
 
+function canUseLocalStorage(): boolean {
+  return typeof window !== "undefined" && !!window.localStorage;
+}
+
+function normalizeWorkspaceRows(cwd: string, rows: KnowledgeEntry[]): KnowledgeEntry[] {
+  return rows.map((row) => ({
+    ...row,
+    workspacePath: String(row.workspacePath ?? "").trim() || cwd,
+  }));
+}
+
+function readWorkspaceHydrationCache(): Record<string, WorkspaceKnowledgeCacheRecord> {
+  if (!canUseLocalStorage()) {
+    return {};
+  }
+  try {
+    const raw = window.localStorage.getItem(WORKSPACE_KNOWLEDGE_CACHE_STORAGE_KEY);
+    if (!raw) {
+      return {};
+    }
+    const parsed = JSON.parse(raw) as Record<string, WorkspaceKnowledgeCacheRecord>;
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeWorkspaceHydrationCache(cache: Record<string, WorkspaceKnowledgeCacheRecord>): void {
+  if (!canUseLocalStorage()) {
+    return;
+  }
+  try {
+    window.localStorage.setItem(WORKSPACE_KNOWLEDGE_CACHE_STORAGE_KEY, JSON.stringify(cache));
+  } catch {
+    // ignore storage failures
+  }
+}
+
+function readCachedWorkspaceRows(cwd: string): KnowledgeEntry[] | null {
+  const memory = workspaceKnowledgeCache.get(cwd);
+  if (memory && Date.now() - memory.cachedAt < WORKSPACE_KNOWLEDGE_CACHE_TTL_MS) {
+    return memory.rows;
+  }
+  const persisted = readWorkspaceHydrationCache()[cwd];
+  if (!persisted || Date.now() - Number(persisted.cachedAt ?? 0) >= WORKSPACE_KNOWLEDGE_CACHE_TTL_MS) {
+    return null;
+  }
+  const rows = normalizeWorkspaceRows(cwd, normalizeKnowledgeEntries(persisted.rows));
+  workspaceKnowledgeCache.set(cwd, {
+    cachedAt: Number(persisted.cachedAt ?? Date.now()),
+    rows,
+  });
+  return rows;
+}
+
+function cacheWorkspaceRows(cwd: string, rows: KnowledgeEntry[]): void {
+  const normalized = normalizeWorkspaceRows(cwd, rows);
+  const record: WorkspaceKnowledgeCacheRecord = {
+    cachedAt: Date.now(),
+    rows: normalized,
+  };
+  workspaceKnowledgeCache.set(cwd, record);
+  const persisted = readWorkspaceHydrationCache();
+  persisted[cwd] = record;
+  writeWorkspaceHydrationCache(persisted);
+}
+
+export function clearWorkspaceKnowledgeHydrationCacheForTest(): void {
+  workspaceKnowledgeCache.clear();
+  if (!canUseLocalStorage()) {
+    return;
+  }
+  try {
+    window.localStorage.removeItem(WORKSPACE_KNOWLEDGE_CACHE_STORAGE_KEY);
+  } catch {
+    // ignore storage failures
+  }
+}
+
 export async function hydrateKnowledgeEntriesFromWorkspaceArtifacts(params: {
   cwd: string;
   invokeFn: InvokeFn;
@@ -26,12 +114,17 @@ export async function hydrateKnowledgeEntriesFromWorkspaceArtifacts(params: {
   if (!cwd) {
     return readKnowledgeEntries();
   }
+  const cachedRows = readCachedWorkspaceRows(cwd);
+  if (cachedRows) {
+    return mergeAndPersist([...readKnowledgeEntries(), ...cachedRows]);
+  }
   try {
     const raw = await params.invokeFn<unknown[]>("knowledge_scan_workspace_artifacts", { cwd });
-    const workspaceRows = normalizeKnowledgeEntries(raw);
+    const workspaceRows = normalizeWorkspaceRows(cwd, normalizeKnowledgeEntries(raw));
     if (workspaceRows.length === 0) {
       return readKnowledgeEntries();
     }
+    cacheWorkspaceRows(cwd, workspaceRows);
     return mergeAndPersist([...readKnowledgeEntries(), ...workspaceRows]);
   } catch {
     return readKnowledgeEntries();
@@ -52,7 +145,10 @@ export async function hydrateKnowledgeEntriesFromWorkspaceSources(params: {
       cwd,
       path: ".rail/studio_index/knowledge/index.json",
     });
-    merged = mergeAndPersist([...merged, ...normalizeKnowledgeEntries(JSON.parse(String(raw ?? "[]")) as unknown)]);
+    merged = mergeAndPersist([
+      ...merged,
+      ...normalizeWorkspaceRows(cwd, normalizeKnowledgeEntries(JSON.parse(String(raw ?? "[]")) as unknown)),
+    ]);
   } catch {
     // ignore workspace index hydrate failures
   }

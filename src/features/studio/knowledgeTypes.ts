@@ -7,6 +7,7 @@ export type KnowledgeEntry = {
   runId: string;
   taskId: StudioTaskId;
   roleId: StudioRoleId;
+  workspacePath?: string;
   taskAgentId?: string;
   taskAgentLabel?: string;
   studioRoleLabel?: string;

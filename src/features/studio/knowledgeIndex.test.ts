@@ -117,6 +117,7 @@ describe("knowledgeIndex.removeKnowledgeEntriesByRunId", () => {
   it("preserves task agent and orchestrator labels across storage", () => {
     upsertKnowledgeEntry({
       ...entry("a", "run-1"),
+      workspacePath: "/tmp/workspace-a",
       taskAgentId: "researcher",
       taskAgentLabel: "RESEARCHER",
       studioRoleLabel: "리서처",
@@ -125,6 +126,7 @@ describe("knowledgeIndex.removeKnowledgeEntriesByRunId", () => {
     });
 
     expect(readKnowledgeEntries()[0]).toMatchObject({
+      workspacePath: "/tmp/workspace-a",
       taskAgentId: "researcher",
       taskAgentLabel: "RESEARCHER",
       studioRoleLabel: "리서처",

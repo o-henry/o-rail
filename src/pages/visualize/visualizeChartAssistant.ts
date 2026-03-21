@@ -21,7 +21,14 @@ type VerificationRow = {
   itemCount: number;
 };
 
+type QuantitativeRow = {
+  label: string;
+  value: number;
+  unit: "players";
+};
+
 export type VisualizeChartAssistantIntent =
+  | "players"
   | "genre"
   | "timeline"
   | "sources"
@@ -35,6 +42,7 @@ export type VisualizeChartAssistantContext = {
   timelineRows: TimelineRow[];
   popularGenres: GenreRow[];
   verificationRows: VerificationRow[];
+  quantitativeRows: QuantitativeRow[];
   markdownChart: FeedChartSpec | null;
 };
 
@@ -103,8 +111,22 @@ function buildVerificationChart(rows: VerificationRow[]): FeedChartSpec | null {
   };
 }
 
+function buildPlayersChart(rows: QuantitativeRow[]): FeedChartSpec | null {
+  if (!rows.length) {
+    return null;
+  }
+  return {
+    type: "bar",
+    labels: rows.map((row) => row.label || "-"),
+    series: [{ name: "Players", data: rows.map((row) => row.value), color: "#0f172a" }],
+  };
+}
+
 function resolveIntent(prompt: string, context: VisualizeChartAssistantContext): VisualizeChartAssistantIntent {
   const normalized = normalize(prompt).toLowerCase();
+  if (includesAny(normalized, ["동접", "동시 접속", "player", "players", "concurrent", "ccu"])) {
+    return context.quantitativeRows.length > 0 ? "players" : "fallback";
+  }
   if (includesAny(normalized, ["genre", "장르", "popular", "popularity"])) {
     return "genre";
   }
@@ -129,11 +151,16 @@ function resolveIntent(prompt: string, context: VisualizeChartAssistantContext):
   if (context.verificationRows.length > 0) {
     return "verification";
   }
+  if (context.quantitativeRows.length > 0) {
+    return "players";
+  }
   return "fallback";
 }
 
 function resolveChart(intent: VisualizeChartAssistantIntent, context: VisualizeChartAssistantContext): FeedChartSpec | null {
   switch (intent) {
+    case "players":
+      return buildPlayersChart(context.quantitativeRows) ?? context.markdownChart;
     case "genre":
       return buildGenreChart(context.popularGenres) ?? context.markdownChart;
     case "timeline":
@@ -144,6 +171,7 @@ function resolveChart(intent: VisualizeChartAssistantIntent, context: VisualizeC
       return buildVerificationChart(context.verificationRows) ?? context.markdownChart;
     default:
       return context.markdownChart
+        ?? buildPlayersChart(context.quantitativeRows)
         ?? buildGenreChart(context.popularGenres)
         ?? buildTimelineChart(context.timelineRows)
         ?? buildSourcesChart(context.topSources)
@@ -155,6 +183,9 @@ function resolveTitle(intent: VisualizeChartAssistantIntent, prompt: string): st
   const normalizedPrompt = normalize(prompt);
   if (normalizedPrompt) {
     return normalizedPrompt.slice(0, 48);
+  }
+  if (intent === "players") {
+    return "PLAYER COUNTS";
   }
   if (intent === "genre") {
     return "POPULAR GENRES";
@@ -172,6 +203,9 @@ function resolveTitle(intent: VisualizeChartAssistantIntent, prompt: string): st
 }
 
 function intentLabel(intent: VisualizeChartAssistantIntent): string {
+  if (intent === "players") {
+    return "동접/규모";
+  }
   if (intent === "genre") {
     return "장르/인기";
   }

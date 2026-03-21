@@ -19,6 +19,13 @@ export type VisualizeParsedEvidenceRow = {
   summary: string;
 };
 
+export type VisualizeParsedQuantitativeRow = {
+  label: string;
+  value: number;
+  unit: "players";
+  sourceText: string;
+};
+
 export type VisualizeParsedMarkdown = {
   charts: Array<{
     title: string;
@@ -28,6 +35,7 @@ export type VisualizeParsedMarkdown = {
   topSources: VisualizeParsedSourceRow[];
   evidence: VisualizeParsedEvidenceRow[];
   conclusions: VisualizeParsedFindingRow[];
+  quantitativeRows: VisualizeParsedQuantitativeRow[];
   metrics: {
     items: number;
     sources: number;
@@ -111,6 +119,43 @@ function sourceNameFromUrl(input: string) {
   } catch {
     return "";
   }
+}
+
+function parsePlayerCountRows(input: string): VisualizeParsedQuantitativeRow[] {
+  const raw = stripMarkdownLinks(input);
+  if (!/(동접|동시 접속|concurrent|player|players|steam 공식 stats|steam stats|명)/i.test(raw)) {
+    return [];
+  }
+  const searchText = raw.replace(/^.*?기준으로\s+/i, "");
+  const rows = [...searchText.matchAll(
+    /(?:^|,\s*|기준으로\s+|에서는\s+|통계는\s+|stats는\s+)([A-Za-z0-9가-힣][A-Za-z0-9가-힣:'"&+./·()\- ]{1,80}?)\s+(\d{1,3}(?:,\d{3})+|\d+)\s*명/gi,
+  )].map((match) => ({
+    label: normalize(match[1] ?? "")
+      .replace(/^(?:Steam 공식 Stats는?|Steam Stats는?)\s*/i, "")
+      .replace(/^(?:202\d[^A-Za-z가-힣]+)+/, "")
+      .trim(),
+    value: Number.parseInt(String(match[2] ?? "0").replace(/,/g, ""), 10) || 0,
+    unit: "players" as const,
+    sourceText: raw,
+  })).filter((row) => {
+    if (!row.label || !Number.isFinite(row.value) || row.value <= 0) {
+      return false;
+    }
+    if (row.label.length > 64) {
+      return false;
+    }
+    if (/기준|업데이트|공식|통계|stats|보여줍니다|상위권|입니다$/i.test(row.label)) {
+      return false;
+    }
+    return /[A-Za-z가-힣]/.test(row.label);
+  });
+  const deduped = new Map<string, VisualizeParsedQuantitativeRow>();
+  for (const row of rows) {
+    if (!deduped.has(row.label)) {
+      deduped.set(row.label, row);
+    }
+  }
+  return [...deduped.values()];
 }
 
 function parseEvidenceBullet(input: { text: string; details: string[] }): VisualizeParsedEvidenceRow {
@@ -283,6 +328,30 @@ export function parseVisualizeMarkdownFallback(raw: string): VisualizeParsedMark
     .filter((row): row is VisualizeParsedFindingRow => Boolean(row))
     .sort((left, right) => left.rank - right.rank)
     .slice(0, 5);
+  const quantitativeRows = new Map<string, VisualizeParsedQuantitativeRow>();
+  for (const section of sections) {
+    for (const paragraph of section.paragraphs) {
+      for (const row of parsePlayerCountRows(paragraph)) {
+        if (!quantitativeRows.has(row.label)) {
+          quantitativeRows.set(row.label, row);
+        }
+      }
+    }
+    for (const bullet of section.bullets) {
+      for (const row of parsePlayerCountRows(bullet.text)) {
+        if (!quantitativeRows.has(row.label)) {
+          quantitativeRows.set(row.label, row);
+        }
+      }
+      for (const detail of bullet.details) {
+        for (const row of parsePlayerCountRows(detail)) {
+          if (!quantitativeRows.has(row.label)) {
+            quantitativeRows.set(row.label, row);
+          }
+        }
+      }
+    }
+  }
   const metrics = {
     items: evidence.length,
     sources: (topSources.length ? topSources : [...inferredTopSources.entries()].map(([sourceName, itemCount]) => ({ sourceName, itemCount }))).length,
@@ -304,6 +373,9 @@ export function parseVisualizeMarkdownFallback(raw: string): VisualizeParsedMark
         .slice(0, 8),
     evidence,
     conclusions,
+    quantitativeRows: [...quantitativeRows.values()]
+      .sort((left, right) => right.value - left.value)
+      .slice(0, 8),
     metrics,
   };
 }
@@ -314,6 +386,7 @@ export function mergeVisualizeMarkdownFallback(...parts: Array<VisualizeParsedMa
     topSources: [],
     evidence: [],
     conclusions: [],
+    quantitativeRows: [],
     metrics: {
       items: 0,
       sources: 0,
@@ -338,6 +411,9 @@ export function mergeVisualizeMarkdownFallback(...parts: Array<VisualizeParsedMa
     }
     if (merged.conclusions.length === 0 && part.conclusions.length > 0) {
       merged.conclusions = part.conclusions;
+    }
+    if (merged.quantitativeRows.length === 0 && part.quantitativeRows.length > 0) {
+      merged.quantitativeRows = part.quantitativeRows;
     }
     if (merged.metrics.items === 0 && part.metrics.items > 0) {
       merged.metrics = part.metrics;

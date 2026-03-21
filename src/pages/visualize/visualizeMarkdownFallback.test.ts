@@ -130,4 +130,19 @@ describe("visualizeMarkdownFallback", () => {
       { label: "03.19", count: 8 },
     ]);
   });
+
+  it("extracts player count rows from research prose", () => {
+    const parsed = parseVisualizeMarkdownFallback(`
+## 핵심 근거
+Steam 공식 Stats는 2026-03-20 21:38 업데이트 기준으로 Slay the Spire 2 304,503명, Crimson Desert 140,279명, ARC Raiders 106,543명, Marathon 52,385명, Resident Evil Requiem 39,056명 동접을 보여줍니다.
+`);
+
+    expect(parsed.quantitativeRows).toEqual([
+      expect.objectContaining({ label: "Slay the Spire 2", value: 304503, unit: "players" }),
+      expect.objectContaining({ label: "Crimson Desert", value: 140279, unit: "players" }),
+      expect.objectContaining({ label: "ARC Raiders", value: 106543, unit: "players" }),
+      expect.objectContaining({ label: "Marathon", value: 52385, unit: "players" }),
+      expect.objectContaining({ label: "Resident Evil Requiem", value: 39056, unit: "players" }),
+    ]);
+  });
 });

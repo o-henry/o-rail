@@ -16,10 +16,12 @@ import {
   parseVisualizeMarkdownFallback,
 } from "./visualizeMarkdownFallback";
 import { buildVisualizeChartAssistantResult } from "./visualizeChartAssistant";
+import { runVisualizeChartAssistantWithCodex } from "./visualizeChartAssistantCodex";
 import { resolveVisualizeRailMode } from "./visualizeRailMode";
 import { VisualizeWidgetFrame } from "./VisualizeWidgetFrame";
 import type { VisualizeWidgetId } from "./visualizeWidgetLayout";
 import type { ResearchCollectionPayload } from "./visualizeReportUtils";
+import { invoke } from "../../shared/tauri";
 
 type VisualizePageProps = {
   cwd: string;
@@ -481,15 +483,6 @@ export default function VisualizePage({ cwd, hasTauriRuntime, isActive, onOpenKn
     if (!prompt || chartAssistantBusy) {
       return;
     }
-    const result = buildVisualizeChartAssistantResult({
-      prompt,
-      leadCopy,
-      topSources,
-      timelineRows,
-      popularGenres,
-      verificationRows,
-      markdownChart: markdownMainChart,
-    });
     const requestId = `${Date.now()}`;
     setChartAssistantBusy(true);
     setChartAssistantLogs((current) => [
@@ -497,27 +490,78 @@ export default function VisualizePage({ cwd, hasTauriRuntime, isActive, onOpenKn
       { id: `user-${requestId}`, role: "user", text: prompt },
     ]);
     setChartAssistantDraft("");
-    for (const [index, step] of result.steps.entries()) {
+    try {
+      if (hasTauriRuntime) {
+        const codexResult = await runVisualizeChartAssistantWithCodex({
+          cwd,
+          invokeFn: invoke,
+          prompt,
+          reportBody: state.reportMarkdown,
+          collectionBody: state.collectionMarkdown,
+          leadCopy,
+          topSources,
+          timelineRows,
+          popularGenres,
+          verificationRows,
+        });
+        const assistantLines = codexResult.logs.length > 0
+          ? codexResult.logs
+          : [codexResult.summary || "문서를 읽고 차트를 구성했습니다."];
+        setManualChartSpec(codexResult.chart ? withoutChartTitle(codexResult.chart) : null);
+        setManualChartTitle(codexResult.chart?.title ?? "");
+        setChartAssistantLogs((current) => [
+          ...current,
+          ...assistantLines.map((text, index) => ({
+            id: `assistant-${requestId}-${index}`,
+            role: "assistant" as const,
+            text,
+          })),
+          ...(codexResult.summary && !assistantLines.includes(codexResult.summary)
+            ? [{ id: `assistant-summary-${requestId}`, role: "assistant" as const, text: codexResult.summary }]
+            : []),
+        ]);
+        return;
+      }
+      throw new Error("no tauri runtime");
+    } catch {
+      const result = buildVisualizeChartAssistantResult({
+        prompt,
+        leadCopy,
+        topSources,
+        timelineRows,
+        popularGenres,
+        verificationRows,
+        quantitativeRows: markdownFallback.quantitativeRows,
+        markdownChart: markdownMainChart,
+      });
+      for (const [index, step] of result.steps.entries()) {
+        await wait(120);
+        setChartAssistantLogs((current) => [
+          ...current,
+          { id: `assistant-${requestId}-${index}`, role: "assistant", text: step },
+        ]);
+      }
       await wait(120);
+      setManualChartSpec(result.chart ? withoutChartTitle(result.chart) : null);
+      setManualChartTitle(result.title);
       setChartAssistantLogs((current) => [
         ...current,
-        { id: `assistant-${requestId}-${index}`, role: "assistant", text: step },
+        { id: `assistant-summary-${requestId}`, role: "assistant", text: result.summary },
       ]);
+    } finally {
+      setChartAssistantBusy(false);
     }
-    await wait(120);
-    setManualChartSpec(result.chart ? withoutChartTitle(result.chart) : null);
-    setManualChartTitle(result.title);
-    setChartAssistantLogs((current) => [
-      ...current,
-      { id: `assistant-summary-${requestId}`, role: "assistant", text: result.summary },
-    ]);
-    setChartAssistantBusy(false);
   }, [
+    cwd,
     chartAssistantBusy,
     chartAssistantDraft,
+    hasTauriRuntime,
     leadCopy,
     markdownMainChart,
+    markdownFallback.quantitativeRows,
     popularGenres,
+    state.collectionMarkdown,
+    state.reportMarkdown,
     timelineRows,
     topSources,
     verificationRows,

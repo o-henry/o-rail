@@ -10,6 +10,7 @@ describe("buildVisualizeChartAssistantResult", () => {
       timelineRows: [{ label: "03.20", count: 2 }],
       popularGenres: [{ genreLabel: "Shooter", popularityScore: 90 }],
       verificationRows: [{ verificationStatus: "verified", itemCount: 3 }],
+      quantitativeRows: [],
       markdownChart: null,
     });
     expect(result.intent).toBe("genre");
@@ -24,9 +25,30 @@ describe("buildVisualizeChartAssistantResult", () => {
       timelineRows: [],
       popularGenres: [],
       verificationRows: [],
+      quantitativeRows: [],
       markdownChart: null,
     });
     expect(result.intent).toBe("sources");
     expect(result.chart?.labels).toEqual(["Metacritic"]);
+  });
+
+  it("uses extracted player counts when the prompt asks for concurrency", () => {
+    const result = buildVisualizeChartAssistantResult({
+      prompt: "장르별 동접자 수를 차트로 보여줘",
+      leadCopy: "player summary",
+      topSources: [],
+      timelineRows: [],
+      popularGenres: [],
+      verificationRows: [],
+      quantitativeRows: [
+        { label: "Slay the Spire 2", value: 304503, unit: "players" },
+        { label: "ARC Raiders", value: 106543, unit: "players" },
+      ],
+      markdownChart: null,
+    });
+
+    expect(result.intent).toBe("players");
+    expect(result.chart?.labels).toEqual(["Slay the Spire 2", "ARC Raiders"]);
+    expect(result.chart?.series[0]?.data).toEqual([304503, 106543]);
   });
 });

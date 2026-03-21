@@ -1,9 +1,17 @@
 import { formatAdaptiveFamilyLabel } from "../../adaptation/families";
 import type { AdaptiveWorkspaceData } from "../../adaptation/types";
+import { formatTaskRoleLearningRoleLabel } from "../../adaptation/taskRoleLearning";
 
 type AdaptationPageProps = {
   data: AdaptiveWorkspaceData;
   loading: boolean;
+  taskLearningLoading?: boolean;
+  taskRoleSummaries?: Array<{
+    roleId: string;
+    successCount: number;
+    failureCount: number;
+    lastFailureReason: string;
+  }>;
   onFreeze: () => void;
   onResume: () => void;
   onReset: () => void;
@@ -110,6 +118,40 @@ export default function AdaptationPage(props: AdaptationPageProps) {
                 </div>
               </article>
             ))
+          )}
+        </div>
+      </section>
+
+      <section className="adaptation-island">
+        <div className="adaptation-island-head">
+          <div>
+            <h2>Tasks 학습 메모리</h2>
+            <p>Tasks 실행의 성공/실패를 구조화해서 다음 비슷한 요청에 자동으로 반영합니다.</p>
+          </div>
+          <div className="settings-badges">
+            <span className="status-tag neutral">
+              {props.taskLearningLoading ? "불러오는 중" : `역할 ${props.taskRoleSummaries?.length ?? 0}`}
+            </span>
+          </div>
+        </div>
+        <div className="adaptation-card-list">
+          {props.taskRoleSummaries && props.taskRoleSummaries.length > 0 ? (
+            props.taskRoleSummaries.slice(0, 6).map((row) => (
+              <article className="adaptation-card" key={row.roleId}>
+                <div className="adaptation-card-head">
+                  <strong>{formatTaskRoleLearningRoleLabel(row.roleId)}</strong>
+                  <small>{row.roleId}</small>
+                </div>
+                <div className="adaptation-card-lines">
+                  <span>성공 {row.successCount}</span>
+                  <span>실패 {row.failureCount}</span>
+                  <span>{row.failureCount > 0 ? "다음 실행에 실패 회피 힌트 적용" : "최근 실패 없음"}</span>
+                </div>
+                {row.lastFailureReason ? <p>{row.lastFailureReason}</p> : null}
+              </article>
+            ))
+          ) : (
+            <div className="adaptation-empty">아직 Tasks 학습 기록이 없습니다.</div>
           )}
         </div>
       </section>

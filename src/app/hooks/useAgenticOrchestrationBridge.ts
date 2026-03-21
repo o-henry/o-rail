@@ -361,6 +361,11 @@ export function useAgenticOrchestrationBridge(params: {
       runStatus: params.runStatus,
       failureReason: params.runStatus === "error" ? extractRunEnvelopeError(params.envelope) : "",
     });
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("rail:task-learning-updated", {
+        detail: { cwd },
+      }));
+    }
     onRoleRunCompleted?.({
       runId: params.runId,
       roleId: params.roleId,

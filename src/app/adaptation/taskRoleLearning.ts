@@ -402,6 +402,26 @@ export function summarizeTaskRoleLearningByRole(cwd: string): Array<{
     .map(({ lastSeenAt: _lastSeenAt, ...rest }) => rest);
 }
 
+export function formatTaskRoleLearningRoleLabel(roleId: string): string {
+  const normalized = String(roleId ?? "").trim();
+  if (normalized === "research_analyst") {
+    return "리서처";
+  }
+  if (normalized === "system_programmer") {
+    return "시스템";
+  }
+  if (normalized === "client_programmer") {
+    return "클라이언트";
+  }
+  if (normalized === "qa_engineer") {
+    return "QA";
+  }
+  if (normalized === "tooling_engineer") {
+    return "툴링";
+  }
+  return normalized.replace(/_/g, " ") || "에이전트";
+}
+
 export function clearTaskRoleLearningDataForTest(): void {
   memoryTaskRoleLearningByWorkspace.clear();
   if (!canUseLocalStorage()) {

@@ -23,6 +23,7 @@ import {
 import { useWorkflowRoleCollaboration } from "./hooks/useWorkflowRoleCollaboration";
 import { useWorkflowShortcuts } from "./hooks/useWorkflowShortcuts";
 import { useAdaptiveWorkspaceState } from "./hooks/useAdaptiveWorkspaceState";
+import { useTaskRoleLearningState } from "./hooks/useTaskRoleLearningState";
 import { useDashboardIntelligenceConfig } from "./hooks/useDashboardIntelligenceConfig";
 import { useDashboardIntelligenceRunner } from "./hooks/useDashboardIntelligenceRunner";
 import { DASHBOARD_TOPIC_IDS } from "../features/dashboard/intelligence";
@@ -662,6 +663,11 @@ function App() {
     void invoke("storage_cleanup_workspace", { cwd }).catch(() => {});
   }, [cwd, hasTauriRuntime]);
   const adaptiveWorkspaceState = useAdaptiveWorkspaceState({
+    cwd,
+    hasTauriRuntime,
+    invokeFn: invoke,
+  });
+  const taskRoleLearningState = useTaskRoleLearningState({
     cwd,
     hasTauriRuntime,
     invokeFn: invoke,
@@ -2658,6 +2664,8 @@ function App() {
       approvalSubmitting={approvalSubmitting}
       adaptiveWorkspaceData={adaptiveWorkspaceState.data}
       adaptiveWorkspaceLoading={adaptiveWorkspaceState.loading}
+      taskRoleLearningLoading={taskRoleLearningState.loading}
+      taskRoleLearningSummaries={taskRoleLearningState.roleSummaries}
       appShellStyle={appShellStyle}
       authMode={authMode}
       authModeLabel={authModeLabel}

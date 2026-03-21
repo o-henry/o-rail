@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import AgentsPage from "../../../pages/agents/AgentsPage";
 import AdaptationPage from "./AdaptationPage";
 import BridgePage from "../../../pages/bridge/BridgePage";
@@ -10,8 +10,9 @@ import SettingsPage from "../../../pages/settings/SettingsPage";
 import TasksPage from "../../../pages/tasks/TasksPage";
 import VisualizePage from "../../../pages/visualize/VisualizePage";
 import { writeStoredSelectedRunId } from "../../../pages/visualize/visualizeSelection";
+import { WorkspaceTabCache } from "./WorkspaceTabCache";
 
-function MainAppWorkspaceContentImpl(props: any) {
+export function MainAppWorkspaceContent(props: any) {
   const [mountedTabs, setMountedTabs] = useState<Record<string, boolean>>(() => ({
     [String(props.workspaceTab ?? "tasks")]: true,
   }));
@@ -269,63 +270,50 @@ function MainAppWorkspaceContentImpl(props: any) {
   return (
     <>
       {mountedTabs.feed ? (
-        <div hidden={props.workspaceTab !== "feed"}>
+        <WorkspaceTabCache active={props.workspaceTab === "feed"}>
           {feedTabContent}
-        </div>
+        </WorkspaceTabCache>
       ) : null}
       {mountedTabs.knowledge ? (
-        <div hidden={props.workspaceTab !== "knowledge"}>
+        <WorkspaceTabCache active={props.workspaceTab === "knowledge"}>
           {knowledgeTabContent}
-        </div>
+        </WorkspaceTabCache>
       ) : null}
       {mountedTabs.visualize ? (
-        <div hidden={props.workspaceTab !== "visualize"}>
+        <WorkspaceTabCache active={props.workspaceTab === "visualize"}>
           {visualizeTabContent}
-        </div>
+        </WorkspaceTabCache>
       ) : null}
       {mountedTabs.adaptation ? (
-        <div hidden={props.workspaceTab !== "adaptation"}>
+        <WorkspaceTabCache active={props.workspaceTab === "adaptation"}>
           {adaptationTabContent}
-        </div>
+        </WorkspaceTabCache>
       ) : null}
       {mountedTabs.tasks ? (
-        <div hidden={props.workspaceTab !== "tasks"}>
+        <WorkspaceTabCache active={props.workspaceTab === "tasks"}>
           {tasksTabContent}
-        </div>
+        </WorkspaceTabCache>
       ) : null}
       {mountedTabs.shell ? (
-        <div hidden={props.workspaceTab !== "shell"}>
+        <WorkspaceTabCache active={props.workspaceTab === "shell"}>
           {shellTabContent}
-        </div>
+        </WorkspaceTabCache>
       ) : null}
       {mountedTabs.agents ? (
-        <div hidden={props.workspaceTab !== "agents"}>
+        <WorkspaceTabCache active={props.workspaceTab === "agents"}>
           {agentsTabContent}
-        </div>
+        </WorkspaceTabCache>
       ) : null}
       {mountedTabs.settings ? (
-        <div hidden={props.workspaceTab !== "settings"}>
+        <WorkspaceTabCache active={props.workspaceTab === "settings"}>
           {settingsTabContent}
-        </div>
+        </WorkspaceTabCache>
       ) : null}
       {mountedTabs.intelligence ? (
-        <div hidden={props.workspaceTab !== "intelligence"}>
+        <WorkspaceTabCache active={props.workspaceTab === "intelligence"}>
           {intelligenceTabContent}
-        </div>
+        </WorkspaceTabCache>
       ) : null}
     </>
   );
 }
-
-function areMainAppWorkspaceContentPropsEqual(prev: any, next: any) {
-  // Keep hidden workspace tabs from re-rendering while the workflow canvas is active.
-  if (prev.workspaceTab === "workflow" && next.workspaceTab === "workflow") {
-    return true;
-  }
-  return false;
-}
-
-export const MainAppWorkspaceContent = memo(
-  MainAppWorkspaceContentImpl,
-  areMainAppWorkspaceContentPropsEqual,
-);

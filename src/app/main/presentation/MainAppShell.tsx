@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useDeferredValue, useMemo } from "react";
 import AppNav from "../../../components/AppNav";
 import WorkflowPage from "../../../pages/workflow/WorkflowPage";
 import WorkflowRagModeDock from "../../../pages/workflow/WorkflowRagModeDock";
@@ -178,8 +178,9 @@ export function MainAppShell(props: any) {
     workspaceEvents,
     workspaceTab,
   } = props;
+  const deferredFeedPosts = useDeferredValue(feedPosts);
   const briefingDocuments = useMemo(
-    () => feedPosts
+    () => deferredFeedPosts
       .filter((post: any) => post.status === "done" || post.status === "low_quality")
       .map((post: any) => ({
         id: post.id,
@@ -191,7 +192,7 @@ export function MainAppShell(props: any) {
         isFinalDocument: post.isFinalDocument,
         status: post.status,
       })),
-    [feedPosts],
+    [deferredFeedPosts],
   );
 
   return (

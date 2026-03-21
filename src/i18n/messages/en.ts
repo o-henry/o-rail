@@ -744,6 +744,7 @@ export const EN_MESSAGES: Dictionary = {
     "workflow.question.authChecking": "Checking Codex login status...",
     "workflow.question.loginRequired": "Sign in to Codex before running the graph.",
     "warning.codexLowQuality": "Without Codex login, Tasks and graph runs may generate lower-quality data.",
+    "warning.loginAction": "Login",
     "preset.validation": "Validation Template",
     "preset.development": "Development Template",
     "preset.research": "Research Template",

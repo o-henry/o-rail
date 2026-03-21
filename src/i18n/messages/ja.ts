@@ -692,6 +692,7 @@ export const JA_MESSAGES: Dictionary = {
     "workflow.question.authChecking": "Codex のログイン状態を確認しています...",
     "workflow.question.loginRequired": "グラフを実行する前に Codex へログインしてください。",
     "warning.codexLowQuality": "Codex にログインしていない場合、Tasks とグラフ実行で低品質なデータが生成されることがあります。",
+    "warning.loginAction": "ログイン",
     "preset.validation": "精密検証テンプレート",
     "preset.development": "開発実行テンプレート",
     "preset.research": "根拠リサーチテンプレート",

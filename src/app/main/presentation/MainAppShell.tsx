@@ -211,7 +211,7 @@ export function MainAppShell(props: any) {
           <div className="warning">
             <span>{t("warning.codexLowQuality")}</span>
             <button className="warning-action" onClick={() => void onLoginCodex()} type="button">
-              {t("settings.codex.login")}
+              {t("warning.loginAction")}
             </button>
           </div>
         )}

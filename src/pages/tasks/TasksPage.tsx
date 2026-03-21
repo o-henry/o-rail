@@ -18,7 +18,7 @@ import {
 } from "./taskAgentMentions";
 import { buildThreadFileTree } from "./threadFileTree";
 import { buildLiveAgentCards } from "./liveAgentState";
-import { isTasksCodexExecutionBlocked, useTasksThreadState } from "./useTasksThreadState";
+import { useTasksThreadState } from "./useTasksThreadState";
 import { TasksThreadNavPane } from "./TasksThreadNavPane";
 import { TasksThreadHeaderBar } from "./TasksThreadHeaderBar";
 import { TasksThreadConversation } from "./TasksThreadConversation";
@@ -127,12 +127,6 @@ export default function TasksPage(props: TasksPageProps) {
     }),
     [state.canInterruptCurrentThread, state.composerSubmitPending],
   );
-  const codexComposerLocked = isTasksCodexExecutionBlocked({
-    hasTauriRuntime: props.hasTauriRuntime,
-    loginCompleted: props.loginCompleted,
-    codexAuthCheckPending: props.codexAuthCheckPending,
-  });
-
   useEffect(() => {
     setThreadTitleDraft(headerTitle);
     setIsEditingThreadTitle(false);
@@ -411,8 +405,6 @@ export default function TasksPage(props: TasksPageProps) {
 
         <TasksThreadComposer
           attachedFiles={state.attachedFiles}
-          codexAuthCheckPending={props.codexAuthCheckPending}
-          codexLoginLocked={codexComposerLocked}
           canUseStopButton={state.canInterruptCurrentThread}
           canInterruptCurrentThread={state.canInterruptCurrentThread}
           composerCoordinationModeOverride={state.composerCoordinationModeOverride}

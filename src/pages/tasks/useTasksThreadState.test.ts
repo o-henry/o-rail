@@ -34,20 +34,20 @@ describe("revealTasksProjectPathState", () => {
 });
 
 describe("isTasksCodexExecutionBlocked", () => {
-  it("blocks desktop task execution while auth is still being checked", () => {
+  it("no longer blocks desktop task execution while auth is still being checked", () => {
     expect(isTasksCodexExecutionBlocked({
       hasTauriRuntime: true,
       loginCompleted: false,
       codexAuthCheckPending: true,
-    })).toBe(true);
+    })).toBe(false);
   });
 
-  it("blocks desktop task execution when login is missing", () => {
+  it("no longer blocks desktop task execution when login is missing", () => {
     expect(isTasksCodexExecutionBlocked({
       hasTauriRuntime: true,
       loginCompleted: false,
       codexAuthCheckPending: false,
-    })).toBe(true);
+    })).toBe(false);
   });
 
   it("allows browser-mode task execution without the Codex gate", () => {

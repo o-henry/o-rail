@@ -17,8 +17,6 @@ describe("WorkflowQuestionComposer", () => {
           },
         ]}
         canRunGraphNow={true}
-        codexAuthCheckPending={false}
-        codexLoginLocked={false}
         isWorkflowBusy={false}
         onApplyModelSelection={vi.fn()}
         onOpenKnowledgeFilePicker={vi.fn()}
@@ -35,13 +33,11 @@ describe("WorkflowQuestionComposer", () => {
     expect(html).toContain("guide.md 삭제");
   });
 
-  it("shows a login-required placeholder when Codex login is blocked", () => {
+  it("keeps the workflow composer usable even when Codex login is missing", () => {
     const html = renderToStaticMarkup(
       <WorkflowQuestionComposer
         attachedFiles={[]}
-        canRunGraphNow={false}
-        codexAuthCheckPending={false}
-        codexLoginLocked
+        canRunGraphNow={true}
         isWorkflowBusy={false}
         onApplyModelSelection={vi.fn()}
         onOpenKnowledgeFilePicker={vi.fn()}
@@ -53,7 +49,7 @@ describe("WorkflowQuestionComposer", () => {
       />,
     );
 
-    expect(html).toContain("Codex 로그인 후 그래프를 실행할 수 있습니다.");
-    expect(html).toContain("disabled");
+    expect(html).toContain("질문 입력");
+    expect(html).not.toContain("<textarea disabled");
   });
 });

@@ -71,14 +71,12 @@ describe("shouldShowTasksComposerStopButton", () => {
 });
 
 describe("TasksThreadComposer", () => {
-  it("disables the composer while Codex login is required", () => {
+  it("keeps the composer usable even when Codex login is missing", () => {
     const html = renderToStaticMarkup(
       createElement(TasksThreadComposer, {
         attachedFiles: [],
         canInterruptCurrentThread: false,
         canUseStopButton: false,
-        codexAuthCheckPending: false,
-        codexLoginLocked: true,
         composerCoordinationModeOverride: null,
         composerDraft: "",
         composerRef: createRef<HTMLTextAreaElement>(),
@@ -111,7 +109,7 @@ describe("TasksThreadComposer", () => {
       }),
     );
 
-    expect(html).toContain("disabled");
-    expect(html).toContain("Codex 로그인 후 Tasks를 사용할 수 있습니다.");
+    expect(html).not.toContain("<textarea disabled");
+    expect(html).toContain("Unity 작업 내용을 입력하거나 @로 에이전트를 선택하세요");
   });
 });

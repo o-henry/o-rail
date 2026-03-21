@@ -191,7 +191,7 @@ export function MainAppShell(props: any) {
         renderIcon={(tab, active) => <NavIcon active={active} tab={tab} />}
       />
       <section
-        className={`workspace ${canvasFullscreen ? "canvas-fullscreen-active" : ""} ${error ? "workspace-has-error" : ""}`.trim()}
+        className={`workspace ${canvasFullscreen ? "canvas-fullscreen-active" : ""} ${error ? "workspace-has-error" : ""} ${!error && codexLoginGateOpen ? "workspace-has-warning" : ""}`.trim()}
       >
         {!canvasFullscreen && <header className="workspace-header workspace-header-spacer" />}
         {error && (
@@ -207,6 +207,14 @@ export function MainAppShell(props: any) {
             </button>
           </div>
         )}
+        {!error && codexLoginGateOpen && (
+          <div className="warning">
+            <span>{t("warning.codexLowQuality")}</span>
+            <button className="warning-action" onClick={() => void onLoginCodex()} type="button">
+              {t("settings.codex.login")}
+            </button>
+          </div>
+        )}
 
         {workspaceTab === "workflow" && (
           <WorkflowPage canvasFullscreen={canvasFullscreen}>
@@ -217,8 +225,6 @@ export function MainAppShell(props: any) {
               canRunGraphNow={canRunGraphNow}
               canvasFullscreen={canvasFullscreen}
               canvasNodes={canvasNodes}
-              codexAuthCheckPending={codexAuthCheckPending}
-              codexLoginLocked={codexLoginGateOpen}
               graphNodes={graph.nodes}
               canvasZoom={canvasZoom}
               graphViewMode={graphViewMode}

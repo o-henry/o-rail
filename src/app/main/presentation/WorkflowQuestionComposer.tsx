@@ -13,8 +13,6 @@ type WorkflowQuestionComposerProps = {
   attachedFiles: KnowledgeFileRef[];
   canRunGraphNow: boolean;
   isWorkflowBusy: boolean;
-  codexLoginLocked: boolean;
-  codexAuthCheckPending: boolean;
   onRunGraph: () => Promise<void>;
   onApplyModelSelection: (selection: {
     modelValue: string;
@@ -35,8 +33,6 @@ export default function WorkflowQuestionComposer({
   attachedFiles,
   canRunGraphNow,
   isWorkflowBusy,
-  codexLoginLocked,
-  codexAuthCheckPending,
   onRunGraph,
   onApplyModelSelection,
   onOpenKnowledgeFilePicker,
@@ -58,12 +54,8 @@ export default function WorkflowQuestionComposer({
   const isReasonLevelSelectable = selectedModelOption.allowsReasonLevel;
   const reasonLevelOptions = useMemo(() => [...TURN_REASONING_LEVEL_OPTIONS], []);
   const hasQuestion = workflowQuestion.trim().length > 0;
-  const composerDisabled = isWorkflowBusy || codexLoginLocked || codexAuthCheckPending;
-  const placeholder = codexAuthCheckPending
-    ? t("workflow.question.authChecking")
-    : codexLoginLocked
-      ? t("workflow.question.loginRequired")
-      : t("workflow.question.placeholder");
+  const composerDisabled = isWorkflowBusy;
+  const placeholder = t("workflow.question.placeholder");
 
   useEffect(() => {
     if (isReasonLevelSelectable) {

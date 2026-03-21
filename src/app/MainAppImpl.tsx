@@ -2054,13 +2054,11 @@ function App() {
   const codexLoginGateOpen = hasTauriRuntime && !codexAuthCheckPending && !loginCompleted;
   const canRunWithoutQuestion = workflowGraphViewMode === "rag";
   const canRunGraphNow =
-    !codexAuthCheckPending &&
-    !codexLoginGateOpen &&
-    (canResumeGraph ||
-      (isWorkspaceCwdConfigured &&
-        !isWorkflowBusy &&
-        graphForCanvas.nodes.length > 0 &&
-        (canRunWithoutQuestion || workflowQuestion.trim().length > 0)));
+    canResumeGraph ||
+    (isWorkspaceCwdConfigured &&
+      !isWorkflowBusy &&
+      graphForCanvas.nodes.length > 0 &&
+      (canRunWithoutQuestion || workflowQuestion.trim().length > 0));
   const {
     currentFeedPosts,
     feedCategoryPosts,

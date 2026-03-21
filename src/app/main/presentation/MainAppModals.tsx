@@ -1,5 +1,4 @@
 import ApprovalModal from "../../../components/modals/ApprovalModal";
-import CodexLoginRequiredModal from "../../../components/modals/CodexLoginRequiredModal";
 import PendingWebConnectModal from "../../../components/modals/PendingWebConnectModal";
 import PendingWebLoginModal from "../../../components/modals/PendingWebLoginModal";
 import PendingWebTurnModal from "../../../components/modals/PendingWebTurnModal";
@@ -7,11 +6,6 @@ import PendingWebTurnModal from "../../../components/modals/PendingWebTurnModal"
 export function MainAppModals(props: any) {
   return (
     <>
-      <CodexLoginRequiredModal
-        onLogin={props.onLoginCodex}
-        open={Boolean(props.codexLoginGateOpen)}
-      />
-
       <PendingWebConnectModal
         onCancel={() => {
           props.setPendingWebConnectCheck(null);

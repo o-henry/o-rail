@@ -96,7 +96,7 @@ describe("createRunGraphControlHandlers", () => {
     );
   });
 
-  it("blocks graph execution when Codex login is missing", async () => {
+  it("still prepares graph execution when Codex login is missing", async () => {
     const params = createParams();
     params.loginCompleted = false;
     params.graph = {
@@ -109,7 +109,7 @@ describe("createRunGraphControlHandlers", () => {
     const { prepareRunGraphStart } = createRunGraphControlHandlers(params);
     const result = await prepareRunGraphStart(true);
 
-    expect(result).toBeNull();
-    expect(params.setError).toHaveBeenCalledWith("Codex 로그인 후 그래프를 실행할 수 있습니다.");
+    expect(result).toEqual({ name: "TEST", kind: "workflow", presetKind: "creative" });
+    expect(params.setError).not.toHaveBeenCalled();
   });
 });

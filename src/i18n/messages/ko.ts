@@ -743,6 +743,7 @@ export const KO_MESSAGES: Dictionary = {
     "tasks.composer.loginRequired": "Codex 로그인 후 Tasks를 사용할 수 있습니다.",
     "workflow.question.authChecking": "Codex 로그인 상태를 확인하는 중...",
     "workflow.question.loginRequired": "Codex 로그인 후 그래프를 실행할 수 있습니다.",
+    "warning.codexLowQuality": "Codex에 로그인하지 않으면 Tasks와 그래프 실행에서 저품질 데이터가 생성될 수 있습니다.",
     "preset.validation": "정밀 검증 템플릿",
     "preset.development": "개발 실행 템플릿",
     "preset.research": "근거 리서치 템플릿",

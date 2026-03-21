@@ -34,8 +34,6 @@ type TasksThreadComposerProps = {
   isReasonMenuOpen: boolean;
   reasoning: string;
   reasoningLabel: string;
-  codexLoginLocked: boolean;
-  codexAuthCheckPending: boolean;
   showStopButton: boolean;
   canUseStopButton: boolean;
   canInterruptCurrentThread: boolean;
@@ -109,12 +107,8 @@ export function buildSelectedTasksComposerBadges(params: {
 export function TasksThreadComposer(props: TasksThreadComposerProps) {
   const { t } = useI18n();
   const canSubmit = canSubmitTasksComposer(props.composerDraft);
-  const composerDisabled = props.codexLoginLocked || props.codexAuthCheckPending;
-  const composerPlaceholder = props.codexAuthCheckPending
-    ? t("tasks.composer.authChecking")
-    : props.codexLoginLocked
-      ? t("tasks.composer.loginRequired")
-      : t("tasks.composer.placeholder");
+  const composerDisabled = false;
+  const composerPlaceholder = t("tasks.composer.placeholder");
   const selectedBadges = buildSelectedTasksComposerBadges({
     roleIds: props.selectedComposerRoleIds,
     modeOverride: props.composerCoordinationModeOverride,

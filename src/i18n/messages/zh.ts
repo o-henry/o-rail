@@ -691,6 +691,7 @@ export const ZH_MESSAGES: Dictionary = {
     "tasks.composer.loginRequired": "请先登录 Codex 后再使用 Tasks。",
     "workflow.question.authChecking": "正在检查 Codex 登录状态...",
     "workflow.question.loginRequired": "请先登录 Codex 后再运行图。",
+    "warning.codexLowQuality": "未登录 Codex 时，Tasks 与图运行可能会生成较低质量的数据。",
     "preset.validation": "精密验证模板",
     "preset.development": "开发执行模板",
     "preset.research": "证据研究模板",

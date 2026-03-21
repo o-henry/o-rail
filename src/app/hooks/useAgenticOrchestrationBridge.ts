@@ -230,13 +230,11 @@ export function useAgenticOrchestrationBridge(params: {
     graphRunOverrideIdRef,
     publishAction,
     subscribeAction,
-    loginCompleted,
     workspaceTab,
     runDashboardTopic,
     refreshDashboardSnapshots,
     onSelectWorkspaceTab,
     setNodeSelection,
-    setError,
     setStatus,
     applyPreset,
     onRoleRunCompleted,
@@ -267,11 +265,6 @@ export function useAgenticOrchestrationBridge(params: {
 
   const onRunGraph = useCallback(
     async (skipWebConnectPreflight = false) => {
-      if (!loginCompleted) {
-        setError("Codex 로그인 후 그래프를 실행할 수 있습니다.");
-        setStatus("로그인 필요");
-        return;
-      }
       if (skipWebConnectPreflight) {
         await runGraphWithAgenticCoordinator(true);
         return;
@@ -283,7 +276,7 @@ export function useAgenticOrchestrationBridge(params: {
         },
       });
     },
-    [graphFileName, loginCompleted, publishAction, runGraphWithAgenticCoordinator, selectedGraphFileName, setError, setStatus],
+    [graphFileName, publishAction, runGraphWithAgenticCoordinator, selectedGraphFileName],
   );
 
   const runDashboardTopicDirect = useCallback(

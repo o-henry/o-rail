@@ -19,11 +19,22 @@ type ResearchCollectionJobPlanResult = {
     domains?: string[];
     planner?: {
       analysisMode?: string;
+      questionCategory?: string;
       metricFocus?: string[];
       dataScope?: string;
       aggregationUnit?: string;
+      requestedSnapshotDate?: string;
+      queryPlan?: Array<{
+        query?: string;
+        axis?: string;
+        language?: string;
+        intent?: string;
+      }>;
+      coverageTargets?: string[];
+      transparencyRequirements?: string[];
       instructions?: string[];
     };
+    preferredExecutionOrder?: string[];
   };
 };
 
@@ -52,6 +63,28 @@ type ResearchCollectionMetricsResult = {
     sourceName: string;
     itemCount: number;
   }>;
+  sourceMix?: Record<string, number>;
+  coverage?: Array<{
+    target?: string;
+    met?: boolean;
+    detail?: string;
+  }>;
+  transparency?: {
+    sourceMix?: Record<string, number>;
+    topSources?: Array<{
+      sourceName?: string;
+      itemCount?: number;
+    }>;
+    freshnessWindow?: {
+      requested?: string;
+      earliestObserved?: string;
+      latestObserved?: string;
+    };
+    conflictsDetected?: number;
+    warningsDetected?: number;
+    collectionGaps?: string[];
+    requirements?: string[];
+  };
 };
 
 type ResearchCollectionItemResult = {
@@ -62,6 +95,17 @@ type ResearchCollectionItemResult = {
     score: number;
     url: string;
     summary: string;
+    evidence?: {
+      claim?: string;
+      quote?: string;
+      metric?: Record<string, number>;
+      publishedAt?: string;
+      fetchedAt?: string;
+      sourceType?: string;
+      sourceFamily?: string;
+      url?: string;
+      confidence?: number;
+    };
   }>;
 };
 
@@ -157,6 +201,7 @@ function buildCollectionContextMarkdown(params: {
   label: string;
   resolvedSourceType: string;
   collectorStrategy: string;
+  preferredExecutionOrder?: string[];
   keywords: string[];
   domains: string[];
   planner?: ResearchCollectionJobPlanResult["job"]["planner"];
@@ -173,10 +218,20 @@ function buildCollectionContextMarkdown(params: {
     `- 소스 유형: ${params.resolvedSourceType}`,
     `- 수집 전략: ${params.collectorStrategy}`,
     `- 분석 모드: ${params.planner?.analysisMode ?? "topic_research"}`,
+    `- 질문 분류: ${params.planner?.questionCategory ?? "topic_research"}`,
     `- 핵심 지표: ${params.planner?.metricFocus?.join(", ") || "-"}`,
     `- 키워드: ${params.keywords.join(", ") || "-"}`,
     `- 도메인: ${params.domains.join(", ") || "-"}`,
+    `- 스냅샷 기준일: ${params.planner?.requestedSnapshotDate || "-"}`,
+    `- 실행 순서: ${params.preferredExecutionOrder?.join(" -> ") || "-"}`,
     `- 합계: 항목 ${params.metrics.totals.items}, 출처 ${params.metrics.totals.sources}, 검증 ${params.metrics.totals.verified}, 경고 ${params.metrics.totals.warnings}`,
+    ``,
+    `## 방법론`,
+    `- 질의 계획: ${(params.planner?.queryPlan ?? []).map((row) => row.query).filter(Boolean).slice(0, 6).join(" | ") || "-"}`,
+    `- 커버리지 목표: ${params.planner?.coverageTargets?.join(", ") || "-"}`,
+    `- 투명성 요구: ${params.planner?.transparencyRequirements?.join(", ") || "-"}`,
+    `- 소스 믹스: ${Object.entries(params.metrics.sourceMix ?? {}).map(([key, value]) => `${key} ${value}`).join(", ") || "-"}`,
+    `- 최신성 범위: ${params.metrics.transparency?.freshnessWindow?.earliestObserved || "-"} ~ ${params.metrics.transparency?.freshnessWindow?.latestObserved || "-"}`,
     ``,
     `## ${params.reportSpec.widgets.mainChart.title}`,
     params.reportSpec.widgets.mainChart.description,
@@ -217,10 +272,26 @@ function buildCollectionContextMarkdown(params: {
     if (item.summary) {
       lines.push(`  ${item.summary}`);
     }
+    if (item.evidence?.quote) {
+      lines.push(`  인용: ${item.evidence.quote}`);
+    }
+    if (typeof item.evidence?.confidence === "number") {
+      lines.push(`  신뢰도: ${item.evidence.confidence}`);
+    }
     if (item.url) {
       lines.push(`  ${item.url}`);
     }
   }
+
+  lines.push("", "## 커버리지 점검");
+  for (const row of params.metrics.coverage ?? []) {
+    lines.push(`- ${row.target}: ${row.met ? "충족" : "미충족"}${row.detail ? ` · ${row.detail}` : ""}`);
+  }
+
+  lines.push("", "## 한계 및 편향 통제");
+  lines.push(`- 충돌 근거: ${params.metrics.transparency?.conflictsDetected ?? 0}`);
+  lines.push(`- 경고 근거: ${params.metrics.transparency?.warningsDetected ?? 0}`);
+  lines.push(`- 수집 누락 영역: ${params.metrics.transparency?.collectionGaps?.join(", ") || "-"}`);
 
   return `${lines.join("\n")}\n`;
 }
@@ -490,9 +561,13 @@ function buildPromptContext(params: {
   const plannerLines = params.planner
     ? [
         `- 분석 모드: ${params.planner.analysisMode ?? "topic_research"}`,
+        `- 질문 분류: ${params.planner.questionCategory ?? "topic_research"}`,
         `- 집계 단위: ${params.planner.aggregationUnit ?? "evidence"}`,
         `- 데이터 범위: ${params.planner.dataScope ?? "cross_source_topic"}`,
+        `- 스냅샷 기준일: ${params.planner.requestedSnapshotDate ?? "-"}`,
         `- 핵심 지표: ${params.planner.metricFocus?.join(", ") || "-"}`,
+        `- 질의 계획: ${(params.planner.queryPlan ?? []).map((row) => row.query).filter(Boolean).slice(0, 4).join(" | ") || "-"}`,
+        `- 커버리지 목표: ${params.planner.coverageTargets?.join(", ") || "-"}`,
         ...(params.planner.instructions ?? []).map((instruction) => `- 수집 규칙: ${instruction}`),
       ]
     : [];
@@ -504,6 +579,8 @@ function buildPromptContext(params: {
     `- 수집 전략: ${params.collectorStrategy}`,
     ...plannerLines,
     `- 합계: 항목 ${params.metrics.totals.items}, 출처 ${params.metrics.totals.sources}, 검증 ${params.metrics.totals.verified}, 경고 ${params.metrics.totals.warnings}, 충돌 ${params.metrics.totals.conflicted}`,
+    `- 소스 믹스: ${Object.entries(params.metrics.sourceMix ?? {}).map(([key, value]) => `${key} ${value}`).join(", ") || "-"}`,
+    `- 수집 누락: ${params.metrics.transparency?.collectionGaps?.join(", ") || "-"}`,
     `- 데이터는 이미 로컬 research storage에 저장되어 있어 visualize/database에서 다시 확인할 수 있습니다`,
     `- 해석보다 먼저 수집된 근거를 인용하세요`,
     `- 사용자가 visualize 탭에서 추적할 수 있도록 작업 ID를 한 번 언급하세요`,
@@ -571,6 +648,7 @@ export async function prepareResearcherCollectionContext(
       label: planned.job.label,
       resolvedSourceType: planned.job.resolvedSourceType,
       collectorStrategy: planned.job.collectorStrategy,
+      preferredExecutionOrder: planned.job.preferredExecutionOrder,
       keywords: planned.job.keywords ?? [],
       domains: planned.job.domains ?? [],
       planner: planned.job.planner,

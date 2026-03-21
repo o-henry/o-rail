@@ -371,6 +371,12 @@ class ResearchStorageTests(unittest.TestCase):
             self.assertEqual(job["requestedSourceType"], "community")
             self.assertEqual(job["resolvedSourceType"], "community")
             self.assertEqual(job["viaSourceType"], "source.community")
+            self.assertEqual(planner["questionCategory"], "market_research")
+            self.assertEqual(planner["requestedSnapshotDate"], "2026-03-19")
+            self.assertIn("source_diversity", planner["coverageTargets"])
+            self.assertIn("freshness", planner["coverageTargets"])
+            self.assertGreaterEqual(len(planner["queryPlan"]), 4)
+            self.assertTrue(any(row["axis"] == "date_snapshot" for row in planner["queryPlan"]))
             self.assertEqual(job["sourceOptions"]["strict_domain_isolation"], True)
             self.assertIn("store.steampowered.com", job["sourceOptions"]["allowed_domains"])
             self.assertTrue(all("yahoo" not in domain for domain in job["sourceOptions"]["allowed_domains"]))
@@ -378,6 +384,7 @@ class ResearchStorageTests(unittest.TestCase):
             self.assertIn("steamdb.info", job["domains"])
             self.assertTrue(any("steam genre" in keyword.lower() for keyword in job["keywords"]))
             self.assertTrue(any("genre level" in instruction.lower() for instruction in planner["instructions"]))
+            self.assertEqual(job["preferredExecutionOrder"][:3], ["rss", "scrapling", "pinchtab"])
 
     def test_plan_agent_collection_job_strips_inline_focus_instructions(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -439,6 +446,29 @@ class ResearchStorageTests(unittest.TestCase):
             planner = job["planner"]
             self.assertEqual(planner["prompt"], "스팀 평가 기준으로 가장 인기있는 장르와 대표 게임 리스트를 조사해줘")
             self.assertTrue(all("Formatting re-enabled" not in keyword for keyword in job["keywords"]))
+
+    def test_plan_agent_collection_job_prefers_free_official_sources_for_generic_requests(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace = Path(temp_dir)
+            planned = plan_agent_collection_job(
+                workspace,
+                prompt="GitHub Actions cache 정책을 조사해줘. 무료 공식 API가 있으면 우선 사용하고, 없으면 공식 문서와 공개 RSS를 참고해줘.",
+                label="",
+                requested_source_type="auto",
+                max_items=30,
+            )
+
+            job = planned["job"]
+            planner = job["planner"]
+            self.assertEqual(planner["analysisMode"], "topic_research")
+            self.assertIn("official_api", planner["metricFocus"])
+            self.assertIn("public_feed", planner["metricFocus"])
+            self.assertTrue(any("official documentation" in keyword.lower() for keyword in job["keywords"]))
+            self.assertTrue(any("public api" in keyword.lower() for keyword in job["keywords"]))
+            self.assertTrue(
+                any("paid apis" in instruction.lower() or "user spending" in instruction.lower() for instruction in planner["instructions"])
+            )
+            self.assertFalse(any(domain == "store.steampowered.com" for domain in job["domains"]))
 
     def test_record_collection_job_run_persists_genre_rankings_for_genre_mode(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -511,6 +541,71 @@ class ResearchStorageTests(unittest.TestCase):
             self.assertEqual(rankings["popular"][0]["genreKey"], "deckbuilder")
             self.assertIn("Slay the Spire", rankings["popular"][0]["representativeTitles"][0])
             self.assertEqual(rankings["quality"][0]["genreKey"], "deckbuilder")
+
+    def test_collection_items_and_metrics_include_evidence_and_transparency(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace = Path(temp_dir)
+            planned = plan_agent_collection_job(
+                workspace,
+                prompt="오픈소스 에이전트 런타임 비교와 한계, 반대 근거까지 조사해줘",
+                label="",
+                requested_source_type="auto",
+                max_items=40,
+            )
+            job_id = planned["job"]["jobId"]
+            result = {
+                "status": "done",
+                "run_id": "via-topic-1",
+                "payload": {
+                    "items_all": [
+                        {
+                            "id": "doc-1",
+                            "source_type": "source.news",
+                            "source_name": "Example Docs",
+                            "title": "Agent runtimes reduce manual coordination overhead",
+                            "summary": "The runtime simplifies retries and orchestration.",
+                            "content_excerpt": "Retries, checkpoints, and execution logs reduce manual toil.",
+                            "url": "https://example.com/docs/agents",
+                            "published_at": "2026-03-19T00:00:00Z",
+                            "fetched_at": "2026-03-19T00:10:00Z",
+                            "verification_status": "verified",
+                            "score": 84,
+                            "hot_score": 11,
+                            "source_count": 3,
+                        },
+                        {
+                            "id": "doc-2",
+                            "source_type": "source.community",
+                            "source_name": "Example Forum",
+                            "title": "Teams report runtime setup complexity",
+                            "summary": "Some teams say configuration overhead offsets the gains.",
+                            "content_excerpt": "Configuration sprawl can make adoption difficult.",
+                            "url": "https://forum.example.com/runtime-thread",
+                            "published_at": "2026-03-18T00:00:00Z",
+                            "fetched_at": "2026-03-19T00:12:00Z",
+                            "verification_status": "conflicted",
+                            "score": 55,
+                            "hot_score": 7,
+                            "source_count": 1,
+                        },
+                    ]
+                },
+            }
+
+            record_collection_job_run(workspace, job_id=job_id, flow_id=1, result=result)
+            items = list_collection_items(workspace, job_id=job_id, source_type="", verification_status="", search="", limit=10, offset=0)
+            metrics = collection_metrics(workspace, job_id=job_id)
+
+            self.assertEqual(items["total"], 2)
+            self.assertIn("evidence", items["items"][0])
+            self.assertEqual(items["items"][0]["evidence"]["sourceFamily"], "news")
+            self.assertGreater(items["items"][0]["evidence"]["confidence"], items["items"][1]["evidence"]["confidence"])
+            self.assertIn("coverage", metrics)
+            self.assertIn("transparency", metrics)
+            self.assertEqual(metrics["sourceMix"]["news"], 1)
+            self.assertEqual(metrics["sourceMix"]["community"], 1)
+            self.assertEqual(metrics["transparency"]["conflictsDetected"], 1)
+            self.assertTrue(any(row["target"] == "counter_evidence" and row["met"] for row in metrics["coverage"]))
 
 
 if __name__ == "__main__":

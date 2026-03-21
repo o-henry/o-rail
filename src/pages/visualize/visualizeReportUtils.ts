@@ -50,8 +50,21 @@ export type ResearchCollectionPayload = {
       label?: string;
       resolvedSourceType?: string;
       collectorStrategy?: string;
+      preferredExecutionOrder?: string[];
       keywords?: string[];
       domains?: string[];
+      planner?: {
+        questionCategory?: string;
+        requestedSnapshotDate?: string;
+        queryPlan?: Array<{
+          query?: string;
+          axis?: string;
+          language?: string;
+          intent?: string;
+        }>;
+        coverageTargets?: string[];
+        transparencyRequirements?: string[];
+      };
       sourceOptions?: {
         allowed_domains?: string[];
         strict_domain_isolation?: boolean;
@@ -78,16 +91,34 @@ export type ResearchCollectionPayload = {
       sourceName?: string;
       itemCount?: number;
     }>;
-    totals?: {
+      totals?: {
       items?: number;
       sources?: number;
       verified?: number;
       warnings?: number;
       conflicted?: number;
       avgScore?: number;
-      avgHotScore?: number;
+        avgHotScore?: number;
+      };
+      sourceMix?: Record<string, number>;
+      coverage?: Array<{
+        target?: string;
+        met?: boolean;
+        detail?: string;
+      }>;
+      transparency?: {
+        sourceMix?: Record<string, number>;
+        freshnessWindow?: {
+          requested?: string;
+          earliestObserved?: string;
+          latestObserved?: string;
+        };
+        conflictsDetected?: number;
+        warningsDetected?: number;
+        collectionGaps?: string[];
+        requirements?: string[];
+      };
     };
-  };
   items?: {
     total?: number;
     items?: Array<{
@@ -101,6 +132,17 @@ export type ResearchCollectionPayload = {
       summary?: string;
       fetchedAt?: string;
       publishedAt?: string;
+      evidence?: {
+        claim?: string;
+        quote?: string;
+        metric?: Record<string, number>;
+        publishedAt?: string;
+        fetchedAt?: string;
+        sourceType?: string;
+        sourceFamily?: string;
+        url?: string;
+        confidence?: number;
+      };
     }>;
   };
   genreRankings?: {

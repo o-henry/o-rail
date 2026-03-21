@@ -82,6 +82,16 @@ PROMPT_DOMAIN_HINTS: dict[str, tuple[str, ...]] = {
     "genre": ("reddit.com", "steamcommunity.com", "opencritic.com"),
     "장르": ("reddit.com", "steamcommunity.com", "opencritic.com"),
     "평가": ("opencritic.com", "metacritic.com", "reddit.com"),
+    "official": (),
+    "공식": (),
+    "api": (),
+    "apis": (),
+    "문서": (),
+    "docs": (),
+    "documentation": (),
+    "feed": (),
+    "rss": (),
+    "atom": (),
 }
 
 PROMPT_QUERY_HINTS: dict[str, str] = {
@@ -95,6 +105,15 @@ PROMPT_QUERY_HINTS: dict[str, str] = {
     "커뮤니티": "player community opinion",
     "review": "game review impressions",
     "리뷰": "game review impressions",
+    "api": "official api documentation",
+    "apis": "official api documentation",
+    "공식": "official documentation reference",
+    "official": "official documentation reference",
+    "문서": "official documentation reference",
+    "docs": "official documentation reference",
+    "documentation": "official documentation reference",
+    "rss": "official rss feed",
+    "feed": "official rss feed",
 }
 
 PROMPT_GENRE_HINTS = ("genre", "장르")
@@ -136,6 +155,13 @@ PROMPT_REPRESENTATIVE_HINTS = (
     "목록",
 )
 PROMPT_DATE_HINT_RE = re.compile(r"\b20\d{2}\s*[-./년]\s*\d{1,2}\s*[-./월]\s*\d{1,2}")
+PROMPT_COMPARE_HINTS = ("compare", "comparison", "vs", "versus", "비교", "차이", "대비")
+PROMPT_POLICY_HINTS = ("policy", "regulation", "law", "법", "정책", "규제", "guideline")
+PROMPT_TECH_HINTS = ("sdk", "framework", "library", "release note", "api", "docs", "문서", "라이브러리", "프레임워크")
+PROMPT_MARKET_HINTS = ("market", "trend", "industry", "시장", "트렌드", "산업")
+PROMPT_COMMUNITY_HINTS = ("reddit", "x.com", "threads", "forum", "community", "커뮤니티", "반응", "여론", "sentiment")
+PROMPT_STATS_HINTS = ("stat", "statistics", "metric", "score", "순위", "통계", "수치", "지표")
+PROMPT_COUNTER_HINTS = ("counterpoint", "criticism", "limitations", "반대", "비판", "한계")
 
 STEAM_MARKET_DEFAULT_URLS = [
     "https://store.steampowered.com/charts/topselling/global",
@@ -611,6 +637,177 @@ def build_prompt_keywords(prompt: str) -> list[str]:
     return queries[:MAX_DYNAMIC_JOB_KEYWORDS]
 
 
+def extract_requested_snapshot_date(prompt: str) -> str:
+    text = str(prompt or "").strip()
+    matched = PROMPT_DATE_HINT_RE.search(text)
+    if not matched:
+        return ""
+    value = matched.group(0)
+    digits = re.findall(r"\d+", value)
+    if len(digits) >= 3:
+        year, month, day = digits[:3]
+        return f"{int(year):04d}-{int(month):02d}-{int(day):02d}"
+    return ""
+
+
+def classify_research_question(prompt: str, analysis_mode: str) -> str:
+    lowered = str(prompt or "").lower()
+    if analysis_mode == "genre_ranking":
+        return "market_research"
+    if any(token in lowered for token in PROMPT_POLICY_HINTS):
+        return "policy_research"
+    if any(token in lowered for token in PROMPT_TECH_HINTS):
+        return "technical_research"
+    if any(token in lowered for token in PROMPT_MARKET_HINTS):
+        return "market_research"
+    if any(token in lowered for token in PROMPT_COMPARE_HINTS):
+        return "product_comparison"
+    if any(token in lowered for token in PROMPT_COMMUNITY_HINTS):
+        return "community_reaction"
+    if any(token in lowered for token in PROMPT_STATS_HINTS):
+        return "statistics_check"
+    return "topic_research"
+
+
+def build_query_plan(prompt: str, planner: dict[str, Any]) -> list[dict[str, str]]:
+    normalized_prompt = " ".join(str(prompt or "").split()).strip()
+    if not normalized_prompt:
+        return []
+    snapshot_date = extract_requested_snapshot_date(normalized_prompt)
+    analysis_mode = str(planner.get("analysisMode") or "topic_research").strip().lower()
+    question_category = classify_research_question(normalized_prompt, analysis_mode)
+    base_queries = build_prompt_keywords(normalized_prompt) + list(planner.get("additionalKeywords") or [])
+    query_rows: list[dict[str, str]] = []
+
+    def push(query: str, *, axis: str, language: str, intent: str) -> None:
+        normalized_query = " ".join(str(query or "").split()).strip()
+        if not normalized_query:
+            return
+        if any(row["query"] == normalized_query for row in query_rows):
+            return
+        query_rows.append({
+            "query": normalized_query[:180],
+            "axis": axis,
+            "language": language,
+            "intent": intent,
+        })
+
+    push(normalized_prompt[:180], axis="primary", language="auto", intent=question_category)
+    for query in base_queries:
+        push(query, axis="discovery", language="auto", intent=question_category)
+    if snapshot_date:
+        push(f"{normalized_prompt} {snapshot_date} 기준", axis="date_snapshot", language="ko", intent=question_category)
+        push(f"{normalized_prompt} as of {snapshot_date}", axis="date_snapshot", language="en", intent=question_category)
+    if any(token in normalized_prompt.lower() for token in PROMPT_COMPARE_HINTS):
+        push(f"{normalized_prompt} pros cons differences", axis="comparison", language="en", intent="counter_evidence")
+    if any(token in normalized_prompt.lower() for token in PROMPT_COUNTER_HINTS):
+        push(f"{normalized_prompt} criticism limitations", axis="counter_evidence", language="en", intent="counter_evidence")
+    if str(planner.get("dataScope") or "") == "steam_market":
+        push("steam genre review volume", axis="popularity", language="en", intent="market_signal")
+        push("steam user review score by genre", axis="quality", language="en", intent="market_signal")
+        push("스팀 장르별 대표 게임", axis="representatives", language="ko", intent="market_signal")
+    return query_rows[:MAX_DYNAMIC_JOB_KEYWORDS]
+
+
+def build_coverage_targets(planner: dict[str, Any], question_category: str) -> list[str]:
+    metric_focus = [str(value).strip().lower() for value in list(planner.get("metricFocus") or []) if str(value).strip()]
+    targets: list[str] = []
+    if "popularity" in metric_focus:
+        targets.append("popularity")
+    if "quality" in metric_focus:
+        targets.append("quality")
+    if "representatives" in metric_focus:
+        targets.append("representatives")
+    if question_category in {"community_reaction", "market_research", "topic_research", "product_comparison"}:
+        targets.append("counter_evidence")
+    targets.append("source_diversity")
+    targets.append("freshness")
+    return dedupe_text_items(targets, limit=8)
+
+
+def classify_source_family(source_type: str) -> str:
+    normalized = str(source_type or "").strip().lower()
+    if "source.news" in normalized:
+        return "news"
+    if "source.community" in normalized:
+        return "community"
+    if "source.sns" in normalized:
+        return "social"
+    if "source.dev" in normalized:
+        return "developer"
+    if "source.market" in normalized:
+        return "market"
+    return "web"
+
+
+def derive_evidence_confidence(*, verification_status: str, score: int, source_count: int, source_type: str) -> float:
+    normalized_status = str(verification_status or "").strip().lower()
+    base = 0.46
+    if normalized_status == "verified":
+        base = 0.78
+    elif normalized_status == "warning":
+        base = 0.56
+    elif normalized_status == "conflicted":
+        base = 0.34
+    source_bonus = min(max(int(source_count or 0), 0), 5) * 0.03
+    score_bonus = min(max(int(score or 0), 0), 100) / 1000.0
+    source_family = classify_source_family(source_type)
+    source_bonus += {
+        "market": 0.04,
+        "developer": 0.03,
+        "news": 0.02,
+        "community": 0.0,
+        "social": -0.02,
+    }.get(source_family, 0.0)
+    return round(max(0.05, min(0.98, base + source_bonus + score_bonus)), 2)
+
+
+def build_evidence_payload(row: dict[str, Any], *, source_type: str, verification_status: str, score: int, source_count: int) -> dict[str, Any]:
+    title = to_safe_text(row.get("title"), limit=220)
+    summary = to_safe_text(row.get("summary"), limit=600)
+    excerpt = to_safe_text(row.get("content_excerpt"), limit=800)
+    quote = excerpt or summary or title
+    claim = summary or title or quote[:220]
+    metrics: dict[str, Any] = {}
+    if score:
+        metrics["score"] = score
+    hot_score = to_safe_int(row.get("hot_score"), 0)
+    if hot_score:
+        metrics["hotScore"] = hot_score
+    if source_count:
+        metrics["sourceCount"] = source_count
+    return {
+        "claim": claim,
+        "quote": quote[:320],
+        "metric": metrics,
+        "publishedAt": to_safe_text(row.get("published_at"), limit=64),
+        "fetchedAt": to_safe_text(row.get("fetched_at"), limit=64),
+        "sourceType": source_type,
+        "sourceFamily": classify_source_family(source_type),
+        "url": to_safe_text(row.get("url"), limit=500),
+        "confidence": derive_evidence_confidence(
+            verification_status=verification_status,
+            score=score,
+            source_count=source_count,
+            source_type=source_type,
+        ),
+    }
+
+
+def build_transparency_requirements(question_category: str) -> list[str]:
+    requirements = [
+        "source_mix",
+        "freshness_window",
+        "conflict_check",
+        "collection_failures",
+    ]
+    if question_category in {"market_research", "statistics_check", "product_comparison"}:
+        requirements.append("methodology")
+    if question_category in {"community_reaction", "topic_research", "market_research"}:
+        requirements.append("counter_evidence")
+    return dedupe_text_items(requirements, limit=8)
+
+
 def dedupe_text_items(values: list[str], *, limit: int) -> list[str]:
     out: list[str] = []
     for value in values:
@@ -649,6 +846,9 @@ def analyze_prompt_collection_plan(prompt: str) -> dict[str, Any]:
     wants_representatives = any(token in lowered for token in PROMPT_REPRESENTATIVE_HINTS)
     mentions_steam = "steam" in lowered or "스팀" in lowered
     asks_for_snapshot_date = bool(PROMPT_DATE_HINT_RE.search(text))
+    wants_official = any(token in lowered for token in ("official", "공식", "문서", "docs", "documentation"))
+    wants_api = any(token in lowered for token in (" api", "api ", " apis", "무료 api", "공개 api", "open api", "openapi"))
+    wants_feed = any(token in lowered for token in ("rss", "atom", "feed", "피드"))
     analysis_mode = "topic_research"
     metric_focus: list[str] = []
     additional_keywords: list[str] = []
@@ -658,6 +858,7 @@ def analyze_prompt_collection_plan(prompt: str) -> dict[str, Any]:
     suggested_source_type = "auto"
     data_scope = "cross_source_topic"
     aggregation_unit = "evidence"
+    requested_snapshot_date = extract_requested_snapshot_date(text)
 
     if wants_genre and (wants_popularity or wants_quality or wants_representatives):
         analysis_mode = "genre_ranking"
@@ -693,12 +894,47 @@ def analyze_prompt_collection_plan(prompt: str) -> dict[str, Any]:
         if asks_for_snapshot_date:
             instructions.append("Honor the requested date window when sources support it, and explicitly call out freshness limits.")
 
+    if wants_official or wants_api or wants_feed:
+        if wants_api:
+            metric_focus.append("official_api")
+        if wants_feed:
+            metric_focus.append("public_feed")
+        additional_keywords.extend(
+            [
+                "official documentation",
+                "public api reference",
+                "open data json api",
+                "official rss atom feed",
+            ]
+        )
+        instructions.extend(
+            [
+                "Prefer free official APIs, public JSON endpoints, RSS/Atom feeds, and official documentation before scraping HTML pages.",
+                "Never rely on paid APIs or services that would trigger user spending.",
+                "If an official API requires payment or a private subscription, skip it and use public documentation or public web evidence instead.",
+            ]
+        )
+
+    question_category = classify_research_question(text, analysis_mode)
+    query_plan = build_query_plan(text, {
+        "analysisMode": analysis_mode,
+        "dataScope": data_scope,
+        "additionalKeywords": additional_keywords,
+        "metricFocus": metric_focus,
+    })
+    coverage_targets = build_coverage_targets({"metricFocus": metric_focus}, question_category)
+
     return {
         "analysisMode": analysis_mode,
+        "questionCategory": question_category,
         "metricFocus": metric_focus,
         "dataScope": data_scope,
         "aggregationUnit": aggregation_unit,
         "suggestedSourceType": suggested_source_type,
+        "requestedSnapshotDate": requested_snapshot_date,
+        "queryPlan": query_plan,
+        "coverageTargets": coverage_targets,
+        "transparencyRequirements": build_transparency_requirements(question_category),
         "additionalKeywords": dedupe_text_items(additional_keywords, limit=6),
         "additionalDomains": dedupe_text_items(additional_domains, limit=8),
         "additionalUrls": dedupe_text_items(additional_urls, limit=8),
@@ -873,6 +1109,10 @@ def build_dynamic_collection_job(
             }
         )
     collector_strategy = summarize_job_strategy(targets)
+    query_plan = list((planner_context or {}).get("queryPlan") or [])
+    preferred_execution_order = ["rss", "scrapling", "pinchtab"]
+    if any(str(target.get("collectorStrategy") or "") == "pinchtab" for target in targets):
+        preferred_execution_order = ["scrapling", "pinchtab", "rss"]
     return {
         "specVersion": 1,
         "jobId": build_run_id("collect"),
@@ -883,10 +1123,12 @@ def build_dynamic_collection_job(
         "resolvedSourceType": resolved_source_type,
         "viaSourceType": via_source_type,
         "collectorStrategy": collector_strategy,
+        "preferredExecutionOrder": preferred_execution_order,
         "maxItems": max(1, min(120, int(max_items))),
         "urls": normalized_urls,
         "keywords": normalized_keywords[:MAX_DYNAMIC_JOB_KEYWORDS],
         "domains": domains,
+        "queryPlan": query_plan,
         "targets": targets,
         "sourceOptions": {
             "urls": normalized_urls,
@@ -896,6 +1138,7 @@ def build_dynamic_collection_job(
             "strict_domain_isolation": strict_domain_isolation,
             "max_items": max(1, min(120, int(max_items))),
             "planner": planner_context or {},
+            "preferred_execution_order": preferred_execution_order,
             "targets": [
                 {
                     "url": str(target["url"]),
@@ -1006,8 +1249,11 @@ def plan_agent_collection_job(
     prompt_urls = extract_urls_from_prompt(normalized_prompt)
     planner = analyze_prompt_collection_plan(normalized_prompt)
     urls = dedupe_text_items(prompt_urls + list(planner.get("additionalUrls") or []), limit=MAX_DYNAMIC_JOB_URLS)
+    query_plan = list(planner.get("queryPlan") or [])
     keywords = dedupe_text_items(
-        build_prompt_keywords(normalized_prompt) + list(planner.get("additionalKeywords") or []),
+        [str(row.get("query") or "") for row in query_plan if isinstance(row, dict)]
+        + build_prompt_keywords(normalized_prompt)
+        + list(planner.get("additionalKeywords") or []),
         limit=MAX_DYNAMIC_JOB_KEYWORDS,
     )
     planner_scope = str(planner.get("dataScope") or "").strip().lower()
@@ -1122,8 +1368,16 @@ def build_collection_job_handoff(workspace: Path, *, job_id: str, agent_role: st
             f"Collection job: {job.get('label')}",
             f"Resolved source type: {job.get('resolvedSourceType')}",
             f"Primary strategy: {job.get('collectorStrategy')}",
+            f"Question category: {((job.get('planner') or {}).get('questionCategory') if isinstance(job.get('planner'), dict) else '') or 'topic_research'}",
             "Targets:",
             *target_lines,
+            "",
+            "Query plan:",
+            *[
+                f"- {row.get('axis')}: {row.get('query')}"
+                for row in list((job.get("planner") or {}).get("queryPlan") or [])
+                if isinstance(row, dict) and str(row.get("query") or "").strip()
+            ][:8],
             "",
             "Collect raw evidence safely, preserve full source pointers, and summarize extraction risks.",
         ]
@@ -1136,7 +1390,7 @@ def build_collection_job_handoff(workspace: Path, *, job_id: str, agent_role: st
         "prompt": prompt,
         "job": job,
         "sourceOptions": job.get("sourceOptions") or {},
-        "preferredExecutionOrder": ["rss", "scrapling", "pinchtab"],
+        "preferredExecutionOrder": list(job.get("preferredExecutionOrder") or ["rss", "scrapling", "pinchtab"]),
     }
     db_path = workspace / DB_PATH
     with connect_db(db_path) as conn:
@@ -1245,6 +1499,9 @@ def normalize_collection_item(
     source_name = to_safe_text(row.get("source_name"), limit=120)
     published_at = to_safe_text(row.get("published_at"), limit=64)
     fetched_at = to_safe_text(row.get("fetched_at"), limit=64) or executed_at
+    verification_status = to_safe_text(row.get("verification_status"), limit=32) or "warning"
+    score = to_safe_int(row.get("score"), 0)
+    source_count = max(1, to_safe_int(row.get("source_count"), 1))
     known_fields = {
         "adapter",
         "comments",
@@ -1275,6 +1532,13 @@ def normalize_collection_item(
         "view_count",
     }
     metadata = {key: value for key, value in row.items() if key not in known_fields}
+    metadata["evidence"] = build_evidence_payload(
+        row,
+        source_type=source_type,
+        verification_status=verification_status,
+        score=score,
+        source_count=source_count,
+    )
     return {
         "itemFactId": item_fact_id,
         "jobId": job_id,
@@ -1292,10 +1556,10 @@ def normalize_collection_item(
         "contentExcerpt": to_safe_text(row.get("content_excerpt"), limit=1200),
         "publishedAt": published_at,
         "fetchedAt": fetched_at,
-        "verificationStatus": to_safe_text(row.get("verification_status"), limit=32) or "warning",
-        "score": to_safe_int(row.get("score"), 0),
+        "verificationStatus": verification_status,
+        "score": score,
         "hotScore": to_safe_int(row.get("hot_score"), 0),
-        "sourceCount": max(1, to_safe_int(row.get("source_count"), 1)),
+        "sourceCount": source_count,
         "rawExportPath": raw_export_path,
         "metadataJson": json.dumps(metadata, ensure_ascii=False),
     }
@@ -1318,6 +1582,88 @@ def load_job_planner(conn: sqlite3.Connection, job_id: str) -> dict[str, Any]:
         return {}
     planner = payload.get("planner")
     return planner if isinstance(planner, dict) else {}
+
+
+def parse_metadata_json(raw: str) -> dict[str, Any]:
+    try:
+        payload = json.loads(str(raw or "{}"))
+        return payload if isinstance(payload, dict) else {}
+    except Exception:
+        return {}
+
+
+def summarize_source_mix(rows: list[sqlite3.Row]) -> dict[str, int]:
+    summary: dict[str, int] = {}
+    for row in rows:
+        source_type = str(row["source_type"] or "")
+        family = classify_source_family(source_type)
+        summary[family] = summary.get(family, 0) + int(row["item_count"] or 0)
+    return summary
+
+
+def build_coverage_status(*, coverage_targets: list[str], metrics: dict[str, Any], items: list[dict[str, Any]], top_sources: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    totals = metrics.get("totals") if isinstance(metrics.get("totals"), dict) else {}
+    timeline = metrics.get("timeline") if isinstance(metrics.get("timeline"), list) else []
+    genre_rankings = metrics.get("genreRankings") if isinstance(metrics.get("genreRankings"), dict) else {}
+    source_mix = metrics.get("sourceMix") if isinstance(metrics.get("sourceMix"), dict) else {}
+    populated_sources = sum(1 for value in source_mix.values() if int(value or 0) > 0)
+    statuses: list[dict[str, Any]] = []
+    for target in coverage_targets:
+        met = False
+        detail = ""
+        if target == "popularity":
+            met = bool(genre_rankings.get("popular")) or bool(int(totals.get("items") or 0) >= 6)
+            detail = "ranking evidence available" if met else "need more ranking or frequency evidence"
+        elif target == "quality":
+            met = bool(genre_rankings.get("quality")) or bool(int(totals.get("verified") or 0) >= 2)
+            detail = "quality evidence available" if met else "need more verified quality evidence"
+        elif target == "representatives":
+            met = any(str(item.get("title") or "").strip() for item in items[:5])
+            detail = "representative examples listed" if met else "need concrete example titles"
+        elif target == "counter_evidence":
+            met = int(totals.get("conflicted") or 0) > 0 or int(totals.get("warnings") or 0) > 0
+            detail = "counter-signal present" if met else "no explicit counter evidence captured yet"
+        elif target == "source_diversity":
+            met = populated_sources >= 2 or len(top_sources) >= 3
+            detail = f"{populated_sources} source families" if met else "need more source families"
+        elif target == "freshness":
+            met = len(timeline) > 0
+            detail = f"{len(timeline)} time buckets" if met else "no freshness timeline yet"
+        statuses.append({"target": target, "met": met, "detail": detail})
+    return statuses
+
+
+def build_transparency_summary(
+    *,
+    planner: dict[str, Any],
+    metrics: dict[str, Any],
+    top_sources: list[dict[str, Any]],
+    coverage: list[dict[str, Any]],
+) -> dict[str, Any]:
+    source_mix = metrics.get("sourceMix") if isinstance(metrics.get("sourceMix"), dict) else {}
+    totals = metrics.get("totals") if isinstance(metrics.get("totals"), dict) else {}
+    timeline = metrics.get("timeline") if isinstance(metrics.get("timeline"), list) else []
+    earliest_bucket = ""
+    latest_bucket = ""
+    if timeline:
+        buckets = [str(row.get("bucketDate") or "").strip() for row in timeline if str(row.get("bucketDate") or "").strip()]
+        if buckets:
+            earliest_bucket = min(buckets)
+            latest_bucket = max(buckets)
+    requirements = [str(value).strip() for value in list(planner.get("transparencyRequirements") or []) if str(value).strip()]
+    return {
+        "sourceMix": source_mix,
+        "topSources": top_sources[:5],
+        "freshnessWindow": {
+            "requested": str(planner.get("requestedSnapshotDate") or ""),
+            "earliestObserved": earliest_bucket,
+            "latestObserved": latest_bucket,
+        },
+        "conflictsDetected": int(totals.get("conflicted") or 0),
+        "warningsDetected": int(totals.get("warnings") or 0),
+        "collectionGaps": [str(row.get("target") or "") for row in coverage if not bool(row.get("met")) and str(row.get("target") or "").strip()],
+        "requirements": requirements,
+    }
 
 
 def detect_item_genres(item: dict[str, Any]) -> list[dict[str, str]]:
@@ -2200,7 +2546,7 @@ def list_collection_items(
             f"""
             SELECT item_fact_id, job_id, job_run_id, via_run_id, source_type, source_name, country, adapter, item_key,
                    source_item_id, title, url, summary, content_excerpt, published_at, fetched_at, verification_status,
-                   score, hot_score, source_count, raw_export_path
+                   score, hot_score, source_count, raw_export_path, metadata_json
             FROM collection_items_fact
             WHERE {where_sql}
             ORDER BY score DESC, published_at DESC, title ASC
@@ -2215,6 +2561,11 @@ def list_collection_items(
         "offset": safe_offset,
         "items": [
             {
+                **(
+                    {"evidence": metadata.get("evidence")}
+                    if isinstance((metadata := parse_metadata_json(row["metadata_json"])).get("evidence"), dict)
+                    else {}
+                ),
                 "itemFactId": str(row["item_fact_id"]),
                 "jobId": str(row["job_id"]),
                 "jobRunId": str(row["job_run_id"]),
@@ -2258,6 +2609,7 @@ def collection_metrics(workspace: Path, *, job_id: str) -> dict[str, Any]:
     where_sql = "job_id = ?" if job_id.strip() else "1 = 1"
     params: list[Any] = [job_id.strip()] if job_id.strip() else []
     with connect_db(db_path) as conn:
+        planner = load_job_planner(conn, job_id.strip()) if job_id.strip() else {}
         counts = conn.execute(
             f"""
             SELECT
@@ -2317,49 +2669,112 @@ def collection_metrics(workspace: Path, *, job_id: str) -> dict[str, Any]:
             """,
             params,
         ).fetchall()
+        preview_rows = conn.execute(
+            f"""
+            SELECT title, url, summary, content_excerpt, source_name, verification_status, score
+            FROM collection_items_fact
+            WHERE {where_sql}
+            ORDER BY score DESC, published_at DESC, title ASC
+            LIMIT 8
+            """,
+            params,
+        ).fetchall()
+        genre_ranking_rows = conn.execute(
+            """
+            SELECT ranking_kind, genre_label, rank_order
+            FROM collection_genre_rankings_fact
+            WHERE job_id = ?
+            ORDER BY ranking_kind ASC, rank_order ASC
+            """,
+            (job_id.strip(),),
+        ).fetchall() if job_id.strip() else []
+    totals = {
+        "items": int(counts["items"] or 0),
+        "sources": int(counts["sources"] or 0),
+        "verified": int(counts["verified"] or 0),
+        "warnings": int(counts["warnings"] or 0),
+        "conflicted": int(counts["conflicted"] or 0),
+        "avgScore": round(float(counts["avg_score"] or 0.0), 2),
+        "avgHotScore": round(float(counts["avg_hot_score"] or 0.0), 2),
+    }
+    by_source_type = [
+        {
+            "sourceType": str(row["source_type"]),
+            "itemCount": int(row["item_count"] or 0),
+            "avgScore": round(float(row["avg_score"] or 0.0), 2),
+            "avgHotScore": round(float(row["avg_hot_score"] or 0.0), 2),
+        }
+        for row in by_source_rows
+    ]
+    by_verification_status = [
+        {
+            "verificationStatus": str(row["verification_status"] or "warning"),
+            "itemCount": int(row["item_count"] or 0),
+        }
+        for row in by_verification_rows
+    ]
+    timeline = [
+        {
+            "bucketDate": str(row["bucket_date"] or ""),
+            "itemCount": int(row["item_count"] or 0),
+        }
+        for row in reversed(timeline_rows)
+        if str(row["bucket_date"] or "").strip()
+    ]
+    top_sources = [
+        {
+            "sourceName": str(row["source_name"] or ""),
+            "itemCount": int(row["item_count"] or 0),
+        }
+        for row in top_source_rows
+    ]
+    preview_items = [
+        {
+            "title": str(row["title"] or ""),
+            "url": str(row["url"] or ""),
+            "summary": str(row["summary"] or ""),
+            "contentExcerpt": str(row["content_excerpt"] or ""),
+            "sourceName": str(row["source_name"] or ""),
+            "verificationStatus": str(row["verification_status"] or ""),
+            "score": int(row["score"] or 0),
+        }
+        for row in preview_rows
+    ]
+    genre_rankings = {
+        "popular": [str(row["genre_label"] or "") for row in genre_ranking_rows if str(row["ranking_kind"] or "") == "popular"][:5],
+        "quality": [str(row["genre_label"] or "") for row in genre_ranking_rows if str(row["ranking_kind"] or "") == "quality"][:5],
+    }
+    source_mix = summarize_source_mix(by_source_rows)
+    metrics_payload = {
+        "totals": totals,
+        "timeline": timeline,
+        "sourceMix": source_mix,
+        "genreRankings": genre_rankings,
+    }
+    coverage = build_coverage_status(
+        coverage_targets=[str(value).strip() for value in list(planner.get("coverageTargets") or []) if str(value).strip()],
+        metrics=metrics_payload,
+        items=preview_items,
+        top_sources=top_sources,
+    )
+    transparency = build_transparency_summary(
+        planner=planner,
+        metrics=metrics_payload,
+        top_sources=top_sources,
+        coverage=coverage,
+    )
     return {
         "dbPath": str(db_path),
         "jobId": job_id.strip(),
-        "totals": {
-            "items": int(counts["items"] or 0),
-            "sources": int(counts["sources"] or 0),
-            "verified": int(counts["verified"] or 0),
-            "warnings": int(counts["warnings"] or 0),
-            "conflicted": int(counts["conflicted"] or 0),
-            "avgScore": round(float(counts["avg_score"] or 0.0), 2),
-            "avgHotScore": round(float(counts["avg_hot_score"] or 0.0), 2),
-        },
-        "bySourceType": [
-            {
-                "sourceType": str(row["source_type"]),
-                "itemCount": int(row["item_count"] or 0),
-                "avgScore": round(float(row["avg_score"] or 0.0), 2),
-                "avgHotScore": round(float(row["avg_hot_score"] or 0.0), 2),
-            }
-            for row in by_source_rows
-        ],
-        "byVerificationStatus": [
-            {
-                "verificationStatus": str(row["verification_status"] or "warning"),
-                "itemCount": int(row["item_count"] or 0),
-            }
-            for row in by_verification_rows
-        ],
-        "timeline": [
-            {
-                "bucketDate": str(row["bucket_date"] or ""),
-                "itemCount": int(row["item_count"] or 0),
-            }
-            for row in reversed(timeline_rows)
-            if str(row["bucket_date"] or "").strip()
-        ],
-        "topSources": [
-            {
-                "sourceName": str(row["source_name"] or ""),
-                "itemCount": int(row["item_count"] or 0),
-            }
-            for row in top_source_rows
-        ],
+        "planner": planner,
+        "totals": totals,
+        "bySourceType": by_source_type,
+        "byVerificationStatus": by_verification_status,
+        "timeline": timeline,
+        "topSources": top_sources,
+        "sourceMix": source_mix,
+        "coverage": coverage,
+        "transparency": transparency,
     }
 
 

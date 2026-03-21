@@ -131,6 +131,13 @@ export type ResearchCollectionTarget = {
   interactionSteps: string[];
 };
 
+export type ResearchCollectionQueryPlanRow = {
+  query: string;
+  axis: string;
+  language: string;
+  intent: string;
+};
+
 export type ResearchCollectionJob = {
   specVersion: number;
   jobId: string;
@@ -152,14 +159,21 @@ export type ResearchCollectionJob = {
     derivedKeywords?: string[];
     derivedDomains?: string[];
     analysisMode?: string;
+    questionCategory?: string;
     metricFocus?: string[];
     dataScope?: string;
     aggregationUnit?: string;
+    requestedSnapshotDate?: string;
+    queryPlan?: ResearchCollectionQueryPlanRow[];
+    coverageTargets?: string[];
+    transparencyRequirements?: string[];
     suggestedSourceType?: string;
     additionalKeywords?: string[];
     additionalDomains?: string[];
     instructions?: string[];
   };
+  preferredExecutionOrder?: string[];
+  queryPlan?: ResearchCollectionQueryPlanRow[];
   targets: ResearchCollectionTarget[];
   sourceOptions: {
     urls: string[];
@@ -169,6 +183,7 @@ export type ResearchCollectionJob = {
     strict_domain_isolation?: boolean;
     max_items: number;
     planner?: Record<string, unknown>;
+    preferred_execution_order?: string[];
     targets: Array<{
       url: string;
       host: string;
@@ -267,6 +282,17 @@ export type ResearchCollectionItem = {
   hotScore: number;
   sourceCount: number;
   rawExportPath: string;
+  evidence?: {
+    claim?: string;
+    quote?: string;
+    metric?: Record<string, number>;
+    publishedAt?: string;
+    fetchedAt?: string;
+    sourceType?: string;
+    sourceFamily?: string;
+    url?: string;
+    confidence?: number;
+  };
 };
 
 export type ResearchCollectionItemSearchFilters = {
@@ -311,6 +337,7 @@ export type ResearchCollectionMetricsTopSource = {
 export type ResearchCollectionMetricsResult = {
   dbPath: string;
   jobId: string;
+  planner?: Record<string, unknown>;
   totals: {
     items: number;
     sources: number;
@@ -324,6 +351,25 @@ export type ResearchCollectionMetricsResult = {
   byVerificationStatus: ResearchCollectionMetricsVerificationRow[];
   timeline: ResearchCollectionMetricsTimelinePoint[];
   topSources: ResearchCollectionMetricsTopSource[];
+  sourceMix?: Record<string, number>;
+  coverage?: Array<{
+    target: string;
+    met: boolean;
+    detail: string;
+  }>;
+  transparency?: {
+    sourceMix?: Record<string, number>;
+    topSources?: ResearchCollectionMetricsTopSource[];
+    freshnessWindow?: {
+      requested?: string;
+      earliestObserved?: string;
+      latestObserved?: string;
+    };
+    conflictsDetected?: number;
+    warningsDetected?: number;
+    collectionGaps?: string[];
+    requirements?: string[];
+  };
 };
 
 export type ResearchCollectionGenreRankingRow = {

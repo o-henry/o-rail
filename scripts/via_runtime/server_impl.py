@@ -2027,6 +2027,13 @@ def _normalize_dynamic_source_options(raw: dict[str, Any] | None) -> dict[str, A
     allowed_domains = [row.lower().strip().strip("/") for row in allowed_domains_raw if row.strip()]
     strict_domain_isolation = bool(payload.get("strict_domain_isolation"))
     planner = payload.get("planner") if isinstance(payload.get("planner"), dict) else {}
+    preferred_execution_order = [
+        str(value or "").strip().lower()
+        for value in _parse_option_list(payload.get("preferred_execution_order"), max_items=4)
+        if str(value or "").strip().lower() in {"rss", "scrapling", "pinchtab", "urls"}
+    ]
+    if not preferred_execution_order:
+        preferred_execution_order = ["rss", "scrapling", "pinchtab", "urls"]
 
     return {
         "keywords": keywords,
@@ -2036,6 +2043,7 @@ def _normalize_dynamic_source_options(raw: dict[str, Any] | None) -> dict[str, A
         "allowed_domains": allowed_domains,
         "strict_domain_isolation": strict_domain_isolation,
         "planner": planner,
+        "preferred_execution_order": preferred_execution_order,
         "max_items": max_items,
         "targets": targets,
     }
@@ -2231,6 +2239,7 @@ def execute_dynamic_source_query(source_type: str, source_options: dict[str, Any
     domains = list(options.get("domains") or [])
     allowed_domains = [str(value or "").strip().lower() for value in list(options.get("allowed_domains") or domains or []) if str(value or "").strip()]
     strict_domain_isolation = bool(options.get("strict_domain_isolation")) and bool(allowed_domains)
+    preferred_execution_order = [str(value or "").strip().lower() for value in list(options.get("preferred_execution_order") or []) if str(value or "").strip()]
     countries = list(options.get("countries") or [])
     targets = list(options.get("targets") or [])
     is_dynamic_requested = bool(urls or keywords or domains or countries or targets)
@@ -2258,37 +2267,41 @@ def execute_dynamic_source_query(source_type: str, source_options: dict[str, Any
             row for row in safe_targets if str(row.get("collector_strategy") or "") not in {"rss", "scrapling", "pinchtab"}
         ]
 
-        if rss_targets:
-            rss_result = collect_custom_url_targets(source_type, f"{source_type}.dynamic.rss", rss_targets, snippets_per_target=3)
-            items.extend(rss_result.items)
-            warnings.extend(rss_result.warnings)
-        if scrapling_targets:
-            scrapling_result = collect_scrapling_targets(
-                source_type,
-                f"{source_type}.dynamic.scrapling",
-                scrapling_targets,
-                snippets_per_target=3,
-            )
-            items.extend(scrapling_result.items)
-            warnings.extend(scrapling_result.warnings)
-        if pinchtab_targets:
-            pinchtab_result = collect_pinchtab_targets(
-                source_type,
-                f"{source_type}.dynamic.pinchtab",
-                pinchtab_targets,
-                snippets_per_target=3,
-            )
-            items.extend(pinchtab_result.items)
-            warnings.extend(pinchtab_result.warnings)
-        if fallback_targets:
-            custom_result = collect_custom_url_targets(
-                source_type,
-                f"{source_type}.dynamic.urls",
-                fallback_targets,
-                snippets_per_target=3,
-            )
-            items.extend(custom_result.items)
-            warnings.extend(custom_result.warnings)
+        target_groups: dict[str, list[dict[str, Any]]] = {
+            "rss": rss_targets,
+            "scrapling": scrapling_targets,
+            "pinchtab": pinchtab_targets,
+            "urls": fallback_targets,
+        }
+        for strategy in preferred_execution_order:
+            strategy_targets = target_groups.get(strategy) or []
+            if not strategy_targets:
+                continue
+            if strategy == "rss":
+                strategy_result = collect_custom_url_targets(source_type, f"{source_type}.dynamic.rss", strategy_targets, snippets_per_target=3)
+            elif strategy == "scrapling":
+                strategy_result = collect_scrapling_targets(
+                    source_type,
+                    f"{source_type}.dynamic.scrapling",
+                    strategy_targets,
+                    snippets_per_target=3,
+                )
+            elif strategy == "pinchtab":
+                strategy_result = collect_pinchtab_targets(
+                    source_type,
+                    f"{source_type}.dynamic.pinchtab",
+                    strategy_targets,
+                    snippets_per_target=3,
+                )
+            else:
+                strategy_result = collect_custom_url_targets(
+                    source_type,
+                    f"{source_type}.dynamic.urls",
+                    strategy_targets,
+                    snippets_per_target=3,
+                )
+            items.extend(strategy_result.items)
+            warnings.extend(strategy_result.warnings)
         if strict_domain_isolation:
             items, domain_warnings = _filter_items_by_allowed_domains(items, allowed_domains, f"{source_type}.dynamic.scope")
             warnings.extend(domain_warnings)

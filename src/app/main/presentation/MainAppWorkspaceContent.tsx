@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useMemo } from "react";
 import AgentsPage from "../../../pages/agents/AgentsPage";
 import AdaptationPage from "./AdaptationPage";
 import BridgePage from "../../../pages/bridge/BridgePage";
@@ -36,19 +36,7 @@ export function WorkspaceTabSkeleton(props: { tab: string }) {
 }
 
 export function MainAppWorkspaceContent(props: any) {
-  const initialTab = String(props.workspaceTab ?? "tasks");
-  const [mountedTabs, setMountedTabs] = useState<Record<string, boolean>>(() => ({
-    [initialTab]: true,
-  }));
   const actualTab = String(props.workspaceTab ?? "").trim();
-  const displayTab = String(props.displayWorkspaceTab ?? actualTab).trim() || actualTab;
-
-  useEffect(() => {
-    if (!actualTab || mountedTabs[actualTab]) {
-      return;
-    }
-    setMountedTabs((current) => (current[actualTab] ? current : { ...current, [actualTab]: true }));
-  }, [actualTab, mountedTabs]);
 
   const handleInjectContextSources = useCallback((entries: any[]) => {
     const sourceIds = entries.map((entry) => entry.id);
@@ -110,20 +98,20 @@ export function MainAppWorkspaceContent(props: any) {
   const knowledgeTabContent = useMemo(() => (
     <KnowledgeBasePage
       cwd={props.cwd}
-      isActive={props.workspaceTab === "knowledge"}
+      isActive
       posts={props.feedPosts}
       onInjectContextSources={handleInjectContextSources}
       onOpenInVisualize={handleOpenVisualizeEntry}
     />
-  ), [handleInjectContextSources, handleOpenVisualizeEntry, props.cwd, props.feedPosts, props.workspaceTab]);
+  ), [handleInjectContextSources, handleOpenVisualizeEntry, props.cwd, props.feedPosts]);
   const visualizeTabContent = useMemo(() => (
     <VisualizePage
       cwd={props.cwd}
       hasTauriRuntime={props.hasTauriRuntime}
-      isActive={props.workspaceTab === "visualize"}
+      isActive
       onOpenKnowledgeEntry={handleOpenKnowledgeEntry}
     />
-  ), [handleOpenKnowledgeEntry, props.cwd, props.hasTauriRuntime, props.workspaceTab]);
+  ), [handleOpenKnowledgeEntry, props.cwd, props.hasTauriRuntime]);
   const adaptationTabContent = useMemo(() => (
     <AdaptationPage
       data={props.adaptiveWorkspaceData}
@@ -292,30 +280,25 @@ export function MainAppWorkspaceContent(props: any) {
     props.running,
   ]);
 
-  const renderTab = (tab: string, content: ReactNode) => {
-    const isActive = displayTab === tab;
-    const isMounted = mountedTabs[tab] || actualTab === tab;
-    const isPending = isActive && actualTab !== tab;
-    if (isPending) {
-      return <WorkspaceTabSkeleton tab={tab} />;
-    }
-    if (!isMounted) {
-      return null;
-    }
-    return <div hidden={!isActive}>{content}</div>;
-  };
-
-  return (
-    <>
-      {renderTab("feed", feedTabContent)}
-      {renderTab("knowledge", knowledgeTabContent)}
-      {renderTab("visualize", visualizeTabContent)}
-      {renderTab("adaptation", adaptationTabContent)}
-      {renderTab("tasks", tasksTabContent)}
-      {renderTab("shell", shellTabContent)}
-      {renderTab("agents", agentsTabContent)}
-      {renderTab("settings", settingsTabContent)}
-      {renderTab("intelligence", intelligenceTabContent)}
-    </>
-  );
+  switch (actualTab) {
+    case "feed":
+      return <>{feedTabContent}</>;
+    case "knowledge":
+      return <>{knowledgeTabContent}</>;
+    case "visualize":
+      return <>{visualizeTabContent}</>;
+    case "adaptation":
+      return <>{adaptationTabContent}</>;
+    case "shell":
+      return <>{shellTabContent}</>;
+    case "agents":
+      return <>{agentsTabContent}</>;
+    case "settings":
+      return <>{settingsTabContent}</>;
+    case "intelligence":
+      return <>{intelligenceTabContent}</>;
+    case "tasks":
+    default:
+      return <>{tasksTabContent}</>;
+  }
 }

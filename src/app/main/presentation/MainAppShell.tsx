@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useMemo } from "react";
 import AppNav from "../../../components/AppNav";
 import WorkflowPage from "../../../pages/workflow/WorkflowPage";
 import WorkflowRagModeDock from "../../../pages/workflow/WorkflowRagModeDock";
 import { NavIcon } from "../../mainAppGraphHelpers";
 import WorkflowCanvasPane from "./WorkflowCanvasPane";
 import { MainAppModals } from "./MainAppModals";
-import { MainAppWorkspaceContent, WorkspaceTabSkeleton } from "./MainAppWorkspaceContent";
+import { MainAppWorkspaceContent } from "./MainAppWorkspaceContent";
 
 export function MainAppShell(props: any) {
   const {
@@ -179,17 +179,25 @@ export function MainAppShell(props: any) {
     workspaceTab,
   } = props;
   const normalizedWorkspaceTab = workspaceTab === "bridge" ? "settings" : workspaceTab;
-  const [displayWorkspaceTab, setDisplayWorkspaceTab] = useState(normalizedWorkspaceTab);
-
-  useEffect(() => {
-    setDisplayWorkspaceTab(normalizedWorkspaceTab);
-  }, [normalizedWorkspaceTab]);
 
   const handleSelectWorkspaceTab = useCallback((next: string) => {
-    const normalizedNext = next === "bridge" ? "settings" : next;
-    setDisplayWorkspaceTab(normalizedNext);
     onSelectWorkspaceTab(next);
   }, [onSelectWorkspaceTab]);
+
+  const briefingDocuments = useMemo(() => (
+    feedPosts
+      .filter((post: any) => post.status === "done" || post.status === "low_quality")
+      .map((post: any) => ({
+        id: post.id,
+        runId: post.runId,
+        summary: post.summary,
+        sourceFile: post.sourceFile,
+        agentName: post.agentName,
+        createdAt: post.createdAt,
+        isFinalDocument: post.isFinalDocument,
+        status: post.status,
+      }))
+  ), [feedPosts]);
 
   return (
     <main
@@ -198,7 +206,7 @@ export function MainAppShell(props: any) {
     >
       <div aria-hidden="true" className="window-drag-region" data-tauri-drag-region />
       <AppNav
-        activeTab={displayWorkspaceTab}
+        activeTab={normalizedWorkspaceTab}
         hidden={tasksLeftNavHidden}
         onSelectTab={handleSelectWorkspaceTab}
         renderIcon={(tab, active) => <NavIcon active={active} tab={tab} />}
@@ -229,8 +237,7 @@ export function MainAppShell(props: any) {
           </div>
         )}
 
-        {displayWorkspaceTab === "workflow" && (
-          normalizedWorkspaceTab === "workflow" ? (
+        {normalizedWorkspaceTab === "workflow" && (
             <WorkflowPage canvasFullscreen={canvasFullscreen}>
               <WorkflowCanvasPane
                 attachedFiles={graphKnowledge.files}
@@ -341,29 +348,13 @@ export function MainAppShell(props: any) {
                 </div>
               )}
             </WorkflowPage>
-          ) : (
-            <section className={`workflow-layout workspace-tab-panel ${canvasFullscreen ? "canvas-only-layout" : ""}`.trim()}>
-              <WorkspaceTabSkeleton tab="workflow" />
-            </section>
-          )
         )}
         <MainAppWorkspaceContent
           agentLaunchRequest={agentLaunchRequest}
           agentLaunchRequestSeqRef={agentLaunchRequestSeqRef}
           appendWorkspaceEvent={props.appendWorkspaceEvent}
           authModeText={props.authModeLabel(authMode)}
-          briefingDocuments={feedPosts
-            .filter((post: any) => post.status === "done" || post.status === "low_quality")
-            .map((post: any) => ({
-              id: post.id,
-              runId: post.runId,
-              summary: post.summary,
-              sourceFile: post.sourceFile,
-              agentName: post.agentName,
-              createdAt: post.createdAt,
-              isFinalDocument: post.isFinalDocument,
-              status: post.status,
-            }))}
+          briefingDocuments={briefingDocuments}
           codexAuthBusy={codexAuthBusy}
           codexAuthCheckPending={codexAuthCheckPending}
           codexMultiAgentMode={codexMultiAgentMode}
@@ -432,7 +423,6 @@ export function MainAppShell(props: any) {
           webBridgeStatus={webBridgeStatus}
           webWorkerBusy={webWorkerBusy}
           workflowRoleId={workflowRoleId}
-          displayWorkspaceTab={displayWorkspaceTab}
           workspaceEvents={workspaceEvents}
           workspaceTab={normalizedWorkspaceTab}
         />

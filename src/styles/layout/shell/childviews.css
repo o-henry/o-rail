@@ -57,7 +57,6 @@
 .feed-layout.workspace-tab-panel,
 .visualize-view.workspace-tab-panel,
 .handoff-view.workspace-tab-panel,
-.knowledge-view.workspace-tab-panel,
 .settings-view.workspace-tab-panel,
 .dashboard-layout.workspace-tab-panel,
 .agents-layout.workspace-tab-panel,
@@ -72,6 +71,15 @@
 }
 
 .workflow-layout.workspace-tab-panel {
+  /* margin: 0 10px 10px; */
+  margin: 0;
+  min-height: 0;
+  height: 100%;
+  box-sizing: border-box;
+  padding-bottom: 0;
+}
+
+.knowledge-view.workspace-tab-panel {
   /* margin: 0 10px 10px; */
   margin: 0;
   min-height: 0;

@@ -50,6 +50,20 @@ describe("taskThreadStorageState", () => {
     expect(loadTasksProjectList("/repo/demo/")).toEqual(["/repo/demo", "/repo/other", "/repo/third"]);
   });
 
+  it("persists hidden projects in localStorage so they survive a fresh app session", () => {
+    persistHiddenTasksProjectList(["/repo/demo"]);
+
+    const freshSessionStorage = createStorage();
+    const persistedLocalStorage = window.localStorage;
+    Object.defineProperty(globalThis, "window", {
+      value: { sessionStorage: freshSessionStorage, localStorage: persistedLocalStorage },
+      configurable: true,
+      writable: true,
+    });
+
+    expect(loadHiddenTasksProjectList()).toEqual(["/repo/demo"]);
+  });
+
   it("normalizes slashes and trailing separators with the shared helper", () => {
     expect(normalizeTasksProjectPath("\\repo\\demo\\")).toBe("/repo/demo");
     expect(normalizeTasksProjectPath("/repo/demo///")).toBe("/repo/demo");

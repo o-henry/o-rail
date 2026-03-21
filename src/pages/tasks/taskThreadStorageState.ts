@@ -41,6 +41,17 @@ function readSessionStorageValue(key: string): string | null {
   return null;
 }
 
+function readLocalStorageValue(key: string): string | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
 function writeSessionStorageValue(key: string, value: string | null) {
   if (typeof window === "undefined") {
     return;
@@ -53,6 +64,21 @@ function writeSessionStorageValue(key: string, value: string | null) {
     }
     window.sessionStorage.setItem(key, value);
     window.localStorage.removeItem(key);
+  } catch {
+    // ignore storage failures
+  }
+}
+
+function writeLocalStorageValue(key: string, value: string | null) {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    if (value == null) {
+      window.localStorage.removeItem(key);
+      return;
+    }
+    window.localStorage.setItem(key, value);
   } catch {
     // ignore storage failures
   }
@@ -151,7 +177,7 @@ export function loadHiddenTasksProjectList(): string[] {
     return [];
   }
   try {
-    const raw = readSessionStorageValue(TASKS_HIDDEN_PROJECT_LIST_KEY);
+    const raw = readLocalStorageValue(TASKS_HIDDEN_PROJECT_LIST_KEY) ?? readSessionStorageValue(TASKS_HIDDEN_PROJECT_LIST_KEY);
     const parsed = raw ? (JSON.parse(raw) as unknown) : [];
     return Array.isArray(parsed)
       ? [...new Set(parsed.map((value) => normalizeTasksProjectPath(String(value ?? ""))).filter(Boolean))]
@@ -166,7 +192,7 @@ export function persistHiddenTasksProjectList(paths: string[]) {
     return;
   }
   const normalized = [...new Set(paths.map((path) => normalizeTasksProjectPath(path)).filter(Boolean))];
-  writeSessionStorageValue(TASKS_HIDDEN_PROJECT_LIST_KEY, JSON.stringify(normalized));
+  writeLocalStorageValue(TASKS_HIDDEN_PROJECT_LIST_KEY, JSON.stringify(normalized));
 }
 
 export function loadTasksActiveThreadSnapshot(): TasksActiveThreadSnapshot | null {

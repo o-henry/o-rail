@@ -321,7 +321,7 @@ export default function VisualizePage({ cwd, hasTauriRuntime, isActive, onOpenKn
   const [chartAssistantDraft, setChartAssistantDraft] = useState("");
   const [chartAssistantLogs, setChartAssistantLogs] = useState<VisualizeChartAssistantLogEntry[]>([]);
   const [manualChartSpec, setManualChartSpec] = useState<FeedChartSpec | null>(null);
-  const [manualChartTitle, setManualChartTitle] = useState("");
+  const [, setManualChartTitle] = useState("");
   const railMode = resolveVisualizeRailMode({ historyOpen, chartAssistantOpen });
   const isRailOpen = railMode !== "closed";
   const mainRef = useRef<HTMLElement | null>(null);
@@ -378,9 +378,7 @@ export default function VisualizePage({ cwd, hasTauriRuntime, isActive, onOpenKn
   const mainChartSpec = withoutChartTitle(
     manualChartSpec,
   );
-  const mainChartTitle =
-    manualChartTitle
-    || t("visualize.chart.generic");
+  const mainChartTitle = t("visualize.chart.generic");
   const primaryListTitle =
     autoSpec?.widgets?.primaryList?.title
     || (questionType === "genre_ranking"

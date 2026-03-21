@@ -22,7 +22,7 @@ export function TasksThreadMessageContent(props: TasksThreadMessageContentProps)
         components={{
           a: renderLink,
           h1: ({ children }) => <h1>{children}</h1>,
-          h2: ({ children }) => <h2>{children}</h2>,
+          h2: ({ children }) => <h3>{children}</h3>,
           h3: ({ children }) => <h3>{children}</h3>,
           p: ({ children }) => <p>{children}</p>,
           ul: ({ children }) => <ul>{children}</ul>,

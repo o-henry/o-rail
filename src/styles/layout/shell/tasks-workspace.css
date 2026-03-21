@@ -1040,7 +1040,7 @@
 .tasks-thread-message-markdown ul,
 .tasks-thread-message-markdown ol {
   display: grid;
-  gap: 8px;
+  gap: 4px;
   padding-left: 18px;
 }
 
@@ -1213,6 +1213,7 @@
   align-items: center;
   justify-content: center;
   align-self: start;
+  margin-top: 10px;
   min-height: 20px;
   padding: 0 8px;
   border-radius: 4px;

@@ -10,7 +10,7 @@ describe("TasksThreadMessageContent", () => {
       />,
     );
 
-    expect(html).toContain("<h2>조사 결론</h2>");
+    expect(html).toContain("<h3>조사 결론</h3>");
     expect(html).toContain("<li>인기 장르는 <strong>슈터</strong> 입니다.</li>");
     expect(html).toContain('href="https://store.steampowered.com/stats/stats/"');
   });

@@ -582,7 +582,7 @@
   position: relative;
   inset: auto;
   z-index: 40;
-  background: var(--bg-app);
+  background: #ffffff;
 }
 
 .tasks-thread-layout.is-main-surface-fullscreen {

@@ -9,6 +9,11 @@ import type {
 } from "../../features/research-storage/domain/types";
 import { useI18n } from "../../i18n";
 import { useVisualizePageState } from "./useVisualizePageState";
+import {
+  chartRowsFromMarkdownFallback,
+  mergeVisualizeMarkdownFallback,
+  parseVisualizeMarkdownFallback,
+} from "./visualizeMarkdownFallback";
 import { VisualizeWidgetFrame } from "./VisualizeWidgetFrame";
 import type { VisualizeWidgetId } from "./visualizeWidgetLayout";
 import type { ResearchCollectionPayload } from "./visualizeReportUtils";
@@ -315,6 +320,18 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
   const reportBody = state.reportMarkdown || state.collectionMarkdown;
   const reportJobId = String(state.collectionPayload?.planned?.job?.jobId ?? "").trim();
   const reportJob = state.collectionPayload?.planned?.job;
+  const collectionMarkdownFallback = useMemo(
+    () => parseVisualizeMarkdownFallback(state.collectionMarkdown),
+    [state.collectionMarkdown],
+  );
+  const reportMarkdownFallback = useMemo(
+    () => parseVisualizeMarkdownFallback(state.reportMarkdown),
+    [state.reportMarkdown],
+  );
+  const markdownFallback = useMemo(
+    () => mergeVisualizeMarkdownFallback(collectionMarkdownFallback, reportMarkdownFallback),
+    [collectionMarkdownFallback, reportMarkdownFallback],
+  );
   const payloadMetrics = useMemo(() => toPayloadMetrics(state.collectionPayload), [state.collectionPayload]);
   const payloadGenreRankings = useMemo(() => toPayloadGenreRankings(state.collectionPayload), [state.collectionPayload]);
   const payloadItems = useMemo(() => toPayloadItems(state.collectionPayload), [state.collectionPayload]);
@@ -337,20 +354,24 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
     [evidenceItems, evidenceWasFiltered, reportJobId, resolvedCollectionMetrics],
   );
   const popularGenres = evidenceWasFiltered ? [] : (resolvedCollectionGenreRankings?.popular.slice(0, 5) ?? []);
-  const topSources = effectiveMetrics?.topSources.slice(0, 5) ?? [];
-  const timelineChart = buildTimelineChart(effectiveMetrics);
+  const markdownMainChart = markdownFallback.charts[0]?.chart ?? null;
+  const topSources = (effectiveMetrics?.topSources.slice(0, 5) ?? []).length
+    ? (effectiveMetrics?.topSources.slice(0, 5) ?? [])
+    : markdownFallback.topSources.slice(0, 5);
+  const timelineChart = buildTimelineChart(effectiveMetrics) ?? markdownMainChart;
   const popularGenreChart = buildGenreRankingChart(popularGenres, "popularityScore", "Popularity", "#0f172a");
   const qualityScore = Math.max(0, Math.min(100, Math.round(effectiveMetrics?.totals.avgScore ?? 0)));
   const leadCopy = firstNarrativeLine(state.reportMarkdown) || firstNarrativeLine(state.collectionMarkdown);
   const mainChartSpec = withoutChartTitle(
-    autoSpec?.widgets
+    (autoSpec?.widgets
       ? (autoSpec.widgets.mainChart?.chart ?? null)
       : questionType === "genre_ranking"
         ? popularGenreChart
-        : timelineChart,
+        : timelineChart) ?? markdownMainChart,
   );
   const mainChartTitle =
     autoSpec?.widgets?.mainChart?.title
+    || markdownFallback.charts[0]?.title
     || (questionType === "genre_ranking"
       ? t("visualize.chart.popularGenres")
       : questionType === "game_comparison"
@@ -373,13 +394,33 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
   const sessionTitle = t("visualize.widget.session");
   const qualityTitle = t("visualize.widget.quality");
   const timelineRows = useMemo(
-    () =>
-      (effectiveMetrics?.timeline ?? []).map((row) => ({
+    () => {
+      const directRows = (effectiveMetrics?.timeline ?? []).map((row) => ({
         label: row.bucketDate.split("-").join("."),
         count: row.itemCount,
-      })),
-    [effectiveMetrics],
+      }));
+      if (directRows.length > 0) {
+        return directRows;
+      }
+      return chartRowsFromMarkdownFallback(markdownMainChart);
+    },
+    [effectiveMetrics, markdownMainChart],
   );
+  const displayEvidenceItems = evidenceItems.length > 0
+    ? evidenceItems.map((item) => ({
+      key: item.itemFactId,
+      title: item.title || shorten(item.sourceName || item.sourceType, 32),
+      verificationStatus: item.verificationStatus,
+      score: item.score,
+      url: item.url,
+    }))
+    : markdownFallback.evidence.map((item, index) => ({
+      key: `fallback-evidence-${index}`,
+      title: item.title || shorten(item.url || item.summary, 32),
+      verificationStatus: item.verificationStatus,
+      score: item.score,
+      url: item.url,
+    }));
   const summaryMetrics = [
     { label: t("visualize.metric.evidence"), value: effectiveMetrics?.totals.items ?? 0, meta: t("visualize.metric.evidence.meta") },
     { label: t("visualize.metric.verified"), value: effectiveMetrics?.totals.verified ?? 0, meta: t("visualize.metric.verified.meta") },
@@ -642,9 +683,9 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
                   <span>{t("visualize.evidence.column.link")}</span>
                 </div>
                 <div className="visualize-monitor-evidence-picker">
-                  {evidenceItems.map((item) => (
-                    <article className="visualize-monitor-evidence-row" key={item.itemFactId}>
-                      <strong>{item.title || shorten(item.sourceName || item.sourceType, 32)}</strong>
+                  {displayEvidenceItems.map((item) => (
+                    <article className="visualize-monitor-evidence-row" key={item.key}>
+                      <strong>{item.title}</strong>
                       <span>{item.verificationStatus}</span>
                       <span>{item.score}</span>
                       <div className="visualize-monitor-evidence-summary-cell">
@@ -654,7 +695,7 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
                       </div>
                     </article>
                   ))}
-                  {evidenceItems.length ? null : <p className="visualize-monitor-empty">{t("visualize.empty.evidence")}</p>}
+                  {displayEvidenceItems.length ? null : <p className="visualize-monitor-empty">{t("visualize.empty.evidence")}</p>}
                 </div>
               </VisualizeWidgetFrame>
             </div>

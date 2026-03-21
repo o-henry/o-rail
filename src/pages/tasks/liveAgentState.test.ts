@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { buildLiveAgentCards, displayArtifactName, formatRelativeUpdateAge, resolveLiveActivityState } from "./liveAgentState";
+import {
+  buildLiveAgentCards,
+  displayArtifactName,
+  formatRelativeUpdateAge,
+  inferNextLiveAction,
+  resolveLatestFailureReason,
+  resolveLiveActivityState,
+  resolveRecentSourceCount,
+} from "./liveAgentState";
 import type { ThreadDetail } from "./threadTypes";
 
 function buildDetail(): ThreadDetail {
@@ -188,5 +196,40 @@ describe("formatRelativeUpdateAge", () => {
     } finally {
       Date.now = originalNow;
     }
+  });
+});
+
+describe("resolveRecentSourceCount", () => {
+  it("extracts source counts from ratio messages", () => {
+    expect(resolveRecentSourceCount([
+      { type: "stage_done", stage: "crawler", message: "ROLE_KB_BOOTSTRAP 완료 (6/7)", at: "2026-03-21T00:00:00.000Z" },
+    ])).toBe(6);
+  });
+});
+
+describe("resolveLatestFailureReason", () => {
+  it("returns the latest explicit error message", () => {
+    expect(resolveLatestFailureReason([
+      { type: "stage_started", stage: "codex", message: "역할 실행 시작", at: "2026-03-21T00:00:00.000Z" },
+      { type: "stage_error", stage: "codex", message: "role execution timed out after 300000ms", at: "2026-03-21T00:01:00.000Z" },
+    ])).toBe("role execution timed out after 300000ms");
+  });
+});
+
+describe("inferNextLiveAction", () => {
+  it("suggests a retry-oriented next action after failure", () => {
+    expect(inferNextLiveAction({
+      stage: "codex",
+      activityState: "stalled",
+      failureReason: "role execution timed out after 300000ms",
+    })).toContain("재시도");
+  });
+
+  it("suggests source discovery work during crawler stage", () => {
+    expect(inferNextLiveAction({
+      stage: "crawler",
+      activityState: "active",
+      failureReason: "",
+    })).toContain("후보 소스");
   });
 });

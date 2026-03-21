@@ -1077,6 +1077,35 @@
   line-height: 1.45;
 }
 
+.tasks-thread-live-metrics {
+  display: grid;
+  gap: 8px;
+  width: min(840px, 98%);
+  margin: 2px 0 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(249, 250, 253, 1);
+}
+
+.tasks-thread-live-metrics > div {
+  display: grid;
+  gap: 2px;
+}
+
+.tasks-thread-live-metrics dt {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.tasks-thread-live-metrics dd {
+  margin: 0;
+  color: var(--text-main);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .tasks-thread-message-row.is-process {
   opacity: 0.92;
 }

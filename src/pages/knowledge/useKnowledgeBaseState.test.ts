@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildKnowledgeGroupDeleteRequest } from "./useKnowledgeBaseState";
+import { buildKnowledgeGroupDeleteRequest, shouldHydrateKnowledgeWorkspaceData } from "./useKnowledgeBaseState";
 import type { KnowledgeEntry } from "../../features/studio/knowledgeTypes";
 import { isRuntimeNoiseKnowledgeEntry } from "./knowledgeEntryMapping";
 
@@ -21,5 +21,23 @@ describe("buildKnowledgeGroupDeleteRequest", () => {
       jsonPath: ".rail/studio_runs/role-1/run.json",
     };
     expect(isRuntimeNoiseKnowledgeEntry(entry)).toBe(true);
+  });
+
+  it("hydrates workspace data only for an active tab that has not been loaded yet", () => {
+    expect(shouldHydrateKnowledgeWorkspaceData({
+      cwd: "/tmp/workspace",
+      hydratedWorkspaceCwd: "",
+      isActive: true,
+    })).toBe(true);
+    expect(shouldHydrateKnowledgeWorkspaceData({
+      cwd: "/tmp/workspace",
+      hydratedWorkspaceCwd: "/tmp/workspace",
+      isActive: true,
+    })).toBe(false);
+    expect(shouldHydrateKnowledgeWorkspaceData({
+      cwd: "/tmp/workspace",
+      hydratedWorkspaceCwd: "",
+      isActive: false,
+    })).toBe(false);
   });
 });

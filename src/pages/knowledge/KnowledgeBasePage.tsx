@@ -6,6 +6,7 @@ import { useKnowledgeBaseState } from "./useKnowledgeBaseState";
 
 type KnowledgeBasePageProps = {
   cwd: string;
+  isActive: boolean;
   posts: KnowledgeSourcePost[];
   onInjectContextSources: (entries: KnowledgeEntry[]) => void;
   onOpenInVisualize?: (entry: KnowledgeEntry) => void;
@@ -13,11 +14,12 @@ type KnowledgeBasePageProps = {
 
 export default function KnowledgeBasePage({
   cwd,
+  isActive,
   posts,
   onInjectContextSources,
   onOpenInVisualize,
 }: KnowledgeBasePageProps) {
-  const state = useKnowledgeBaseState({ cwd, posts });
+  const state = useKnowledgeBaseState({ cwd, isActive, posts });
 
   return (
     <section aria-label="데이터베이스 작업공간" className="panel-card knowledge-view workspace-tab-panel" data-e2e="knowledge-page">

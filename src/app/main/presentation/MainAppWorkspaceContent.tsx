@@ -65,6 +65,7 @@ export function MainAppWorkspaceContent(props: any) {
         <div hidden={props.workspaceTab !== "knowledge"}>
           <KnowledgeBasePage
             cwd={props.cwd}
+            isActive={props.workspaceTab === "knowledge"}
             posts={props.feedPosts}
             onInjectContextSources={handleInjectContextSources}
             onOpenInVisualize={handleOpenVisualizeEntry}
@@ -76,6 +77,7 @@ export function MainAppWorkspaceContent(props: any) {
           <VisualizePage
             cwd={props.cwd}
             hasTauriRuntime={props.hasTauriRuntime}
+            isActive={props.workspaceTab === "visualize"}
             onOpenKnowledgeEntry={handleOpenKnowledgeEntry}
           />
         </div>

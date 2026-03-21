@@ -27,6 +27,7 @@ import { writeStoredSelectedRunId } from "../visualize/visualizeSelection";
 
 type UseKnowledgeBaseStateParams = {
   cwd: string;
+  isActive: boolean;
   posts: KnowledgeSourcePost[];
 };
 
@@ -46,6 +47,16 @@ export function buildKnowledgeGroupDeleteRequest(runId: string, taskId: string):
     runId: normalizedRunId,
     taskId: String(taskId ?? "").trim(),
   };
+}
+
+export function shouldHydrateKnowledgeWorkspaceData(params: {
+  cwd: string;
+  hydratedWorkspaceCwd: string;
+  isActive: boolean;
+}): boolean {
+  return params.isActive
+    && Boolean(String(params.cwd ?? "").trim())
+    && String(params.cwd) !== String(params.hydratedWorkspaceCwd ?? "");
 }
 
 async function deleteIfExists(
@@ -118,12 +129,13 @@ function toVisibleKnowledgeRows(rows: KnowledgeEntry[], cwd: string): KnowledgeE
   );
 }
 
-export function useKnowledgeBaseState({ cwd, posts }: UseKnowledgeBaseStateParams) {
+export function useKnowledgeBaseState({ cwd, isActive, posts }: UseKnowledgeBaseStateParams) {
   const [selectedId, setSelectedId] = useState("");
   const [entries, setEntries] = useState<KnowledgeEntry[]>(() =>
     toVisibleKnowledgeRows(readKnowledgeEntries(), cwd),
   );
   const [loading, setLoading] = useState(false);
+  const [hydratedWorkspaceCwd, setHydratedWorkspaceCwd] = useState("");
   const [collapsedByGroup, setCollapsedByGroup] = useState<Record<string, boolean>>({});
   const [markdownContent, setMarkdownContent] = useState("");
   const [jsonContent, setJsonContent] = useState("");
@@ -143,10 +155,18 @@ export function useKnowledgeBaseState({ cwd, posts }: UseKnowledgeBaseStateParam
   }, [cwd, postEntries]);
 
   useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
+    if (!isActive) {
+      setLoading(false);
+      return;
+    }
     const initialRows = mergePostEntries(readKnowledgeEntries());
     setEntries(initialRows);
+    if (!shouldHydrateKnowledgeWorkspaceData({ cwd, hydratedWorkspaceCwd, isActive })) {
+      setLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
     void (async () => {
       try {
         const next = await hydrateKnowledgeEntriesFromWorkspaceSources({
@@ -167,6 +187,7 @@ export function useKnowledgeBaseState({ cwd, posts }: UseKnowledgeBaseStateParam
         const merged = mergePostEntries(next);
         setEntries(merged);
         await persistKnowledgeIndexToWorkspace({ cwd, invokeFn: invoke, rows: merged });
+        setHydratedWorkspaceCwd(cwd);
       } finally {
         if (!cancelled) {
           setLoading(false);
@@ -176,11 +197,14 @@ export function useKnowledgeBaseState({ cwd, posts }: UseKnowledgeBaseStateParam
     return () => {
       cancelled = true;
     };
-  }, [cwd, mergePostEntries]);
+  }, [cwd, hydratedWorkspaceCwd, isActive, mergePostEntries]);
 
   useEffect(() => {
+    if (!isActive) {
+      return;
+    }
     setEntries(mergePostEntries(readKnowledgeEntries()));
-  }, [mergePostEntries]);
+  }, [isActive, mergePostEntries]);
 
   const filtered = useMemo(() => sortKnowledgeEntries(entries), [entries]);
   const grouped = useMemo<KnowledgeGroup[]>(() => groupKnowledgeEntries(filtered), [filtered]);
@@ -237,6 +261,11 @@ export function useKnowledgeBaseState({ cwd, posts }: UseKnowledgeBaseStateParam
 
   useEffect(() => {
     let cancelled = false;
+    if (!isActive) {
+      return () => {
+        cancelled = true;
+      };
+    }
     const selectedMarkdownPath = String(selected?.markdownPath ?? "").trim();
     const selectedJsonPath = String(selected?.jsonPath ?? "").trim();
     if (!selected || (!selectedMarkdownPath && !selectedJsonPath)) {
@@ -302,7 +331,7 @@ export function useKnowledgeBaseState({ cwd, posts }: UseKnowledgeBaseStateParam
     return () => {
       cancelled = true;
     };
-  }, [selected?.id, selected?.jsonPath, selected?.markdownPath]);
+  }, [isActive, selected?.id, selected?.jsonPath, selected?.markdownPath]);
 
   const persistRows = (rows: KnowledgeEntry[]) => {
     setEntries(rows);

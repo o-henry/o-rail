@@ -32,6 +32,7 @@ import { useI18n } from "../../i18n";
 type UseVisualizePageStateParams = {
   cwd: string;
   hasTauriRuntime: boolean;
+  isActive: boolean;
 };
 
 function toMessage(error: unknown, fallback: string) {
@@ -54,7 +55,19 @@ function isEntryInWorkspace(entry: { sourceFile?: string; markdownPath?: string;
   return candidates.some((value) => value.startsWith(root));
 }
 
-export function useVisualizePageState({ cwd, hasTauriRuntime }: UseVisualizePageStateParams) {
+export function shouldLoadVisualizeWorkspaceData(params: {
+  cwd: string;
+  hasTauriRuntime: boolean;
+  isActive: boolean;
+  loadedWorkspaceCwd: string;
+}): boolean {
+  return params.isActive
+    && params.hasTauriRuntime
+    && Boolean(String(params.cwd ?? "").trim())
+    && String(params.cwd) !== String(params.loadedWorkspaceCwd ?? "");
+}
+
+export function useVisualizePageState({ cwd, hasTauriRuntime, isActive }: UseVisualizePageStateParams) {
   const { t } = useI18n();
   const [overview, setOverview] = useState<ResearchOverview | null>(null);
   const [jobs, setJobs] = useState<ResearchCollectionJobListItem[]>([]);
@@ -72,6 +85,7 @@ export function useVisualizePageState({ cwd, hasTauriRuntime }: UseVisualizePage
   const [busy, setBusy] = useState(false), [refreshing, setRefreshing] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false), [steamIngesting, setSteamIngesting] = useState(false);
   const [error, setError] = useState(""), [statusText, setStatusText] = useState("");
+  const [loadedWorkspaceCwd, setLoadedWorkspaceCwd] = useState("");
 
   const selectedReportRun = useMemo(() => reportRuns.find((item) => item.runId === selectedRunId) ?? null, [reportRuns, selectedRunId]);
   const reportJobId = String(collectionPayload?.planned?.job?.jobId ?? "").trim();
@@ -115,10 +129,20 @@ export function useVisualizePageState({ cwd, hasTauriRuntime }: UseVisualizePage
       setStatusText(t("visualize.status.desktopOnly"));
       return;
     }
+    if (!isActive) {
+      setRefreshing(false);
+      return;
+    }
     let cancelled = false;
-    setRefreshing(true);
     setError("");
     syncReportRuns();
+    if (!shouldLoadVisualizeWorkspaceData({ cwd, hasTauriRuntime, isActive, loadedWorkspaceCwd })) {
+      setRefreshing(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+    setRefreshing(true);
     void hydrateKnowledgeEntriesFromWorkspaceSources({
       cwd,
       invokeFn: invoke,
@@ -137,6 +161,7 @@ export function useVisualizePageState({ cwd, hasTauriRuntime }: UseVisualizePage
         setJobs(nextJobs.items);
         setSteamMetrics(nextSteamMetrics);
         setSelectedJobId((current) => (current && nextJobs.items.some((item) => item.jobId === current) ? current : (nextJobs.items[0]?.jobId ?? "")));
+        setLoadedWorkspaceCwd(cwd);
         setStatusText(
           t("visualize.status.storageLoaded", {
             runs: nextOverview.totals.runs,
@@ -158,9 +183,12 @@ export function useVisualizePageState({ cwd, hasTauriRuntime }: UseVisualizePage
     return () => {
       cancelled = true;
     };
-  }, [cwd, hasTauriRuntime, syncReportRuns, t]);
+  }, [cwd, hasTauriRuntime, isActive, loadedWorkspaceCwd, syncReportRuns, t]);
 
   useEffect(() => {
+    if (!isActive) {
+      return;
+    }
     syncReportRuns();
     const handler = () => syncReportRuns();
     window.addEventListener("rail:thread-updated", handler as EventListener);
@@ -169,9 +197,12 @@ export function useVisualizePageState({ cwd, hasTauriRuntime }: UseVisualizePage
       window.removeEventListener("rail:thread-updated", handler as EventListener);
       window.removeEventListener("rail:task-updated", handler as EventListener);
     };
-  }, [syncReportRuns]);
+  }, [isActive, syncReportRuns]);
 
   useEffect(() => {
+    if (!isActive) {
+      return;
+    }
     if (!hasTauriRuntime || !selectedReportRun) {
       setReportMarkdown("");
       setCollectionMarkdown("");
@@ -208,10 +239,10 @@ export function useVisualizePageState({ cwd, hasTauriRuntime }: UseVisualizePage
     return () => {
       cancelled = true;
     };
-  }, [cwd, hasTauriRuntime, selectedReportRun]);
+  }, [cwd, hasTauriRuntime, isActive, selectedReportRun]);
 
   useEffect(() => {
-    if (!hasTauriRuntime || !cwd.trim()) {
+    if (!isActive || !hasTauriRuntime || !cwd.trim()) {
       return;
     }
     if (selectedReportRun && !reportJobId) {
@@ -248,7 +279,7 @@ export function useVisualizePageState({ cwd, hasTauriRuntime }: UseVisualizePage
     return () => {
       cancelled = true;
     };
-  }, [activeJobId, cwd, hasTauriRuntime, itemSearch, reportJobId, selectedReportRun, t]);
+  }, [activeJobId, cwd, hasTauriRuntime, isActive, itemSearch, reportJobId, selectedReportRun, t]);
 
   async function refreshAll(nextSelectedJobId = selectedJobId) {
     if (!hasTauriRuntime || !cwd.trim()) {

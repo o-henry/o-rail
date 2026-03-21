@@ -21,6 +21,7 @@ import type { ResearchCollectionPayload } from "./visualizeReportUtils";
 type VisualizePageProps = {
   cwd: string;
   hasTauriRuntime: boolean;
+  isActive: boolean;
   onOpenKnowledgeEntry?: (entryId: string) => void;
 };
 
@@ -317,9 +318,9 @@ function withoutChartTitle(spec: FeedChartSpec | null | undefined): FeedChartSpe
   return { ...spec, title: "" };
 }
 
-export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEntry }: VisualizePageProps) {
+export default function VisualizePage({ cwd, hasTauriRuntime, isActive, onOpenKnowledgeEntry }: VisualizePageProps) {
   const { t } = useI18n();
-  const state = useVisualizePageState({ cwd, hasTauriRuntime });
+  const state = useVisualizePageState({ cwd, hasTauriRuntime, isActive });
   const [maximizedWidgetId, setMaximizedWidgetId] = useState<VisualizeWidgetId | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [selectedReportDocumentKind, setSelectedReportDocumentKind] = useState<"report" | "collection">("report");

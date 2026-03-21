@@ -173,7 +173,10 @@
 }
 
 .visualize-monitor-rail.is-assistant-open {
+  width: 340px;
+  min-width: 340px;
   padding: 0;
+  overflow: hidden;
 }
 
 .visualize-monitor-rail-head {
@@ -223,10 +226,12 @@
   flex-direction: column;
   gap: 5px;
   align-items: flex-start;
+  min-width: 0;
   border: 0;
   background: rgba(248, 250, 252, 0.94);
   padding: 9px 10px;
   text-align: left;
+  overflow: hidden;
 }
 
 .visualize-monitor-rail-item.is-active {
@@ -235,18 +240,33 @@
 }
 
 .visualize-monitor-rail-item strong {
+  display: block;
+  width: 100%;
+  min-width: 0;
   color: #0f172a;
   font-size: 0.82rem;
   line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .visualize-monitor-rail-item span {
+  display: block;
+  width: 100%;
+  min-width: 0;
   color: #64748b;
   font-size: 0.68rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .visualize-monitor-rail-item p,
 .visualize-monitor-rail-empty {
+  display: block;
+  width: 100%;
+  min-width: 0;
   margin: 0;
   color: #475569;
   font-size: 0.74rem;
@@ -407,8 +427,8 @@
 }
 
 .visualize-monitor-widget-action-button img {
-  width: 16px;
-  height: 16px;
+  width: 17px;
+  height: 17px;
   object-fit: contain;
 }
 
@@ -555,20 +575,24 @@
   border-left: 0;
   background: rgba(255, 255, 255, 0.96);
   flex: 1 1 auto;
+  overflow: hidden;
 }
 
 .visualize-chart-assistant-scroll {
   min-height: 0;
   flex: 1 1 auto;
   overflow: auto;
-  padding: 10px;
-  display: grid;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
   gap: 12px;
 }
 
 .visualize-chart-assistant-section {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 8px;
+  min-width: 0;
 }
 
 .visualize-chart-assistant-section-head {
@@ -596,11 +620,13 @@
 }
 
 .visualize-chart-assistant-document {
-  min-height: 0;
-  max-height: 260px;
+  min-height: 180px;
+  max-height: 280px;
   overflow: auto;
   padding: 10px;
   background: rgba(248, 250, 252, 0.94);
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  border-radius: 10px;
 }
 
 .visualize-chart-assistant-document .tasks-thread-message-markdown {
@@ -608,8 +634,14 @@
 }
 
 .visualize-chart-assistant-log {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 8px;
+  min-height: 180px;
+  padding: 10px;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  border-radius: 10px;
+  background: rgba(248, 250, 252, 0.82);
 }
 
 .visualize-chart-assistant-log-item {
@@ -642,6 +674,7 @@
   max-width: none;
   margin: 0 10px 10px;
   gap: 5px;
+  border-radius: 12px;
 }
 
 .visualize-chart-assistant-composer .tasks-thread-composer-input {

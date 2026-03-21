@@ -516,7 +516,7 @@ export default function VisualizePage({ cwd, hasTauriRuntime, isActive, onOpenKn
               }}
               type="button"
             >
-              <img alt="" aria-hidden="true" src={isRailOpen ? "/terminal-close.svg" : "/terminal-open.svg"} />
+              <img alt="" aria-hidden="true" src="/open-panel.svg" />
             </button>
           </div>
         </header>
@@ -592,7 +592,7 @@ export default function VisualizePage({ cwd, hasTauriRuntime, isActive, onOpenKn
                     }}
                     type="button"
                   >
-                    <img alt="" aria-hidden="true" src="/shell-terminal.svg" />
+                    <img alt="" aria-hidden="true" src="/open-panel.svg" />
                   </button>
                 )}
                 maximized={maximizedWidgetId === "timeline"}

@@ -278,6 +278,17 @@ function buildTimelineChart(spec: VisualizeMetrics): FeedChartSpec | null {
   };
 }
 
+function buildSourceMixFallbackChart(rows: Array<{ sourceName: string; itemCount: number }>): FeedChartSpec | null {
+  if (rows.length === 0) {
+    return null;
+  }
+  return {
+    type: "bar",
+    labels: rows.map((row) => row.sourceName),
+    series: [{ name: "Sources", data: rows.map((row) => row.itemCount), color: "#0f172a" }],
+  };
+}
+
 function buildGenreRankingChart(
   rows: Array<{ genreLabel: string; popularityScore?: number; avgScore?: number; qualityScore?: number }>,
   metric: "popularityScore" | "avgScore" | "qualityScore",
@@ -358,10 +369,13 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
   const topSources = (effectiveMetrics?.topSources.slice(0, 5) ?? []).length
     ? (effectiveMetrics?.topSources.slice(0, 5) ?? [])
     : markdownFallback.topSources.slice(0, 5);
-  const timelineChart = buildTimelineChart(effectiveMetrics) ?? markdownMainChart;
+  const timelineChart = buildTimelineChart(effectiveMetrics) ?? markdownMainChart ?? buildSourceMixFallbackChart(topSources);
   const popularGenreChart = buildGenreRankingChart(popularGenres, "popularityScore", "Popularity", "#0f172a");
-  const qualityScore = Math.max(0, Math.min(100, Math.round(effectiveMetrics?.totals.avgScore ?? 0)));
-  const leadCopy = firstNarrativeLine(state.reportMarkdown) || firstNarrativeLine(state.collectionMarkdown);
+  const qualityScore = Math.max(
+    0,
+    Math.min(100, Math.round((effectiveMetrics?.totals.avgScore ?? 0) || markdownFallback.metrics.avgScore || 0)),
+  );
+  const leadCopy = firstNarrativeLine(state.reportMarkdown) || firstNarrativeLine(state.collectionMarkdown) || markdownFallback.conclusions[0]?.title || "";
   const mainChartSpec = withoutChartTitle(
     (autoSpec?.widgets
       ? (autoSpec.widgets.mainChart?.chart ?? null)
@@ -422,13 +436,21 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
       url: item.url,
     }));
   const summaryMetrics = [
-    { label: t("visualize.metric.evidence"), value: effectiveMetrics?.totals.items ?? 0, meta: t("visualize.metric.evidence.meta") },
-    { label: t("visualize.metric.verified"), value: effectiveMetrics?.totals.verified ?? 0, meta: t("visualize.metric.verified.meta") },
-    { label: t("visualize.metric.sources"), value: effectiveMetrics?.totals.sources ?? 0, meta: t("visualize.metric.sources.meta") },
-    { label: t("visualize.metric.avgScore"), value: effectiveMetrics?.totals.avgScore ?? 0, meta: t("visualize.metric.avgScore.meta") },
-    { label: t("visualize.metric.warnings"), value: effectiveMetrics?.totals.warnings ?? 0, meta: t("visualize.metric.warnings.meta") },
+    { label: t("visualize.metric.evidence"), value: effectiveMetrics?.totals.items ?? markdownFallback.metrics.items, meta: t("visualize.metric.evidence.meta") },
+    { label: t("visualize.metric.verified"), value: effectiveMetrics?.totals.verified ?? markdownFallback.metrics.verified, meta: t("visualize.metric.verified.meta") },
+    { label: t("visualize.metric.sources"), value: effectiveMetrics?.totals.sources ?? markdownFallback.metrics.sources, meta: t("visualize.metric.sources.meta") },
+    { label: t("visualize.metric.avgScore"), value: effectiveMetrics?.totals.avgScore ?? markdownFallback.metrics.avgScore, meta: t("visualize.metric.avgScore.meta") },
+    { label: t("visualize.metric.warnings"), value: effectiveMetrics?.totals.warnings ?? markdownFallback.metrics.warnings, meta: t("visualize.metric.warnings.meta") },
   ];
-  const hasCollectedEvidence = (effectiveMetrics?.totals.items ?? 0) > 0 || evidenceItems.length > 0;
+  const hasCollectedEvidence = (effectiveMetrics?.totals.items ?? 0) > 0 || evidenceItems.length > 0 || markdownFallback.metrics.items > 0;
+  const verificationRows = (effectiveMetrics?.byVerificationStatus?.length ?? 0) > 0
+    ? (effectiveMetrics?.byVerificationStatus ?? [])
+    : [
+      { verificationStatus: "verified", itemCount: markdownFallback.metrics.verified },
+      { verificationStatus: "warning", itemCount: markdownFallback.metrics.warnings },
+      { verificationStatus: "conflicted", itemCount: markdownFallback.metrics.conflicted },
+    ].filter((row) => row.itemCount > 0);
+  const sourceShareTotal = Math.max(effectiveMetrics?.totals.items ?? markdownFallback.metrics.items ?? 0, 1);
 
   const toggleMaximize = useCallback((widgetId: VisualizeWidgetId) => {
     setMaximizedWidgetId((current) => (current === widgetId ? null : widgetId));
@@ -510,6 +532,15 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
                 <p className="visualize-monitor-summary-copy visualize-monitor-session-summary-copy">
                   {leadCopy || t("visualize.session.emptySummary")}
                 </p>
+                {markdownFallback.conclusions.length > 1 ? (
+                  <div className="visualize-monitor-session-findings">
+                    {markdownFallback.conclusions.slice(0, 3).map((row) => (
+                      <p className="visualize-monitor-session-switch-hint" key={`${row.rank}-${row.title}`}>
+                        {`${row.rank}. ${row.title}`}
+                      </p>
+                    ))}
+                  </div>
+                ) : null}
               </VisualizeWidgetFrame>
 
               <VisualizeWidgetFrame
@@ -545,7 +576,7 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
                     {t("visualize.quality.copy")}
                   </p>
                   <div className="visualize-monitor-quality-legend">
-                    {(effectiveMetrics?.byVerificationStatus ?? []).map((row) => (
+                    {verificationRows.map((row) => (
                       <div
                         className={`visualize-monitor-quality-legend-row${row.verificationStatus === "verified" ? " is-verified" : ""}`}
                         key={row.verificationStatus}
@@ -587,7 +618,7 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
                     <div className="visualize-monitor-ranked-item is-table" key={source.sourceName}>
                       <strong>{source.sourceName || "-"}</strong>
                       <span>{source.itemCount}</span>
-                      <span>{formatPercent((source.itemCount / Math.max(effectiveMetrics?.totals.items ?? 0, 1)) * 100)}</span>
+                      <span>{formatPercent((source.itemCount / sourceShareTotal) * 100)}</span>
                     </div>
                   ))}
                   {topSources.length ? null : <p className="visualize-monitor-empty">{t("visualize.empty.items")}</p>}

@@ -5,6 +5,12 @@ export type VisualizeParsedSourceRow = {
   itemCount: number;
 };
 
+export type VisualizeParsedFindingRow = {
+  title: string;
+  detail: string;
+  rank: number;
+};
+
 export type VisualizeParsedEvidenceRow = {
   title: string;
   verificationStatus: string;
@@ -21,6 +27,15 @@ export type VisualizeParsedMarkdown = {
   }>;
   topSources: VisualizeParsedSourceRow[];
   evidence: VisualizeParsedEvidenceRow[];
+  conclusions: VisualizeParsedFindingRow[];
+  metrics: {
+    items: number;
+    sources: number;
+    verified: number;
+    warnings: number;
+    conflicted: number;
+    avgScore: number;
+  };
 };
 
 export type VisualizeParsedChartRow = {
@@ -69,8 +84,37 @@ function parseSourceBullet(input: string): VisualizeParsedSourceRow | null {
   };
 }
 
+type MarkdownLink = {
+  label: string;
+  url: string;
+};
+
+function parseMarkdownLinks(input: string): MarkdownLink[] {
+  return [...String(input ?? "").matchAll(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/gi)].map((match) => ({
+    label: normalize(match[1] ?? ""),
+    url: normalize(match[2] ?? ""),
+  })).filter((row) => row.label || row.url);
+}
+
+function stripMarkdownLinks(input: string) {
+  return normalize(String(input ?? "").replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/gi, "$1"));
+}
+
+function sourceNameFromUrl(input: string) {
+  try {
+    const host = new URL(input).hostname.replace(/^www\./i, "");
+    const base = host.split(".")[0] ?? host;
+    return base
+      .split(/[-_]/g)
+      .map((part) => part.slice(0, 1).toUpperCase() + part.slice(1))
+      .join(" ");
+  } catch {
+    return "";
+  }
+}
+
 function parseEvidenceBullet(input: { text: string; details: string[] }): VisualizeParsedEvidenceRow {
-  const raw = normalize(input.text);
+  const raw = stripMarkdownLinks(input.text);
   const titleMatch = raw.match(/^(.+?)\s*\(([^)]*)\)\s*$/);
   const title = normalize(titleMatch?.[1] ?? raw);
   const meta = normalize(titleMatch?.[2] ?? "");
@@ -79,16 +123,41 @@ function parseEvidenceBullet(input: { text: string; details: string[] }): Visual
   const verificationStatus = metaParts[1] ?? "";
   const scoreMatch = meta.match(/(?:점수|score)\s*(\d+(?:\.\d+)?)/i);
   const score = scoreMatch ? Number.parseFloat(scoreMatch[1] ?? "0") : 0;
-  const detailLines = input.details.map((line) => normalize(line)).filter(Boolean);
-  const url = detailLines.find((line) => /^https?:\/\//i.test(line)) ?? "";
-  const summary = detailLines.filter((line) => line !== url && !/^인용:/.test(line) && !/^신뢰도:/.test(line)).join(" ").trim();
+  const detailLines = input.details.map((line) => stripMarkdownLinks(line)).filter(Boolean);
+  const inlineLinks = [
+    ...parseMarkdownLinks(input.text),
+    ...input.details.flatMap((line) => parseMarkdownLinks(line)),
+  ];
+  const url = inlineLinks[0]?.url ?? detailLines.find((line) => /^https?:\/\//i.test(line)) ?? "";
+  const summary = detailLines
+    .filter((line) => line !== url && !/^인용:/.test(line) && !/^신뢰도:/.test(line))
+    .join(" ")
+    .trim();
   return {
     title,
-    verificationStatus: verificationStatus || sourceLabel,
+    verificationStatus: verificationStatus || sourceLabel || sourceNameFromUrl(url),
     score,
     url,
     summary,
   };
+}
+
+function parseConclusionBullet(
+  input: { text: string; details: string[] },
+  fallbackRank: number,
+): VisualizeParsedFindingRow | null {
+  const raw = stripMarkdownLinks(input.text);
+  const rankMatch = raw.match(/(?:^|\s)(\d+)위/);
+  const rank = Number.parseInt(rankMatch?.[1] ?? `${fallbackRank}`, 10) || fallbackRank;
+  const titleMatch =
+    raw.match(/(?:\d+위는?|TOP\s*\d+\s*:?)\s*[`"'“”]?([^`"'“”]+?)[`"'“”]?(?:[.,]|$)/i)
+    ?? raw.match(/[`"'“”]([^`"'“”]+)[`"'“”]/);
+  const title = normalize(titleMatch?.[1] ?? raw.replace(/^[-*]\s*/, ""));
+  if (!title) {
+    return null;
+  }
+  const detail = input.details.map((line) => stripMarkdownLinks(line)).filter(Boolean).join(" ").trim();
+  return { title, detail, rank };
 }
 
 function findSection(sections: MarkdownSection[], patterns: RegExp[]): MarkdownSection | null {
@@ -173,18 +242,87 @@ export function parseVisualizeMarkdownFallback(raw: string): VisualizeParsedMark
 
   const topSourcesSection = findSection(sections, [/주요 출처/i, /top sources?/i, /sources?/i]);
   const evidenceSection = findSection(sections, [/핵심 근거/i, /evidence/i, /reaction highlights/i, /representative/i, /compared/i]);
+  const conclusionsSection = findSection(sections, [/조사 결론/i, /결론/i, /findings/i, /summary/i, /결과/i]);
+  const evidence = (evidenceSection?.bullets ?? []).map((bullet) => parseEvidenceBullet(bullet));
+  const inferredTopSources = new Map<string, number>();
+  for (const bullet of evidenceSection?.bullets ?? []) {
+    const bulletLinks = [
+      ...parseMarkdownLinks(bullet.text),
+      ...bullet.details.flatMap((line) => parseMarkdownLinks(line)),
+    ];
+    if (bulletLinks.length > 0) {
+      for (const link of bulletLinks) {
+        const name = link.label || sourceNameFromUrl(link.url);
+        if (name) {
+          inferredTopSources.set(name, (inferredTopSources.get(name) ?? 0) + 1);
+        }
+      }
+      continue;
+    }
+    const parsedEvidence = parseEvidenceBullet(bullet);
+    const name = sourceNameFromUrl(parsedEvidence.url);
+    if (name) {
+      inferredTopSources.set(name, (inferredTopSources.get(name) ?? 0) + 1);
+    }
+  }
+  if (topSourcesSection) {
+    for (const paragraph of topSourcesSection.paragraphs) {
+      for (const link of parseMarkdownLinks(paragraph)) {
+        const name = link.label || sourceNameFromUrl(link.url);
+        if (name) {
+          inferredTopSources.set(name, (inferredTopSources.get(name) ?? 0) + 1);
+        }
+      }
+    }
+  }
+  const topSources = (topSourcesSection?.bullets ?? [])
+    .map((bullet) => parseSourceBullet(bullet.text))
+    .filter((row): row is VisualizeParsedSourceRow => Boolean(row));
+  const conclusions = (conclusionsSection?.bullets ?? [])
+    .map((bullet, index) => parseConclusionBullet(bullet, index + 1))
+    .filter((row): row is VisualizeParsedFindingRow => Boolean(row))
+    .sort((left, right) => left.rank - right.rank)
+    .slice(0, 5);
+  const metrics = {
+    items: evidence.length,
+    sources: (topSources.length ? topSources : [...inferredTopSources.entries()].map(([sourceName, itemCount]) => ({ sourceName, itemCount }))).length,
+    verified: evidence.filter((row) => /verified/i.test(row.verificationStatus)).length,
+    warnings: evidence.filter((row) => /warning/i.test(row.verificationStatus)).length,
+    conflicted: evidence.filter((row) => /conflicted/i.test(row.verificationStatus)).length,
+    avgScore: evidence.length > 0
+      ? evidence.reduce((total, row) => total + (Number.isFinite(row.score) ? row.score : 0), 0) / evidence.length
+      : 0,
+  };
 
   return {
     charts,
-    topSources: (topSourcesSection?.bullets ?? [])
-      .map((bullet) => parseSourceBullet(bullet.text))
-      .filter((row): row is VisualizeParsedSourceRow => Boolean(row)),
-    evidence: (evidenceSection?.bullets ?? []).map((bullet) => parseEvidenceBullet(bullet)),
+    topSources: topSources.length > 0
+      ? topSources
+      : [...inferredTopSources.entries()]
+        .sort((left, right) => right[1] - left[1])
+        .map(([sourceName, itemCount]) => ({ sourceName, itemCount }))
+        .slice(0, 8),
+    evidence,
+    conclusions,
+    metrics,
   };
 }
 
 export function mergeVisualizeMarkdownFallback(...parts: Array<VisualizeParsedMarkdown | null | undefined>): VisualizeParsedMarkdown {
-  const merged: VisualizeParsedMarkdown = { charts: [], topSources: [], evidence: [] };
+  const merged: VisualizeParsedMarkdown = {
+    charts: [],
+    topSources: [],
+    evidence: [],
+    conclusions: [],
+    metrics: {
+      items: 0,
+      sources: 0,
+      verified: 0,
+      warnings: 0,
+      conflicted: 0,
+      avgScore: 0,
+    },
+  };
   for (const part of parts) {
     if (!part) {
       continue;
@@ -197,6 +335,12 @@ export function mergeVisualizeMarkdownFallback(...parts: Array<VisualizeParsedMa
     }
     if (merged.evidence.length === 0 && part.evidence.length > 0) {
       merged.evidence = part.evidence;
+    }
+    if (merged.conclusions.length === 0 && part.conclusions.length > 0) {
+      merged.conclusions = part.conclusions;
+    }
+    if (merged.metrics.items === 0 && part.metrics.items > 0) {
+      merged.metrics = part.metrics;
     }
   }
   return merged;

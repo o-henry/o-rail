@@ -1,4 +1,4 @@
-import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { startTransition, type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "../App.css";
 import { invoke, listen, openUrl } from "../shared/tauri";
 import { type DashboardDetailTopic } from "../pages/dashboard/DashboardDetailPage";
@@ -830,7 +830,9 @@ function App() {
       runId: params.runId,
       topic: params.topic,
     });
-    setWorkspaceEvents((prev) => [next, ...prev].slice(0, 300));
+    startTransition(() => {
+      setWorkspaceEvents((prev) => [next, ...prev].slice(0, 300));
+    });
   }, []);
   const missionControl = useMissionControl({
     cwd,
@@ -840,7 +842,9 @@ function App() {
   });
 
   const setStatus = useCallback((message: string) => {
-    setStatusCore(message);
+    startTransition(() => {
+      setStatusCore(message);
+    });
   }, [setStatusCore]);
 
   const setError = useCallback((message: string) => {

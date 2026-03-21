@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import AppNav from "../../../components/AppNav";
 import WorkflowPage from "../../../pages/workflow/WorkflowPage";
 import WorkflowRagModeDock from "../../../pages/workflow/WorkflowRagModeDock";
@@ -177,6 +178,21 @@ export function MainAppShell(props: any) {
     workspaceEvents,
     workspaceTab,
   } = props;
+  const briefingDocuments = useMemo(
+    () => feedPosts
+      .filter((post: any) => post.status === "done" || post.status === "low_quality")
+      .map((post: any) => ({
+        id: post.id,
+        runId: post.runId,
+        summary: post.summary,
+        sourceFile: post.sourceFile,
+        agentName: post.agentName,
+        createdAt: post.createdAt,
+        isFinalDocument: post.isFinalDocument,
+        status: post.status,
+      })),
+    [feedPosts],
+  );
 
   return (
     <main
@@ -333,18 +349,7 @@ export function MainAppShell(props: any) {
           agentLaunchRequestSeqRef={agentLaunchRequestSeqRef}
           appendWorkspaceEvent={props.appendWorkspaceEvent}
           authModeText={props.authModeLabel(authMode)}
-          briefingDocuments={feedPosts
-            .filter((post: any) => post.status === "done" || post.status === "low_quality")
-            .map((post: any) => ({
-              id: post.id,
-              runId: post.runId,
-              summary: post.summary,
-              sourceFile: post.sourceFile,
-              agentName: post.agentName,
-              createdAt: post.createdAt,
-              isFinalDocument: post.isFinalDocument,
-              status: post.status,
-            }))}
+          briefingDocuments={briefingDocuments}
           codexAuthBusy={codexAuthBusy}
           codexAuthCheckPending={codexAuthCheckPending}
           codexMultiAgentMode={codexMultiAgentMode}

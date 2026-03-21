@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import AgentsPage from "../../../pages/agents/AgentsPage";
 import AdaptationPage from "./AdaptationPage";
 import BridgePage from "../../../pages/bridge/BridgePage";
@@ -11,7 +11,7 @@ import TasksPage from "../../../pages/tasks/TasksPage";
 import VisualizePage from "../../../pages/visualize/VisualizePage";
 import { writeStoredSelectedRunId } from "../../../pages/visualize/visualizeSelection";
 
-export function MainAppWorkspaceContent(props: any) {
+function MainAppWorkspaceContentImpl(props: any) {
   const [mountedTabs, setMountedTabs] = useState<Record<string, boolean>>(() => ({
     [String(props.workspaceTab ?? "tasks")]: true,
   }));
@@ -316,3 +316,16 @@ export function MainAppWorkspaceContent(props: any) {
     </>
   );
 }
+
+function areMainAppWorkspaceContentPropsEqual(prev: any, next: any) {
+  // Keep hidden workspace tabs from re-rendering while the workflow canvas is active.
+  if (prev.workspaceTab === "workflow" && next.workspaceTab === "workflow") {
+    return true;
+  }
+  return false;
+}
+
+export const MainAppWorkspaceContent = memo(
+  MainAppWorkspaceContentImpl,
+  areMainAppWorkspaceContentPropsEqual,
+);

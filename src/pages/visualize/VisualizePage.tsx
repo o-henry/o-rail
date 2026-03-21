@@ -52,6 +52,34 @@ function formatPercent(value: number) {
   return `${Math.round(value)}%`;
 }
 
+export function resolveQualityScore(
+  metrics: VisualizeMetrics | null | undefined,
+  items: EvidenceItem[],
+  markdownAvgScore: number,
+) {
+  const metricAvg = Number(metrics?.totals.avgScore ?? 0);
+  const scoredItems = items.filter((item) => Number.isFinite(item.score) && item.score > 0);
+  const evidenceAvg = scoredItems.length
+    ? scoredItems.reduce((total, item) => total + item.score, 0) / scoredItems.length
+    : 0;
+  const totalItems = Math.max(
+    0,
+    Number(metrics?.totals.items ?? 0) || items.length,
+  );
+  const verified = Math.max(0, Number(metrics?.totals.verified ?? 0));
+  const warnings = Math.max(0, Number(metrics?.totals.warnings ?? 0));
+  const conflicted = Math.max(0, Number(metrics?.totals.conflicted ?? 0));
+  const unresolved = Math.max(0, totalItems - verified - warnings - conflicted);
+  const verificationScore = totalItems > 0
+    ? ((verified * 1 + warnings * 0.55 + unresolved * 0.35) / totalItems) * 100
+    : 0;
+  const baseScore = metricAvg > 0 ? metricAvg : evidenceAvg;
+  const blendedScore = baseScore > 0 && verificationScore > 0
+    ? baseScore * 0.7 + verificationScore * 0.3
+    : baseScore || verificationScore || Number(markdownAvgScore ?? 0) || 0;
+  return Math.max(0, Math.min(100, Math.round(blendedScore)));
+}
+
 type VisualizeMetrics = ReturnType<typeof useVisualizePageState>["collectionMetrics"];
 type EvidenceItem = NonNullable<ReturnType<typeof useVisualizePageState>["collectionItems"]>["items"][number];
 type PayloadMetricsSourceRow = NonNullable<NonNullable<ResearchCollectionPayload["metrics"]>["bySourceType"]>[number];
@@ -342,9 +370,9 @@ export default function VisualizePage({ cwd, hasTauriRuntime, isActive, onOpenKn
   const topSources = (effectiveMetrics?.topSources.slice(0, 5) ?? []).length
     ? (effectiveMetrics?.topSources.slice(0, 5) ?? [])
     : markdownFallback.topSources.slice(0, 5);
-  const qualityScore = Math.max(
-    0,
-    Math.min(100, Math.round((effectiveMetrics?.totals.avgScore ?? 0) || markdownFallback.metrics.avgScore || 0)),
+  const qualityScore = useMemo(
+    () => resolveQualityScore(effectiveMetrics, evidenceItems, markdownFallback.metrics.avgScore),
+    [effectiveMetrics, evidenceItems, markdownFallback.metrics.avgScore],
   );
   const leadCopy = firstNarrativeLine(state.reportMarkdown) || firstNarrativeLine(state.collectionMarkdown) || markdownFallback.conclusions[0]?.title || "";
   const mainChartSpec = withoutChartTitle(

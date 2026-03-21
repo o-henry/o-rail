@@ -5,7 +5,6 @@
   --tasks-control-height: 34px;
   --tasks-nav-width: 336px;
   --tasks-reading-width: 860px;
-  --tasks-article-width: 820px;
   position: relative;
   min-height: 0;
   height: 100%;
@@ -996,7 +995,7 @@
 }
 
 .tasks-thread-log-line {
-  max-width: min(var(--tasks-article-width), 96%);
+  max-width: min(820px, 96%);
   padding: 0;
   background: transparent;
   color: var(--text-main);
@@ -1009,7 +1008,7 @@
 .tasks-thread-message-row.is-assistant .tasks-thread-log-line {
   display: grid;
   gap: 8px;
-  width: min(var(--tasks-article-width), 96%);
+  width: min(820px, 96%);
 }
 
 .tasks-thread-message-markdown {
@@ -1151,7 +1150,7 @@
 }
 
 .tasks-thread-live-detail {
-  max-width: min(100%, var(--tasks-article-width));
+  max-width: min(100%, 820px);
   color: var(--text-muted);
   font-size: 11px;
   line-height: 1.45;
@@ -1160,7 +1159,7 @@
 .tasks-thread-live-metrics {
   display: grid;
   gap: 8px;
-  width: min(100%, calc(var(--tasks-article-width) + 20px));
+  width: min(100%, 840px);
   margin: 2px 0 0;
   padding: 10px 12px;
   border-radius: 10px;
@@ -1489,8 +1488,8 @@
 .tasks-thread-composer-shell {
   position: relative;
   min-width: 0;
-  width: min(100%, var(--tasks-article-width));
-  max-width: var(--tasks-article-width);
+  width: min(100%, var(--tasks-reading-width));
+  max-width: var(--tasks-reading-width);
   box-sizing: border-box;
   margin: 12px auto 0;
   border: 1px solid rgba(15, 23, 42, 0.1);

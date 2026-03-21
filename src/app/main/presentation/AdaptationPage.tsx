@@ -11,6 +11,15 @@ type AdaptationPageProps = {
     successCount: number;
     failureCount: number;
     lastFailureReason: string;
+    lastFailureKind: string;
+  }>;
+  taskRoleImprovementSummaries?: Array<{
+    roleId: string;
+    currentSuccessRate: number;
+    previousSuccessRate: number | null;
+    successRateDelta: number | null;
+    recentSampleSize: number;
+    previousSampleSize: number;
   }>;
   onFreeze: () => void;
   onResume: () => void;
@@ -73,6 +82,21 @@ function formatStamp(value?: string): string {
   });
 }
 
+function formatPercent(value: number): string {
+  return `${Math.round(value * 100)}%`;
+}
+
+function formatSuccessDelta(value: number | null): string {
+  if (value === null) {
+    return "비교 표본 부족";
+  }
+  const rounded = Math.round(value * 100);
+  if (rounded === 0) {
+    return "이전 대비 변화 없음";
+  }
+  return `이전 대비 ${rounded > 0 ? "+" : ""}${rounded}%p`;
+}
+
 export default function AdaptationPage(props: AdaptationPageProps) {
   const recentComparisons = props.data.comparisons.slice(0, 6);
   const shadowCandidates = props.data.candidates
@@ -84,6 +108,9 @@ export default function AdaptationPage(props: AdaptationPageProps) {
     }
     props.onReset();
   };
+  const taskImprovementByRole = new Map(
+    (props.taskRoleImprovementSummaries ?? []).map((row) => [row.roleId, row]),
+  );
 
   return (
     <section className="panel-card settings-view adaptation-view workspace-tab-panel">
@@ -136,8 +163,10 @@ export default function AdaptationPage(props: AdaptationPageProps) {
         </div>
         <div className="adaptation-card-list">
           {props.taskRoleSummaries && props.taskRoleSummaries.length > 0 ? (
-            props.taskRoleSummaries.slice(0, 6).map((row) => (
-              <article className="adaptation-card" key={row.roleId}>
+            props.taskRoleSummaries.slice(0, 6).map((row) => {
+              const improvement = taskImprovementByRole.get(row.roleId);
+              return (
+                <article className="adaptation-card" key={row.roleId}>
                 <div className="adaptation-card-head">
                   <strong>{formatTaskRoleLearningRoleLabel(row.roleId)}</strong>
                   <small>{row.roleId}</small>
@@ -147,9 +176,17 @@ export default function AdaptationPage(props: AdaptationPageProps) {
                   <span>실패 {row.failureCount}</span>
                   <span>{row.failureCount > 0 ? "다음 실행에 실패 회피 힌트 적용" : "최근 실패 없음"}</span>
                 </div>
+                {improvement ? (
+                  <div className="adaptation-card-lines">
+                    <span>최근 성공률 {formatPercent(improvement.currentSuccessRate)}</span>
+                    <span>{formatSuccessDelta(improvement.successRateDelta)}</span>
+                    <span>최근 표본 {improvement.recentSampleSize}</span>
+                  </div>
+                ) : null}
                 {row.lastFailureReason ? <p>{row.lastFailureReason}</p> : null}
-              </article>
-            ))
+                </article>
+              );
+            })
           ) : (
             <div className="adaptation-empty">아직 Tasks 학습 기록이 없습니다.</div>
           )}

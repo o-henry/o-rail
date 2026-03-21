@@ -4,6 +4,7 @@ import {
   clearTaskRoleLearningDataForTest,
   loadTaskRoleLearningData,
   recordTaskRoleLearningOutcome,
+  summarizeTaskRoleLearningImprovementByRole,
   summarizeTaskRoleLearningByRole,
 } from "./taskRoleLearning";
 
@@ -43,6 +44,8 @@ describe("taskRoleLearning", () => {
     expect(context).toContain("비슷한 성공 패턴");
     expect(context).toContain("반복 금지");
     expect(context).toContain("외부 근거 수집 실패");
+    expect(context).toContain("회피 전략");
+    expect(context.length).toBeLessThanOrEqual(640);
   });
 
   it("persists task role learning to workspace storage without failing local cache updates", async () => {
@@ -120,6 +123,84 @@ describe("taskRoleLearning", () => {
         successCount: 1,
         failureCount: 1,
         lastFailureReason: "role execution timed out after 300000ms",
+        lastFailureKind: "timeout",
+      }),
+    ]);
+  });
+
+  it("classifies auth and source sparsity failures separately", async () => {
+    await recordTaskRoleLearningOutcome({
+      cwd: "/tmp/rail-docs",
+      runId: "run-auth",
+      roleId: "research_analyst",
+      prompt: "공개 커뮤니티 조사",
+      summary: "",
+      artifactPaths: [],
+      runStatus: "error",
+      failureReason: "401 Unauthorized from public source fetch",
+    });
+    await recordTaskRoleLearningOutcome({
+      cwd: "/tmp/rail-docs",
+      runId: "run-sparse",
+      roleId: "research_analyst",
+      prompt: "유럽 커뮤니티 조사",
+      summary: "근거 0개, 상위 소스 0개",
+      artifactPaths: [],
+      runStatus: "error",
+      failureReason: "insufficient sources after public web search",
+    });
+
+    const summaries = summarizeTaskRoleLearningByRole("/tmp/rail-docs");
+    expect(summaries[0]).toEqual(expect.objectContaining({
+      roleId: "research_analyst",
+    }));
+
+    const context = buildTaskRoleLearningPromptContext({
+      cwd: "/tmp/rail-docs",
+      roleId: "research_analyst",
+      prompt: "유럽 공개 커뮤니티 조사",
+    });
+    expect(context).toContain("인증/권한 실패");
+    expect(context).toContain("근거 희소/출처 부족");
+    expect(context).toContain("동의어·영문명·지역명으로 질의를 넓히고");
+  });
+
+  it("summarizes recent success-rate improvement by role", async () => {
+    const runs: Array<{ id: string; status: "done" | "error" }> = [
+      { id: "r7", status: "error" },
+      { id: "r8", status: "error" },
+      { id: "r9", status: "done" },
+      { id: "r10", status: "error" },
+      { id: "r11", status: "error" },
+      { id: "r12", status: "error" },
+      { id: "r1", status: "done" },
+      { id: "r2", status: "done" },
+      { id: "r3", status: "done" },
+      { id: "r4", status: "done" },
+      { id: "r5", status: "error" },
+      { id: "r6", status: "done" },
+    ];
+    for (const row of runs) {
+      await recordTaskRoleLearningOutcome({
+        cwd: "/tmp/rail-docs",
+        runId: row.id,
+        roleId: "research_analyst",
+        prompt: "시장 조사",
+        summary: row.status === "done" ? "성공" : "",
+        artifactPaths: row.status === "done" ? ["a.md"] : [],
+        runStatus: row.status,
+        failureReason: row.status === "error" ? "role execution timed out after 300000ms" : "",
+      });
+    }
+
+    expect(summarizeTaskRoleLearningImprovementByRole("/tmp/rail-docs")).toEqual([
+      expect.objectContaining({
+        roleId: "research_analyst",
+        currentSuccessRate: 5 / 6,
+        previousSuccessRate: 1 / 6,
+        successRateDelta: 0.6666666666666667,
+        recentSampleSize: 6,
+        previousSampleSize: 6,
       }),
     ]);
   });

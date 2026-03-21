@@ -2666,6 +2666,7 @@ function App() {
       adaptiveWorkspaceLoading={adaptiveWorkspaceState.loading}
       taskRoleLearningLoading={taskRoleLearningState.loading}
       taskRoleLearningSummaries={taskRoleLearningState.roleSummaries}
+      taskRoleLearningImprovementSummaries={taskRoleLearningState.roleImprovementSummaries}
       appShellStyle={appShellStyle}
       authMode={authMode}
       authModeLabel={authModeLabel}

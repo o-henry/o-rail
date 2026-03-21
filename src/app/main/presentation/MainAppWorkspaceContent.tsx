@@ -83,6 +83,7 @@ export function MainAppWorkspaceContent(props: any) {
             loading={props.adaptiveWorkspaceLoading}
             taskLearningLoading={props.taskRoleLearningLoading}
             taskRoleSummaries={props.taskRoleLearningSummaries}
+            taskRoleImprovementSummaries={props.taskRoleLearningImprovementSummaries}
             onFreeze={props.onFreezeAdaptiveWorkspace}
             onResume={props.onResumeAdaptiveWorkspace}
             onReset={props.onResetAdaptiveWorkspace}

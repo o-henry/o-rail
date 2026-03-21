@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   loadTaskRoleLearningData,
   readTaskRoleLearningData,
+  summarizeTaskRoleLearningImprovementByRole,
   summarizeTaskRoleLearningByRole,
   type TaskRoleLearningData,
 } from "../adaptation/taskRoleLearning";
@@ -53,5 +54,6 @@ export function useTaskRoleLearningState(params: UseTaskRoleLearningStateParams)
     loading,
     refresh,
     roleSummaries: summarizeTaskRoleLearningByRole(params.cwd),
+    roleImprovementSummaries: summarizeTaskRoleLearningImprovementByRole(params.cwd),
   };
 }

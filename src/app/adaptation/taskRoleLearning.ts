@@ -3,6 +3,15 @@ import { adaptationStorageDir, normalizeAdaptiveWorkspaceKey } from "./workspace
 type InvokeFn = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
 
 export type TaskRoleLearningRunStatus = "done" | "error";
+export type TaskRoleLearningFailureKind =
+  | "bootstrap"
+  | "auth"
+  | "timeout"
+  | "source_sparsity"
+  | "materialization"
+  | "empty_response"
+  | "failure"
+  | "error";
 
 export type TaskRoleLearningRecord = {
   id: string;
@@ -48,6 +57,8 @@ const TASK_ROLE_LEARNING_STORAGE_KEY_PREFIX = "rail.studio.taskRoleLearning.v1";
 const TASK_ROLE_LEARNING_FILE_NAME = "task_role_learning.json";
 const MAX_STORED_RUNS = 160;
 const MAX_SIMILAR_ROWS = 2;
+const MAX_PROMPT_CONTEXT_CHARS = 640;
+const IMPROVEMENT_WINDOW_SIZE = 6;
 const STOP_WORDS = new Set([
   "the",
   "and",
@@ -232,19 +243,44 @@ export async function loadTaskRoleLearningData(cwd: string, invokeFn?: InvokeFn)
   }
 }
 
-function detectFailureKind(message: string): string {
-  const lowered = message.toLowerCase();
+function detectFailureKind(params: {
+  message: string;
+  summary: string;
+  artifactCount: number;
+}): TaskRoleLearningFailureKind {
+  const lowered = params.message.toLowerCase();
+  const summaryLowered = params.summary.toLowerCase();
   if (!lowered) {
-    return "";
+    return params.artifactCount === 0 && summaryLowered.includes("근거") && summaryLowered.includes("0")
+      ? "source_sparsity"
+      : "error";
   }
   if (lowered.includes("role_kb_bootstrap 실패") || lowered.includes("bootstrap")) {
     return "bootstrap";
   }
+  if (
+    lowered.includes("unauthorized") ||
+    lowered.includes("forbidden") ||
+    lowered.includes("401") ||
+    lowered.includes("403") ||
+    lowered.includes("auth")
+  ) {
+    return "auth";
+  }
   if (lowered.includes("timed out") || lowered.includes("timeout")) {
     return "timeout";
   }
-  if (lowered.includes("unauthorized")) {
-    return "auth";
+  if (
+    lowered.includes("0개") ||
+    lowered.includes("근거가 없어") ||
+    lowered.includes("no sources") ||
+    lowered.includes("no source") ||
+    lowered.includes("no evidence") ||
+    lowered.includes("source sparsity") ||
+    lowered.includes("insufficient sources") ||
+    lowered.includes("search hit 0")
+  ) {
+    return "source_sparsity";
   }
   if (lowered.includes("not materialized")) {
     return "materialization";
@@ -256,6 +292,50 @@ function detectFailureKind(message: string): string {
     return "failure";
   }
   return "error";
+}
+
+function failureKindLabel(kind?: string): string {
+  if (kind === "bootstrap") {
+    return "외부 근거 수집 실패";
+  }
+  if (kind === "auth") {
+    return "인증/권한 실패";
+  }
+  if (kind === "timeout") {
+    return "장시간 실행/타임아웃";
+  }
+  if (kind === "source_sparsity") {
+    return "근거 희소/출처 부족";
+  }
+  if (kind === "materialization") {
+    return "세션 준비 race";
+  }
+  if (kind === "empty_response") {
+    return "응답 비어 있음";
+  }
+  return "실행 실패";
+}
+
+function failureAvoidanceHint(kind?: string): string {
+  if (kind === "bootstrap") {
+    return "동일 사이트만 반복하지 말고, 공식 문서·검색 인덱스·공개 커뮤니티로 소스 풀을 넓힌다.";
+  }
+  if (kind === "auth") {
+    return "로그인/권한이 필요한 소스는 피하고, 공개 접근 가능한 문서형 페이지와 검색 인덱스를 우선한다.";
+  }
+  if (kind === "timeout") {
+    return "초기 범위를 줄여 먼저 핵심 지표를 확보하고, 이후 지역/커뮤니티 축을 단계적으로 확장한다.";
+  }
+  if (kind === "source_sparsity") {
+    return "동의어·영문명·지역명으로 질의를 넓히고, 공식/언론/커뮤니티 출처 비중을 분산한다.";
+  }
+  if (kind === "materialization") {
+    return "첫 응답 전 준비 구간을 전제로 하고, 즉시 재시도보다는 준비 완료 후 계속 진행한다.";
+  }
+  if (kind === "empty_response") {
+    return "최종 결론 전에 최소 근거와 링크를 먼저 확보한 뒤 요약한다.";
+  }
+  return "최근 실패 원인을 반복하지 않도록 접근 경로를 바꾼다.";
 }
 
 function overlapScore(left: string[], right: string[]): number {
@@ -274,17 +354,17 @@ function overlapScore(left: string[], right: string[]): number {
 }
 
 function formatFailureGuidance(row: TaskRoleLearningRecord): string {
-  const kind = row.failureKind === "bootstrap"
-    ? "외부 근거 수집 실패"
-    : row.failureKind === "timeout"
-      ? "장시간 실행/타임아웃"
-      : row.failureKind === "auth"
-        ? "인증/권한 실패"
-        : row.failureKind === "materialization"
-          ? "세션 준비 race"
-          : "실행 실패";
+  const kind = failureKindLabel(row.failureKind);
   const detail = row.failureReason ? ` — ${trimLine(row.failureReason, 120)}` : "";
   return `${kind}${detail}`;
+}
+
+function trimPromptContext(context: string): string {
+  const normalized = String(context ?? "").trim();
+  if (!normalized || normalized.length <= MAX_PROMPT_CONTEXT_CHARS) {
+    return normalized;
+  }
+  return `${normalized.slice(0, MAX_PROMPT_CONTEXT_CHARS - 1).trimEnd()}…`;
 }
 
 export function buildTaskRoleLearningPromptContext(input: BuildTaskRoleLearningPromptContextInput): string {
@@ -311,15 +391,20 @@ export function buildTaskRoleLearningPromptContext(input: BuildTaskRoleLearningP
     .filter(({ row }) => row.status === "error")
     .slice(0, MAX_SIMILAR_ROWS)
     .map(({ row }) => `- 반복 금지: ${formatFailureGuidance(row)}`);
+  const avoidances = fallbackScored
+    .filter(({ row }) => row.status === "error")
+    .slice(0, 1)
+    .map(({ row }) => `- 회피 전략: ${failureAvoidanceHint(row.failureKind)}`);
   if (successes.length === 0 && failures.length === 0) {
     return "";
   }
-  return [
+  return trimPromptContext([
     "# TASK LEARNING MEMORY",
     ...successes,
     ...failures,
-    "- 이전 실패를 반복하지 말고, 같은 유형의 성공 경로가 있으면 그 방식을 우선한다.",
-  ].join("\n");
+    ...avoidances,
+    "- 같은 유형의 성공 경로를 우선하되, 학습 메모리는 짧게 반영하고 현재 요청 범위를 넘겨 일반화하지 않는다.",
+  ].join("\n"));
 }
 
 export async function recordTaskRoleLearningOutcome(input: RecordTaskRoleLearningOutcomeInput): Promise<TaskRoleLearningData> {
@@ -327,6 +412,13 @@ export async function recordTaskRoleLearningOutcome(input: RecordTaskRoleLearnin
   const promptExcerpt = trimLine(input.prompt, 220);
   const summaryExcerpt = trimLine(input.summary, 240);
   const failureReason = trimLine(input.failureReason, 220);
+  const failureKind = input.runStatus === "error"
+    ? detectFailureKind({
+      message: failureReason,
+      summary: summaryExcerpt,
+      artifactCount: Array.isArray(input.artifactPaths) ? input.artifactPaths.filter(Boolean).length : 0,
+    })
+    : undefined;
   const nextRecord: TaskRoleLearningRecord = {
     id: `${trimLine(input.runId, 80)}:${trimLine(input.roleId, 80)}`,
     runId: trimLine(input.runId, 80),
@@ -337,7 +429,7 @@ export async function recordTaskRoleLearningOutcome(input: RecordTaskRoleLearnin
     promptTerms: normalizeTerms(input.prompt),
     summaryExcerpt,
     artifactCount: Array.isArray(input.artifactPaths) ? input.artifactPaths.filter(Boolean).length : 0,
-    failureKind: input.runStatus === "error" ? detectFailureKind(failureReason) : undefined,
+    failureKind,
     failureReason: input.runStatus === "error" ? failureReason : undefined,
     createdAt: nowIso(),
   };
@@ -370,13 +462,21 @@ export function summarizeTaskRoleLearningByRole(cwd: string): Array<{
   successCount: number;
   failureCount: number;
   lastFailureReason: string;
+  lastFailureKind: string;
 }> {
-  const grouped = new Map<string, { successCount: number; failureCount: number; lastFailureReason: string; lastSeenAt: string }>();
+  const grouped = new Map<string, {
+    successCount: number;
+    failureCount: number;
+    lastFailureReason: string;
+    lastFailureKind: string;
+    lastSeenAt: string;
+  }>();
   for (const row of readTaskRoleLearningData(cwd).runs) {
     const current = grouped.get(row.roleId) ?? {
       successCount: 0,
       failureCount: 0,
       lastFailureReason: "",
+      lastFailureKind: "",
       lastSeenAt: "",
     };
     if (row.status === "done") {
@@ -385,6 +485,7 @@ export function summarizeTaskRoleLearningByRole(cwd: string): Array<{
       current.failureCount += 1;
       if (!current.lastFailureReason) {
         current.lastFailureReason = row.failureReason ?? row.failureKind ?? "";
+        current.lastFailureKind = row.failureKind ?? "";
       }
     }
     current.lastSeenAt = row.createdAt;
@@ -396,8 +497,46 @@ export function summarizeTaskRoleLearningByRole(cwd: string): Array<{
       successCount: value.successCount,
       failureCount: value.failureCount,
       lastFailureReason: value.lastFailureReason,
+      lastFailureKind: value.lastFailureKind,
       lastSeenAt: value.lastSeenAt,
     }))
+    .sort((left, right) => String(right.lastSeenAt).localeCompare(String(left.lastSeenAt)))
+    .map(({ lastSeenAt: _lastSeenAt, ...rest }) => rest);
+}
+
+export function summarizeTaskRoleLearningImprovementByRole(cwd: string): Array<{
+  roleId: string;
+  currentSuccessRate: number;
+  previousSuccessRate: number | null;
+  successRateDelta: number | null;
+  recentSampleSize: number;
+  previousSampleSize: number;
+}> {
+  const grouped = new Map<string, TaskRoleLearningRecord[]>();
+  for (const row of readTaskRoleLearningData(cwd).runs) {
+    const current = grouped.get(row.roleId) ?? [];
+    current.push(row);
+    grouped.set(row.roleId, current);
+  }
+  return [...grouped.entries()]
+    .map(([roleId, rows]) => {
+      const sorted = [...rows].sort((left, right) => String(right.createdAt).localeCompare(String(left.createdAt)));
+      const recent = sorted.slice(0, IMPROVEMENT_WINDOW_SIZE);
+      const previous = sorted.slice(IMPROVEMENT_WINDOW_SIZE, IMPROVEMENT_WINDOW_SIZE * 2);
+      const recentSuccesses = recent.filter((row) => row.status === "done").length;
+      const previousSuccesses = previous.filter((row) => row.status === "done").length;
+      const currentSuccessRate = recent.length > 0 ? recentSuccesses / recent.length : 0;
+      const previousSuccessRate = previous.length > 0 ? previousSuccesses / previous.length : null;
+      return {
+        roleId,
+        currentSuccessRate,
+        previousSuccessRate,
+        successRateDelta: previousSuccessRate === null ? null : currentSuccessRate - previousSuccessRate,
+        recentSampleSize: recent.length,
+        previousSampleSize: previous.length,
+        lastSeenAt: sorted[0]?.createdAt ?? "",
+      };
+    })
     .sort((left, right) => String(right.lastSeenAt).localeCompare(String(left.lastSeenAt)))
     .map(({ lastSeenAt: _lastSeenAt, ...rest }) => rest);
 }

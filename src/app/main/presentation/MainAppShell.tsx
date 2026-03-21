@@ -349,6 +349,7 @@ export function MainAppShell(props: any) {
           adaptiveWorkspaceLoading={props.adaptiveWorkspaceLoading}
           taskRoleLearningLoading={props.taskRoleLearningLoading}
           taskRoleLearningSummaries={props.taskRoleLearningSummaries}
+          taskRoleLearningImprovementSummaries={props.taskRoleLearningImprovementSummaries}
           enabledScheduleCount={batchScheduler.schedules.filter((item: any) => item.status === "enabled").length}
           engineStarted={props.engineStarted}
           feedPageVm={feedPageVm}

@@ -503,7 +503,20 @@ export default function VisualizePage({ cwd, hasTauriRuntime, onOpenKnowledgeEnt
         </header>
 
         <section className="visualize-monitor-body">
-          <section className="visualize-monitor-main" ref={mainRef}>
+          <section
+            aria-busy={state.refreshing || state.detailLoading}
+            className={`visualize-monitor-main${state.refreshing || state.detailLoading ? " is-updating" : ""}`}
+            ref={mainRef}
+          >
+            {state.refreshing || state.detailLoading ? (
+              <div className="visualize-monitor-loading-overlay" aria-hidden="true">
+                <div className="visualize-monitor-loading-skeleton">
+                  <span />
+                  <span />
+                  <span />
+                </div>
+              </div>
+            ) : null}
             <div className={`visualize-monitor-grid${maximizedWidgetId ? " has-maximized-widget" : ""}`}>
               <VisualizeWidgetFrame
                 articleRef={sessionRef}

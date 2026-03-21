@@ -114,8 +114,8 @@ export function KnowledgeBaseDetailPanel(props: KnowledgeBaseDetailPanelProps) {
             </button>
           </div>
           {props.detailError ? <p className="knowledge-detail-error">{props.detailError}</p> : null}
-          {props.detailLoading ? <p className="knowledge-empty">문서를 불러오는 중...</p> : null}
-          {!props.detailLoading && props.markdownContent ? (
+          {props.detailLoading ? <p className="knowledge-empty">문서를 업데이트하는 중...</p> : null}
+          {props.markdownContent ? (
             <section className="knowledge-doc-block">
               <header className="knowledge-doc-head">
                 <strong>문서 (Markdown)</strong>
@@ -123,7 +123,7 @@ export function KnowledgeBaseDetailPanel(props: KnowledgeBaseDetailPanelProps) {
               <pre className="knowledge-doc-markdown">{props.markdownContent}</pre>
             </section>
           ) : null}
-          {!props.detailLoading && props.jsonContent ? (
+          {props.jsonContent ? (
             <section className="knowledge-doc-block">
               <header className="knowledge-doc-head">
                 <strong>구조화 데이터 (JSON)</strong>

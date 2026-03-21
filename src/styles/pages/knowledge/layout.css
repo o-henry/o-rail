@@ -52,10 +52,59 @@
 }
 
 .knowledge-layout {
+  position: relative;
   min-height: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
   gap: 4px;
+}
+
+.knowledge-layout.is-loading {
+  isolation: isolate;
+}
+
+.knowledge-loading-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 12px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(255, 255, 255, 0.18));
+  z-index: 2;
+}
+
+.knowledge-loading-skeleton {
+  width: min(520px, calc(100% - 24px));
+  display: grid;
+  gap: 8px;
+}
+
+.knowledge-loading-skeleton span {
+  display: block;
+  height: 12px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(226, 232, 240, 0.95), rgba(248, 250, 252, 1), rgba(226, 232, 240, 0.95));
+  background-size: 200% 100%;
+  animation: knowledge-loading-shimmer 1.1s linear infinite;
+}
+
+.knowledge-loading-skeleton span:nth-child(2) {
+  width: 86%;
+}
+
+.knowledge-loading-skeleton span:nth-child(3) {
+  width: 72%;
+}
+
+@keyframes knowledge-loading-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
 }
 
 .knowledge-island {

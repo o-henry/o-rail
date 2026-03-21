@@ -123,6 +123,7 @@ export function useKnowledgeBaseState({ cwd, posts }: UseKnowledgeBaseStateParam
   const [entries, setEntries] = useState<KnowledgeEntry[]>(() =>
     toVisibleKnowledgeRows(readKnowledgeEntries(), cwd),
   );
+  const [loading, setLoading] = useState(false);
   const [collapsedByGroup, setCollapsedByGroup] = useState<Record<string, boolean>>({});
   const [markdownContent, setMarkdownContent] = useState("");
   const [jsonContent, setJsonContent] = useState("");
@@ -143,27 +144,34 @@ export function useKnowledgeBaseState({ cwd, posts }: UseKnowledgeBaseStateParam
 
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
     const initialRows = mergePostEntries(readKnowledgeEntries());
     setEntries(initialRows);
     void (async () => {
-      const next = await hydrateKnowledgeEntriesFromWorkspaceSources({
-        cwd,
-        invokeFn: invoke,
-        onUpdate: (rows) => {
-          if (cancelled) {
-            return;
-          }
-          const merged = mergePostEntries(rows);
-          setEntries(merged);
-          void persistKnowledgeIndexToWorkspace({ cwd, invokeFn: invoke, rows: merged });
-        },
-      });
-      if (cancelled) {
-        return;
+      try {
+        const next = await hydrateKnowledgeEntriesFromWorkspaceSources({
+          cwd,
+          invokeFn: invoke,
+          onUpdate: (rows) => {
+            if (cancelled) {
+              return;
+            }
+            const merged = mergePostEntries(rows);
+            setEntries(merged);
+            void persistKnowledgeIndexToWorkspace({ cwd, invokeFn: invoke, rows: merged });
+          },
+        });
+        if (cancelled) {
+          return;
+        }
+        const merged = mergePostEntries(next);
+        setEntries(merged);
+        await persistKnowledgeIndexToWorkspace({ cwd, invokeFn: invoke, rows: merged });
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
-      const merged = mergePostEntries(next);
-      setEntries(merged);
-      await persistKnowledgeIndexToWorkspace({ cwd, invokeFn: invoke, rows: merged });
     })();
     return () => {
       cancelled = true;
@@ -463,6 +471,7 @@ export function useKnowledgeBaseState({ cwd, posts }: UseKnowledgeBaseStateParam
     grouped,
     jsonContent,
     jsonReadable,
+    loading,
     markdownContent,
     pendingGroupDelete,
     onCancelDeleteGroup,

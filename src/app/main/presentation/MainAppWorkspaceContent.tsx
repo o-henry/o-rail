@@ -56,7 +56,11 @@ export function MainAppWorkspaceContent(props: any) {
 
   return (
     <>
-      {props.workspaceTab === "feed" && <FeedPage vm={props.feedPageVm} />}
+      {mountedTabs.feed ? (
+        <div hidden={props.workspaceTab !== "feed"}>
+          <FeedPage vm={props.feedPageVm} />
+        </div>
+      ) : null}
       {mountedTabs.knowledge ? (
         <div hidden={props.workspaceTab !== "knowledge"}>
           <KnowledgeBasePage
@@ -115,82 +119,88 @@ export function MainAppWorkspaceContent(props: any) {
           />
         </div>
       ) : null}
-      {props.workspaceTab === "agents" && (
-        <AgentsPage
-          codexMultiAgentMode={props.codexMultiAgentMode}
-          launchRequest={props.agentLaunchRequest}
-          missionControl={props.missionControl}
-          onQuickAction={props.onAgentQuickAction}
-          onRunRole={({ roleId, taskId, prompt, runId }) => {
-            props.publishAction({
-              type: "run_role",
-              payload: {
-                roleId,
-                taskId,
-                prompt,
-                runId,
-                sourceTab: "agents",
-              },
-            });
-          }}
-          onOpenDataTab={() => props.onSelectWorkspaceTab("intelligence")}
-          onRunDataTopic={props.onRunDashboardTopicFromAgents}
-          runStateByTopic={props.dashboardIntelligenceRunStateByTopic}
-          topicSnapshots={props.dashboardSnapshotsByTopic}
-        />
-      )}
-      {props.workspaceTab === "settings" && (
-        <section className="panel-card settings-view workspace-tab-panel">
-          <SettingsPage
-            authModeText={props.authModeText}
-            codexAuthBusy={props.codexAuthBusy}
-            compact={false}
-            cwd={props.cwd}
-            engineStarted={props.engineStarted}
-            isGraphRunning={props.isGraphRunning}
-            loginCompleted={props.loginCompleted}
+      {mountedTabs.agents ? (
+        <div hidden={props.workspaceTab !== "agents"}>
+          <AgentsPage
             codexMultiAgentMode={props.codexMultiAgentMode}
-            codexMultiAgentModeOptions={[...props.codexMultiAgentModeOptions]}
-            userBackgroundImage={props.userBackgroundImage}
-            userBackgroundOpacity={props.userBackgroundOpacity}
-            onCloseUsageResult={() => props.setUsageResultClosed(true)}
-            onOpenRunsFolder={() => void props.onOpenRunsFolder()}
-            onSelectCwdDirectory={() => void props.onSelectCwdDirectory()}
-            onSetCodexMultiAgentMode={(next) => props.setCodexMultiAgentMode(props.normalizeCodexMultiAgentMode(next))}
-            onSetUserBackgroundImage={props.setUserBackgroundImage}
-            onSetUserBackgroundOpacity={(next) =>
-              props.setUserBackgroundOpacity(Number.isFinite(next) ? Math.min(1, Math.max(0, next)) : 0)
-            }
-            onToggleCodexLogin={() => void props.onLoginCodex()}
-            running={props.running}
-            status={props.status}
-            usageInfoText={props.usageInfoText}
-            usageResultClosed={props.usageResultClosed}
-          />
-          <BridgePage
-            busy={props.webWorkerBusy}
-            connectCode={props.webBridgeConnectCode}
-            embedded
-            onCopyConnectCode={() => void props.onCopyWebBridgeConnectCode()}
-            onRefreshStatus={() => void props.refreshWebBridgeStatus()}
-            onRestartBridge={() => void props.onRestartWebBridge()}
-            status={props.webBridgeStatus}
-          />
-        </section>
-      )}
-      {props.workspaceTab === "intelligence" && (
-        <section className="panel-card settings-view data-intelligence-view workspace-tab-panel">
-          <DashboardIntelligenceSettings
-            briefingDocuments={props.briefingDocuments}
-            config={props.dashboardIntelligenceConfig}
-            disabled={props.running || props.isGraphRunning}
-            onOpenBriefingDocument={props.onOpenBriefingDocumentFromData}
-            onRunTopic={props.onRunDashboardTopicFromData}
+            launchRequest={props.agentLaunchRequest}
+            missionControl={props.missionControl}
+            onQuickAction={props.onAgentQuickAction}
+            onRunRole={({ roleId, taskId, prompt, runId }) => {
+              props.publishAction({
+                type: "run_role",
+                payload: {
+                  roleId,
+                  taskId,
+                  prompt,
+                  runId,
+                  sourceTab: "agents",
+                },
+              });
+            }}
+            onOpenDataTab={() => props.onSelectWorkspaceTab("intelligence")}
+            onRunDataTopic={props.onRunDashboardTopicFromAgents}
             runStateByTopic={props.dashboardIntelligenceRunStateByTopic}
-            snapshotsByTopic={props.dashboardSnapshotsByTopic}
+            topicSnapshots={props.dashboardSnapshotsByTopic}
           />
-        </section>
-      )}
+        </div>
+      ) : null}
+      {mountedTabs.settings ? (
+        <div hidden={props.workspaceTab !== "settings"}>
+          <section className="panel-card settings-view workspace-tab-panel">
+            <SettingsPage
+              authModeText={props.authModeText}
+              codexAuthBusy={props.codexAuthBusy}
+              compact={false}
+              cwd={props.cwd}
+              engineStarted={props.engineStarted}
+              isGraphRunning={props.isGraphRunning}
+              loginCompleted={props.loginCompleted}
+              codexMultiAgentMode={props.codexMultiAgentMode}
+              codexMultiAgentModeOptions={[...props.codexMultiAgentModeOptions]}
+              userBackgroundImage={props.userBackgroundImage}
+              userBackgroundOpacity={props.userBackgroundOpacity}
+              onCloseUsageResult={() => props.setUsageResultClosed(true)}
+              onOpenRunsFolder={() => void props.onOpenRunsFolder()}
+              onSelectCwdDirectory={() => void props.onSelectCwdDirectory()}
+              onSetCodexMultiAgentMode={(next) => props.setCodexMultiAgentMode(props.normalizeCodexMultiAgentMode(next))}
+              onSetUserBackgroundImage={props.setUserBackgroundImage}
+              onSetUserBackgroundOpacity={(next) =>
+                props.setUserBackgroundOpacity(Number.isFinite(next) ? Math.min(1, Math.max(0, next)) : 0)
+              }
+              onToggleCodexLogin={() => void props.onLoginCodex()}
+              running={props.running}
+              status={props.status}
+              usageInfoText={props.usageInfoText}
+              usageResultClosed={props.usageResultClosed}
+            />
+            <BridgePage
+              busy={props.webWorkerBusy}
+              connectCode={props.webBridgeConnectCode}
+              embedded
+              onCopyConnectCode={() => void props.onCopyWebBridgeConnectCode()}
+              onRefreshStatus={() => void props.refreshWebBridgeStatus()}
+              onRestartBridge={() => void props.onRestartWebBridge()}
+              status={props.webBridgeStatus}
+            />
+          </section>
+        </div>
+      ) : null}
+      {mountedTabs.intelligence ? (
+        <div hidden={props.workspaceTab !== "intelligence"}>
+          <section className="panel-card settings-view data-intelligence-view workspace-tab-panel">
+            <DashboardIntelligenceSettings
+              briefingDocuments={props.briefingDocuments}
+              config={props.dashboardIntelligenceConfig}
+              disabled={props.running || props.isGraphRunning}
+              onOpenBriefingDocument={props.onOpenBriefingDocumentFromData}
+              onRunTopic={props.onRunDashboardTopicFromData}
+              runStateByTopic={props.dashboardIntelligenceRunStateByTopic}
+              snapshotsByTopic={props.dashboardSnapshotsByTopic}
+            />
+          </section>
+        </div>
+      ) : null}
     </>
   );
 }

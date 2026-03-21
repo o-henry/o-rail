@@ -25,7 +25,10 @@ export default function KnowledgeBasePage({
         <h2>데이터베이스</h2>
         <p>역할 실행으로 생성된 산출물(Markdown/JSON)을 탐색하고 에이전트 컨텍스트로 재주입합니다.</p>
       </header>
-      <section className="knowledge-layout">
+      <section
+        aria-busy={state.loading}
+        className={`knowledge-layout${state.loading ? " is-loading" : ""}`}
+      >
         <KnowledgeBaseListPanel
           collapsedByGroup={state.collapsedByGroup}
           filteredCount={state.filtered.length}
@@ -47,6 +50,15 @@ export default function KnowledgeBasePage({
           onRevealPath={state.onRevealPath}
           selected={state.selected}
         />
+        {state.loading ? (
+          <div className="knowledge-loading-overlay" aria-hidden="true">
+            <div className="knowledge-loading-skeleton">
+              <span />
+              <span />
+              <span />
+            </div>
+          </div>
+        ) : null}
       </section>
       <KnowledgeDeleteGroupModal
         onCancel={state.onCancelDeleteGroup}

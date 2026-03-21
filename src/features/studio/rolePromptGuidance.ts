@@ -38,6 +38,7 @@ const ROLE_PROMPT_SPECS: Record<StudioRoleId, RolePromptSpec> = {
     focus: [
       "익숙한 패턴 재진술 대신 새로운 조합, 반전, 장르 혼합, 감정적 훅을 우선 탐색합니다.",
       "창의적인 아이디어라도 왜 이 프로젝트 제약 안에서 성립 가능한지 최소 구현 가설까지 같이 제시합니다.",
+      "최소 세 가지로 충분히 다른 후보를 먼저 발산하고, 안전안/대담안/혼합안을 대비시킨 뒤 하나로 수렴합니다.",
     ],
     deliverables: ["## 창의적 코어 제안", "## 차별화 포인트", "## 빠른 검증 실험", "## 다음 handoff"],
   },
@@ -174,6 +175,12 @@ export function buildStudioRolePromptEnvelope(input: RolePromptShape): string {
     "- 아래 섹션 이름을 그대로 사용합니다.",
     ...roleSpec.deliverables.map((line) => `- ${line}`),
     "- 각 섹션은 bullet 또는 짧은 문단으로만 작성합니다.",
+    ...(input.roleId === "pm_creative_director"
+      ? [
+          "- `안전안`, `대담안`, `혼합안` 세 후보를 짧게 대비한 뒤 최종 추천안을 하나 고릅니다.",
+          "- 후보는 서로 다른 플레이 판타지, 리스크, 구현 난이도를 가져야 합니다.",
+        ]
+      : []),
     ...(input.roleId && REVIEW_STYLE_ROLE_IDS.has(input.roleId as StudioRoleId)
       ? [
           "- 각 제안안마다 `keep`, `revise`, `drop` 중 하나를 명시합니다.",

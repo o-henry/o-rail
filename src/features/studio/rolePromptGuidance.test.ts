@@ -11,6 +11,8 @@ describe("rolePromptGuidance", () => {
 
     expect(prompt).toContain("기획(PM) · 창의 확장");
     expect(prompt).toContain("새로운 조합");
+    expect(prompt).toContain("안전안");
+    expect(prompt).toContain("혼합안");
     expect(prompt).toContain("## 창의적 코어 제안");
     expect(prompt).toContain("## 빠른 검증 실험");
   });

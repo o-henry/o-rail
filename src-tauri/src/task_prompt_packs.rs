@@ -208,4 +208,18 @@ mod tests {
         assert_eq!(researcher_pack.id, "researcher");
         assert!(researcher_pack.developer_instructions.contains("검색"));
     }
+
+    #[test]
+    fn creative_task_packs_include_divergent_direction_guidance() {
+        let game_designer_pack = builtin_task_agent_prompt_pack("game_designer").unwrap();
+        assert!(game_designer_pack.developer_instructions.contains("안전안"));
+
+        let level_designer_pack = builtin_task_agent_prompt_pack("level_designer").unwrap();
+        assert!(level_designer_pack.developer_instructions.contains("혼합안"));
+
+        let technical_artist_pack = builtin_task_agent_prompt_pack("technical_artist").unwrap();
+        assert!(technical_artist_pack
+            .developer_instructions
+            .contains("최대 2안"));
+    }
 }

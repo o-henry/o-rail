@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   UNITY_TASK_TEAM_PRESETS,
+  buildTaskAgentPrompt,
   getDefaultRunPresetIds,
   getTaskAgentWorkflowStageLabels,
   getDefaultTaskAgentPresetIds,
@@ -57,5 +58,17 @@ describe("taskAgentPresets", () => {
     expect(getTaskAgentWorkflowStageLabels("game_designer")).toEqual(["요청 정리", "설계"]);
     expect(getTaskAgentWorkflowStageLabels("researcher")).toEqual(["요청 정리"]);
     expect(getTaskAgentWorkflowStageLabels("unity_implementer")).toEqual(["구현"]);
+  });
+
+  it("adds constrained creativity guidance only for design-facing task agents", () => {
+    const gameDesignerPrompt = buildTaskAgentPrompt("game_designer", "새 전투 시스템을 정리해줘");
+    const levelDesignerPrompt = buildTaskAgentPrompt("level_designer", "보스 구간 레벨 흐름을 설계해줘");
+    const technicalArtistPrompt = buildTaskAgentPrompt("technical_artist", "새 VFX 통합 리스크를 검토해줘");
+    const researcherPrompt = buildTaskAgentPrompt("researcher", "시장 조사해줘");
+
+    expect(gameDesignerPrompt).toContain("안전안/대담안/혼합안");
+    expect(levelDesignerPrompt).toContain("안전안/대담안/혼합안");
+    expect(technicalArtistPrompt).toContain("최대 2안");
+    expect(researcherPrompt).not.toContain("안전안/대담안/혼합안");
   });
 });

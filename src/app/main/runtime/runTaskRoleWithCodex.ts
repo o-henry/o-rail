@@ -4,6 +4,7 @@ import { toTurnReasoningEffort } from "../../../features/workflow/reasoningLevel
 import { extractCompletedStatus, extractDeltaText, extractUsageStats } from "../../mainAppUtils";
 import { extractStringByPaths } from "../../../shared/lib/valueUtils";
 import { prepareResearcherCollectionContext } from "./researcherCollection";
+import { ensureResearcherCollectionArtifacts } from "./researcherCollectionArtifacts";
 
 type InvokeFn = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
 
@@ -599,9 +600,20 @@ export async function runTaskRoleWithCodex(input: RunTaskRoleWithCodexInput): Pr
     )}\n`,
   });
 
+  const ensuredResearcherArtifactPaths =
+    pack.id === "researcher" || pack.studioRoleId === "research_analyst"
+      ? await ensureResearcherCollectionArtifacts({
+          invokeFn: input.invokeFn,
+          artifactDir,
+          existingArtifactPaths: researcherCollection.artifactPaths,
+          findingsMarkdown: summary,
+          fallbackSummary: researcherCollection.fallbackSummary,
+        })
+      : researcherCollection.artifactPaths;
+
   return {
     summary,
-    artifactPaths: [...researcherCollection.artifactPaths, promptArtifactPath, responseArtifactPath, responseJsonPath],
+    artifactPaths: [...ensuredResearcherArtifactPaths, promptArtifactPath, responseArtifactPath, responseJsonPath],
     usage: extractUsageStats(rawResponse),
     codexThreadId: threadStart.threadId,
     codexTurnId:

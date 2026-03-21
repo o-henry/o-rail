@@ -349,6 +349,61 @@ describe("runTaskRoleWithCodex", () => {
     expect(String((collectionJsonCall?.[1] as Record<string, unknown>).content ?? "")).toContain("\"questionType\": \"genre_ranking\"");
   });
 
+  it("backfills collection artifacts when the pre-run collection pipeline fails but the role still succeeds", async () => {
+    const invokeSpy = vi.fn(async (command: string, args?: Record<string, unknown>) => {
+      switch (command) {
+        case "task_agent_pack_read":
+          return {
+            id: "researcher",
+            label: "RESEARCHER",
+            studioRoleId: "research_analyst",
+            model: "gpt-5.4",
+            modelReasoningEffort: "medium",
+            sandboxMode: "workspace-write",
+            outputArtifactName: "research_findings.md",
+            promptDocFile: "researcher.md",
+            developerInstructions: "자료 조사와 웹 리서치를 수행하라.",
+          };
+        case "thread_load":
+          return {
+            thread: { model: "GPT-5.4", reasoning: "중간" },
+            task: { workspacePath: "/tmp/mockking" },
+          };
+        case "research_storage_plan_agent_job":
+          throw new Error("bootstrap unavailable");
+        case "thread_start":
+          return { threadId: "thread-codex-fallback" };
+        case "turn_start_blocking":
+          return {
+            status: "completed",
+            output_text: "## 조사 결론\n- 인기 장르 1위는 `슈터/FPS`입니다.\n\n## 핵심 근거\n- Steam 공식 통계는 [Steam Stats](https://store.steampowered.com/stats/stats/)에서 확인됩니다.",
+          };
+        case "workspace_write_text":
+          return `${String(args?.cwd)}/${String(args?.name)}`;
+        default:
+          throw new Error(`unexpected command: ${command}`);
+      }
+    });
+    const invokeFn = (invokeSpy as unknown) as <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
+
+    const result = await runTaskRoleWithCodex({
+      invokeFn,
+      storageCwd: "/tmp/rail-storage",
+      taskId: "thread-fallback",
+      studioRoleId: "research_analyst",
+      prompt: "@researcher 조사해줘",
+      sourceTab: "tasks-thread",
+      runId: "role-run-fallback",
+    });
+
+    expect(result.artifactPaths).toContain("/tmp/rail-storage/.rail/tasks/thread-fallback/codex_runs/role-run-fallback/research_collection.md");
+    expect(result.artifactPaths).toContain("/tmp/rail-storage/.rail/tasks/thread-fallback/codex_runs/role-run-fallback/research_collection.json");
+    const collectionJsonCall = invokeSpy.mock.calls.find(
+      ([command, callArgs]) => command === "workspace_write_text" && callArgs && (callArgs as Record<string, unknown>).name === "research_collection.json",
+    );
+    expect(String((collectionJsonCall?.[1] as Record<string, unknown>).content ?? "")).toContain("Steam Stats");
+  });
+
   it("strips role-formatted wrappers before planning researcher collection jobs", async () => {
     const capturedPrompts: string[] = [];
     const invokeFn = (vi.fn(async (command: string, args?: Record<string, unknown>) => {

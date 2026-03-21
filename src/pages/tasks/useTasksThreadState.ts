@@ -417,6 +417,20 @@ export function useTasksThreadState(params: Params) {
   }, [hiddenProjectPaths]);
 
   useEffect(() => {
+    const normalizedProjectPath = normalizeTasksProjectPath(projectPath);
+    if (!normalizedProjectPath || !hiddenProjectPaths.includes(normalizedProjectPath)) {
+      return;
+    }
+    const fallbackProjectPath = visibleProjectPaths.find((path) => normalizeTasksProjectPath(path) !== normalizedProjectPath)
+      || visibleProjectPaths[0]
+      || normalizeTasksProjectPath(params.cwd)
+      || "";
+    if (fallbackProjectPath && fallbackProjectPath !== projectPath) {
+      setProjectPath(fallbackProjectPath);
+    }
+  }, [hiddenProjectPaths, params.cwd, projectPath, visibleProjectPaths]);
+
+  useEffect(() => {
     const discoveredPaths = threadItems
       .map((item) => normalizeTasksProjectPath(item.projectPath || item.thread.cwd || ""))
       .filter(Boolean);

@@ -69,7 +69,12 @@ export function buildProjectThreadGroups(
     existing.push(item);
     groups.set(projectPath, existing);
   }
-  if (selectedProjectPath && !groups.has(selectedProjectPath)) {
+  const knownProjectPathSet = new Set(
+    knownProjectPaths
+      .map((path) => normalizePath(path))
+      .filter(Boolean),
+  );
+  if (selectedProjectPath && knownProjectPathSet.has(selectedProjectPath) && !groups.has(selectedProjectPath)) {
     groups.set(selectedProjectPath, []);
   }
   return [...groups.entries()]

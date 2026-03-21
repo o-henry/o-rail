@@ -60,4 +60,12 @@ describe("buildProjectThreadGroups", () => {
     expect(groups).toHaveLength(2);
     expect(groups.some((group) => group.projectPath === "/tmp/playground" && group.threads.length === 0)).toBe(true);
   });
+
+  it("does not resurrect a selected project that is absent from the visible project list", () => {
+    const items = [
+      { projectPath: "/tmp/game-a", thread: { threadId: "a-1", updatedAt: "2026-03-18T10:00:00Z" } },
+    ] as ThreadListItem[];
+    const groups = buildProjectThreadGroups(items, "/tmp/hidden-project", ["/tmp/game-a"]);
+    expect(groups.some((group) => group.projectPath === "/tmp/hidden-project")).toBe(false);
+  });
 });

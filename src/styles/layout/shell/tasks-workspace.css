@@ -4,6 +4,7 @@
   --tasks-wrapper-radius: 10px;
   --tasks-control-height: 34px;
   --tasks-nav-width: 336px;
+  --tasks-reading-width: 860px;
   position: relative;
   min-height: 0;
   height: 100%;
@@ -839,12 +840,19 @@
   min-height: 0;
   height: 100%;
   overflow: auto;
-  padding: 12px;
+  padding: 12px clamp(16px, 4vw, 40px) 0;
   display: grid;
   align-content: start;
   gap: 12px;
-  border-radius: 0 0 var(--tasks-wrapper-radius) var(--tasks-wrapper-radius);
-  background: #ffffff;
+  border-radius: 0;
+  background: transparent;
+}
+
+.tasks-thread-conversation-scroll > .tasks-thread-orchestration-card,
+.tasks-thread-conversation-scroll > .tasks-thread-empty-state,
+.tasks-thread-conversation-scroll > .tasks-thread-timeline {
+  width: min(100%, var(--tasks-reading-width));
+  justify-self: center;
 }
 
 .tasks-thread-empty-state {
@@ -907,7 +915,7 @@
 .tasks-thread-conversation-scroll + .tasks-thread-running-strip,
 .tasks-thread-conversation-scroll + .tasks-thread-composer-shell,
 .tasks-thread-running-strip + .tasks-thread-composer-shell {
-  margin-top: 10px;
+  margin-top: 0;
 }
 
 .tasks-thread-running-strip .tasks-thread-section-head {
@@ -1067,6 +1075,7 @@
   display: grid;
   gap: 4px;
   justify-items: start;
+  width: 100%;
 }
 
 .tasks-thread-message-row.is-assistant {
@@ -1139,7 +1148,7 @@
 }
 
 .tasks-thread-live-detail {
-  max-width: min(820px, 96%);
+  max-width: min(100%, 820px);
   color: var(--text-muted);
   font-size: 11px;
   line-height: 1.45;
@@ -1148,7 +1157,7 @@
 .tasks-thread-live-metrics {
   display: grid;
   gap: 8px;
-  width: min(840px, 98%);
+  width: min(100%, 840px);
   margin: 2px 0 0;
   padding: 10px 12px;
   border-radius: 10px;
@@ -1477,19 +1486,23 @@
 .tasks-thread-composer-shell {
   position: relative;
   min-width: 0;
-  width: 100%;
-  max-width: 100%;
+  width: min(100%, var(--tasks-reading-width));
+  max-width: var(--tasks-reading-width);
   box-sizing: border-box;
-  margin: 10px 0 0;
-  border: 0;
-  border-radius: var(--tasks-wrapper-radius);
-  box-shadow: var(--panel-shadow);
+  margin: 0 auto;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  border-radius: 12px;
+  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.08);
   background: #ffffff;
   gap: 10px;
   align-self: end;
   overflow: visible;
   isolation: isolate;
   z-index: 22;
+}
+
+.tasks-thread-main-surface > .tasks-thread-composer-shell {
+  justify-self: center;
 }
 
 .tasks-thread-composer-input {

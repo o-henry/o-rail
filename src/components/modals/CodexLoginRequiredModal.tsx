@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import { useI18n } from "../../i18n";
 
 type CodexLoginRequiredModalProps = {
@@ -16,7 +17,7 @@ export default function CodexLoginRequiredModal({
     return null;
   }
 
-  return (
+  const content = (
     <div className="modal-backdrop codex-login-required-modal-layer">
       <section className="approval-modal web-turn-modal codex-login-required-modal">
         <h2>{t("modal.codexLoginRequired")}</h2>
@@ -32,4 +33,10 @@ export default function CodexLoginRequiredModal({
       </section>
     </div>
   );
+
+  if (typeof document === "undefined") {
+    return content;
+  }
+
+  return createPortal(content, document.body);
 }

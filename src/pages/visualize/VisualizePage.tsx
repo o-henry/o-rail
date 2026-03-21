@@ -17,6 +17,7 @@ import {
 } from "./visualizeMarkdownFallback";
 import { buildVisualizeChartAssistantResult } from "./visualizeChartAssistant";
 import { runVisualizeChartAssistantWithCodex } from "./visualizeChartAssistantCodex";
+import { shouldShowVisualizeLoadingOverlay } from "./visualizeLoadingState";
 import { resolveVisualizeRailMode } from "./visualizeRailMode";
 import { VisualizeWidgetFrame } from "./VisualizeWidgetFrame";
 import type { VisualizeWidgetId } from "./visualizeWidgetLayout";
@@ -423,6 +424,17 @@ export default function VisualizePage({ cwd, hasTauriRuntime, isActive, onOpenKn
       score: item.score,
       url: item.url,
     }));
+  const hasVisibleContent = state.reportRuns.length > 0
+    || Boolean(state.reportMarkdown.trim())
+    || Boolean(state.collectionMarkdown.trim())
+    || displayEvidenceItems.length > 0
+    || timelineRows.length > 0
+    || topSources.length > 0;
+  const showLoadingOverlay = shouldShowVisualizeLoadingOverlay({
+    refreshing: state.refreshing,
+    detailLoading: state.detailLoading,
+    hasVisibleContent,
+  });
   const summaryMetrics = [
     { label: t("visualize.metric.evidence"), value: effectiveMetrics?.totals.items ?? markdownFallback.metrics.items, meta: t("visualize.metric.evidence.meta") },
     { label: t("visualize.metric.verified"), value: effectiveMetrics?.totals.verified ?? markdownFallback.metrics.verified, meta: t("visualize.metric.verified.meta") },
@@ -594,10 +606,10 @@ export default function VisualizePage({ cwd, hasTauriRuntime, isActive, onOpenKn
         <section className="visualize-monitor-body">
           <section
             aria-busy={state.refreshing || state.detailLoading}
-            className={`visualize-monitor-main${state.refreshing || state.detailLoading ? " is-updating" : ""}`}
+            className={`visualize-monitor-main${showLoadingOverlay ? " is-updating" : ""}`}
             ref={mainRef}
           >
-            {state.refreshing || state.detailLoading ? (
+            {showLoadingOverlay ? (
               <div className="visualize-monitor-loading-overlay" aria-hidden="true">
                 <div className="visualize-monitor-loading-skeleton">
                   <span />

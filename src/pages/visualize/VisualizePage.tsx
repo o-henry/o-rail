@@ -16,6 +16,7 @@ import {
   parseVisualizeMarkdownFallback,
 } from "./visualizeMarkdownFallback";
 import { buildVisualizeChartAssistantResult } from "./visualizeChartAssistant";
+import { resolveVisualizeRailMode } from "./visualizeRailMode";
 import { VisualizeWidgetFrame } from "./VisualizeWidgetFrame";
 import type { VisualizeWidgetId } from "./visualizeWidgetLayout";
 import type { ResearchCollectionPayload } from "./visualizeReportUtils";
@@ -293,6 +294,8 @@ export default function VisualizePage({ cwd, hasTauriRuntime, isActive, onOpenKn
   const [chartAssistantLogs, setChartAssistantLogs] = useState<VisualizeChartAssistantLogEntry[]>([]);
   const [manualChartSpec, setManualChartSpec] = useState<FeedChartSpec | null>(null);
   const [manualChartTitle, setManualChartTitle] = useState("");
+  const railMode = resolveVisualizeRailMode({ historyOpen, chartAssistantOpen });
+  const isRailOpen = railMode !== "closed";
   const mainRef = useRef<HTMLElement | null>(null);
   const sessionRef = useRef<HTMLElement | null>(null);
   const reportRef = useRef<HTMLElement | null>(null);
@@ -504,13 +507,16 @@ export default function VisualizePage({ cwd, hasTauriRuntime, isActive, onOpenKn
           </div>
           <div className="visualize-monitor-toolbar-actions">
             <button
-              aria-label={historyOpen ? t("visualize.history.close") : t("visualize.history.open")}
-              aria-pressed={historyOpen}
+              aria-label={isRailOpen ? t("visualize.history.close") : t("visualize.history.open")}
+              aria-pressed={isRailOpen}
               className="visualize-monitor-toolbar-icon"
-              onClick={() => setHistoryOpen((current) => !current)}
+              onClick={() => {
+                setChartAssistantOpen(false);
+                setHistoryOpen((current) => !current);
+              }}
               type="button"
             >
-              <img alt="" aria-hidden="true" src="/open-panel.svg" />
+              <img alt="" aria-hidden="true" src={isRailOpen ? "/terminal-close.svg" : "/terminal-open.svg"} />
             </button>
           </div>
         </header>
@@ -575,7 +581,15 @@ export default function VisualizePage({ cwd, hasTauriRuntime, isActive, onOpenKn
                   <button
                     aria-label={chartAssistantOpen ? "차트 생성 패널 닫기" : "차트 생성 패널 열기"}
                     className={`visualize-monitor-widget-action-button${chartAssistantOpen ? " is-active" : ""}`}
-                    onClick={() => setChartAssistantOpen((current) => !current)}
+                    onClick={() => {
+                      setChartAssistantOpen((current) => {
+                        const next = !current;
+                        if (next) {
+                          setHistoryOpen(false);
+                        }
+                        return next;
+                      });
+                    }}
                     type="button"
                   >
                     <img alt="" aria-hidden="true" src="/shell-terminal.svg" />
@@ -583,7 +597,7 @@ export default function VisualizePage({ cwd, hasTauriRuntime, isActive, onOpenKn
                 )}
                 maximized={maximizedWidgetId === "timeline"}
                 onToggleMaximize={toggleMaximize}
-                surfaceClassName={`is-chart-builder-surface${chartAssistantOpen ? " is-chart-builder-open" : ""}`}
+                surfaceClassName="is-chart-builder-surface"
                 title={mainChartTitle}
                 widgetId="timeline"
               >
@@ -599,15 +613,6 @@ export default function VisualizePage({ cwd, hasTauriRuntime, isActive, onOpenKn
                     </div>
                   )}
                 </div>
-                <VisualizeChartAssistantPane
-                  busy={chartAssistantBusy}
-                  draft={chartAssistantDraft}
-                  logs={chartAssistantLogs}
-                  onDraftChange={setChartAssistantDraft}
-                  onSubmit={() => void runChartAssistant()}
-                  open={chartAssistantOpen}
-                  reportBody={reportBody}
-                />
               </VisualizeWidgetFrame>
 
               <VisualizeWidgetFrame
@@ -784,49 +789,66 @@ export default function VisualizePage({ cwd, hasTauriRuntime, isActive, onOpenKn
               </VisualizeWidgetFrame>
             </div>
           </section>
-          {historyOpen ? (
-            <aside className="visualize-monitor-rail" aria-label={t("visualize.history.aria")}>
-              <header className="visualize-monitor-rail-head">
-                <strong>{t("visualize.history.title")}</strong>
-                <span>{t("visualize.session.count", { count: state.reportRuns.length })}</span>
-              </header>
-              <div className={`visualize-monitor-rail-list${state.reportRuns.length ? "" : " is-empty"}`}>
-                {state.reportRuns.length ? (
-                  state.reportRuns.map((run) => {
-                    const isSelected = run.runId === state.selectedRunId;
-                    return (
-                      <button
-                        aria-label={`${run.title || run.taskId} 시각화 세션 선택`}
-                        className={`visualize-monitor-rail-item${isSelected ? " is-active" : ""}`}
-                        data-e2e={`visualize-history-run-${run.runId}`}
-                        key={run.runId}
-                        onClick={() => state.setSelectedRunId(run.runId)}
-                        title={`${run.title || run.taskId} · ${formatStamp(run.updatedAt)}`}
-                        type="button"
-                      >
-                        <strong>{run.title || run.taskId}</strong>
-                        <span>{formatStamp(run.updatedAt)}</span>
-                        {run.summary && run.summary.trim() !== run.title.trim() ? <p>{run.summary}</p> : null}
-                      </button>
-                    );
-                  })
-                ) : (
-                  <div className="visualize-monitor-rail-empty">{t("visualize.history.empty")}</div>
-                )}
-              </div>
-              <div className="visualize-monitor-rail-footer">
-                <button
-                  aria-label={state.refreshing ? t("visualize.action.sync") : t("visualize.action.refresh")}
-                  className="visualize-monitor-rail-action"
-                  data-e2e="visualize-refresh"
-                  disabled={state.refreshing}
-                  onClick={() => void state.refreshAll()}
-                  title={state.refreshing ? t("visualize.action.sync") : t("visualize.action.refresh")}
-                  type="button"
-                >
-                  {state.refreshing ? t("visualize.action.sync") : t("visualize.action.refresh")}
-                </button>
-              </div>
+          {isRailOpen ? (
+            <aside
+              className={`visualize-monitor-rail${railMode === "assistant" ? " is-assistant-open" : ""}`}
+              aria-label={railMode === "assistant" ? "Chart assistant" : t("visualize.history.aria")}
+            >
+              {railMode === "assistant" ? (
+                <VisualizeChartAssistantPane
+                  busy={chartAssistantBusy}
+                  draft={chartAssistantDraft}
+                  logs={chartAssistantLogs}
+                  onDraftChange={setChartAssistantDraft}
+                  onSubmit={() => void runChartAssistant()}
+                  open={chartAssistantOpen}
+                  reportBody={reportBody}
+                />
+              ) : (
+                <>
+                  <header className="visualize-monitor-rail-head">
+                    <strong>{t("visualize.history.title")}</strong>
+                    <span>{t("visualize.session.count", { count: state.reportRuns.length })}</span>
+                  </header>
+                  <div className={`visualize-monitor-rail-list${state.reportRuns.length ? "" : " is-empty"}`}>
+                    {state.reportRuns.length ? (
+                      state.reportRuns.map((run) => {
+                        const isSelected = run.runId === state.selectedRunId;
+                        return (
+                          <button
+                            aria-label={`${run.title || run.taskId} 시각화 세션 선택`}
+                            className={`visualize-monitor-rail-item${isSelected ? " is-active" : ""}`}
+                            data-e2e={`visualize-history-run-${run.runId}`}
+                            key={run.runId}
+                            onClick={() => state.setSelectedRunId(run.runId)}
+                            title={`${run.title || run.taskId} · ${formatStamp(run.updatedAt)}`}
+                            type="button"
+                          >
+                            <strong>{run.title || run.taskId}</strong>
+                            <span>{formatStamp(run.updatedAt)}</span>
+                            {run.summary && run.summary.trim() !== run.title.trim() ? <p>{run.summary}</p> : null}
+                          </button>
+                        );
+                      })
+                    ) : (
+                      <div className="visualize-monitor-rail-empty">{t("visualize.history.empty")}</div>
+                    )}
+                  </div>
+                  <div className="visualize-monitor-rail-footer">
+                    <button
+                      aria-label={state.refreshing ? t("visualize.action.sync") : t("visualize.action.refresh")}
+                      className="visualize-monitor-rail-action"
+                      data-e2e="visualize-refresh"
+                      disabled={state.refreshing}
+                      onClick={() => void state.refreshAll()}
+                      title={state.refreshing ? t("visualize.action.sync") : t("visualize.action.refresh")}
+                      type="button"
+                    >
+                      {state.refreshing ? t("visualize.action.sync") : t("visualize.action.refresh")}
+                    </button>
+                  </div>
+                </>
+              )}
             </aside>
           ) : null}
         </section>

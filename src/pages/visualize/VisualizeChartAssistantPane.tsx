@@ -89,12 +89,18 @@ export function VisualizeChartAssistantPane(props: VisualizeChartAssistantPanePr
         <div className="question-input-footer tasks-thread-composer-toolbar">
           <div className="agents-composer-left tasks-thread-composer-controls" />
           <button
-            className="agents-send-button"
+            aria-label={props.busy ? "차트 생성 중" : "차트 생성"}
+            className="agents-send-button visualize-chart-assistant-send-button"
             disabled={props.busy || !props.draft.trim()}
             onClick={props.onSubmit}
             type="button"
           >
-            {props.busy ? "생성 중" : "생성"}
+            <img
+              alt=""
+              aria-hidden="true"
+              className="visualize-chart-assistant-send-icon"
+              src="/up.svg"
+            />
           </button>
         </div>
       </div>

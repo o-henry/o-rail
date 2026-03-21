@@ -10,6 +10,11 @@
     linear-gradient(180deg, #f7f9fc, #edf2f8 46%, #e9eef5);
 }
 
+.panel-card.visualize-view.workspace-tab-panel {
+  /* margin: 0 10px 10px; */
+  margin: 0;
+}
+
 .visualize-monitor-shell {
   display: flex;
   min-height: 0;
@@ -89,8 +94,8 @@
 }
 
 .visualize-monitor-toolbar-icon img {
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   object-fit: contain;
 }
 
@@ -165,6 +170,10 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
+}
+
+.visualize-monitor-rail.is-assistant-open {
+  padding: 0;
 }
 
 .visualize-monitor-rail-head {
@@ -242,6 +251,9 @@
   color: #475569;
   font-size: 0.74rem;
   line-height: 1.45;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .visualize-monitor-rail-empty {
@@ -251,6 +263,7 @@
   width: 100%;
   align-items: center;
   justify-content: center;
+  padding: 0 12px;
   text-align: center;
 }
 
@@ -394,8 +407,8 @@
 }
 
 .visualize-monitor-widget-action-button img {
-  width: 12px;
-  height: 12px;
+  width: 16px;
+  height: 16px;
   object-fit: contain;
 }
 
@@ -515,10 +528,6 @@
   padding: 10px;
 }
 
-.visualize-monitor-widget.is-chart-main .visualize-monitor-widget-surface.is-chart-builder-surface.is-chart-builder-open {
-  padding-right: 0;
-}
-
 .visualize-chart-builder-main {
   min-width: 0;
   flex: 1 1 auto;
@@ -537,14 +546,15 @@
 }
 
 .visualize-chart-assistant-pane {
-  width: 300px;
-  min-width: 300px;
-  max-width: 300px;
+  width: 100%;
+  min-width: 0;
+  max-width: none;
   display: flex;
   flex-direction: column;
   min-height: 0;
-  border-left: 1px solid rgba(226, 232, 240, 0.95);
+  border-left: 0;
   background: rgba(255, 255, 255, 0.96);
+  flex: 1 1 auto;
 }
 
 .visualize-chart-assistant-scroll {
@@ -631,6 +641,25 @@
   width: calc(100% - 20px);
   max-width: none;
   margin: 0 10px 10px;
+  gap: 5px;
+}
+
+.visualize-chart-assistant-composer .tasks-thread-composer-input {
+  min-height: 34px;
+}
+
+.visualize-chart-assistant-composer .tasks-thread-composer-toolbar {
+  margin-top: 0;
+}
+
+.visualize-chart-assistant-send-button {
+  flex: 0 0 auto;
+}
+
+.visualize-chart-assistant-send-icon {
+  width: 12px;
+  height: 12px;
+  filter: brightness(0) invert(1);
 }
 
 .visualize-monitor-widget.is-report .visualize-monitor-widget-surface,

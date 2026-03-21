@@ -155,6 +155,32 @@ function nextId(prefix: string): string {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}_${Date.now().toString(36)}`;
 }
 
+export function rememberTasksProjectPath(projectPaths: string[], nextPath: string): string[] {
+  const normalized = normalizeTasksProjectPath(nextPath);
+  if (!normalized) {
+    return projectPaths;
+  }
+  return projectPaths.includes(normalized) ? projectPaths : [...projectPaths, normalized];
+}
+
+export function revealTasksProjectPathState(params: {
+  hiddenProjectPaths: string[];
+  projectPaths: string[];
+  nextPath: string;
+}): { hiddenProjectPaths: string[]; projectPaths: string[] } {
+  const normalized = normalizeTasksProjectPath(params.nextPath);
+  if (!normalized) {
+    return {
+      hiddenProjectPaths: params.hiddenProjectPaths,
+      projectPaths: params.projectPaths,
+    };
+  }
+  return {
+    hiddenProjectPaths: params.hiddenProjectPaths.filter((path) => path !== normalized),
+    projectPaths: rememberTasksProjectPath(params.projectPaths, normalized),
+  };
+}
+
 async function writeTextByPath(invokeFn: InvokeFn, path: string, content: string) {
   const normalized = String(path ?? "").trim();
   const slashIndex = Math.max(normalized.lastIndexOf("/"), normalized.lastIndexOf("\\"));
@@ -318,8 +344,16 @@ export function useTasksThreadState(params: Params) {
     if (!normalized) {
       return;
     }
+    setProjectPaths((current) => rememberTasksProjectPath(current, normalized));
+  }, []);
+
+  const revealProjectPath = useCallback((nextPath: string) => {
+    const normalized = normalizeTasksProjectPath(nextPath);
+    if (!normalized) {
+      return;
+    }
     setHiddenProjectPaths((current) => current.filter((path) => path !== normalized));
-    setProjectPaths((current) => (current.includes(normalized) ? current : [...current, normalized]));
+    setProjectPaths((current) => rememberTasksProjectPath(current, normalized));
   }, []);
 
   const rememberSelectedAgent = useCallback((threadId: string, agentId: string) => {
@@ -854,20 +888,20 @@ export function useTasksThreadState(params: Params) {
       setSelectedAgentDetail(null);
       setSelectedFilePath("");
       setSelectedFileDiff("");
-      rememberProjectPath(selectedPath);
+      revealProjectPath(selectedPath);
       setProjectPath(selectedPath);
       params.setStatus(`Tasks project selected: ${selectedPath}`);
     } catch (error) {
       params.setStatus(`Failed to open project: ${formatError(error)}`);
     }
-  }, [params, rememberProjectPath]);
+  }, [params, revealProjectPath]);
 
   const selectProject = useCallback((nextProjectPath: string) => {
     const normalized = String(nextProjectPath ?? "").trim();
     if (!normalized || normalized === projectPath) {
       return;
     }
-    rememberProjectPath(normalized);
+    revealProjectPath(normalized);
     setActiveThread(null);
     setActiveThreadId("");
     setSelectedAgentId("");
@@ -876,7 +910,7 @@ export function useTasksThreadState(params: Params) {
     setSelectedFileDiff("");
     setSelectedComposerRoleIds([]);
     setProjectPath(normalized);
-  }, [projectPath, rememberProjectPath]);
+  }, [projectPath, revealProjectPath]);
 
   const openKnowledgeEntryForArtifact = useCallback((artifactPath: string) => {
     const entryId = findKnowledgeEntryIdByArtifact(artifactPath);

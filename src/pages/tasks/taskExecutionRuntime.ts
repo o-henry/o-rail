@@ -31,6 +31,7 @@ export function deriveExecutionPlan(params: {
     ...basePlan,
     mode: "single",
     participantRoleIds: [basePlan.primaryRoleId],
+    useAdaptiveOrchestrator: false,
   };
 }
 
@@ -63,26 +64,42 @@ export function dispatchTaskExecutionPlan(params: {
       payload: {
         roleId: studioRoleId,
         taskId: params.detail.task.taskId,
-        prompt: rolePrompt(params.detail, roleId, params.prompt),
+        prompt: params.plan.rolePrompts[roleId] ?? rolePrompt(params.detail, roleId, params.prompt),
         sourceTab: "tasks-thread",
       },
     });
     return;
   }
 
+  const rolePrompts = Object.fromEntries(
+    params.plan.candidateRoleIds.flatMap((roleId) => {
+      const studioRoleId = getTaskAgentStudioRoleId(roleId);
+      const prompt = params.plan.rolePrompts[roleId];
+      if (!studioRoleId || !prompt) {
+        return [];
+      }
+      return [[studioRoleId, prompt] as const];
+    }),
+  );
+
   params.publishAction({
     type: "run_task_collaboration",
-    payload: {
-      taskId: params.detail.task.taskId,
-      prompt: params.prompt,
-      sourceTab: "tasks-thread",
-      roleIds: params.plan.participantRoleIds.map((roleId) => getTaskAgentStudioRoleId(roleId)).filter(Boolean) as string[],
-      primaryRoleId: String(getTaskAgentStudioRoleId(params.plan.primaryRoleId) ?? "").trim(),
-      synthesisRoleId: String(getTaskAgentStudioRoleId(params.plan.synthesisRoleId) ?? "").trim(),
-      criticRoleId: String(getTaskAgentStudioRoleId(params.plan.criticRoleId ?? "") ?? "").trim() || undefined,
-      cappedParticipantCount: params.plan.cappedParticipantCount,
-    },
-  });
+      payload: {
+        taskId: params.detail.task.taskId,
+        prompt: params.prompt,
+        sourceTab: "tasks-thread",
+        roleIds: params.plan.participantRoleIds.map((roleId) => getTaskAgentStudioRoleId(roleId)).filter(Boolean) as string[],
+        candidateRoleIds: params.plan.candidateRoleIds.map((roleId) => getTaskAgentStudioRoleId(roleId)).filter(Boolean) as string[],
+        requestedRoleIds: params.plan.requestedRoleIds.map((roleId) => getTaskAgentStudioRoleId(roleId)).filter(Boolean) as string[],
+        rolePrompts,
+        intent: params.plan.intent,
+        primaryRoleId: String(getTaskAgentStudioRoleId(params.plan.primaryRoleId) ?? "").trim(),
+        synthesisRoleId: String(getTaskAgentStudioRoleId(params.plan.synthesisRoleId) ?? "").trim(),
+        criticRoleId: String(getTaskAgentStudioRoleId(params.plan.criticRoleId ?? "") ?? "").trim() || undefined,
+        cappedParticipantCount: params.plan.cappedParticipantCount,
+        useAdaptiveOrchestrator: params.plan.useAdaptiveOrchestrator,
+      },
+    });
 }
 
 export function runBrowserExecutionPlan(params: {
@@ -110,7 +127,7 @@ export function runBrowserExecutionPlan(params: {
         createBrowserMessage(
           detail.thread.threadId,
           "assistant",
-          `Created ${getTaskAgentLabel(roleId)} with instructions: ${rolePrompt(detail, roleId, prompt)}`,
+          `Created ${getTaskAgentLabel(roleId)} with instructions: ${plan.rolePrompts[roleId] ?? rolePrompt(detail, roleId, prompt)}`,
           timestamp,
           {
             agentId: `${detail.thread.threadId}:${roleId}`,
@@ -183,9 +200,9 @@ export function runBrowserExecutionPlan(params: {
     ...detail.artifacts,
     brief: prompt,
     findings: rolesToRun.map((roleId) => `${getTaskAgentLabel(roleId)}: ${getTaskAgentSummary(roleId)}`).join("\n"),
-    plan: plan.mode === "discussion"
+    plan: `${plan.orchestrationSummary}\n\n${plan.mode === "discussion"
       ? `1. Run ${rolesToRun.map((roleId) => getTaskAgentLabel(roleId)).join(", ")} brief\n2. Exchange a bounded critique\n3. Synthesize one answer`
-      : `1. Run ${rolesToRun.map((roleId) => getTaskAgentLabel(roleId)).join(", ")}\n2. Review files\n3. Synthesize answer`,
+      : `1. Run ${rolesToRun.map((roleId) => getTaskAgentLabel(roleId)).join(", ")}\n2. Review files\n3. Synthesize answer`}`,
   };
   detail.workflow = deriveThreadWorkflow(detail);
   return detail;

@@ -104,9 +104,11 @@ export function MainAppWorkspaceContent(props: any) {
       data={props.adaptiveWorkspaceData}
       loading={props.adaptiveWorkspaceLoading}
       taskLearningLoading={props.taskRoleLearningLoading}
+      taskRoleRuns={props.taskRoleLearningRuns}
       taskRoleSummaries={props.taskRoleLearningSummaries}
       taskRoleImprovementSummaries={props.taskRoleLearningImprovementSummaries}
       onFreeze={props.onFreezeAdaptiveWorkspace}
+      onDeleteTaskRoleRun={props.onDeleteTaskRoleLearningRun}
       onResume={props.onResumeAdaptiveWorkspace}
       onReset={props.onResetAdaptiveWorkspace}
     />
@@ -114,10 +116,12 @@ export function MainAppWorkspaceContent(props: any) {
     props.adaptiveWorkspaceData,
     props.adaptiveWorkspaceLoading,
     props.onFreezeAdaptiveWorkspace,
+    props.onDeleteTaskRoleLearningRun,
     props.onResetAdaptiveWorkspace,
     props.onResumeAdaptiveWorkspace,
     props.taskRoleImprovementSummaries,
     props.taskRoleLearningLoading,
+    props.taskRoleLearningRuns,
     props.taskRoleLearningSummaries,
   ]);
   const tasksTabContent = useMemo(() => (

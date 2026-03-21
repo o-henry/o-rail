@@ -2726,6 +2726,7 @@ function App() {
       adaptiveWorkspaceData={adaptiveWorkspaceState.data}
       adaptiveWorkspaceLoading={adaptiveWorkspaceState.loading}
       taskRoleLearningLoading={taskRoleLearningState.loading}
+      taskRoleLearningRuns={taskRoleLearningState.recentRuns}
       taskRoleLearningSummaries={taskRoleLearningState.roleSummaries}
       taskRoleLearningImprovementSummaries={taskRoleLearningState.roleImprovementSummaries}
       appShellStyle={appShellStyle}
@@ -2838,6 +2839,9 @@ function App() {
       onAddRoleReviewPassForNode={addRoleReviewPassForNode}
       onFreezeAdaptiveWorkspace={() => {
         void adaptiveWorkspaceState.setLearningState("frozen");
+      }}
+      onDeleteTaskRoleLearningRun={(id: string) => {
+        void taskRoleLearningState.deleteRun(id);
       }}
       onResumeAdaptiveWorkspace={() => {
         void adaptiveWorkspaceState.setLearningState("active");

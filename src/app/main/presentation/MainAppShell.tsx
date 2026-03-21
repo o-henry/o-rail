@@ -365,6 +365,7 @@ export function MainAppShell(props: any) {
           adaptiveWorkspaceData={props.adaptiveWorkspaceData}
           adaptiveWorkspaceLoading={props.adaptiveWorkspaceLoading}
           taskRoleLearningLoading={props.taskRoleLearningLoading}
+          taskRoleLearningRuns={props.taskRoleLearningRuns}
           taskRoleLearningSummaries={props.taskRoleLearningSummaries}
           taskRoleLearningImprovementSummaries={props.taskRoleLearningImprovementSummaries}
           enabledScheduleCount={batchScheduler.schedules.filter((item: any) => item.status === "enabled").length}
@@ -389,6 +390,7 @@ export function MainAppShell(props: any) {
           onRunDashboardTopicFromAgents={onRunDashboardTopicFromAgents}
           onRunDashboardTopicFromData={onRunDashboardTopicFromData}
           onFreezeAdaptiveWorkspace={props.onFreezeAdaptiveWorkspace}
+          onDeleteTaskRoleLearningRun={props.onDeleteTaskRoleLearningRun}
           onResumeAdaptiveWorkspace={props.onResumeAdaptiveWorkspace}
           onResetAdaptiveWorkspace={props.onResetAdaptiveWorkspace}
           onSelectCwdDirectory={onSelectCwdDirectory}

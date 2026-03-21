@@ -1,0 +1,169 @@
+type AdaptiveTaskOrchestrationPlan = {
+  participantRoleIds: string[];
+  primaryRoleId: string;
+  criticRoleId?: string;
+  rolePrompts: Record<string, string>;
+  orchestrationSummary: string;
+};
+
+function clip(value: string, maxChars: number): string {
+  const normalized = String(value ?? "").trim();
+  if (normalized.length <= maxChars) {
+    return normalized;
+  }
+  return `${normalized.slice(0, Math.max(0, maxChars - 1)).trim()}…`;
+}
+
+function normalizeJsonBlock(value: string): string {
+  const trimmed = String(value ?? "").trim();
+  if (!trimmed) {
+    return "";
+  }
+  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fenced?.[1]) {
+    return fenced[1].trim();
+  }
+  const start = trimmed.indexOf("{");
+  const end = trimmed.lastIndexOf("}");
+  if (start >= 0 && end > start) {
+    return trimmed.slice(start, end + 1);
+  }
+  return trimmed;
+}
+
+function normalizeRoleIds(
+  roleIds: unknown,
+  allowedRoleIds: string[],
+  maxParticipants: number,
+): string[] {
+  if (!Array.isArray(roleIds)) {
+    return [];
+  }
+  const allowed = new Set(allowedRoleIds);
+  const normalized: string[] = [];
+  for (const item of roleIds) {
+    const roleId = String(item ?? "").trim();
+    if (!roleId || !allowed.has(roleId) || normalized.includes(roleId)) {
+      continue;
+    }
+    normalized.push(roleId);
+    if (normalized.length >= maxParticipants) {
+      break;
+    }
+  }
+  return normalized;
+}
+
+export function buildAdaptiveOrchestrationPrompt(params: {
+  prompt: string;
+  intent: string;
+  contextSummary: string;
+  requestedRoleIds: string[];
+  candidateRoleIds: string[];
+  candidateRolePrompts: Record<string, string>;
+  maxParticipants: number;
+  heuristicPrimaryRoleId: string;
+  heuristicParticipantRoleIds: string[];
+}): string {
+  const roleBlocks = params.candidateRoleIds.map((roleId) => [
+    `- role_id: ${roleId}`,
+    `  baseline_assignment: ${clip(params.candidateRolePrompts[roleId] ?? "", 700) || "없음"}`,
+  ].join("\n"));
+  return [
+    "# 작업 모드",
+    "메인 오케스트레이터",
+    "",
+    "# 목표",
+    "사용자 요청을 가장 잘 해결하기 위한 서브워커 조합과 역할별 지시를 재배정한다.",
+    "",
+    "# 사용자 요청",
+    params.prompt.trim(),
+    "",
+    "# 의도 추정",
+    params.intent,
+    "",
+    "# 압축된 스레드 컨텍스트",
+    params.contextSummary.trim() || "없음",
+    "",
+    "# 사용자 멘션 힌트",
+    params.requestedRoleIds.length > 0 ? params.requestedRoleIds.join(", ") : "없음",
+    "",
+    "# 후보 서브워커",
+    roleBlocks.join("\n"),
+    "",
+    "# 현재 규칙 기반 초안",
+    `- primary_role_id: ${params.heuristicPrimaryRoleId}`,
+    `- participant_role_ids: ${params.heuristicParticipantRoleIds.join(", ") || "없음"}`,
+    "",
+    "# 오케스트레이션 규칙",
+    `- 참여 역할은 1명 이상 ${params.maxParticipants}명 이하로 고른다.`,
+    "- 멘션은 힌트일 뿐이며, 사용자 의도에 더 맞는 역할 조합이 있으면 재배치한다.",
+    "- 역할 수는 최소화하되 답의 질이 떨어지지 않게 한다.",
+    "- ideation이면 game_designer를 기본 주역으로 보고, researcher는 근거/클리셰/시장 신호 보조에 집중시킨다.",
+    "- researcher 단독 조사 요청이면 researcher만 유지한다.",
+    "- unity_architect는 현실성/기술 리스크/범위 검토를 맡기고, 아이디어 발산의 주역으로 쓰지 않는다.",
+    "- 각 역할 지시는 서로 겹치지 않게 구체적으로 나눈다.",
+    "",
+    "# 출력 형식",
+    "반드시 아래 JSON 객체만 출력한다. 설명 문장이나 코드펜스는 금지한다.",
+    `{"participant_role_ids":["role_a"],"primary_role_id":"role_a","critic_role_id":"role_b 또는 빈 문자열","orchestration_summary":"한 줄 요약","role_assignments":{"role_a":"역할별 지시","role_b":"역할별 지시"}}`,
+  ].join("\n");
+}
+
+export function parseAdaptiveOrchestrationPlan(params: {
+  text: string;
+  allowedRoleIds: string[];
+  maxParticipants: number;
+  fallbackPrimaryRoleId: string;
+  fallbackCriticRoleId?: string;
+  fallbackRolePrompts: Record<string, string>;
+}): AdaptiveTaskOrchestrationPlan | null {
+  const payload = normalizeJsonBlock(params.text);
+  if (!payload) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(payload) as Record<string, unknown>;
+    const participantRoleIds = normalizeRoleIds(
+      parsed.participant_role_ids,
+      params.allowedRoleIds,
+      params.maxParticipants,
+    );
+    if (participantRoleIds.length === 0) {
+      return null;
+    }
+    const primaryCandidate = String(parsed.primary_role_id ?? "").trim();
+    const primaryRoleId = participantRoleIds.includes(primaryCandidate)
+      ? primaryCandidate
+      : (participantRoleIds.includes(params.fallbackPrimaryRoleId) ? params.fallbackPrimaryRoleId : participantRoleIds[0]);
+    const criticCandidate = String(parsed.critic_role_id ?? "").trim();
+    const criticRoleId = criticCandidate && criticCandidate !== primaryRoleId && participantRoleIds.includes(criticCandidate)
+      ? criticCandidate
+      : (params.fallbackCriticRoleId && params.fallbackCriticRoleId !== primaryRoleId && participantRoleIds.includes(params.fallbackCriticRoleId)
+        ? params.fallbackCriticRoleId
+        : undefined);
+    const rawAssignments = parsed.role_assignments && typeof parsed.role_assignments === "object"
+      ? (parsed.role_assignments as Record<string, unknown>)
+      : {};
+    const rolePrompts = Object.fromEntries(
+      participantRoleIds.map((roleId) => {
+        const assignment = clip(String(rawAssignments[roleId] ?? "").trim(), 1200);
+        return [roleId, assignment || params.fallbackRolePrompts[roleId] || ""];
+      }),
+    ) as Record<string, string>;
+    const orchestrationSummary = clip(String(parsed.orchestration_summary ?? "").trim(), 280)
+      || `메인 오케스트레이터가 ${participantRoleIds.join(", ")} 조합으로 재배치했습니다.`;
+    return {
+      participantRoleIds: [
+        primaryRoleId,
+        ...participantRoleIds.filter((roleId) => roleId !== primaryRoleId),
+      ],
+      primaryRoleId,
+      criticRoleId,
+      rolePrompts,
+      orchestrationSummary,
+    };
+  } catch {
+    return null;
+  }
+}

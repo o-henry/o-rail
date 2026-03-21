@@ -19,6 +19,10 @@
   gap: 10px;
 }
 
+.adaptation-island-wide {
+  max-width: 1160px;
+}
+
 .adaptation-island-head {
   display: flex;
   align-items: start;
@@ -102,4 +106,116 @@
   min-height: 34px;
   max-height: 34px;
   width: 100%;
+}
+
+.adaptation-table-wrap {
+  overflow-x: auto;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--surface-soft) 72%, var(--surface-elevated));
+}
+
+.adaptation-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  min-width: 980px;
+  table-layout: fixed;
+}
+
+.adaptation-table th,
+.adaptation-table td {
+  padding: 9px 10px;
+  text-align: left;
+  vertical-align: middle;
+  border-bottom: 1px solid color-mix(in srgb, var(--border-subtle) 70%, transparent);
+  word-break: keep-all;
+  overflow-wrap: normal;
+}
+
+.adaptation-table th {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.adaptation-table td {
+  color: var(--text-main);
+  line-height: 1.45;
+}
+
+.adaptation-summary-cell {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  line-clamp: 2;
+}
+
+.adaptation-table th:nth-child(1),
+.adaptation-table td:nth-child(1) {
+  width: 110px;
+}
+
+.adaptation-table th:nth-child(2),
+.adaptation-table td:nth-child(2) {
+  width: 72px;
+  white-space: nowrap;
+}
+
+.adaptation-table th:nth-child(3),
+.adaptation-table td:nth-child(3) {
+  width: 120px;
+}
+
+.adaptation-table th:nth-child(5),
+.adaptation-table td:nth-child(5) {
+  width: 118px;
+  white-space: nowrap;
+}
+
+.adaptation-table th:nth-child(6),
+.adaptation-table td:nth-child(6) {
+  width: 54px;
+  white-space: nowrap;
+}
+
+.adaptation-table-time-cell {
+  font-size: 10px;
+  color: var(--text-muted);
+  padding-right: 18px;
+}
+
+.adaptation-table-action-cell {
+  text-align: center;
+}
+
+.adaptation-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.adaptation-row-action {
+  border: none;
+  background: transparent;
+  color: var(--text-main);
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  padding: 0;
+  cursor: pointer;
+}
+
+.adaptation-row-action:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.adaptation-row-action-icon {
+  width: 10px;
+  height: 10px;
+  display: block;
+  opacity: 0.7;
 }

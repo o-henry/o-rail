@@ -117,7 +117,7 @@ describe("taskExecutionRuntime", () => {
       buildCoordination({ mode: "quick", requestedRoleIds: ["researcher", "unity_architect"] }),
     );
     expect(plan.mode).toBe("single");
-    expect(plan.participantRoleIds).toEqual(["researcher"]);
+    expect(plan.participantRoleIds).toEqual(["unity_architect"]);
   });
 
   it("dispatches a collaboration action for discussion plans", () => {
@@ -132,7 +132,15 @@ describe("taskExecutionRuntime", () => {
       }),
       publishAction,
     });
-    expect(publishAction).toHaveBeenCalledWith(expect.objectContaining({ type: "run_task_collaboration" }));
+    expect(publishAction).toHaveBeenCalledWith(expect.objectContaining({
+      type: "run_task_collaboration",
+      payload: expect.objectContaining({
+        candidateRoleIds: expect.any(Array),
+        requestedRoleIds: expect.any(Array),
+        useAdaptiveOrchestrator: expect.any(Boolean),
+        rolePrompts: expect.any(Object),
+      }),
+    }));
   });
 
   it("creates a browser approval when multiple roles run in sequence", () => {
@@ -142,12 +150,18 @@ describe("taskExecutionRuntime", () => {
       prompt: "Review the implementation",
       plan: {
         mode: "single",
+        intent: "review",
+        candidateRoleIds: ["researcher", "unity_architect"],
         participantRoleIds: ["researcher", "unity_architect"],
+        requestedRoleIds: ["researcher", "unity_architect"],
         primaryRoleId: "researcher",
         synthesisRoleId: "researcher",
         maxParticipants: 3,
         maxRounds: 1,
         cappedParticipantCount: false,
+        rolePrompts: {},
+        orchestrationSummary: "",
+        useAdaptiveOrchestrator: false,
       },
       timestamp: "2026-03-20T00:01:00.000Z",
       createId: (prefix) => `${prefix}_1`,

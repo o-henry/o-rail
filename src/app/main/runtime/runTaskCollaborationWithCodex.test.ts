@@ -5,7 +5,7 @@ describe("runTaskCollaborationWithCodex", () => {
   it("runs bounded briefs, one critique, then final synthesis", async () => {
     const executeRoleRun = vi.fn(async (params: {
       roleId: string;
-      promptMode: "brief" | "critique" | "final";
+      promptMode: "orchestrate" | "brief" | "critique" | "final";
       internal: boolean;
     }) => ({
       roleId: params.roleId,
@@ -30,17 +30,21 @@ describe("runTaskCollaborationWithCodex", () => {
       promptMode: "brief",
       internal: true,
       model: "GPT-5.4-Mini",
+      reasoning: "중간",
     }));
     expect(executeRoleRun).toHaveBeenNthCalledWith(4, expect.objectContaining({
       roleId: "unity_architect",
       promptMode: "critique",
       internal: true,
+      model: "GPT-5.4-Mini",
+      reasoning: "중간",
     }));
     expect(executeRoleRun).toHaveBeenNthCalledWith(5, expect.objectContaining({
       roleId: "unity_implementer",
       promptMode: "final",
       internal: false,
       model: "GPT-5.4",
+      reasoning: "높음",
     }));
     expect(result.finalResult.summary).toContain("final");
   });
@@ -48,7 +52,7 @@ describe("runTaskCollaborationWithCodex", () => {
   it("retries a transient participant brief failure once before continuing", async () => {
     const executeRoleRun = vi.fn(async (params: {
       roleId: string;
-      promptMode: "brief" | "critique" | "final";
+      promptMode: "orchestrate" | "brief" | "critique" | "final";
       internal: boolean;
     }) => {
       if (params.roleId === "researcher" && params.promptMode === "brief") {
@@ -87,7 +91,7 @@ describe("runTaskCollaborationWithCodex", () => {
   it("retries participant briefs when a materialization RPC error occurs", async () => {
     const executeRoleRun = vi.fn(async (params: {
       roleId: string;
-      promptMode: "brief" | "critique" | "final";
+      promptMode: "orchestrate" | "brief" | "critique" | "final";
       internal: boolean;
     }) => {
       if (params.roleId === "researcher" && params.promptMode === "brief") {
@@ -125,7 +129,7 @@ describe("runTaskCollaborationWithCodex", () => {
   it("does not run critique or final synthesis when every participant brief fails", async () => {
     const executeRoleRun = vi.fn(async (params: {
       roleId: string;
-      promptMode: "brief" | "critique" | "final";
+      promptMode: "orchestrate" | "brief" | "critique" | "final";
     }) => {
       if (params.promptMode === "brief") {
         throw new Error(`${params.roleId} failed`);
@@ -158,7 +162,7 @@ describe("runTaskCollaborationWithCodex", () => {
   it("retries critique and final synthesis on transient RPC errors", async () => {
     const executeRoleRun = vi.fn(async (params: {
       roleId: string;
-      promptMode: "brief" | "critique" | "final";
+      promptMode: "orchestrate" | "brief" | "critique" | "final";
       internal: boolean;
     }) => {
       const attempts = executeRoleRun.mock.calls.filter(
@@ -195,5 +199,122 @@ describe("runTaskCollaborationWithCodex", () => {
       executeRoleRun.mock.calls.filter(([call]) => call.roleId === "researcher" && call.promptMode === "final"),
     ).toHaveLength(2);
     expect(result.finalResult.summary).toContain("final");
+  });
+
+  it("injects per-role orchestration prompts into participant briefs", async () => {
+    const executeRoleRun = vi.fn(async (params: {
+      roleId: string;
+      prompt: string;
+      promptMode: "orchestrate" | "brief" | "critique" | "final";
+      internal: boolean;
+    }) => ({
+      roleId: params.roleId,
+      runId: `${params.roleId}-${params.promptMode}`,
+      summary: params.prompt,
+      artifactPaths: [`/${params.roleId}/${params.promptMode}.md`],
+    }));
+
+    await runTaskCollaborationWithCodex({
+      prompt: "새 게임 아이디어를 만들어줘",
+      contextSummary: "",
+      participantRoleIds: ["researcher", "game_designer"],
+      participantPrompts: {
+        researcher: "researcher-assignment",
+        game_designer: "designer-assignment",
+      },
+      synthesisRoleId: "game_designer",
+      criticRoleId: "researcher",
+      cappedParticipantCount: false,
+      executeRoleRun,
+    });
+
+    expect(executeRoleRun).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      roleId: "researcher",
+      promptMode: "brief",
+      prompt: expect.stringContaining("researcher-assignment"),
+    }));
+    expect(executeRoleRun).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      roleId: "game_designer",
+      promptMode: "brief",
+      prompt: expect.stringContaining("designer-assignment"),
+    }));
+  });
+
+  it("runs a GPT-5.4 xhigh orchestration step before briefs when adaptive orchestration is enabled", async () => {
+    const executeRoleRun = vi.fn(async (params: {
+      roleId: string;
+      prompt: string;
+      promptMode: "orchestrate" | "brief" | "critique" | "final";
+      internal: boolean;
+      model?: string;
+      reasoning?: string;
+    }) => {
+      if (params.promptMode === "orchestrate") {
+        return {
+          roleId: params.roleId,
+          runId: `${params.roleId}-orchestrate`,
+          summary: JSON.stringify({
+            participant_role_ids: ["game_designer", "researcher", "unity_architect"],
+            primary_role_id: "game_designer",
+            critic_role_id: "unity_architect",
+            orchestration_summary: "메인 오케스트레이터가 designer 중심으로 재배치했습니다.",
+            role_assignments: {
+              game_designer: "designer-plan",
+              researcher: "research-plan",
+              unity_architect: "architect-plan",
+            },
+          }),
+          artifactPaths: ["/orchestration.json"],
+        };
+      }
+      return {
+        roleId: params.roleId,
+        runId: `${params.roleId}-${params.promptMode}`,
+        summary: `${params.roleId}-${params.promptMode}-summary`,
+        artifactPaths: [`/${params.roleId}/${params.promptMode}.md`],
+      };
+    });
+
+    await runTaskCollaborationWithCodex({
+      prompt: "새 게임 아이디어를 fanout으로 토론해서 골라줘",
+      contextSummary: "",
+      participantRoleIds: ["game_designer", "researcher"],
+      candidateRoleIds: ["game_designer", "researcher", "unity_architect"],
+      requestedRoleIds: ["researcher", "unity_architect"],
+      participantPrompts: {
+        game_designer: "designer-base",
+        researcher: "research-base",
+        unity_architect: "architect-base",
+      },
+      intent: "ideation",
+      synthesisRoleId: "game_designer",
+      criticRoleId: "researcher",
+      cappedParticipantCount: false,
+      useAdaptiveOrchestrator: true,
+      executeRoleRun,
+    });
+
+    expect(executeRoleRun).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      roleId: "game_designer",
+      promptMode: "orchestrate",
+      internal: true,
+      model: "GPT-5.4",
+      reasoning: "매우 높음",
+    }));
+    expect(executeRoleRun).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      roleId: "game_designer",
+      promptMode: "brief",
+      prompt: expect.stringContaining("designer-plan"),
+    }));
+    expect(executeRoleRun).toHaveBeenNthCalledWith(3, expect.objectContaining({
+      roleId: "researcher",
+      promptMode: "brief",
+      prompt: expect.stringContaining("research-plan"),
+    }));
+    expect(executeRoleRun).toHaveBeenNthCalledWith(4, expect.objectContaining({
+      roleId: "unity_architect",
+      promptMode: "brief",
+      prompt: expect.stringContaining("architect-plan"),
+    }));
   });
 });

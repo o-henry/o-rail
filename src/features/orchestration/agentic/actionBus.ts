@@ -60,10 +60,15 @@ export type AgenticAction =
         prompt?: string;
         sourceTab?: "tasks" | "tasks-thread";
         roleIds: string[];
+        candidateRoleIds?: string[];
+        requestedRoleIds?: string[];
+        rolePrompts?: Record<string, string>;
+        intent?: string;
         primaryRoleId: string;
         synthesisRoleId: string;
         criticRoleId?: string;
         cappedParticipantCount?: boolean;
+        useAdaptiveOrchestrator?: boolean;
       };
     }
   | {

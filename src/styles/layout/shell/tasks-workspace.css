@@ -2049,8 +2049,8 @@
 }
 
 .tasks-thread-files-panel.is-empty {
-  min-height: 132px;
-  grid-template-rows: auto 1fr;
+  min-height: 0;
+  grid-template-rows: auto;
 }
 
 .tasks-thread-files-panel.is-expanded .tasks-thread-file-tree {
@@ -2076,6 +2076,10 @@
   padding: 0 8px 4px;
   color: var(--text-subtle);
   text-align: center;
+}
+
+.tasks-thread-files-panel.is-empty .tasks-thread-files-empty {
+  display: none;
 }
 
 .tasks-thread-file-list button {

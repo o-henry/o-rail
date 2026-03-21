@@ -81,4 +81,31 @@ describe("taskExecutionPolicy", () => {
     expect(plan.primaryRoleId).toBe("researcher");
     expect(plan.participantRoleIds).toEqual(["researcher"]);
   });
+
+  it("treats researcher mentions as hints for ideation requests and keeps designer primary", () => {
+    const plan = createTaskExecutionPlan({
+      enabledRoleIds: ["game_designer", "researcher", "unity_architect", "unity_implementer"],
+      requestedRoleIds: ["researcher"],
+      prompt: "1인 인디용 새 게임 아이디어 5개를 만들고 30초 hook까지 붙여줘",
+    });
+
+    expect(plan.intent).toBe("ideation");
+    expect(plan.primaryRoleId).toBe("game_designer");
+    expect(plan.synthesisRoleId).toBe("game_designer");
+    expect(plan.participantRoleIds).toEqual(["game_designer", "researcher"]);
+    expect(plan.candidateRoleIds).toEqual(["game_designer", "researcher", "unity_architect", "unity_implementer"]);
+    expect(plan.rolePrompts.researcher).toContain("아이디어 자체를 대신 확정하지 말고");
+    expect(plan.rolePrompts.game_designer).toContain("30초 hook");
+  });
+
+  it("enables the adaptive orchestrator for fanout-style multi-role prompts", () => {
+    const plan = createTaskExecutionPlan({
+      enabledRoleIds: ["game_designer", "researcher", "unity_architect", "qa_playtester"],
+      requestedRoleIds: ["researcher", "unity_architect", "game_designer"],
+      prompt: "fanout으로 서로 토론해서 가장 좋은 게임 방향을 선정해줘",
+    });
+
+    expect(plan.mode).toBe("discussion");
+    expect(plan.useAdaptiveOrchestrator).toBe(true);
+  });
 });

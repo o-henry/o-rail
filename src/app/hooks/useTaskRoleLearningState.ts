@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import {
+  deleteTaskRoleLearningRecord,
   loadTaskRoleLearningData,
   readTaskRoleLearningData,
   summarizeTaskRoleLearningImprovementByRole,
@@ -49,10 +50,27 @@ export function useTaskRoleLearningState(params: UseTaskRoleLearningStateParams)
     return () => window.removeEventListener("rail:task-learning-updated", handler as EventListener);
   }, [params.cwd, refresh]);
 
+  const deleteRun = useCallback(async (id: string) => {
+    const next = await deleteTaskRoleLearningRecord({
+      cwd: params.cwd,
+      invokeFn: params.hasTauriRuntime ? params.invokeFn : undefined,
+      id,
+    });
+    setData(next);
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("rail:task-learning-updated", {
+        detail: { cwd: params.cwd },
+      }));
+    }
+    return next;
+  }, [params.cwd, params.hasTauriRuntime, params.invokeFn]);
+
   return {
     data,
     loading,
     refresh,
+    deleteRun,
+    recentRuns: data.runs,
     roleSummaries: summarizeTaskRoleLearningByRole(params.cwd),
     roleImprovementSummaries: summarizeTaskRoleLearningImprovementByRole(params.cwd),
   };

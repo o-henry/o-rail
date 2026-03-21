@@ -1,11 +1,15 @@
 import { formatAdaptiveFamilyLabel } from "../../adaptation/families";
 import type { AdaptiveWorkspaceData } from "../../adaptation/types";
-import { formatTaskRoleLearningRoleLabel } from "../../adaptation/taskRoleLearning";
+import {
+  formatTaskRoleLearningRoleLabel,
+  type TaskRoleLearningRecord,
+} from "../../adaptation/taskRoleLearning";
 
 type AdaptationPageProps = {
   data: AdaptiveWorkspaceData;
   loading: boolean;
   taskLearningLoading?: boolean;
+  taskRoleRuns?: TaskRoleLearningRecord[];
   taskRoleSummaries?: Array<{
     roleId: string;
     successCount: number;
@@ -22,6 +26,7 @@ type AdaptationPageProps = {
     previousSampleSize: number;
   }>;
   onFreeze: () => void;
+  onDeleteTaskRoleRun?: (id: string) => void;
   onResume: () => void;
   onReset: () => void;
 };
@@ -97,11 +102,16 @@ function formatSuccessDelta(value: number | null): string {
   return `이전 대비 ${rounded > 0 ? "+" : ""}${rounded}%p`;
 }
 
+function formatTaskLearningStatus(status: string): string {
+  return status === "done" ? "성공" : "실패";
+}
+
 export default function AdaptationPage(props: AdaptationPageProps) {
   const recentComparisons = props.data.comparisons.slice(0, 6);
   const shadowCandidates = props.data.candidates
     .filter((row) => row.candidateKind !== "current")
     .slice(0, 6);
+  const recentTaskRuns = (props.taskRoleRuns ?? []).slice(0, 12);
   const handleReset = () => {
     if (!confirmAdaptiveReset()) {
       return;
@@ -114,7 +124,7 @@ export default function AdaptationPage(props: AdaptationPageProps) {
 
   return (
     <section className="panel-card settings-view adaptation-view workspace-tab-panel">
-      <section className="adaptation-island">
+      <section className="adaptation-island adaptation-island-wide">
         <div className="adaptation-island-head">
           <div>
             <h2>현재 추천 기본값</h2>
@@ -149,7 +159,7 @@ export default function AdaptationPage(props: AdaptationPageProps) {
         </div>
       </section>
 
-      <section className="adaptation-island">
+      <section className="adaptation-island adaptation-island-wide">
         <div className="adaptation-island-head">
           <div>
             <h2>Tasks 학습 메모리</h2>
@@ -162,38 +172,67 @@ export default function AdaptationPage(props: AdaptationPageProps) {
           </div>
         </div>
         <div className="adaptation-card-list">
-          {props.taskRoleSummaries && props.taskRoleSummaries.length > 0 ? (
-            props.taskRoleSummaries.slice(0, 6).map((row) => {
-              const improvement = taskImprovementByRole.get(row.roleId);
-              return (
-                <article className="adaptation-card" key={row.roleId}>
-                <div className="adaptation-card-head">
-                  <strong>{formatTaskRoleLearningRoleLabel(row.roleId)}</strong>
-                  <small>{row.roleId}</small>
-                </div>
-                <div className="adaptation-card-lines">
-                  <span>성공 {row.successCount}</span>
-                  <span>실패 {row.failureCount}</span>
-                  <span>{row.failureCount > 0 ? "다음 실행에 실패 회피 힌트 적용" : "최근 실패 없음"}</span>
-                </div>
-                {improvement ? (
-                  <div className="adaptation-card-lines">
-                    <span>최근 성공률 {formatPercent(improvement.currentSuccessRate)}</span>
-                    <span>{formatSuccessDelta(improvement.successRateDelta)}</span>
-                    <span>최근 표본 {improvement.recentSampleSize}</span>
-                  </div>
-                ) : null}
-                {row.lastFailureReason ? <p>{row.lastFailureReason}</p> : null}
-                </article>
-              );
-            })
+          {recentTaskRuns.length > 0 ? (
+            <div className="adaptation-table-wrap">
+              <table className="adaptation-table">
+                <thead>
+                  <tr>
+                    <th>역할</th>
+                    <th>상태</th>
+                    <th>메모</th>
+                    <th>요약</th>
+                    <th>시각</th>
+                    <th>관리</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recentTaskRuns.map((row) => {
+                    const aggregate = props.taskRoleSummaries?.find((item) => item.roleId === row.roleId);
+                    const improvement = taskImprovementByRole.get(row.roleId);
+                    const memo = row.status === "done"
+                      ? aggregate
+                        ? `성공 ${aggregate.successCount} / 실패 ${aggregate.failureCount}`
+                        : "최근 성공"
+                      : (row.failureReason || "실패 이유 미기록");
+                    const summary = row.status === "done"
+                      ? (row.summaryExcerpt || row.promptExcerpt || "-")
+                      : (improvement ? `${formatSuccessDelta(improvement.successRateDelta)} · 최근 성공률 ${formatPercent(improvement.currentSuccessRate)}` : row.promptExcerpt || "-");
+                    return (
+                      <tr key={row.id}>
+                        <td>{formatTaskRoleLearningRoleLabel(row.roleId)}</td>
+                        <td>{formatTaskLearningStatus(row.status)}</td>
+                        <td>{memo}</td>
+                        <td>
+                          <div className="adaptation-summary-cell" title={summary}>
+                            {summary}
+                          </div>
+                        </td>
+                        <td className="adaptation-table-time-cell">{formatStamp(row.createdAt)}</td>
+                        <td className="adaptation-table-action-cell">
+                          <button
+                            className="adaptation-row-action"
+                            aria-label="학습 메모리 삭제"
+                            disabled={props.loading || !props.onDeleteTaskRoleRun}
+                            onClick={() => props.onDeleteTaskRoleRun?.(row.id)}
+                            title="삭제"
+                            type="button"
+                          >
+                            <img alt="" aria-hidden="true" className="adaptation-row-action-icon" src="/xmark-small-svgrepo-com.svg" />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           ) : (
             <div className="adaptation-empty">아직 Tasks 학습 기록이 없습니다.</div>
           )}
         </div>
       </section>
 
-      <section className="adaptation-island">
+      <section className="adaptation-island adaptation-island-wide">
         <div className="adaptation-island-head">
           <div>
             <h2>최근 평가 결과</h2>
@@ -225,7 +264,7 @@ export default function AdaptationPage(props: AdaptationPageProps) {
         </div>
       </section>
 
-      <section className="adaptation-island">
+      <section className="adaptation-island adaptation-island-wide">
         <div className="adaptation-island-head">
           <div>
             <h2>시험한 다른 방식</h2>
@@ -253,7 +292,7 @@ export default function AdaptationPage(props: AdaptationPageProps) {
         </div>
       </section>
 
-      <section className="adaptation-island">
+      <section className="adaptation-island adaptation-island-wide">
         <div className="adaptation-island-head">
           <div>
             <h2>관리</h2>

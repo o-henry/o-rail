@@ -360,8 +360,9 @@ export function useAgenticOrchestrationBridge(params: {
       artifactPaths: dedupedArtifactPaths,
       runStatus: params.runStatus,
       failureReason: params.runStatus === "error" ? extractRunEnvelopeError(params.envelope) : "",
+      internal: params.internal,
     });
-    if (typeof window !== "undefined") {
+    if (!params.internal && typeof window !== "undefined") {
       window.dispatchEvent(new CustomEvent("rail:task-learning-updated", {
         detail: { cwd },
       }));
@@ -395,7 +396,7 @@ export function useAgenticOrchestrationBridge(params: {
     includeRoleKnowledge?: boolean;
     handoffToRole?: string;
     handoffRequest?: string;
-    promptMode?: "direct" | "brief" | "critique" | "final";
+    promptMode?: "direct" | "orchestrate" | "brief" | "critique" | "final";
   }) => {
     const sourceTab = params.sourceTab;
     const promptText = String(params.prompt ?? "").trim();
@@ -544,10 +545,15 @@ export function useAgenticOrchestrationBridge(params: {
     prompt?: string;
     sourceTab?: "tasks" | "tasks-thread";
     roleIds: string[];
+    candidateRoleIds?: string[];
+    requestedRoleIds?: string[];
+    rolePrompts?: Record<string, string>;
+    intent?: string;
     primaryRoleId: string;
     synthesisRoleId: string;
     criticRoleId?: string;
     cappedParticipantCount?: boolean;
+    useAdaptiveOrchestrator?: boolean;
   }) => {
     const sourceTab = params.sourceTab === "tasks" ? "tasks" : "tasks-thread";
     if (!params.taskId || !params.roleIds.length) {
@@ -572,9 +578,14 @@ export function useAgenticOrchestrationBridge(params: {
         prompt: String(params.prompt ?? "").trim(),
         contextSummary,
         participantRoleIds: params.roleIds,
+        candidateRoleIds: params.candidateRoleIds,
+        requestedRoleIds: params.requestedRoleIds,
+        participantPrompts: params.rolePrompts,
+        intent: params.intent,
         synthesisRoleId: params.synthesisRoleId,
         criticRoleId: params.criticRoleId,
         cappedParticipantCount: Boolean(params.cappedParticipantCount),
+        useAdaptiveOrchestrator: Boolean(params.useAdaptiveOrchestrator),
         executeRoleRun: async (runParams) => {
           const result = await executeTaskRoleRun({
             roleId: runParams.roleId,
@@ -884,10 +895,15 @@ export function useAgenticOrchestrationBridge(params: {
           prompt: action.payload.prompt,
           sourceTab,
           roleIds: action.payload.roleIds,
+          candidateRoleIds: action.payload.candidateRoleIds,
+          requestedRoleIds: action.payload.requestedRoleIds,
+          rolePrompts: action.payload.rolePrompts,
+          intent: action.payload.intent,
           primaryRoleId: action.payload.primaryRoleId,
           synthesisRoleId: action.payload.synthesisRoleId,
           criticRoleId: action.payload.criticRoleId,
           cappedParticipantCount: action.payload.cappedParticipantCount,
+          useAdaptiveOrchestrator: action.payload.useAdaptiveOrchestrator,
         });
         return;
       }

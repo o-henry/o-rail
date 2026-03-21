@@ -1,3 +1,8 @@
+import {
+  buildAdaptiveOrchestrationPrompt,
+  parseAdaptiveOrchestrationPlan,
+} from "./taskCollaborationOrchestrator";
+
 type CollaborationRoleRunResult = {
   roleId: string;
   runId: string;
@@ -8,7 +13,7 @@ type CollaborationRoleRunResult = {
 type ExecuteRoleRun = (params: {
   roleId: string;
   prompt: string;
-  promptMode: "brief" | "critique" | "final";
+  promptMode: "orchestrate" | "brief" | "critique" | "final";
   internal: boolean;
   model?: string;
   reasoning?: string;
@@ -31,6 +36,15 @@ export type TaskCollaborationResult = {
 const BRIEF_MAX_ATTEMPTS = 2;
 const CRITIQUE_MAX_ATTEMPTS = 2;
 const FINAL_MAX_ATTEMPTS = 2;
+const ORCHESTRATOR_MAX_ATTEMPTS = 2;
+const ORCHESTRATOR_MODEL = "GPT-5.4";
+const ORCHESTRATOR_REASONING = "매우 높음";
+const BRIEF_MODEL = "GPT-5.4-Mini";
+const BRIEF_REASONING = "중간";
+const CRITIQUE_MODEL = "GPT-5.4-Mini";
+const CRITIQUE_REASONING = "중간";
+const FINAL_MODEL = "GPT-5.4";
+const FINAL_REASONING = "높음";
 
 function clip(value: string, maxChars: number): string {
   const normalized = String(value ?? "").trim();
@@ -46,6 +60,7 @@ function renderRoleSummary(result: CollaborationRoleRunResult): string {
 
 function buildBriefPrompt(params: {
   prompt: string;
+  participantPrompt: string;
   contextSummary: string;
   participantRoleIds: string[];
   cappedParticipantCount: boolean;
@@ -56,6 +71,9 @@ function buildBriefPrompt(params: {
     "",
     "# 사용자 요청",
     params.prompt.trim(),
+    "",
+    "# 역할별 배정",
+    params.participantPrompt.trim() || params.prompt.trim(),
     "",
     "# 압축된 스레드 컨텍스트",
     params.contextSummary.trim() || "없음",
@@ -152,7 +170,7 @@ async function executeRoleRunWithRetry(params: {
   executeRoleRun: ExecuteRoleRun;
   roleId: string;
   prompt: string;
-  promptMode: "brief" | "critique" | "final";
+  promptMode: "orchestrate" | "brief" | "critique" | "final";
   internal: boolean;
   model?: string;
   reasoning?: string;
@@ -191,22 +209,94 @@ export async function runTaskCollaborationWithCodex(params: {
   prompt: string;
   contextSummary: string;
   participantRoleIds: string[];
+  candidateRoleIds?: string[];
+  requestedRoleIds?: string[];
+  participantPrompts?: Record<string, string>;
+  intent?: string;
   synthesisRoleId: string;
   criticRoleId?: string;
   cappedParticipantCount: boolean;
+  useAdaptiveOrchestrator?: boolean;
   executeRoleRun: ExecuteRoleRun;
   onProgress?: (progress: CollaborationProgress) => void;
 }): Promise<TaskCollaborationResult> {
+  let participantRoleIds = [...params.participantRoleIds];
+  let synthesisRoleId = params.synthesisRoleId;
+  let criticRoleId = params.criticRoleId;
+  let participantPrompts = { ...(params.participantPrompts ?? {}) };
   const participantResults: CollaborationRoleRunResult[] = [];
   const failedRoleIds: string[] = [];
-  const briefPrompt = buildBriefPrompt({
-    prompt: params.prompt,
-    contextSummary: params.contextSummary,
-    participantRoleIds: params.participantRoleIds,
-    cappedParticipantCount: params.cappedParticipantCount,
-  });
 
-  for (const roleId of params.participantRoleIds) {
+  if (params.useAdaptiveOrchestrator) {
+    const allowedRoleIds = [...new Set((params.candidateRoleIds ?? participantRoleIds).map((roleId) => String(roleId ?? "").trim()).filter(Boolean))];
+    if (allowedRoleIds.length > 0) {
+      params.onProgress?.({
+        roleId: synthesisRoleId,
+        stage: "codex",
+        message: `${synthesisRoleId} 메인 오케스트레이션`,
+      });
+      try {
+        const orchestrationResult = await executeRoleRunWithRetry({
+          executeRoleRun: params.executeRoleRun,
+          roleId: synthesisRoleId,
+          prompt: buildAdaptiveOrchestrationPrompt({
+            prompt: params.prompt,
+            intent: String(params.intent ?? "").trim() || "planning",
+            contextSummary: params.contextSummary,
+            requestedRoleIds: (params.requestedRoleIds ?? []).map((roleId) => String(roleId ?? "").trim()).filter(Boolean),
+            candidateRoleIds: allowedRoleIds,
+            candidateRolePrompts: participantPrompts,
+            maxParticipants: Math.max(1, Math.min(3, allowedRoleIds.length || 1)),
+            heuristicPrimaryRoleId: params.synthesisRoleId,
+            heuristicParticipantRoleIds: participantRoleIds,
+          }),
+          promptMode: "orchestrate",
+          internal: true,
+          model: ORCHESTRATOR_MODEL,
+          reasoning: ORCHESTRATOR_REASONING,
+          outputArtifactName: "orchestration_plan.json",
+          includeRoleKnowledge: false,
+          maxAttempts: ORCHESTRATOR_MAX_ATTEMPTS,
+          onRetryMessage: (message) => params.onProgress?.({
+            roleId: synthesisRoleId,
+            stage: "codex",
+            message,
+          }),
+        });
+        const adaptivePlan = parseAdaptiveOrchestrationPlan({
+          text: orchestrationResult.summary,
+          allowedRoleIds,
+          maxParticipants: Math.max(1, Math.min(3, allowedRoleIds.length || 1)),
+          fallbackPrimaryRoleId: params.synthesisRoleId,
+          fallbackCriticRoleId: params.criticRoleId,
+          fallbackRolePrompts: participantPrompts,
+        });
+        if (adaptivePlan) {
+          participantRoleIds = adaptivePlan.participantRoleIds;
+          synthesisRoleId = adaptivePlan.primaryRoleId;
+          criticRoleId = adaptivePlan.criticRoleId;
+          participantPrompts = {
+            ...participantPrompts,
+            ...adaptivePlan.rolePrompts,
+          };
+          params.onProgress?.({
+            roleId: synthesisRoleId,
+            stage: "codex",
+            message: adaptivePlan.orchestrationSummary,
+          });
+        }
+      } catch (error) {
+        params.onProgress?.({
+          roleId: synthesisRoleId,
+          stage: "codex",
+          message: `메인 오케스트레이션 실패, 규칙 기반 계획으로 계속 진행합니다: ${String(error ?? "unknown error")}`,
+        });
+      }
+    }
+  }
+
+  for (const roleId of participantRoleIds) {
+    const participantPrompt = String(participantPrompts[roleId] ?? params.prompt).trim();
     params.onProgress?.({
       roleId,
       stage: "codex",
@@ -217,11 +307,17 @@ export async function runTaskCollaborationWithCodex(params: {
       participantResults.push(await executeRoleRunWithRetry({
         executeRoleRun: params.executeRoleRun,
         roleId,
-        prompt: briefPrompt,
+        prompt: buildBriefPrompt({
+          prompt: params.prompt,
+          participantPrompt,
+          contextSummary: params.contextSummary,
+          participantRoleIds,
+          cappedParticipantCount: params.cappedParticipantCount,
+        }),
         promptMode: "brief",
         internal: true,
-        model: "GPT-5.4-Mini",
-        reasoning: "낮음",
+        model: BRIEF_MODEL,
+        reasoning: BRIEF_REASONING,
         outputArtifactName: "discussion_brief.md",
         includeRoleKnowledge: false,
         maxAttempts: BRIEF_MAX_ATTEMPTS,
@@ -247,16 +343,16 @@ export async function runTaskCollaborationWithCodex(params: {
   }
 
   let criticResult: CollaborationRoleRunResult | undefined;
-  if (params.criticRoleId && params.criticRoleId !== params.synthesisRoleId && participantResults.length > 1) {
+  if (criticRoleId && criticRoleId !== synthesisRoleId && participantResults.length > 1) {
     params.onProgress?.({
-      roleId: params.criticRoleId,
+      roleId: criticRoleId,
       stage: "critic",
-      message: `${params.criticRoleId} 충돌/누락 검토`,
+      message: `${criticRoleId} 충돌/누락 검토`,
     });
     try {
       criticResult = await executeRoleRunWithRetry({
         executeRoleRun: params.executeRoleRun,
-        roleId: params.criticRoleId,
+        roleId: criticRoleId,
         prompt: buildCritiquePrompt({
           prompt: params.prompt,
           contextSummary: params.contextSummary,
@@ -264,37 +360,37 @@ export async function runTaskCollaborationWithCodex(params: {
         }),
         promptMode: "critique",
         internal: true,
-        model: "GPT-5.4-Mini",
-        reasoning: "낮음",
+        model: CRITIQUE_MODEL,
+        reasoning: CRITIQUE_REASONING,
         outputArtifactName: "discussion_critique.md",
         includeRoleKnowledge: false,
         maxAttempts: CRITIQUE_MAX_ATTEMPTS,
         onRetryMessage: (message) => params.onProgress?.({
-          roleId: params.criticRoleId,
+          roleId: criticRoleId,
           stage: "critic",
           message,
         }),
       });
     } catch (error) {
       params.onProgress?.({
-        roleId: params.criticRoleId,
+        roleId: criticRoleId,
         stage: "critic",
-        message: `${params.criticRoleId} 검토 실패: ${String(error ?? "unknown error")}`,
+        message: `${criticRoleId} 검토 실패: ${String(error ?? "unknown error")}`,
       });
     }
   }
 
   params.onProgress?.({
-    roleId: params.synthesisRoleId,
+    roleId: synthesisRoleId,
     stage: "save",
-    message: `${params.synthesisRoleId} 최종 합성`,
+    message: `${synthesisRoleId} 최종 합성`,
   });
   if (participantResults.length === 0) {
     throw new Error("모든 내부 브리프가 실패해 최종 합성을 진행할 수 없습니다.");
   }
   const finalResult = await executeRoleRunWithRetry({
     executeRoleRun: params.executeRoleRun,
-    roleId: params.synthesisRoleId,
+    roleId: synthesisRoleId,
     prompt: buildFinalPrompt({
       prompt: params.prompt,
       contextSummary: params.contextSummary,
@@ -304,13 +400,13 @@ export async function runTaskCollaborationWithCodex(params: {
     }),
     promptMode: "final",
     internal: false,
-    model: "GPT-5.4",
-    reasoning: "중간",
+    model: FINAL_MODEL,
+    reasoning: FINAL_REASONING,
     outputArtifactName: "final_response.md",
     includeRoleKnowledge: true,
     maxAttempts: FINAL_MAX_ATTEMPTS,
     onRetryMessage: (message) => params.onProgress?.({
-      roleId: params.synthesisRoleId,
+      roleId: synthesisRoleId,
       stage: "save",
       message,
     }),

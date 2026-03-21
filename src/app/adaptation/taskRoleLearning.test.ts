@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   buildTaskRoleLearningPromptContext,
   clearTaskRoleLearningDataForTest,
+  deleteTaskRoleLearningRecord,
   loadTaskRoleLearningData,
   recordTaskRoleLearningOutcome,
   retrieveTaskRoleLearningMemoryModules,
@@ -306,5 +307,52 @@ describe("taskRoleLearning", () => {
 
     expect(context).toBe("");
     vi.useRealTimers();
+  });
+
+  it("does not record internal collaboration briefs into task learning memory", async () => {
+    await recordTaskRoleLearningOutcome({
+      cwd: "/tmp/rail-docs",
+      runId: "internal-brief",
+      roleId: "research_analyst",
+      prompt: "내부 브리프",
+      summary: "중간 요약",
+      artifactPaths: ["a.md"],
+      runStatus: "done",
+      internal: true,
+    });
+
+    expect(loadTaskRoleLearningData("/tmp/rail-docs")).resolves.toEqual(expect.objectContaining({
+      runs: [],
+    }));
+  });
+
+  it("deletes a selected task learning record and persists the new state", async () => {
+    const invokeFn = (vi.fn(async (command: string, args?: Record<string, unknown>) => {
+      if (command === "workspace_write_text") {
+        return String(args?.name ?? "");
+      }
+      throw new Error(`unexpected command: ${command}`);
+    }) as unknown) as <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
+
+    await recordTaskRoleLearningOutcome({
+      cwd: "/tmp/rail-docs",
+      runId: "delete-me",
+      roleId: "research_analyst",
+      prompt: "시장 조사",
+      summary: "삭제 대상",
+      artifactPaths: ["a.md"],
+      runStatus: "done",
+    });
+
+    const next = await deleteTaskRoleLearningRecord({
+      cwd: "/tmp/rail-docs",
+      id: "delete-me:research_analyst",
+      invokeFn,
+    });
+
+    expect(next.runs).toHaveLength(0);
+    expect(invokeFn).toHaveBeenCalledWith("workspace_write_text", expect.objectContaining({
+      name: "task_role_learning.json",
+    }));
   });
 });

@@ -1677,12 +1677,18 @@ export function useTasksThreadState(params: Params) {
               prompt: followupPrompt,
               plan: {
                 mode: "single",
+                intent: "planning",
+                candidateRoleIds: [targetRole],
                 participantRoleIds: [targetRole],
+                requestedRoleIds: [targetRole],
                 primaryRoleId: targetRole,
                 synthesisRoleId: targetRole,
                 maxParticipants: 1,
                 maxRounds: 1,
                 cappedParticipantCount: false,
+                rolePrompts: {},
+                orchestrationSummary: "",
+                useAdaptiveOrchestrator: false,
               },
               publishAction: params.publishAction,
             });

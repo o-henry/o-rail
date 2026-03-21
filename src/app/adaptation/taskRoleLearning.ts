@@ -45,6 +45,7 @@ type RecordTaskRoleLearningOutcomeInput = {
   artifactPaths?: string[];
   runStatus: TaskRoleLearningRunStatus;
   failureReason?: string;
+  internal?: boolean;
 };
 
 type BuildTaskRoleLearningPromptContextInput = {
@@ -594,6 +595,9 @@ export function buildTaskRoleLearningPromptContext(input: BuildTaskRoleLearningP
 }
 
 export async function recordTaskRoleLearningOutcome(input: RecordTaskRoleLearningOutcomeInput): Promise<TaskRoleLearningData> {
+  if (input.internal) {
+    return readTaskRoleLearningData(input.cwd);
+  }
   const current = readTaskRoleLearningData(input.cwd);
   const promptExcerpt = trimLine(input.prompt, 220);
   const summaryExcerpt = trimLine(input.summary, 240);
@@ -633,6 +637,37 @@ export async function recordTaskRoleLearningOutcome(input: RecordTaskRoleLearnin
     try {
       await input.invokeFn<string>("workspace_write_text", {
         cwd: adaptationStorageDir(input.cwd),
+        name: TASK_ROLE_LEARNING_FILE_NAME,
+        content: `${JSON.stringify(next, null, 2)}\n`,
+      });
+    } catch {
+      // ignore workspace persistence failures
+    }
+  }
+  return next;
+}
+
+export async function deleteTaskRoleLearningRecord(params: {
+  cwd: string;
+  id: string;
+  invokeFn?: InvokeFn;
+}): Promise<TaskRoleLearningData> {
+  const current = readTaskRoleLearningData(params.cwd);
+  const targetId = trimLine(params.id, 120);
+  if (!targetId) {
+    return current;
+  }
+  const next: TaskRoleLearningData = {
+    version: 1,
+    workspace: normalizeWorkspace(params.cwd),
+    updatedAt: nowIso(),
+    runs: current.runs.filter((row) => row.id !== targetId),
+  };
+  writeCache(params.cwd, next);
+  if (params.invokeFn && String(params.cwd ?? "").trim()) {
+    try {
+      await params.invokeFn<string>("workspace_write_text", {
+        cwd: adaptationStorageDir(params.cwd),
         name: TASK_ROLE_LEARNING_FILE_NAME,
         content: `${JSON.stringify(next, null, 2)}\n`,
       });

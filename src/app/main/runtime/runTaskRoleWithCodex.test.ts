@@ -1,7 +1,12 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { runTaskRoleWithCodex } from "./runTaskRoleWithCodex";
+import { clearTaskRoleLearningDataForTest, recordTaskRoleLearningOutcome } from "../../adaptation/taskRoleLearning";
 
 describe("runTaskRoleWithCodex", () => {
+  beforeEach(() => {
+    clearTaskRoleLearningDataForTest();
+  });
+
   it("uses the task prompt pack and writes role artifacts for thread runs", async () => {
     const writtenArtifacts = ["prompt.md", "implementation_report.md", "response.json"];
     let artifactIndex = 0;
@@ -347,6 +352,101 @@ describe("runTaskRoleWithCodex", () => {
     );
     expect(collectionJsonCall).toBeTruthy();
     expect(String((collectionJsonCall?.[1] as Record<string, unknown>).content ?? "")).toContain("\"questionType\": \"genre_ranking\"");
+  });
+
+  it("injects recent task learning hints into later role prompts", async () => {
+    await recordTaskRoleLearningOutcome({
+      cwd: "/tmp/rail-storage",
+      runId: "seed-run",
+      roleId: "research_analyst",
+      prompt: "스팀 메타크리틱 장르 조사",
+      summary: "Steam과 Metacritic 비교 축으로 정리하고 장르별 대표작을 먼저 분리했다.",
+      artifactPaths: ["a.md"],
+      runStatus: "done",
+    });
+
+    const writtenArtifacts = new Map<string, string>();
+    const invokeFn = (vi.fn(async (command: string, args?: Record<string, unknown>) => {
+      switch (command) {
+        case "task_agent_pack_read":
+          return {
+            id: "researcher",
+            label: "RESEARCHER",
+            studioRoleId: "research_analyst",
+            model: "gpt-5.4",
+            modelReasoningEffort: "medium",
+            sandboxMode: "workspace-write",
+            outputArtifactName: "research_findings.md",
+            promptDocFile: "researcher.md",
+            developerInstructions: "자료 조사와 웹 리서치를 수행하라.",
+          };
+        case "thread_load":
+          return {
+            thread: { model: "GPT-5.4", reasoning: "중간" },
+            task: { workspacePath: "/tmp/mockking" },
+          };
+        case "research_storage_plan_agent_job":
+          return {
+            job: {
+              jobId: "collect-learning",
+              label: "Researcher · learning",
+              resolvedSourceType: "community",
+              collectorStrategy: "dynamic_search",
+              keywords: [],
+              domains: [],
+              planner: {
+                analysisMode: "topic_research",
+                aggregationUnit: "evidence",
+                dataScope: "cross_source_topic",
+                metricFocus: [],
+                instructions: [],
+              },
+            },
+          };
+        case "research_storage_execute_job":
+          return { job: { jobId: "collect-learning" } };
+        case "research_storage_collection_metrics":
+          return {
+            totals: { items: 0, sources: 0, verified: 0, warnings: 0, conflicted: 0, avgScore: 0 },
+            bySourceType: [],
+            byVerificationStatus: [],
+            timeline: [],
+            topSources: [],
+          };
+        case "research_storage_list_collection_items":
+          return { items: [] };
+        case "research_storage_collection_genre_rankings":
+          return { popular: [], quality: [] };
+        case "thread_start":
+          return { threadId: "thread-codex-learning" };
+        case "turn_start_blocking":
+          return {
+            id: "turn-learning",
+            status: "completed",
+            output_text: "## 조사 결론\n- 학습 메모리가 포함된 실행입니다.",
+          };
+        case "workspace_write_text": {
+          const path = `${String(args?.cwd)}/${String(args?.name)}`;
+          writtenArtifacts.set(String(args?.name), String(args?.content ?? ""));
+          return path;
+        }
+        default:
+          throw new Error(`unexpected command: ${command}`);
+      }
+    }) as unknown) as <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
+
+    await runTaskRoleWithCodex({
+      invokeFn,
+      storageCwd: "/tmp/rail-storage",
+      taskId: "thread-learning",
+      studioRoleId: "research_analyst",
+      prompt: "스팀 메타크리틱 장르 조사와 대표작 비교",
+      sourceTab: "tasks-thread",
+      runId: "role-run-learning",
+    });
+
+    expect(writtenArtifacts.get("prompt.md")).toContain("TASK LEARNING MEMORY");
+    expect(writtenArtifacts.get("prompt.md")).toContain("비슷한 성공 패턴");
   });
 
   it("backfills collection artifacts when the pre-run collection pipeline fails but the role still succeeds", async () => {

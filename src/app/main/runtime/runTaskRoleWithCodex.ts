@@ -5,6 +5,7 @@ import { extractCompletedStatus, extractDeltaText, extractUsageStats } from "../
 import { extractStringByPaths } from "../../../shared/lib/valueUtils";
 import { prepareResearcherCollectionContext } from "./researcherCollection";
 import { ensureResearcherCollectionArtifacts } from "./researcherCollectionArtifacts";
+import { buildTaskRoleLearningPromptContext } from "../../adaptation/taskRoleLearning";
 
 type InvokeFn = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
 
@@ -523,7 +524,17 @@ export async function runTaskRoleWithCodex(input: RunTaskRoleWithCodexInput): Pr
   const reasoningEffort = toTurnReasoningEffort(
     input.reasoning || pack.modelReasoningEffort || context.threadReasoning || "중간",
   );
-  const promptText = buildRoleTurnPrompt(pack, input.prompt ?? "", context.projectPath, researcherCollection.promptContext);
+  const learningPromptContext = buildTaskRoleLearningPromptContext({
+    cwd: input.storageCwd,
+    roleId: pack.studioRoleId || input.studioRoleId,
+    prompt: input.prompt ?? "",
+  });
+  const promptText = buildRoleTurnPrompt(
+    pack,
+    input.prompt ?? "",
+    context.projectPath,
+    [researcherCollection.promptContext, learningPromptContext].filter(Boolean).join("\n\n"),
+  );
 
   const threadStart = await startCodexThreadWithRecovery({
     invokeFn: input.invokeFn,

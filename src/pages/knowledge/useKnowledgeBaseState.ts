@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   mergeKnowledgeEntryRows,
   persistKnowledgeIndexToWorkspace,
@@ -130,12 +130,16 @@ export function useKnowledgeBaseState({ cwd, posts }: UseKnowledgeBaseStateParam
   const [detailError, setDetailError] = useState("");
   const [pendingGroupDelete, setPendingGroupDelete] = useState<PendingKnowledgeGroupDelete | null>(null);
 
-  const mergePostEntries = (rows: KnowledgeEntry[]) => {
-    const postRows = posts.map((post) => toKnowledgeEntry(post)).filter((row): row is KnowledgeEntry => row !== null);
-    const merged = mergeKnowledgeEntryRows([...rows, ...postRows]);
+  const postEntries = useMemo(
+    () => posts.map((post) => toKnowledgeEntry(post)).filter((row): row is KnowledgeEntry => row !== null),
+    [posts],
+  );
+
+  const mergePostEntries = useCallback((rows: KnowledgeEntry[]) => {
+    const merged = mergeKnowledgeEntryRows([...rows, ...postEntries]);
     writeKnowledgeEntries(merged);
     return toVisibleKnowledgeRows(merged, cwd);
-  };
+  }, [cwd, postEntries]);
 
   useEffect(() => {
     let cancelled = false;
@@ -164,7 +168,11 @@ export function useKnowledgeBaseState({ cwd, posts }: UseKnowledgeBaseStateParam
     return () => {
       cancelled = true;
     };
-  }, [cwd, posts]);
+  }, [cwd, mergePostEntries]);
+
+  useEffect(() => {
+    setEntries(mergePostEntries(readKnowledgeEntries()));
+  }, [mergePostEntries]);
 
   const filtered = useMemo(() => sortKnowledgeEntries(entries), [entries]);
   const grouped = useMemo<KnowledgeGroup[]>(() => groupKnowledgeEntries(filtered), [filtered]);

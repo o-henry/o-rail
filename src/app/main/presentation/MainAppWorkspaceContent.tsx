@@ -76,15 +76,17 @@ export function MainAppWorkspaceContent(props: any) {
           />
         </div>
       ) : null}
-      {props.workspaceTab === "adaptation" && (
-        <AdaptationPage
-          data={props.adaptiveWorkspaceData}
-          loading={props.adaptiveWorkspaceLoading}
-          onFreeze={props.onFreezeAdaptiveWorkspace}
-          onResume={props.onResumeAdaptiveWorkspace}
-          onReset={props.onResetAdaptiveWorkspace}
-        />
-      )}
+      {mountedTabs.adaptation ? (
+        <div hidden={props.workspaceTab !== "adaptation"}>
+          <AdaptationPage
+            data={props.adaptiveWorkspaceData}
+            loading={props.adaptiveWorkspaceLoading}
+            onFreeze={props.onFreezeAdaptiveWorkspace}
+            onResume={props.onResumeAdaptiveWorkspace}
+            onReset={props.onResetAdaptiveWorkspace}
+          />
+        </div>
+      ) : null}
       {mountedTabs.tasks ? (
         <div hidden={props.workspaceTab !== "tasks"}>
           <TasksPage

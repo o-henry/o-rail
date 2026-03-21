@@ -14,6 +14,7 @@ import { runTaskCollaborationWithCodex } from "../main/runtime/runTaskCollaborat
 import { shouldSkipRecentTaskRoleRun } from "../main/runtime/taskRoleRunDeduper";
 import { shouldDeduplicateTaskRoleRun } from "../main/runtime/taskRoleRunDeduperPolicy";
 import type { AgenticQueue } from "../main/runtime/agenticQueue";
+import { recordTaskRoleLearningOutcome } from "../adaptation/taskRoleLearning";
 import {
   bootstrapRoleKnowledgeProfile,
   injectRoleKnowledgePrompt,
@@ -349,6 +350,17 @@ export function useAgenticOrchestrationBridge(params: {
       `.rail/studio_runs/${params.runId}/run.json`,
     ];
     const dedupedArtifactPaths = [...new Set(artifactPaths.map((row) => String(row ?? "").trim()).filter(Boolean))];
+    await recordTaskRoleLearningOutcome({
+      cwd,
+      invokeFn,
+      runId: params.runId,
+      roleId: params.roleId,
+      prompt: params.prompt,
+      summary: params.summary,
+      artifactPaths: dedupedArtifactPaths,
+      runStatus: params.runStatus,
+      failureReason: params.runStatus === "error" ? extractRunEnvelopeError(params.envelope) : "",
+    });
     onRoleRunCompleted?.({
       runId: params.runId,
       roleId: params.roleId,

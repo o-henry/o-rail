@@ -1,10 +1,11 @@
+import { useCallback, useEffect, useState } from "react";
 import AppNav from "../../../components/AppNav";
 import WorkflowPage from "../../../pages/workflow/WorkflowPage";
 import WorkflowRagModeDock from "../../../pages/workflow/WorkflowRagModeDock";
 import { NavIcon } from "../../mainAppGraphHelpers";
 import WorkflowCanvasPane from "./WorkflowCanvasPane";
 import { MainAppModals } from "./MainAppModals";
-import { MainAppWorkspaceContent } from "./MainAppWorkspaceContent";
+import { MainAppWorkspaceContent, WorkspaceTabSkeleton } from "./MainAppWorkspaceContent";
 
 export function MainAppShell(props: any) {
   const {
@@ -177,6 +178,18 @@ export function MainAppShell(props: any) {
     workspaceEvents,
     workspaceTab,
   } = props;
+  const normalizedWorkspaceTab = workspaceTab === "bridge" ? "settings" : workspaceTab;
+  const [displayWorkspaceTab, setDisplayWorkspaceTab] = useState(normalizedWorkspaceTab);
+
+  useEffect(() => {
+    setDisplayWorkspaceTab(normalizedWorkspaceTab);
+  }, [normalizedWorkspaceTab]);
+
+  const handleSelectWorkspaceTab = useCallback((next: string) => {
+    const normalizedNext = next === "bridge" ? "settings" : next;
+    setDisplayWorkspaceTab(normalizedNext);
+    onSelectWorkspaceTab(next);
+  }, [onSelectWorkspaceTab]);
 
   return (
     <main
@@ -185,9 +198,9 @@ export function MainAppShell(props: any) {
     >
       <div aria-hidden="true" className="window-drag-region" data-tauri-drag-region />
       <AppNav
-        activeTab={workspaceTab}
+        activeTab={displayWorkspaceTab}
         hidden={tasksLeftNavHidden}
-        onSelectTab={onSelectWorkspaceTab}
+        onSelectTab={handleSelectWorkspaceTab}
         renderIcon={(tab, active) => <NavIcon active={active} tab={tab} />}
       />
       <section
@@ -216,117 +229,123 @@ export function MainAppShell(props: any) {
           </div>
         )}
 
-        {workspaceTab === "workflow" && (
-          <WorkflowPage canvasFullscreen={canvasFullscreen}>
-            <WorkflowCanvasPane
-              attachedFiles={graphKnowledge.files}
-              boundedStageHeight={boundedStageHeight}
-              boundedStageWidth={boundedStageWidth}
-              canRunGraphNow={canRunGraphNow}
-              canvasFullscreen={canvasFullscreen}
-              canvasNodes={canvasNodes}
-              graphNodes={graph.nodes}
-              canvasZoom={canvasZoom}
-              graphViewMode={graphViewMode}
-              connectPreviewLine={connectPreviewLine}
-              deleteNode={deleteNode}
-              draggingNodeIds={draggingNodeIds}
-              edgeLines={edgeLines}
-              expandedRoleNodeIds={expandedRoleNodeIds}
-              formatNodeElapsedTime={formatNodeElapsedTime}
-              graphCanvasRef={graphCanvasRef}
-              onActivateWorkspacePanels={onActivateWorkflowPanels}
-              isConnectingDrag={isConnectingDrag}
-              isGraphRunning={isGraphRunning}
-              isNodeDragAllowedTarget={isNodeDragAllowedTarget}
-              isWorkflowBusy={isWorkflowBusy}
-              marqueeSelection={marqueeSelection}
-              nodeAnchorSides={nodeAnchorSides}
-              nodeCardSummary={nodeCardSummary}
-              nodeStates={nodeStates}
-              nodeStatusLabel={nodeStatusLabel}
-              nodeTypeLabel={nodeTypeLabel}
-              openTerminalNodeId={openTerminalNodeId}
-              onCancelGraphRun={onCancelGraphRun}
-              onCanvasKeyDown={onCanvasKeyDown}
-              onCanvasMouseDown={onCanvasMouseDown}
-              onCanvasMouseMove={onCanvasMouseMove}
-              onCanvasMouseUp={onCanvasMouseUp}
-              onCanvasWheel={onCanvasWheel}
-              onCanvasZoomIn={onCanvasZoomIn}
-              onCanvasZoomOut={onCanvasZoomOut}
-              onEdgeDragStart={onEdgeDragStart}
-              onAssignSelectedEdgeAnchor={onAssignSelectedEdgeAnchor}
-              onNodeAnchorDragStart={onNodeAnchorDragStart}
-              onNodeAnchorDrop={onNodeAnchorDrop}
-              onNodeDragStart={onNodeDragStart}
-              onOpenFeedFromNode={onOpenFeedFromNode}
-              onOpenKnowledgeFilePicker={onOpenKnowledgeFilePicker}
-              onOpenWebInputForNode={onOpenWebInputForNode}
-              onAddRolePerspectivePass={onAddRolePerspectivePassForNode}
-              onAddRoleReviewPass={onAddRoleReviewPassForNode}
-              onSetPmPlanningMode={onSetPmPlanningMode}
-              onToggleNodeTerminal={onToggleNodeTerminal}
-              onToggleRoleInternalExpanded={onToggleRoleInternalExpanded}
-              onClearGraph={props.onClearGraphCanvas}
-              onRedoGraph={onRedoGraph}
-              onReopenPendingWebTurn={onReopenPendingWebTurn}
-              onRemoveKnowledgeFile={onRemoveKnowledgeFile}
-              onRunGraph={onRunGraph}
-              onUndoGraph={onUndoGraph}
-              panMode={panMode}
-              pendingWebTurn={pendingWebTurn}
-              questionDirectInputNodeIds={questionDirectInputNodeIds}
-              questionInputRef={questionInputRef}
-              redoStackLength={redoStack.length}
-              runtimeNowMs={runtimeNowMs}
-              selectedEdgeKey={selectedEdgeKey}
-              selectedEdgeNodeIdSet={selectedEdgeNodeIdSet}
-              selectedNodeIds={selectedNodeIds}
-              setCanvasFullscreen={setCanvasFullscreen}
-              setNodeSelection={setNodeSelection}
-              setPanMode={setPanMode}
-              setSelectedEdgeKey={setSelectedEdgeKey}
-              onApplyModelSelection={onApplyModelSelection}
-              agentTerminalIsland={workflowAgentTerminalIslandElement}
-              setWorkflowQuestion={props.setWorkflowQuestion}
-              stageInsetX={stageInsetX}
-              stageInsetY={stageInsetY}
-              stageInsetBottom={stageInsetBottom}
-              suspendedWebTurn={suspendedWebTurn}
-              turnModelLabel={turnModelLabel}
-              turnRoleLabel={turnRoleLabel}
-              canClearGraph={canClearGraph}
-              undoStackLength={undoStack.length}
-              workflowQuestion={workflowQuestion}
-            />
+        {displayWorkspaceTab === "workflow" && (
+          normalizedWorkspaceTab === "workflow" ? (
+            <WorkflowPage canvasFullscreen={canvasFullscreen}>
+              <WorkflowCanvasPane
+                attachedFiles={graphKnowledge.files}
+                boundedStageHeight={boundedStageHeight}
+                boundedStageWidth={boundedStageWidth}
+                canRunGraphNow={canRunGraphNow}
+                canvasFullscreen={canvasFullscreen}
+                canvasNodes={canvasNodes}
+                graphNodes={graph.nodes}
+                canvasZoom={canvasZoom}
+                graphViewMode={graphViewMode}
+                connectPreviewLine={connectPreviewLine}
+                deleteNode={deleteNode}
+                draggingNodeIds={draggingNodeIds}
+                edgeLines={edgeLines}
+                expandedRoleNodeIds={expandedRoleNodeIds}
+                formatNodeElapsedTime={formatNodeElapsedTime}
+                graphCanvasRef={graphCanvasRef}
+                onActivateWorkspacePanels={onActivateWorkflowPanels}
+                isConnectingDrag={isConnectingDrag}
+                isGraphRunning={isGraphRunning}
+                isNodeDragAllowedTarget={isNodeDragAllowedTarget}
+                isWorkflowBusy={isWorkflowBusy}
+                marqueeSelection={marqueeSelection}
+                nodeAnchorSides={nodeAnchorSides}
+                nodeCardSummary={nodeCardSummary}
+                nodeStates={nodeStates}
+                nodeStatusLabel={nodeStatusLabel}
+                nodeTypeLabel={nodeTypeLabel}
+                openTerminalNodeId={openTerminalNodeId}
+                onCancelGraphRun={onCancelGraphRun}
+                onCanvasKeyDown={onCanvasKeyDown}
+                onCanvasMouseDown={onCanvasMouseDown}
+                onCanvasMouseMove={onCanvasMouseMove}
+                onCanvasMouseUp={onCanvasMouseUp}
+                onCanvasWheel={onCanvasWheel}
+                onCanvasZoomIn={onCanvasZoomIn}
+                onCanvasZoomOut={onCanvasZoomOut}
+                onEdgeDragStart={onEdgeDragStart}
+                onAssignSelectedEdgeAnchor={onAssignSelectedEdgeAnchor}
+                onNodeAnchorDragStart={onNodeAnchorDragStart}
+                onNodeAnchorDrop={onNodeAnchorDrop}
+                onNodeDragStart={onNodeDragStart}
+                onOpenFeedFromNode={onOpenFeedFromNode}
+                onOpenKnowledgeFilePicker={onOpenKnowledgeFilePicker}
+                onOpenWebInputForNode={onOpenWebInputForNode}
+                onAddRolePerspectivePass={onAddRolePerspectivePassForNode}
+                onAddRoleReviewPass={onAddRoleReviewPassForNode}
+                onSetPmPlanningMode={onSetPmPlanningMode}
+                onToggleNodeTerminal={onToggleNodeTerminal}
+                onToggleRoleInternalExpanded={onToggleRoleInternalExpanded}
+                onClearGraph={props.onClearGraphCanvas}
+                onRedoGraph={onRedoGraph}
+                onReopenPendingWebTurn={onReopenPendingWebTurn}
+                onRemoveKnowledgeFile={onRemoveKnowledgeFile}
+                onRunGraph={onRunGraph}
+                onUndoGraph={onUndoGraph}
+                panMode={panMode}
+                pendingWebTurn={pendingWebTurn}
+                questionDirectInputNodeIds={questionDirectInputNodeIds}
+                questionInputRef={questionInputRef}
+                redoStackLength={redoStack.length}
+                runtimeNowMs={runtimeNowMs}
+                selectedEdgeKey={selectedEdgeKey}
+                selectedEdgeNodeIdSet={selectedEdgeNodeIdSet}
+                selectedNodeIds={selectedNodeIds}
+                setCanvasFullscreen={setCanvasFullscreen}
+                setNodeSelection={setNodeSelection}
+                setPanMode={setPanMode}
+                setSelectedEdgeKey={setSelectedEdgeKey}
+                onApplyModelSelection={onApplyModelSelection}
+                agentTerminalIsland={workflowAgentTerminalIslandElement}
+                setWorkflowQuestion={props.setWorkflowQuestion}
+                stageInsetX={stageInsetX}
+                stageInsetY={stageInsetY}
+                stageInsetBottom={stageInsetBottom}
+                suspendedWebTurn={suspendedWebTurn}
+                turnModelLabel={turnModelLabel}
+                turnRoleLabel={turnRoleLabel}
+                canClearGraph={canClearGraph}
+                undoStackLength={undoStack.length}
+                workflowQuestion={workflowQuestion}
+              />
 
-            {!canvasFullscreen && workflowSidePanelsVisible && (
-              <div className="workflow-right-stack">
-                {graphViewMode === "rag" ? (
-                  <WorkflowRagModeDock
-                    isGraphRunning={isGraphRunning}
-                    onAddRagNode={props.onAddViaFlowNode}
-                    onApplyTemplate={props.onApplyRagTemplate}
-                    onSelectNode={props.onSelectRagModeNode}
-                    onUpdateFlowId={props.onUpdateRagModeFlowId}
-                    onUpdateSourceOptions={props.onUpdateRagSourceOptions}
-                    ragNodeProgress={ragNodeProgress}
-                    ragNodes={ragNodes}
-                    ragTemplateOptions={ragTemplateOptions}
-                    selectedNodeId={selectedNodeId}
-                    viaNodeOptions={viaNodeOptions}
-                  />
-                ) : (
-                  <>
-                    {showInspectorFirst ? workflowInspectorPaneElement : workflowRoleDockElement}
-                    {workflowUnityAutomationIslandElement}
-                    {showInspectorFirst ? workflowRoleDockElement : workflowInspectorPaneElement}
-                  </>
-                )}
-              </div>
-            )}
-          </WorkflowPage>
+              {!canvasFullscreen && workflowSidePanelsVisible && (
+                <div className="workflow-right-stack">
+                  {graphViewMode === "rag" ? (
+                    <WorkflowRagModeDock
+                      isGraphRunning={isGraphRunning}
+                      onAddRagNode={props.onAddViaFlowNode}
+                      onApplyTemplate={props.onApplyRagTemplate}
+                      onSelectNode={props.onSelectRagModeNode}
+                      onUpdateFlowId={props.onUpdateRagModeFlowId}
+                      onUpdateSourceOptions={props.onUpdateRagSourceOptions}
+                      ragNodeProgress={ragNodeProgress}
+                      ragNodes={ragNodes}
+                      ragTemplateOptions={ragTemplateOptions}
+                      selectedNodeId={selectedNodeId}
+                      viaNodeOptions={viaNodeOptions}
+                    />
+                  ) : (
+                    <>
+                      {showInspectorFirst ? workflowInspectorPaneElement : workflowRoleDockElement}
+                      {workflowUnityAutomationIslandElement}
+                      {showInspectorFirst ? workflowRoleDockElement : workflowInspectorPaneElement}
+                    </>
+                  )}
+                </div>
+              )}
+            </WorkflowPage>
+          ) : (
+            <section className={`workflow-layout workspace-tab-panel ${canvasFullscreen ? "canvas-only-layout" : ""}`.trim()}>
+              <WorkspaceTabSkeleton tab="workflow" />
+            </section>
+          )
         )}
         <MainAppWorkspaceContent
           agentLaunchRequest={agentLaunchRequest}
@@ -413,8 +432,9 @@ export function MainAppShell(props: any) {
           webBridgeStatus={webBridgeStatus}
           webWorkerBusy={webWorkerBusy}
           workflowRoleId={workflowRoleId}
+          displayWorkspaceTab={displayWorkspaceTab}
           workspaceEvents={workspaceEvents}
-          workspaceTab={workspaceTab}
+          workspaceTab={normalizedWorkspaceTab}
         />
       </section>
       <MainAppModals

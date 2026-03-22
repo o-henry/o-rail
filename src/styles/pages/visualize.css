@@ -1227,7 +1227,8 @@
 
 .visualize-monitor-report-link-button {
   flex: 0 0 auto;
-  min-height: 32px;
+  height: 36px;
+  min-height: 36px;
   border: 1px solid rgba(203, 213, 225, 0.95);
   border-radius: 2px;
   background: #ffffff;

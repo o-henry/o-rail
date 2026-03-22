@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   blockCoordinationRun,
   completeDelegateTask,
@@ -117,6 +117,8 @@ import { t as translate } from "../../i18n";
 import { findRuntimeModelOption } from "../../features/workflow/runtimeModelOptions";
 
 type InvokeFn = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
+const LIVE_ROLE_EVENT_FLUSH_MS = 120;
+const LIVE_ROLE_EVENT_REFRESH_DEBOUNCE_MS = 220;
 
 type Params = {
   cwd: string;
@@ -145,6 +147,16 @@ type LiveProcessEvent = {
   stage: string;
   message: string;
   at: string;
+};
+
+type TasksRoleRuntimeEvent = {
+  taskId?: string;
+  runId?: string;
+  studioRoleId?: string;
+  type?: string;
+  stage?: string | null;
+  message?: string;
+  at?: string;
 };
 
 function formatError(error: unknown): string {
@@ -246,6 +258,102 @@ export function deriveAutomaticResearchProviderBadge(params: {
     return "WEB / LIGHTPANDA";
   }
   return null;
+}
+
+export function reduceLiveRoleEventBatch(params: {
+  activeThreadId: string;
+  currentNotes: Partial<Record<ThreadRoleId, { message: string; updatedAt: string }>>;
+  currentEvents: LiveProcessEvent[];
+  details: TasksRoleRuntimeEvent[];
+}): {
+  nextNotes: Partial<Record<ThreadRoleId, { message: string; updatedAt: string }>>;
+  nextEvents: LiveProcessEvent[];
+  shouldRefresh: boolean;
+} {
+  const activeThreadId = String(params.activeThreadId ?? "").trim();
+  if (!activeThreadId || params.details.length === 0) {
+    return {
+      nextNotes: params.currentNotes,
+      nextEvents: params.currentEvents,
+      shouldRefresh: false,
+    };
+  }
+  let nextNotes = params.currentNotes;
+  let notesChanged = false;
+  let nextEvents = params.currentEvents;
+  let eventsChanged = false;
+  let shouldRefresh = false;
+  const knownEventIds = new Set(params.currentEvents.map((entry) => entry.id));
+
+  for (const detail of params.details) {
+    if (String(detail.taskId ?? "").trim() !== activeThreadId) {
+      continue;
+    }
+    const roleId = getTaskAgentPresetIdByStudioRoleId(detail.studioRoleId);
+    if (!roleId) {
+      continue;
+    }
+    const eventType = String(detail.type ?? "").trim();
+    const stageLabel = String(detail.stage ?? "").trim();
+    const message = String(detail.message ?? "").trim() || (stageLabel ? `${stageLabel} 진행 중` : "작업 중");
+    const updatedAt = String(detail.at ?? "").trim() || nowIso();
+
+    if (eventType === "run_done" || eventType === "run_error") {
+      if (Object.prototype.hasOwnProperty.call(nextNotes, roleId)) {
+        if (!notesChanged) {
+          nextNotes = { ...nextNotes };
+          notesChanged = true;
+        }
+        delete nextNotes[roleId];
+      }
+      shouldRefresh = true;
+    } else {
+      const previous = nextNotes[roleId];
+      if (!previous || previous.message !== message || previous.updatedAt !== updatedAt) {
+        if (!notesChanged) {
+          nextNotes = { ...nextNotes };
+          notesChanged = true;
+        }
+        nextNotes[roleId] = {
+          message,
+          updatedAt,
+        };
+      }
+    }
+
+    const eventId = [
+      String(detail.runId ?? "").trim(),
+      roleId,
+      eventType,
+      stageLabel,
+      message,
+    ].filter(Boolean).join(":");
+    const nextEventId = eventId || nextId("process");
+    if (knownEventIds.has(nextEventId)) {
+      continue;
+    }
+    if (!eventsChanged) {
+      nextEvents = [...nextEvents];
+      eventsChanged = true;
+    }
+    knownEventIds.add(nextEventId);
+    nextEvents.push({
+      id: nextEventId,
+      runId: String(detail.runId ?? "").trim(),
+      roleId,
+      agentLabel: getTaskAgentLabel(roleId),
+      type: eventType,
+      stage: stageLabel,
+      message,
+      at: updatedAt,
+    });
+  }
+
+  return {
+    nextNotes,
+    nextEvents: eventsChanged ? nextEvents.slice(-24) : params.currentEvents,
+    shouldRefresh,
+  };
 }
 
 export function isTasksCodexExecutionBlocked(_params: {
@@ -360,6 +468,11 @@ export function useTasksThreadState(params: Params) {
   const browserStoreRef = useRef<BrowserStore>(loadBrowserStore());
   const orchestrationRef = useRef(orchestrationByThread);
   const orchestrationLedgerRef = useRef<Record<string, RuntimeLedgerEvent[]>>({});
+  const liveRoleNotesRef = useRef(liveRoleNotes);
+  const liveProcessEventsRef = useRef(liveProcessEvents);
+  const pendingRoleEventsRef = useRef<TasksRoleRuntimeEvent[]>([]);
+  const liveRoleEventFlushTimeoutRef = useRef<number | null>(null);
+  const refreshThreadTimeoutRef = useRef<number | null>(null);
   const visibleThreadItems = useMemo(
     () => threadItems.filter((item) => !hiddenProjectPaths.includes(normalizeTasksProjectPath(item.projectPath || item.thread.cwd || ""))),
     [hiddenProjectPaths, threadItems],
@@ -394,6 +507,14 @@ export function useTasksThreadState(params: Params) {
     orchestrationRef.current = orchestrationByThread;
     writeTasksOrchestrationCache(orchestrationByThread);
   }, [orchestrationByThread]);
+
+  useEffect(() => {
+    liveRoleNotesRef.current = liveRoleNotes;
+  }, [liveRoleNotes]);
+
+  useEffect(() => {
+    liveProcessEventsRef.current = liveProcessEvents;
+  }, [liveProcessEvents]);
 
   useEffect(() => {
     const snapshot = activeThread
@@ -570,6 +691,17 @@ export function useTasksThreadState(params: Params) {
     setProjectPath((current) => current || initialProjectPath);
   }, [initialProjectPath]);
 
+  useEffect(() => () => {
+    if (typeof window !== "undefined") {
+      if (liveRoleEventFlushTimeoutRef.current !== null) {
+        window.clearTimeout(liveRoleEventFlushTimeoutRef.current);
+      }
+      if (refreshThreadTimeoutRef.current !== null) {
+        window.clearTimeout(refreshThreadTimeoutRef.current);
+      }
+    }
+  }, []);
+
   useEffect(() => {
     persistTasksProjectPath(projectPath);
   }, [projectPath]);
@@ -729,6 +861,49 @@ export function useTasksThreadState(params: Params) {
     [hydratePersistedCoordination, params, projectPath, rememberSelectedAgent, rememberSelectedFile, selectedAgentIdsByThread, selectedFilePathsByThread],
   );
 
+  const scheduleRefreshCurrentThreadSilently = useCallback((threadId: string) => {
+    const normalizedThreadId = String(threadId ?? "").trim();
+    if (!normalizedThreadId || typeof window === "undefined") {
+      return;
+    }
+    if (refreshThreadTimeoutRef.current !== null) {
+      window.clearTimeout(refreshThreadTimeoutRef.current);
+    }
+    refreshThreadTimeoutRef.current = window.setTimeout(() => {
+      refreshThreadTimeoutRef.current = null;
+      void refreshCurrentThreadSilently(normalizedThreadId);
+    }, LIVE_ROLE_EVENT_REFRESH_DEBOUNCE_MS);
+  }, [refreshCurrentThreadSilently]);
+
+  const flushPendingRoleEvents = useCallback(() => {
+    if (liveRoleEventFlushTimeoutRef.current !== null && typeof window !== "undefined") {
+      window.clearTimeout(liveRoleEventFlushTimeoutRef.current);
+      liveRoleEventFlushTimeoutRef.current = null;
+    }
+    const pending = pendingRoleEventsRef.current;
+    if (pending.length === 0) {
+      return;
+    }
+    pendingRoleEventsRef.current = [];
+    const reduced = reduceLiveRoleEventBatch({
+      activeThreadId,
+      currentNotes: liveRoleNotesRef.current,
+      currentEvents: liveProcessEventsRef.current,
+      details: pending,
+    });
+    startTransition(() => {
+      if (reduced.nextNotes !== liveRoleNotesRef.current) {
+        setLiveRoleNotes(reduced.nextNotes);
+      }
+      if (reduced.nextEvents !== liveProcessEventsRef.current) {
+        setLiveProcessEvents(reduced.nextEvents);
+      }
+    });
+    if (reduced.shouldRefresh) {
+      scheduleRefreshCurrentThreadSilently(activeThreadId);
+    }
+  }, [activeThreadId, scheduleRefreshCurrentThreadSilently]);
+
   const refreshThreadListMetadataSilently = useCallback(
     async () => refreshThreadListSilently({
       hasTauriRuntime: params.hasTauriRuntime,
@@ -803,75 +978,64 @@ export function useTasksThreadState(params: Params) {
 
   useEffect(() => {
     const handler = (event: Event) => {
-      const detail = (event as CustomEvent<{
-        taskId?: string;
-        runId?: string;
-        studioRoleId?: string;
-        type?: string;
-        stage?: string | null;
-        message?: string;
-        at?: string;
-      }>).detail;
+      const detail = (event as CustomEvent<TasksRoleRuntimeEvent>).detail;
       if (!detail || String(detail.taskId ?? "").trim() !== String(activeThreadId ?? "").trim()) {
         return;
       }
-      const roleId = getTaskAgentPresetIdByStudioRoleId(detail.studioRoleId);
-      if (!roleId) {
+      pendingRoleEventsRef.current = [...pendingRoleEventsRef.current, detail];
+      if (liveRoleEventFlushTimeoutRef.current !== null) {
         return;
       }
-      const eventType = String(detail.type ?? "").trim();
-      if (eventType === "run_done" || eventType === "run_error") {
-        setLiveRoleNotes((current) => {
-          const next = { ...current };
-          delete next[roleId];
-          return next;
-        });
-      }
-      const stageLabel = String(detail.stage ?? "").trim();
-      const message = String(detail.message ?? "").trim() || (stageLabel ? `${stageLabel} 진행 중` : "작업 중");
-      const eventId = [
-        String(detail.runId ?? "").trim(),
-        roleId,
-        eventType,
-        stageLabel,
-        message,
-      ].filter(Boolean).join(":");
-      setLiveProcessEvents((current) => {
-        if (eventId && current.some((entry) => entry.id === eventId)) {
-          return current;
-        }
-        return [
-          ...current,
-          {
-            id: eventId || nextId("process"),
-            runId: String(detail.runId ?? "").trim(),
-            roleId,
-            agentLabel: getTaskAgentLabel(roleId),
-            type: eventType,
-            stage: stageLabel,
-            message,
-            at: String(detail.at ?? "").trim() || nowIso(),
-          },
-        ].slice(-24);
-      });
-      if (eventType === "run_done" || eventType === "run_error") {
-        void refreshCurrentThreadSilently(activeThreadId);
-        return;
-      }
-      setLiveRoleNotes((current) => ({
-        ...current,
-        [roleId]: {
-          message,
-          updatedAt: String(detail.at ?? "").trim() || nowIso(),
-        },
-      }));
+      liveRoleEventFlushTimeoutRef.current = window.setTimeout(() => {
+        flushPendingRoleEvents();
+      }, LIVE_ROLE_EVENT_FLUSH_MS);
     };
     window.addEventListener("rail:tasks-role-event", handler as EventListener);
-    return () => window.removeEventListener("rail:tasks-role-event", handler as EventListener);
-  }, [activeThreadId, refreshCurrentThreadSilently]);
+    return () => {
+      window.removeEventListener("rail:tasks-role-event", handler as EventListener);
+      if (liveRoleEventFlushTimeoutRef.current !== null) {
+        window.clearTimeout(liveRoleEventFlushTimeoutRef.current);
+        liveRoleEventFlushTimeoutRef.current = null;
+      }
+    };
+  }, [activeThreadId, flushPendingRoleEvents]);
 
   useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<{
+        taskId?: string;
+        participantRoleIds?: string[];
+        primaryRoleId?: string;
+        criticRoleId?: string;
+        orchestrationSummary?: string;
+      }>).detail;
+      const threadId = String(detail?.taskId ?? "").trim();
+      if (!threadId) {
+        return;
+      }
+      updateThreadCoordination(threadId, (current) => {
+        if (!current) {
+          return current;
+        }
+        return {
+          ...current,
+          assignedRoleIds: [...new Set((detail?.participantRoleIds ?? []).map((roleId) => String(roleId ?? "").trim()).filter(Boolean))],
+          nextAction: String(detail?.orchestrationSummary ?? "").trim() || current.nextAction,
+          updatedAt: nowIso(),
+        };
+      });
+    };
+    window.addEventListener("rail:tasks-orchestration-resolved", handler as EventListener);
+    return () => window.removeEventListener("rail:tasks-orchestration-resolved", handler as EventListener);
+  }, [updateThreadCoordination]);
+
+  useEffect(() => {
+    pendingRoleEventsRef.current = [];
     setLiveProcessEvents([]);
+    if (typeof window !== "undefined" && refreshThreadTimeoutRef.current !== null) {
+      window.clearTimeout(refreshThreadTimeoutRef.current);
+      refreshThreadTimeoutRef.current = null;
+    }
   }, [activeThreadId]);
 
   useEffect(() => {

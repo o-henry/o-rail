@@ -1,5 +1,6 @@
 import {
   type KeyboardEvent as ReactKeyboardEvent,
+  useDeferredValue,
   useEffect,
   useMemo,
   useRef,
@@ -8,9 +9,7 @@ import {
 import { RUNTIME_MODEL_OPTIONS } from "../../features/workflow/runtimeModelOptions";
 import { t as translate, useI18n } from "../../i18n";
 import {
-  getDefaultTaskAgentPresetIds,
   getThreadStageLabel,
-  parseCoordinationModeTag,
   type ThreadStageId,
 } from "./taskAgentPresets";
 import {
@@ -18,7 +17,6 @@ import {
   stripTaskAgentMentionMatch,
   type TaskAgentMentionOption,
 } from "./taskAgentMentions";
-import { deriveAutoSelectedComposerRoleIds } from "./taskComposerAutoSelection";
 import { buildThreadFileTree } from "./threadFileTree";
 import { buildLiveAgentCards } from "./liveAgentState";
 import { deriveAutomaticResearchProviderBadge, type ExternalResearchProviderModel, useTasksThreadState } from "./useTasksThreadState";
@@ -107,6 +105,7 @@ export default function TasksPage(props: TasksPageProps) {
   const [isMainSurfaceFullscreen, setIsMainSurfaceFullscreen] = useState(false);
   const [isThreadNavHidden, setIsThreadNavHidden] = useState(false);
   const [isReviewPaneOpen, setIsReviewPaneOpen] = useState(false);
+  const deferredComposerDraft = useDeferredValue(state.composerDraft);
   const title = useMemo(() => displayThreadTitle(state.activeThread?.thread.title), [state.activeThread]);
   const headerTitle = state.activeThread ? title : "";
   const selectedModelOption = useMemo(
@@ -248,31 +247,18 @@ export default function TasksPage(props: TasksPageProps) {
     [composerCursor, isMentionMenuHidden, state.composerDraft],
   );
   const recentRuntimeSessions = useMemo(() => state.searchRuntimeSessions(""), [state.searchRuntimeSessions]);
-  const autoSelectedComposerRoleIds = useMemo(
-    () => deriveAutoSelectedComposerRoleIds({
-      draft: state.composerDraft,
-      selectedComposerRoleIds: state.selectedComposerRoleIds,
-      enabledRoleIds: state.activeThread?.agents.map((agent) => agent.roleId) ?? getDefaultTaskAgentPresetIds("full-squad"),
-      modeOverride: state.composerCoordinationModeOverride ?? parseCoordinationModeTag(state.composerDraft),
-    }),
-    [
-      state.activeThread?.agents,
-      state.composerCoordinationModeOverride,
-      state.composerDraft,
-      state.selectedComposerRoleIds,
-    ],
-  );
+  const autoSelectedComposerRoleIds = useMemo(() => [], []);
   const autoSelectedProviderModel = useMemo(
     () => deriveAutomaticResearchProviderBadge({
       currentModel: state.model,
-      prompt: state.composerDraft,
+      prompt: deferredComposerDraft,
       taggedRoles: state.selectedComposerRoleIds,
       preferredProviderModel: state.composerProviderOverride,
       readiness: state.externalProviderReadiness,
     }),
     [
       state.model,
-      state.composerDraft,
+      deferredComposerDraft,
       state.selectedComposerRoleIds,
       state.composerProviderOverride,
       state.externalProviderReadiness,

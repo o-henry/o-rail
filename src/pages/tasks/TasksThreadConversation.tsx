@@ -104,7 +104,11 @@ export function resolveAssistantParticipationBadgeRoleIds(params: {
   if (String(params.message.id ?? "").trim() !== latestAssistantOutcomeMessageId(params.messages)) {
     return [];
   }
-  const orchestrationRoleIds = orderedTaskAgentPresetIds(params.orchestration?.requestedRoleIds ?? []);
+  const orchestrationRoleIds = orderedTaskAgentPresetIds(
+    params.orchestration?.assignedRoleIds?.length
+      ? params.orchestration.assignedRoleIds
+      : (params.orchestration?.requestedRoleIds ?? []),
+  );
   if (orchestrationRoleIds.length > 0) {
     return orchestrationRoleIds;
   }

@@ -162,8 +162,8 @@ export default function AdaptationPage(props: AdaptationPageProps) {
       <section className="adaptation-island adaptation-island-wide">
         <div className="adaptation-island-head">
           <div>
-            <h2>Tasks 학습 메모리</h2>
-            <p>Tasks 실행의 성공/실패를 구조화해서 다음 비슷한 요청에 자동으로 반영합니다.</p>
+            <h2>에이전트 학습 메모리</h2>
+            <p>에이전트 실행의 성공/실패를 구조화해서 다음 비슷한 요청에 자동으로 반영합니다.</p>
           </div>
           <div className="settings-badges">
             <span className="status-tag neutral">

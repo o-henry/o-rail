@@ -85,6 +85,7 @@ describe("resolveAssistantParticipationBadgeRoleIds", () => {
         threadId: "thread-1",
         prompt: "아이디어 추천",
         requestedRoleIds: ["researcher", "game_designer"],
+        assignedRoleIds: ["unity_architect", "researcher"],
         recommendedMode: "team",
         mode: "team",
         intent: "research",
@@ -99,7 +100,7 @@ describe("resolveAssistantParticipationBadgeRoleIds", () => {
         guidance: [],
         updatedAt: "2026-03-20T00:01:00Z",
       },
-    })).toEqual(["game_designer", "researcher"]);
+    })).toEqual(["researcher", "unity_architect"]);
   });
 
   it("does not show the badge list on older assistant results", () => {

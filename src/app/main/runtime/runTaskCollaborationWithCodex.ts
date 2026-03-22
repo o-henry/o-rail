@@ -249,6 +249,12 @@ export async function runTaskCollaborationWithCodex(params: {
   preferredReasoning?: string;
   executeRoleRun: ExecuteRoleRun;
   onProgress?: (progress: CollaborationProgress) => void;
+  onOrchestrationResolved?: (plan: {
+    participantRoleIds: string[];
+    primaryRoleId: string;
+    criticRoleId?: string;
+    orchestrationSummary: string;
+  }) => void;
 }): Promise<TaskCollaborationResult> {
   let participantRoleIds = [...params.participantRoleIds];
   let synthesisRoleId = params.synthesisRoleId;
@@ -256,6 +262,7 @@ export async function runTaskCollaborationWithCodex(params: {
   let participantPrompts = { ...(params.participantPrompts ?? {}) };
   const participantResults: CollaborationRoleRunResult[] = [];
   const failedRoleIds: string[] = [];
+  let resolvedOrchestrationSummary = "";
 
   if (params.useAdaptiveOrchestrator) {
     const allowedRoleIds = [...new Set((params.candidateRoleIds ?? participantRoleIds).map((roleId) => String(roleId ?? "").trim()).filter(Boolean))];
@@ -315,6 +322,7 @@ export async function runTaskCollaborationWithCodex(params: {
             ...participantPrompts,
             ...adaptivePlan.rolePrompts,
           };
+          resolvedOrchestrationSummary = adaptivePlan.orchestrationSummary;
           params.onProgress?.({
             roleId: synthesisRoleId,
             stage: "codex",
@@ -330,6 +338,13 @@ export async function runTaskCollaborationWithCodex(params: {
       }
     }
   }
+
+  params.onOrchestrationResolved?.({
+    participantRoleIds: [...participantRoleIds],
+    primaryRoleId: synthesisRoleId,
+    criticRoleId,
+    orchestrationSummary: resolvedOrchestrationSummary || `${participantRoleIds.join(", ")} assigned`,
+  });
 
   for (const roleId of participantRoleIds) {
     const participantPrompt = String(participantPrompts[roleId] ?? params.prompt).trim();

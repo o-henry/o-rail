@@ -119,6 +119,7 @@ export type AgenticCoordinationState = {
   threadId: string;
   prompt: string;
   requestedRoleIds: string[];
+  assignedRoleIds?: string[] | null;
   recommendedMode: CoordinationMode;
   mode: CoordinationMode;
   intent: ExecutionIntent;

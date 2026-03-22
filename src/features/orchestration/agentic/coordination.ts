@@ -74,6 +74,7 @@ export function createCoordinationState(params: {
     threadId: params.threadId,
     prompt: String(params.prompt ?? "").trim(),
     requestedRoleIds: [...new Set((params.requestedRoleIds ?? []).map((value) => String(value ?? "").trim()).filter(Boolean))],
+    assignedRoleIds: [...new Set((params.requestedRoleIds ?? []).map((value) => String(value ?? "").trim()).filter(Boolean))],
     recommendedMode,
     mode,
     intent,

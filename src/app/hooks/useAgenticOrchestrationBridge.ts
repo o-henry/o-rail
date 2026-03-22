@@ -171,6 +171,30 @@ function dispatchTasksRoleEvent(params: {
   }));
 }
 
+function dispatchTasksOrchestrationResolved(params: {
+  taskId: string;
+  sourceTab: "tasks" | "tasks-thread";
+  participantRoleIds: string[];
+  primaryRoleId: string;
+  criticRoleId?: string;
+  orchestrationSummary?: string;
+}) {
+  if (typeof window === "undefined") {
+    return;
+  }
+  window.dispatchEvent(new CustomEvent("rail:tasks-orchestration-resolved", {
+    detail: {
+      sourceTab: params.sourceTab,
+      taskId: params.taskId,
+      participantRoleIds: params.participantRoleIds,
+      primaryRoleId: params.primaryRoleId,
+      criticRoleId: params.criticRoleId ?? "",
+      orchestrationSummary: params.orchestrationSummary ?? "",
+      at: new Date().toISOString(),
+    },
+  }));
+}
+
 function extractRunEnvelopeError(envelope: AgenticRunEnvelope | undefined): string {
   if (!envelope) {
     return "";
@@ -642,6 +666,16 @@ export function useAgenticOrchestrationBridge(params: {
             type: "stage_started",
             stage: progress.stage,
             message: progress.message,
+          });
+        },
+        onOrchestrationResolved: (plan) => {
+          dispatchTasksOrchestrationResolved({
+            sourceTab,
+            taskId: params.taskId,
+            participantRoleIds: plan.participantRoleIds,
+            primaryRoleId: plan.primaryRoleId,
+            criticRoleId: plan.criticRoleId,
+            orchestrationSummary: plan.orchestrationSummary,
           });
         },
       });

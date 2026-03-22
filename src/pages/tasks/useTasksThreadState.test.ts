@@ -3,6 +3,7 @@ import {
   deriveAutomaticResearchProviderBadge,
   resolveAutomaticResearchModel,
   isTasksCodexExecutionBlocked,
+  reduceLiveRoleEventBatch,
   rememberTasksProjectPath,
   resolveTasksProjectSelection,
   revealTasksProjectPathState,
@@ -173,5 +174,67 @@ describe("deriveAutomaticResearchProviderBadge", () => {
       taggedRoles: ["researcher"],
       readiness: { steel: true, lightpanda: true },
     })).toBe("WEB / STEEL");
+  });
+});
+
+describe("reduceLiveRoleEventBatch", () => {
+  it("batches duplicate progress events into one timeline entry and one live note", () => {
+    const reduced = reduceLiveRoleEventBatch({
+      activeThreadId: "thread-1",
+      currentNotes: {},
+      currentEvents: [],
+      details: [
+        {
+          taskId: "thread-1",
+          runId: "run-1",
+          studioRoleId: "research_analyst",
+          type: "run_progress",
+          stage: "search",
+          message: "자료 조사 중",
+          at: "2026-03-22T00:00:00.000Z",
+        },
+        {
+          taskId: "thread-1",
+          runId: "run-1",
+          studioRoleId: "research_analyst",
+          type: "run_progress",
+          stage: "search",
+          message: "자료 조사 중",
+          at: "2026-03-22T00:00:00.000Z",
+        },
+      ],
+    });
+
+    expect(reduced.nextEvents).toHaveLength(1);
+    expect(reduced.nextNotes.researcher?.message).toBe("자료 조사 중");
+    expect(reduced.shouldRefresh).toBe(false);
+  });
+
+  it("clears completed role notes and schedules a refresh for done/error events", () => {
+    const reduced = reduceLiveRoleEventBatch({
+      activeThreadId: "thread-1",
+      currentNotes: {
+        researcher: {
+          message: "자료 조사 중",
+          updatedAt: "2026-03-22T00:00:00.000Z",
+        },
+      },
+      currentEvents: [],
+      details: [
+        {
+          taskId: "thread-1",
+          runId: "run-1",
+          studioRoleId: "research_analyst",
+          type: "run_done",
+          stage: "done",
+          message: "완료",
+          at: "2026-03-22T00:00:01.000Z",
+        },
+      ],
+    });
+
+    expect(reduced.nextNotes.researcher).toBeUndefined();
+    expect(reduced.nextEvents).toHaveLength(1);
+    expect(reduced.shouldRefresh).toBe(true);
   });
 });

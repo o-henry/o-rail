@@ -5,6 +5,7 @@ import {
   isTasksCodexExecutionBlocked,
   reduceLiveRoleEventBatch,
   rememberTasksProjectPath,
+  resolveTasksThreadWebProvider,
   resolveTasksProjectSelection,
   revealTasksProjectPathState,
   shouldAutoUseExternalResearchProvider,
@@ -174,6 +175,20 @@ describe("deriveAutomaticResearchProviderBadge", () => {
       taggedRoles: ["researcher"],
       readiness: { steel: true, lightpanda: true },
     })).toBe("WEB / STEEL");
+  });
+});
+
+describe("resolveTasksThreadWebProvider", () => {
+  it("maps WEB / STEEL to the steel provider", () => {
+    expect(resolveTasksThreadWebProvider("WEB / STEEL")).toBe("steel");
+  });
+
+  it("maps WEB / LIGHTPANDA to the lightpanda experimental provider", () => {
+    expect(resolveTasksThreadWebProvider("WEB / LIGHTPANDA")).toBe("lightpanda_experimental");
+  });
+
+  it("returns null for codex-backed task models", () => {
+    expect(resolveTasksThreadWebProvider("GPT-5.4")).toBeNull();
   });
 });
 

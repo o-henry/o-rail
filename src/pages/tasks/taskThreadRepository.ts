@@ -1,3 +1,4 @@
+import { startTransition } from "react";
 import { defaultSelectedAgent, defaultSelectedFile, toThreadListItem, withDerivedWorkflow } from "./taskThreadBrowserState";
 import { persistBrowserStore, type BrowserStore } from "./taskThreadStorageState";
 import { resolveThreadSelection } from "./threadSelectionState";
@@ -138,7 +139,9 @@ export function applyBrowserStoreSnapshot(params: ApplyBrowserStoreParams): Thre
   ) as Record<string, ThreadDetail>;
   params.store.details = normalizedDetails;
   const allItems = params.store.order.map((threadId) => params.store.details[threadId]).filter(Boolean).map(toThreadListItem);
-  params.setThreadItems(allItems);
+  startTransition(() => {
+    params.setThreadItems(allItems);
+  });
   const visibleOrder = filterBrowserThreadIdsByProject(params.store.details, params.store.order, params.projectPath);
   const nextId =
     (params.preferredThreadId && visibleOrder.includes(params.preferredThreadId) ? params.preferredThreadId : "") ||
@@ -155,8 +158,10 @@ export function applyBrowserStoreSnapshot(params: ApplyBrowserStoreParams): Thre
     return null;
   }
   const detail = params.hydrateThreadDetail(params.store.details[nextId]) ?? withDerivedWorkflow(params.store.details[nextId]);
-  params.setActiveThread(detail);
-  params.setActiveThreadId(nextId);
+  startTransition(() => {
+    params.setActiveThread(detail);
+    params.setActiveThreadId(nextId);
+  });
   syncSelectedState({
     detail,
     selectedAgentIdsByThread: params.selectedAgentIdsByThread,
@@ -234,7 +239,9 @@ export async function reloadThreadList(params: ReloadThreadsParams) {
       cwd: params.cwd,
       projectPath: params.projectPath || undefined,
     });
-    params.setThreadItems(items);
+    startTransition(() => {
+      params.setThreadItems(items);
+    });
     const visibleItems = filterThreadListByProject(items, params.projectPath);
     const nextId =
       (params.preferredThreadId && visibleItems.some((item) => item.thread.threadId === params.preferredThreadId) ? params.preferredThreadId : "") ||
@@ -276,9 +283,11 @@ export async function refreshThreadStateSilently(params: RefreshCurrentThreadPar
     if (!nextDetail) {
       return;
     }
-    params.setThreadItems(items);
-    params.setActiveThread(nextDetail);
-    params.setActiveThreadId(nextDetail.thread.threadId);
+    startTransition(() => {
+      params.setThreadItems(items);
+      params.setActiveThread(nextDetail);
+      params.setActiveThreadId(nextDetail.thread.threadId);
+    });
     syncSelectedState({
       detail: nextDetail,
       selectedAgentIdsByThread: params.selectedAgentIdsByThread,
@@ -300,7 +309,9 @@ export async function refreshThreadListSilently(params: RefreshThreadListSilentl
       cwd: params.cwd,
       projectPath: params.projectPath || undefined,
     });
-    params.setThreadItems(items);
+    startTransition(() => {
+      params.setThreadItems(items);
+    });
   } catch {
     // silent by design
   }

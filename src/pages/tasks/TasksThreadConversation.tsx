@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useState } from "react";
+import { Fragment, memo, useEffect, useMemo, useState } from "react";
 import type { AgenticCoordinationState, SessionIndexEntry } from "../../features/orchestration/agentic/coordinationTypes";
 import { useI18n } from "../../i18n";
 import { TasksThreadOrchestrationCard } from "./TasksThreadOrchestrationCard";
@@ -83,37 +83,43 @@ export function isFailedThreadMessage(message: ThreadMessage): boolean {
   return message.role === "assistant" && String(message.eventKind ?? "").trim() === "agent_failed";
 }
 
-function latestAssistantOutcomeMessageId(messages: ThreadMessage[]): string {
+function latestUserMessageId(messages: ThreadMessage[]): string {
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index];
-    if (message && (isFinishedThreadMessage(message) || isFailedThreadMessage(message))) {
+    if (message?.role === "user") {
       return String(message.id ?? "").trim();
     }
   }
   return "";
 }
 
-export function resolveAssistantParticipationBadgeRoleIds(params: {
-  message: ThreadMessage;
-  messages: ThreadMessage[];
-  orchestration: AgenticCoordinationState | null;
-}): ThreadRoleId[] {
-  if (!isFinishedThreadMessage(params.message) && !isFailedThreadMessage(params.message)) {
-    return [];
+function latestAssistantOutcomeMessage(messages: ThreadMessage[]): ThreadMessage | null {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message && (isFinishedThreadMessage(message) || isFailedThreadMessage(message))) {
+      return message;
+    }
   }
-  if (String(params.message.id ?? "").trim() !== latestAssistantOutcomeMessageId(params.messages)) {
-    return [];
-  }
+  return null;
+}
+
+export function resolveThreadParticipationBadgeRoleIds(orchestration: AgenticCoordinationState | null): ThreadRoleId[] {
   const orchestrationRoleIds = orderedTaskAgentPresetIds(
-    params.orchestration?.assignedRoleIds?.length
-      ? params.orchestration.assignedRoleIds
-      : (params.orchestration?.requestedRoleIds ?? []),
+    orchestration?.assignedRoleIds?.length
+      ? orchestration.assignedRoleIds
+      : (orchestration?.requestedRoleIds ?? []),
   );
   if (orchestrationRoleIds.length > 0) {
     return orchestrationRoleIds;
   }
-  const sourceRoleId = String(params.message.sourceRoleId ?? "").trim() as ThreadRoleId;
-  return sourceRoleId ? [sourceRoleId] : [];
+  return [];
+}
+
+export function resolveProgressiveRevealStep(contentLength: number): number {
+  if (contentLength <= 0) {
+    return 0;
+  }
+  return Math.max(48, Math.min(220, Math.ceil(contentLength / 36)));
 }
 
 function formatArtifactStamp(input: string) {
@@ -189,6 +195,8 @@ function TasksThreadConversationImpl(props: TasksThreadConversationProps) {
   const { t } = useI18n();
   const [pulseFrame, setPulseFrame] = useState(0);
   const [liveNowMs, setLiveNowMs] = useState(() => Date.now());
+  const [streamingMessageId, setStreamingMessageId] = useState("");
+  const [streamingVisibleChars, setStreamingVisibleChars] = useState(0);
   const latestProcessEventByRole = useMemo(
     () => buildLatestProcessEventByRole(props.liveProcessEvents),
     [props.liveProcessEvents],
@@ -196,6 +204,18 @@ function TasksThreadConversationImpl(props: TasksThreadConversationProps) {
   const roleEventsByRole = useMemo(
     () => buildRoleEventsByRole(props.liveProcessEvents),
     [props.liveProcessEvents],
+  );
+  const currentRunBadgeRoleIds = useMemo(
+    () => resolveThreadParticipationBadgeRoleIds(props.orchestration),
+    [props.orchestration],
+  );
+  const latestUserPromptMessageId = useMemo(
+    () => latestUserMessageId(props.messages),
+    [props.messages],
+  );
+  const latestOutcomeMessage = useMemo(
+    () => latestAssistantOutcomeMessage(props.messages),
+    [props.messages],
   );
 
   useEffect(() => {
@@ -208,6 +228,45 @@ function TasksThreadConversationImpl(props: TasksThreadConversationProps) {
     }, 450);
     return () => window.clearInterval(intervalId);
   }, [props.liveAgents.length, props.liveProcessEvents.length]);
+
+  useEffect(() => {
+    const latestMessageId = String(latestOutcomeMessage?.id ?? "").trim();
+    const latestBody = latestOutcomeMessage
+      ? resolveTimelineMessage(latestOutcomeMessage, props.visibleAgentLabels).body
+      : "";
+    if (!latestMessageId || !latestBody) {
+      setStreamingMessageId("");
+      setStreamingVisibleChars(0);
+      return;
+    }
+    const step = resolveProgressiveRevealStep(latestBody.length);
+    setStreamingMessageId(latestMessageId);
+    setStreamingVisibleChars((current) => (
+      latestMessageId === streamingMessageId
+        ? Math.min(Math.max(current, step), latestBody.length)
+        : Math.min(step, latestBody.length)
+    ));
+    if (latestBody.length <= step) {
+      return;
+    }
+    const intervalId = window.setInterval(() => {
+      setStreamingVisibleChars((current) => {
+        if (current >= latestBody.length) {
+          window.clearInterval(intervalId);
+          return latestBody.length;
+        }
+        return Math.min(latestBody.length, current + step);
+      });
+    }, 20);
+    return () => window.clearInterval(intervalId);
+  }, [latestOutcomeMessage, props.visibleAgentLabels, streamingMessageId]);
+
+  useEffect(() => {
+    if (!streamingMessageId || !props.conversationRef.current) {
+      return;
+    }
+    props.conversationRef.current.scrollTop = props.conversationRef.current.scrollHeight;
+  }, [props.conversationRef, streamingMessageId, streamingVisibleChars]);
 
   return (
     <div className="tasks-thread-conversation-scroll" ref={props.conversationRef}>
@@ -224,40 +283,43 @@ function TasksThreadConversationImpl(props: TasksThreadConversationProps) {
       <section className="tasks-thread-timeline">
         {props.messages.map((message) => {
           const parsed = resolveTimelineMessage(message, props.visibleAgentLabels);
-          const participantRoleIds = resolveAssistantParticipationBadgeRoleIds({
-            message,
-            messages: props.messages,
-            orchestration: props.orchestration,
-          });
+          const displayedBody =
+            String(message.id ?? "").trim() === streamingMessageId && streamingVisibleChars > 0
+              ? parsed.body.slice(0, Math.min(parsed.body.length, streamingVisibleChars))
+              : parsed.body;
           return (
-            <article className={`tasks-thread-message-row is-${message.role}`} key={message.id}>
-              {parsed.label ? <span className="tasks-thread-message-label">{parsed.label}</span> : null}
-              {participantRoleIds.length > 0 ? (
-                <div className="tasks-thread-message-agent-list">
-                  {participantRoleIds.map((roleId) => (
-                    <span className="tasks-thread-message-agent-chip" key={`${message.id}:${roleId}`}>
-                      {getTaskAgentLabel(roleId)}
-                    </span>
-                  ))}
+            <Fragment key={message.id}>
+              <article className={`tasks-thread-message-row is-${message.role}`} key={message.id}>
+                {parsed.label ? <span className="tasks-thread-message-label">{parsed.label}</span> : null}
+                <div className="tasks-thread-log-line">
+                  {message.role === "assistant" ? <TasksThreadMessageContent content={displayedBody} /> : displayedBody}
                 </div>
+                {isFinishedThreadMessage(message) || isFailedThreadMessage(message) ? (
+                  <div className="tasks-thread-message-badges">
+                    {isFinishedThreadMessage(message) ? <span className="tasks-thread-finish-badge">FINISH</span> : null}
+                    {isFinishedThreadMessage(message) ? <span className="tasks-thread-status-badge is-success">SUCCESS</span> : null}
+                    {isFailedThreadMessage(message) ? <span className="tasks-thread-status-badge is-fail">FAIL</span> : null}
+                  </div>
+                ) : null}
+                {parsed.artifactPath ? (
+                  <div className="tasks-thread-message-meta">
+                    <small className="tasks-thread-message-artifact">{parsed.artifactPath}</small>
+                    {parsed.createdAt ? <small className="tasks-thread-message-time">{formatArtifactStamp(parsed.createdAt)}</small> : null}
+                  </div>
+                ) : null}
+              </article>
+              {String(message.id ?? "").trim() === latestUserPromptMessageId && currentRunBadgeRoleIds.length > 0 ? (
+                <article className="tasks-thread-message-row is-assistant is-participant-summary" key={`${message.id}:participants`}>
+                  <div className="tasks-thread-message-agent-list">
+                    {currentRunBadgeRoleIds.map((roleId) => (
+                      <span className="tasks-thread-message-agent-chip" key={`${message.id}:${roleId}`}>
+                        {getTaskAgentLabel(roleId)}
+                      </span>
+                    ))}
+                  </div>
+                </article>
               ) : null}
-              <div className="tasks-thread-log-line">
-                {message.role === "assistant" ? <TasksThreadMessageContent content={parsed.body} /> : parsed.body}
-              </div>
-              {isFinishedThreadMessage(message) || isFailedThreadMessage(message) ? (
-                <div className="tasks-thread-message-badges">
-                  {isFinishedThreadMessage(message) ? <span className="tasks-thread-finish-badge">FINISH</span> : null}
-                  {isFinishedThreadMessage(message) ? <span className="tasks-thread-status-badge is-success">SUCCESS</span> : null}
-                  {isFailedThreadMessage(message) ? <span className="tasks-thread-status-badge is-fail">FAIL</span> : null}
-                </div>
-              ) : null}
-              {parsed.artifactPath ? (
-                <div className="tasks-thread-message-meta">
-                  <small className="tasks-thread-message-artifact">{parsed.artifactPath}</small>
-                  {parsed.createdAt ? <small className="tasks-thread-message-time">{formatArtifactStamp(parsed.createdAt)}</small> : null}
-                </div>
-              ) : null}
-            </article>
+            </Fragment>
           );
         })}
         {props.liveProcessEvents.map((event) => (

@@ -115,6 +115,7 @@ import {
 import { getDefaultTaskCreationIsolation } from "./taskCreationDefaults";
 import { t as translate } from "../../i18n";
 import { findRuntimeModelOption } from "../../features/workflow/runtimeModelOptions";
+import { getWebProviderFromExecutor } from "../../features/workflow/domain";
 
 type InvokeFn = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
 const LIVE_ROLE_EVENT_FLUSH_MS = 120;
@@ -258,6 +259,11 @@ export function deriveAutomaticResearchProviderBadge(params: {
     return "WEB / LIGHTPANDA";
   }
   return null;
+}
+
+export function resolveTasksThreadWebProvider(model: string): string | null {
+  const executor = findRuntimeModelOption(String(model ?? "").trim()).executor;
+  return getWebProviderFromExecutor(executor);
 }
 
 export function reduceLiveRoleEventBatch(params: {
@@ -1657,13 +1663,22 @@ export function useTasksThreadState(params: Params) {
           .map((detail) => String(detail?.codexThreadId ?? "").trim())
           .filter(Boolean),
       )];
+      const threadWebProvider = resolveTasksThreadWebProvider(String(activeThread.thread.model ?? model));
+      const cancelOperations: Promise<unknown>[] = [
+        ...codexThreadIds.map((threadId) => params.invokeFn("turn_interrupt", { threadId })),
+      ];
+      if (threadWebProvider) {
+        cancelOperations.push(
+          params.invokeFn("web_provider_cancel", { provider: threadWebProvider }).catch(() => undefined),
+        );
+      }
 
-      if (codexThreadIds.length === 0) {
+      if (cancelOperations.length === 0) {
         params.setStatus("중단할 실행 세션을 찾지 못했습니다.");
         return;
       }
 
-      await Promise.all(codexThreadIds.map((threadId) => params.invokeFn("turn_interrupt", { threadId })));
+      await Promise.all(cancelOperations);
       const interruptedCoordination = updateThreadCoordination(
         activeThread.thread.threadId,
         (current) => (

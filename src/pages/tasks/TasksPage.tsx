@@ -82,6 +82,11 @@ function displayThreadTitle(input: string | null | undefined) {
   return normalizeThreadTitle(input);
 }
 
+const EMPTY_THREAD_MESSAGES: never[] = [];
+const EMPTY_APPROVALS: never[] = [];
+const EMPTY_RUNTIME_SESSIONS: never[] = [];
+const EMPTY_LIVE_EVENTS: never[] = [];
+
 export default function TasksPage(props: TasksPageProps) {
   const { t } = useI18n();
   const state = useTasksThreadState(props);
@@ -241,12 +246,17 @@ export default function TasksPage(props: TasksPageProps) {
     [state.activeThread?.agents],
   );
   const liveAgents = useMemo(() => buildLiveAgentCards(state.activeThread, state.liveRoleNotes), [state.activeThread, state.liveRoleNotes]);
+  const deferredMessages = useDeferredValue(state.activeThread?.messages ?? EMPTY_THREAD_MESSAGES);
+  const deferredPendingApprovals = useDeferredValue(state.pendingApprovals ?? EMPTY_APPROVALS);
+  const deferredLiveAgents = useDeferredValue(liveAgents);
+  const deferredLiveProcessEvents = useDeferredValue(state.liveProcessEvents ?? EMPTY_LIVE_EVENTS);
   const fileTree = useMemo(() => buildThreadFileTree(state.activeThread?.files ?? []), [state.activeThread?.files]);
   const mentionMatch = useMemo(
     () => (isMentionMenuHidden ? null : getTaskAgentMentionMatch(state.composerDraft, composerCursor)),
     [composerCursor, isMentionMenuHidden, state.composerDraft],
   );
   const recentRuntimeSessions = useMemo(() => state.searchRuntimeSessions(""), [state.searchRuntimeSessions]);
+  const deferredRecentRuntimeSessions = useDeferredValue(recentRuntimeSessions ?? EMPTY_RUNTIME_SESSIONS);
   const autoSelectedComposerRoleIds = useMemo(() => [], []);
   const autoSelectedProviderModel = useMemo(
     () => deriveAutomaticResearchProviderBadge({
@@ -326,7 +336,7 @@ export default function TasksPage(props: TasksPageProps) {
       return;
     }
     node.scrollTop = node.scrollHeight;
-  }, [state.activeThread?.messages.length, liveAgents.length, state.pendingApprovals.length, state.selectedFileDiff]);
+  }, [deferredMessages.length, deferredLiveAgents.length, deferredPendingApprovals.length, state.selectedFileDiff]);
 
   return (
     <section
@@ -419,13 +429,13 @@ export default function TasksPage(props: TasksPageProps) {
           </div>
         ) : (
           <TasksThreadConversation
-            approvals={state.pendingApprovals}
+            approvals={deferredPendingApprovals}
             conversationRef={conversationRef}
-            liveAgents={liveAgents}
-            liveProcessEvents={state.liveProcessEvents}
-            messages={state.activeThread.messages}
+            liveAgents={deferredLiveAgents}
+            liveProcessEvents={deferredLiveProcessEvents}
+            messages={deferredMessages}
             orchestration={state.activeThreadCoordination}
-            recentRuntimeSessions={recentRuntimeSessions}
+            recentRuntimeSessions={deferredRecentRuntimeSessions}
             visibleAgentLabels={visibleAgentLabels}
             onApprovePlan={state.approveActiveCoordinationPlan}
             onCancelOrchestration={state.cancelActiveCoordination}

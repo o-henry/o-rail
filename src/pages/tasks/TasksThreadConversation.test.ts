@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { isFailedThreadMessage, isFinishedThreadMessage, resolveAssistantParticipationBadgeRoleIds } from "./TasksThreadConversation";
+import {
+  isFailedThreadMessage,
+  isFinishedThreadMessage,
+  resolveProgressiveRevealStep,
+  resolveThreadParticipationBadgeRoleIds,
+} from "./TasksThreadConversation";
 
 describe("isFinishedThreadMessage", () => {
   it("returns true for completed assistant result messages", () => {
@@ -57,76 +62,62 @@ describe("isFailedThreadMessage", () => {
   });
 });
 
-describe("resolveAssistantParticipationBadgeRoleIds", () => {
-  it("shows orchestration participants on the latest assistant result", () => {
-    const messages = [
-      {
-        id: "1",
-        threadId: "thread-1",
-        role: "assistant" as const,
-        content: "중간 상태",
-        eventKind: "agent_status",
-        createdAt: "2026-03-20T00:00:00Z",
-      },
-      {
-        id: "2",
-        threadId: "thread-1",
-        role: "assistant" as const,
-        content: "최종 답변",
-        eventKind: "agent_result",
-        createdAt: "2026-03-20T00:01:00Z",
-      },
-    ];
-
-    expect(resolveAssistantParticipationBadgeRoleIds({
-      message: messages[1]!,
-      messages,
-      orchestration: {
-        threadId: "thread-1",
-        prompt: "아이디어 추천",
-        requestedRoleIds: ["researcher", "game_designer"],
-        assignedRoleIds: ["unity_architect", "researcher"],
-        recommendedMode: "team",
-        mode: "team",
-        intent: "research",
-        status: "completed",
-        nextAction: "done",
-        blockedReason: null,
-        plan: null,
-        delegateTasks: [],
-        delegateResults: [],
-        teamSession: null,
-        resumePointer: null,
-        guidance: [],
-        updatedAt: "2026-03-20T00:01:00Z",
-      },
+describe("resolveThreadParticipationBadgeRoleIds", () => {
+  it("prefers assigned orchestration participants", () => {
+    expect(resolveThreadParticipationBadgeRoleIds({
+      threadId: "thread-1",
+      prompt: "아이디어 추천",
+      requestedRoleIds: ["researcher", "game_designer"],
+      assignedRoleIds: ["unity_architect", "researcher"],
+      recommendedMode: "team",
+      mode: "team",
+      intent: "research",
+      status: "completed",
+      nextAction: "done",
+      blockedReason: null,
+      plan: null,
+      delegateTasks: [],
+      delegateResults: [],
+      teamSession: null,
+      resumePointer: null,
+      guidance: [],
+      updatedAt: "2026-03-20T00:01:00Z",
     })).toEqual(["researcher", "unity_architect"]);
   });
 
-  it("does not show the badge list on older assistant results", () => {
-    const messages = [
-      {
-        id: "1",
-        threadId: "thread-1",
-        role: "assistant" as const,
-        content: "첫 결과",
-        eventKind: "agent_result",
-        createdAt: "2026-03-20T00:00:00Z",
-      },
-      {
-        id: "2",
-        threadId: "thread-1",
-        role: "assistant" as const,
-        content: "둘째 결과",
-        eventKind: "agent_result",
-        createdAt: "2026-03-20T00:01:00Z",
-      },
-    ];
+  it("falls back to requested participants when orchestration has not resolved yet", () => {
+    expect(resolveThreadParticipationBadgeRoleIds({
+      threadId: "thread-1",
+      prompt: "아이디어 추천",
+      requestedRoleIds: ["researcher", "game_designer"],
+      assignedRoleIds: [],
+      recommendedMode: "team",
+      mode: "team",
+      intent: "research",
+      status: "running",
+      nextAction: "running",
+      blockedReason: null,
+      plan: null,
+      delegateTasks: [],
+      delegateResults: [],
+      teamSession: null,
+      resumePointer: null,
+      guidance: [],
+      updatedAt: "2026-03-20T00:01:00Z",
+    })).toEqual(["game_designer", "researcher"]);
+  });
 
-    expect(resolveAssistantParticipationBadgeRoleIds({
-      message: messages[0]!,
-      messages,
-      orchestration: null,
-    })).toEqual([]);
+  it("returns an empty list when orchestration is unavailable", () => {
+    expect(resolveThreadParticipationBadgeRoleIds(null)).toEqual([]);
+  });
+});
+
+describe("resolveProgressiveRevealStep", () => {
+  it("keeps a sensible minimum chunk size for short answers", () => {
+    expect(resolveProgressiveRevealStep(12)).toBe(48);
+  });
+
+  it("caps chunk size for large answers", () => {
+    expect(resolveProgressiveRevealStep(20000)).toBe(220);
   });
 });

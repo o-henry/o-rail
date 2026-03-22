@@ -433,6 +433,7 @@ export default function TasksPage(props: TasksPageProps) {
             conversationRef={conversationRef}
             liveAgents={deferredLiveAgents}
             liveProcessEvents={deferredLiveProcessEvents}
+            latestRunInternalBadges={state.latestRunInternalBadges}
             messages={deferredMessages}
             orchestration={state.activeThreadCoordination}
             recentRuntimeSessions={deferredRecentRuntimeSessions}

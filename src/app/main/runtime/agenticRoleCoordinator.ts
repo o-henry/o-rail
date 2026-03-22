@@ -22,6 +22,7 @@ type MutableRunContext = {
 type RoleKnowledgeBootstrapResult = {
   message?: string;
   artifactPaths?: string[];
+  providers?: string[];
   payload?: Record<string, unknown>;
 };
 
@@ -263,6 +264,9 @@ export async function runRoleWithCoordinator(input: AgenticRunRoleInput): Promis
           type: "stage_done",
           stage: "crawler",
           message: bootstrapResult?.message ?? "ROLE_KB_BOOTSTRAP 완료",
+          payload: {
+            providers: bootstrapResult?.providers ?? [],
+          },
           onEvent: input.onEvent,
         });
         emitWorkspace({

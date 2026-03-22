@@ -347,7 +347,24 @@ describe("reduceRuntimeTargetsByRole", () => {
 
     expect(next.researcher).toEqual({
       codexThreadIds: ["codex-thread-1"],
-      provider: "steel",
+      providers: ["steel"],
+    });
+  });
+
+  it("accumulates provider names from bootstrap payload arrays", () => {
+    const next = reduceRuntimeTargetsByRole({}, {
+      taskId: "thread-1",
+      studioRoleId: "research_analyst",
+      type: "stage_done",
+      stage: "crawler",
+      payload: {
+        providers: ["scrapling", "steel"],
+      },
+    });
+
+    expect(next.researcher).toEqual({
+      codexThreadIds: [],
+      providers: ["scrapling", "steel"],
     });
   });
 
@@ -355,7 +372,7 @@ describe("reduceRuntimeTargetsByRole", () => {
     const current = {
       researcher: {
         codexThreadIds: ["codex-thread-1"],
-        provider: "steel",
+        providers: ["steel"],
       },
     };
 

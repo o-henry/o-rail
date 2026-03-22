@@ -228,12 +228,12 @@ export function resolveRoleKnowledgeProviderOrder(params: {
   userPrompt?: string;
 }): RoleKnowledgeProviderId[] {
   if (prefersDocumentationExtraction(params)) {
-    return ["crawl4ai", "scrapling", "steel"];
+    return ["crawl4ai", "scrapling", "steel", "lightpanda_experimental", "browser_use"];
   }
   if (isInteractiveCommunityUrl(params.url)) {
-    return ["scrapling", "steel", "crawl4ai"];
+    return ["scrapling", "steel", "lightpanda_experimental", "browser_use", "crawl4ai"];
   }
-  return ["scrapling", "crawl4ai", "steel"];
+  return ["scrapling", "crawl4ai", "steel", "lightpanda_experimental", "browser_use"];
 }
 
 async function readProviderHealth(params: {
@@ -305,6 +305,7 @@ function normalizeFetchResult(
 ): RoleKnowledgeSource {
   return {
     url: cleanLine(result.url) || params.url,
+    provider: params.provider,
     status: "ok",
     fetchedAt: cleanLine(result.fetched_at) || new Date().toISOString(),
     summary: truncateText(result.summary, 320),
@@ -312,6 +313,56 @@ function normalizeFetchResult(
     markdownPath: cleanLine(result.markdown_path) || undefined,
     jsonPath: cleanLine(result.json_path) || undefined,
   };
+}
+
+async function fetchRoleKnowledgeSourceWithProvider(
+  params: FetchRoleKnowledgeSourceInput & {
+    provider: RoleKnowledgeProviderId;
+  },
+): Promise<RoleKnowledgeSource> {
+  try {
+    await ensureProviderReady({
+      cwd: params.cwd,
+      invokeFn: params.invokeFn,
+      provider: params.provider,
+    });
+  } catch (error) {
+    return {
+      url: params.url,
+      provider: params.provider,
+      status: "error",
+      error: truncateText(error, 180),
+    };
+  }
+
+  try {
+    const result = await withTimeout(
+      params.invokeFn<RoleKnowledgeProviderFetchResult>("dashboard_crawl_provider_fetch_url", {
+        cwd: params.cwd,
+        provider: params.provider,
+        url: params.url,
+        topic: params.topic ?? DEFAULT_ROLE_KB_TOPIC,
+      }),
+      ROLE_KB_FETCH_TIMEOUT_MS,
+      "dashboard_crawl_provider_fetch_url",
+    );
+    if (cleanLine(result.status).toLowerCase() === "ok") {
+      return normalizeFetchResult({ provider: params.provider, url: params.url }, result);
+    }
+    return {
+      url: params.url,
+      provider: params.provider,
+      status: "error",
+      error: truncateText(result.error || result.status || "provider fetch failed", 180),
+    };
+  } catch (error) {
+    return {
+      url: params.url,
+      provider: params.provider,
+      status: "error",
+      error: truncateText(error, 180),
+    };
+  }
 }
 
 export async function fetchRoleKnowledgeSourceWithProviders(
@@ -322,44 +373,31 @@ export async function fetchRoleKnowledgeSourceWithProviders(
     roleId: params.roleId,
     userPrompt: params.userPrompt,
   });
-  const failures: string[] = [];
+  const providerResults = await Promise.all(
+    providerOrder.map((provider) =>
+      fetchRoleKnowledgeSourceWithProvider({
+        ...params,
+        provider,
+      }),
+    ),
+  );
 
   for (const provider of providerOrder) {
-    try {
-      await ensureProviderReady({
-        cwd: params.cwd,
-        invokeFn: params.invokeFn,
-        provider,
-      });
-    } catch (error) {
-      failures.push(`${provider}: ${truncateText(error, 180)}`);
-      continue;
-    }
-
-    try {
-      const result = await withTimeout(
-        params.invokeFn<RoleKnowledgeProviderFetchResult>("dashboard_crawl_provider_fetch_url", {
-          cwd: params.cwd,
-          provider,
-          url: params.url,
-          topic: params.topic ?? DEFAULT_ROLE_KB_TOPIC,
-        }),
-        ROLE_KB_FETCH_TIMEOUT_MS,
-        "dashboard_crawl_provider_fetch_url",
-      );
-      if (cleanLine(result.status).toLowerCase() === "ok") {
-        return normalizeFetchResult({ provider, url: params.url }, result);
-      }
-      failures.push(
-        `${provider}: ${truncateText(result.error || result.status || "provider fetch failed", 180)}`,
-      );
-    } catch (error) {
-      failures.push(`${provider}: ${truncateText(error, 180)}`);
+    const matched = providerResults.find(
+      (row) => row.status === "ok" && cleanLine(row.provider) === provider,
+    );
+    if (matched) {
+      return matched;
     }
   }
+  const failures = providerResults
+    .filter((row) => row.status !== "ok")
+    .map((row) => `${cleanLine(row.provider) || "unknown"}: ${truncateText(row.error, 180)}`)
+    .filter(Boolean);
 
   return {
     url: params.url,
+    provider: providerOrder[0],
     status: "error",
     error: failures.join(" | ") || "no provider succeeded",
   };

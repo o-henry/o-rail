@@ -41,6 +41,7 @@ type RoleKnowledgeBootstrapResult = {
   sourceSuccessCount: number;
   artifactPaths: string[];
   message: string;
+  providers: string[];
 };
 
 type RoleKnowledgeStoreResult = {
@@ -227,12 +228,18 @@ export async function bootstrapRoleKnowledgeProfile(input: RoleKnowledgeBootstra
     .flatMap((row) => [row.jsonPath])
     .map((row) => cleanLine(row))
     .filter(Boolean);
+  const providers = [...new Set(
+    successfulSources
+      .map((row) => cleanLine(row.provider))
+      .filter(Boolean),
+  )];
 
   return {
     profile,
     sourceCount: sourceResults.length,
     sourceSuccessCount: successfulSources.length,
     artifactPaths,
+    providers,
     message:
       successfulSources.length > 0
         ? `ROLE_KB_BOOTSTRAP 완료 (${successfulSources.length}/${sourceResults.length})${attemptsUsed > 1 ? ` · 재시도 ${attemptsUsed}회` : ""}${successfulSources.length < minSuccessCount ? " · 부분 성공" : ""}`

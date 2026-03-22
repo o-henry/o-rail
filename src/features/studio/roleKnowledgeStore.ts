@@ -9,6 +9,7 @@ function getStorage(): Storage | null {
 
 export type RoleKnowledgeSource = {
   url: string;
+  provider?: string;
   status: "ok" | "error";
   summary?: string;
   content?: string;
@@ -66,6 +67,7 @@ function normalizeSource(raw: unknown): RoleKnowledgeSource | null {
   const status = String(row.status ?? "").trim().toLowerCase() === "ok" ? "ok" : "error";
   return {
     url,
+    provider: String(row.provider ?? "").trim() || undefined,
     status,
     summary: String(row.summary ?? "").trim() || undefined,
     content: String(row.content ?? "").trim() || undefined,

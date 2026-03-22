@@ -163,8 +163,39 @@ type TasksRoleRuntimeEvent = {
 
 type RuntimeTarget = {
   codexThreadIds: string[];
-  provider: string | null;
+  providers: string[];
 };
+
+type InternalRunBadge = {
+  key: string;
+  label: string;
+  kind: "internal" | "provider";
+};
+
+function formatRuntimeProviderBadgeLabel(raw: string): string {
+  const normalized = String(raw ?? "").trim().toLowerCase();
+  if (!normalized) {
+    return "";
+  }
+  if (normalized === "steel") return "@STEEL";
+  if (normalized === "lightpanda_experimental") return "@LIGHTPANDA";
+  if (normalized === "scrapling") return "SCRAPLING";
+  if (normalized === "crawl4ai") return "CRAWL4AI";
+  if (normalized === "browser_use") return "BROWSER USE";
+  if (normalized === "playwright_local") return "PLAYWRIGHT";
+  if (normalized === "scrapy_playwright") return "SCRAPY PLAYWRIGHT";
+  return normalized.replace(/_/g, " ").toUpperCase();
+}
+
+function appendInternalRunBadge(current: InternalRunBadge[], next: InternalRunBadge): InternalRunBadge[] {
+  if (!next.key || !next.label) {
+    return current;
+  }
+  if (current.some((badge) => badge.key === next.key)) {
+    return current;
+  }
+  return [...current, next];
+}
 
 function formatError(error: unknown): string {
   return error instanceof Error ? error.message : String(error ?? translate("common.unknownError"));
@@ -394,18 +425,26 @@ export function reduceRuntimeTargetsByRole(
   const payload = detail.payload ?? {};
   const codexThreadId = String(payload.codexThreadId ?? "").trim();
   const provider = String(payload.provider ?? "").trim();
-  if (!codexThreadId && !provider) {
+  const payloadProviders = Array.isArray(payload.providers)
+    ? payload.providers.map((value) => String(value ?? "").trim()).filter(Boolean)
+    : [];
+  if (!codexThreadId && !provider && payloadProviders.length === 0) {
     return current;
   }
-  const previous = current[roleId] ?? { codexThreadIds: [], provider: null };
+  const previous = current[roleId] ?? { codexThreadIds: [], providers: [] };
   const nextThreadIds = codexThreadId && !previous.codexThreadIds.includes(codexThreadId)
     ? [...previous.codexThreadIds, codexThreadId]
     : previous.codexThreadIds;
-  const nextProvider = provider || previous.provider;
+  const nextProviders = [...new Set([
+    ...previous.providers,
+    ...payloadProviders,
+    ...(provider ? [provider] : []),
+  ])];
   if (
     nextThreadIds.length === previous.codexThreadIds.length
     && nextThreadIds.every((value, index) => value === previous.codexThreadIds[index])
-    && nextProvider === previous.provider
+    && nextProviders.length === previous.providers.length
+    && nextProviders.every((value, index) => value === previous.providers[index])
   ) {
     return current;
   }
@@ -413,7 +452,7 @@ export function reduceRuntimeTargetsByRole(
     ...current,
     [roleId]: {
       codexThreadIds: nextThreadIds,
-      provider: nextProvider || null,
+      providers: nextProviders,
     },
   };
 }
@@ -543,6 +582,7 @@ export function useTasksThreadState(params: Params) {
   const [hiddenProjectPaths, setHiddenProjectPaths] = useState<string[]>(initialHiddenProjectList);
   const [liveRoleNotes, setLiveRoleNotes] = useState<Partial<Record<ThreadRoleId, { message: string; updatedAt: string }>>>({});
   const [liveProcessEvents, setLiveProcessEvents] = useState<LiveProcessEvent[]>([]);
+  const [latestRunInternalBadges, setLatestRunInternalBadges] = useState<InternalRunBadge[]>([]);
   const [runtimeTargetCount, setRuntimeTargetCount] = useState(0);
   const [stoppingComposerRun, setStoppingComposerRun] = useState(false);
   const [composerSubmitPending, setComposerSubmitPending] = useState(false);
@@ -601,6 +641,10 @@ export function useTasksThreadState(params: Params) {
   useEffect(() => {
     liveProcessEventsRef.current = liveProcessEvents;
   }, [liveProcessEvents]);
+
+  useEffect(() => {
+    setLatestRunInternalBadges([]);
+  }, [activeThreadId]);
 
   useEffect(() => {
     const snapshot = activeThread
@@ -1070,6 +1114,23 @@ export function useTasksThreadState(params: Params) {
       }
       runtimeTargetsByRoleRef.current = reduceRuntimeTargetsByRole(runtimeTargetsByRoleRef.current, detail);
       setRuntimeTargetCount(Object.keys(runtimeTargetsByRoleRef.current).length);
+      const payload = detail.payload ?? {};
+      const providerLabels = [
+        String(payload.provider ?? "").trim(),
+        ...(Array.isArray(payload.providers) ? payload.providers.map((value) => String(value ?? "").trim()) : []),
+      ]
+        .map((value) => formatRuntimeProviderBadgeLabel(value))
+        .filter(Boolean);
+      if (providerLabels.length > 0) {
+        setLatestRunInternalBadges((current) => providerLabels.reduce(
+          (badges, label) => appendInternalRunBadge(badges, {
+            key: `provider:${label}`,
+            label,
+            kind: "provider",
+          }),
+          current,
+        ));
+      }
       pendingRoleEventsRef.current = [...pendingRoleEventsRef.current, detail];
       if (liveRoleEventFlushTimeoutRef.current !== null) {
         return;
@@ -1113,6 +1174,11 @@ export function useTasksThreadState(params: Params) {
           updatedAt: nowIso(),
         };
       });
+      setLatestRunInternalBadges((current) => appendInternalRunBadge(current, {
+        key: "internal:orchestrator",
+        label: "ORCHESTRATOR",
+        kind: "internal",
+      }));
       setLiveRoleNotes((current) => Object.fromEntries(
         Object.entries(current).filter(([roleId]) => assignedRoleIds.includes(roleId as ThreadRoleId)),
       ) as Partial<Record<ThreadRoleId, { message: string; updatedAt: string }>>);
@@ -1520,6 +1586,7 @@ export function useTasksThreadState(params: Params) {
       return;
     }
     setComposerSubmitPending(true);
+    setLatestRunInternalBadges([]);
     const selectedProjectPath = String(projectPath || params.cwd || "/workspace").trim();
     try {
       const promptWithAttachments = await buildPromptWithAttachments(prompt);
@@ -1822,7 +1889,7 @@ export function useTasksThreadState(params: Params) {
         ],
       )];
       const runtimeProviders = activeRuntimeTargets
-        .map((target) => String(target?.provider ?? "").trim())
+        .flatMap((target) => target?.providers ?? [])
         .filter(Boolean);
       const threadWebProvider = runtimeProviders[0] || resolveTasksThreadWebProvider(String(activeThread.thread.model ?? model));
       const cancelOperations: Promise<unknown>[] = [
@@ -2497,6 +2564,7 @@ export function useTasksThreadState(params: Params) {
     selectedFileDiff,
     liveRoleNotes,
     liveProcessEvents,
+    latestRunInternalBadges,
     attachedFiles,
     selectedComposerRoleIds,
     setComposerCoordinationModeOverride,

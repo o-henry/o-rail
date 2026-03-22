@@ -1339,6 +1339,14 @@
   white-space: nowrap;
 }
 
+.tasks-thread-message-agent-chip.is-provider {
+  background: #3d6a57;
+}
+
+.tasks-thread-message-agent-chip.is-internal {
+  background: #5a6475;
+}
+
 .tasks-thread-message-row.is-participant-summary {
   margin-top: 2px;
   gap: 2px;

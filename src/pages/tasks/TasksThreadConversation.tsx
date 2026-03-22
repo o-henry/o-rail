@@ -43,6 +43,7 @@ type TasksThreadConversationProps = {
   visibleAgentLabels: string[];
   liveAgents: LiveAgentCard[];
   liveProcessEvents: LiveProcessEvent[];
+  latestRunInternalBadges: Array<{ key: string; label: string; kind: "internal" | "provider" }>;
   approvals: ApprovalRecord[];
   conversationRef: React.RefObject<HTMLDivElement | null>;
   onApprovePlan: () => void;
@@ -210,6 +211,35 @@ export function resolveLatestRunParticipationBadgeRoleIds(params: {
       .map((message) => message.sourceRoleId)
       .filter((roleId): roleId is ThreadRoleId => Boolean(roleId)),
   );
+}
+
+type ConversationParticipationBadge = {
+  key: string;
+  label: string;
+  kind: "agent" | "provider" | "internal";
+};
+
+export function resolveLatestRunParticipationBadges(params: {
+  orchestration: AgenticCoordinationState | null;
+  messages: ThreadMessage[];
+  liveAgents: LiveAgentCard[];
+  internalBadges: Array<{ key: string; label: string; kind: "internal" | "provider" }>;
+}): ConversationParticipationBadge[] {
+  const roleBadges = resolveLatestRunParticipationBadgeRoleIds({
+    orchestration: params.orchestration,
+    messages: params.messages,
+    liveAgents: params.liveAgents,
+  }).map((roleId) => ({
+    key: `agent:${roleId}`,
+    label: getTaskAgentLabel(roleId),
+    kind: "agent" as const,
+  }));
+  const internalBadges = params.internalBadges.map((badge) => ({
+    key: badge.key,
+    label: badge.label,
+    kind: badge.kind,
+  }));
+  return [...roleBadges, ...internalBadges];
 }
 
 export function resolveProgressiveRevealStep(contentLength: number): number {
@@ -410,13 +440,14 @@ function TasksThreadConversationImpl(props: TasksThreadConversationProps) {
     }),
     [props.liveAgents, props.liveProcessEvents],
   );
-  const currentRunBadgeRoleIds = useMemo(
-    () => resolveLatestRunParticipationBadgeRoleIds({
+  const currentRunBadges = useMemo(
+    () => resolveLatestRunParticipationBadges({
       orchestration: props.orchestration,
       messages: props.messages,
       liveAgents: props.liveAgents,
+      internalBadges: props.latestRunInternalBadges,
     }),
-    [props.liveAgents, props.messages, props.orchestration],
+    [props.latestRunInternalBadges, props.liveAgents, props.messages, props.orchestration],
   );
   const latestUserPromptMessageId = useMemo(
     () => latestUserMessageId(props.messages),
@@ -555,12 +586,15 @@ function TasksThreadConversationImpl(props: TasksThreadConversationProps) {
                 showFinish={isFinishedThreadMessage(message)}
                 showSuccess={isFinishedThreadMessage(message)}
               />
-              {String(message.id ?? "").trim() === latestUserPromptMessageId && currentRunBadgeRoleIds.length > 0 ? (
+              {String(message.id ?? "").trim() === latestUserPromptMessageId && currentRunBadges.length > 0 ? (
                 <article className="tasks-thread-message-row is-assistant is-participant-summary" key={`${message.id}:participants`}>
                   <div className="tasks-thread-message-agent-list">
-                    {currentRunBadgeRoleIds.map((roleId) => (
-                      <span className="tasks-thread-message-agent-chip" key={`${message.id}:${roleId}`}>
-                        {getTaskAgentLabel(roleId)}
+                    {currentRunBadges.map((badge) => (
+                      <span
+                        className={`tasks-thread-message-agent-chip${badge.kind === "provider" ? " is-provider" : ""}${badge.kind === "internal" ? " is-internal" : ""}`}
+                        key={`${message.id}:${badge.key}`}
+                      >
+                        {badge.label}
                       </span>
                     ))}
                   </div>

@@ -5,6 +5,7 @@ import {
   isFinishedThreadMessage,
   normalizeTasksTimelineCopy,
   resolveLiveConversationEntries,
+  resolveLatestRunParticipationBadges,
   resolveLatestRunParticipationBadgeRoleIds,
   resolveProgressiveRevealStep,
   resolveThreadParticipationBadgeRoleIds,
@@ -251,6 +252,42 @@ describe("resolveLatestRunParticipationBadgeRoleIds", () => {
         },
       ],
     })).toEqual(["game_designer", "unity_architect"]);
+  });
+});
+
+describe("resolveLatestRunParticipationBadges", () => {
+  it("includes agent, provider, and internal badges together", () => {
+    expect(resolveLatestRunParticipationBadges({
+      orchestration: {
+        threadId: "thread-1",
+        prompt: "아이디어 추천",
+        requestedRoleIds: ["researcher"],
+        assignedRoleIds: ["researcher"],
+        recommendedMode: "team",
+        mode: "team",
+        intent: "research",
+        status: "running",
+        nextAction: "running",
+        blockedReason: null,
+        plan: null,
+        delegateTasks: [],
+        delegateResults: [],
+        teamSession: null,
+        resumePointer: null,
+        guidance: [],
+        updatedAt: "2026-03-20T00:01:00Z",
+      },
+      liveAgents: [],
+      messages: [],
+      internalBadges: [
+        { key: "internal:orchestrator", label: "ORCHESTRATOR", kind: "internal" },
+        { key: "provider:@STEEL", label: "@STEEL", kind: "provider" },
+      ],
+    })).toEqual([
+      { key: "agent:researcher", label: "RESEARCHER", kind: "agent" },
+      { key: "internal:orchestrator", label: "ORCHESTRATOR", kind: "internal" },
+      { key: "provider:@STEEL", label: "@STEEL", kind: "provider" },
+    ]);
   });
 });
 

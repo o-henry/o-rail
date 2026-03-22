@@ -58,8 +58,8 @@
 }
 
 .knowledge-detail-head button.danger {
-  background: color-mix(in srgb, #cc3131 14%, var(--surface));
-  color: #8a1f1f;
+  background: #ff8a3d;
+  color: #ffffff;
 }
 
 .knowledge-artifact-actions {
@@ -99,6 +99,10 @@
   margin: 8px 0 0 0;
   font-size: 12px;
   line-height: 1.45;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
 }
 
 .knowledge-paths {

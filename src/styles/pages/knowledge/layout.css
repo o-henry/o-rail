@@ -117,7 +117,8 @@
 }
 
 .knowledge-list {
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   display: grid;
   align-content: start;
   gap: 2px;
@@ -167,30 +168,38 @@
   display: flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
+  width: 100%;
 }
 
 .knowledge-group-trigger {
   flex: 1 1 auto;
   width: auto;
+  max-width: none;
   min-width: 0;
   border: 0;
   border-radius: 4px;
   background: #e9f8ee;
   min-height: 30px;
+  height: 30px;
   padding: 0 10px;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 82px;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
   text-align: left;
+  overflow: hidden;
 }
 
 .knowledge-group-delete {
+  flex: 0 0 auto;
   min-height: 30px;
+  height: 30px;
+  min-width: max-content;
   border: 0;
   border-radius: 4px;
-  background: color-mix(in srgb, #cc3131 14%, var(--surface));
-  color: #8a1f1f;
+  background: #ff8a3d;
+  color: #ffffff;
   font-size: 11px;
   padding: 0 9px;
   white-space: nowrap;
@@ -202,7 +211,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-main);
 }
 
@@ -212,9 +221,30 @@
 }
 
 .knowledge-group-count {
+  display: inline-grid;
+  align-items: center;
+  grid-template-columns: 10px minmax(0, max-content);
+  justify-content: end;
+  column-gap: 6px;
+  flex: 0 0 auto;
+  width: 82px;
+  white-space: nowrap;
+}
+
+.knowledge-group-count-copy {
   display: inline-flex;
   align-items: center;
+  justify-self: end;
   gap: 4px;
+  white-space: nowrap;
+}
+
+.knowledge-group-count-value {
+  text-align: left;
+}
+
+.knowledge-group-count-dot {
+  text-align: center;
 }
 
 .knowledge-group-arrow {
@@ -232,6 +262,147 @@
 .knowledge-group-items {
   display: grid;
   gap: 4px;
+  min-width: 0;
+}
+
+.knowledge-role-tree {
+  position: relative;
+  display: grid;
+  min-width: 0;
+}
+
+.knowledge-role-tree.is-selected .knowledge-role-trigger {
+  background: transparent;
+}
+
+.knowledge-role-tree::before {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 6px;
+  bottom: 6px;
+  width: 1px;
+  background: color-mix(in srgb, var(--surface-soft) 68%, #b8c0ca);
+}
+
+.knowledge-role-head {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 0.8rem 0 0.8rem 0.5rem;
+  border-radius: 4px;
+  background: #eef3f7;
+  overflow: hidden;
+}
+
+.knowledge-role-toggle {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  margin-top: -2px;
+  align-self: flex-start;
+}
+
+.knowledge-role-toggle img {
+  width: 10px;
+  height: 10px;
+  opacity: 0.72;
+  transition: transform 160ms ease;
+}
+
+.knowledge-role-toggle img.is-expanded {
+  transform: rotate(180deg);
+}
+
+.knowledge-role-trigger {
+  position: relative;
+  width: 100%;
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  min-height: 0;
+  border-radius: 0;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.knowledge-role-trigger::before {
+  content: "";
+  position: absolute;
+  left: -10px;
+  top: 12px;
+  width: 8px;
+  height: 1px;
+  background: color-mix(in srgb, var(--surface-soft) 68%, #b8c0ca);
+}
+
+.knowledge-role-copy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.knowledge-role-copy strong {
+  font-size: 12px;
+  color: var(--text-main);
+}
+
+.knowledge-role-copy span,
+.knowledge-role-copy small {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.knowledge-role-items {
+  position: relative;
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  margin-bottom: 8px;
+  margin-left: 0;
+  padding-left: 16px;
+}
+
+.knowledge-role-items::before {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 2px;
+  bottom: 2px;
+  width: 1px;
+  background: color-mix(in srgb, var(--surface-soft) 68%, #b8c0ca);
+}
+
+.knowledge-role-items .knowledge-row {
+  position: relative;
+  min-width: 0;
+  background: #ffffff;
+}
+
+.knowledge-role-items .knowledge-row::before {
+  content: "";
+  position: absolute;
+  left: -12px;
+  top: 16px;
+  width: 8px;
+  height: 1px;
+  background: color-mix(in srgb, var(--surface-soft) 68%, #b8c0ca);
 }
 
 .knowledge-row.is-selected {
@@ -247,4 +418,13 @@
 .knowledge-row small {
   font-size: 11px;
   color: var(--text-muted);
+}
+
+.knowledge-row strong,
+.knowledge-row span,
+.knowledge-row small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

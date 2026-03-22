@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { KnowledgeEntry } from "../../features/studio/knowledgeTypes";
 import {
   formatArtifactFileNames,
@@ -9,13 +10,22 @@ type KnowledgeBaseListPanelProps = {
   collapsedByGroup: Record<string, boolean>;
   filteredCount: number;
   grouped: KnowledgeGroup[];
-  onDeleteGroup: (runId: string, taskId: string) => void;
+  onDeleteGroup: (runIds: string[], taskId: string, promptLabel: string) => void;
   onSelectEntry: (entryId: string) => void;
   onToggleGroup: (groupId: string) => void;
   selectedEntry: KnowledgeEntry | null;
 };
 
 export function KnowledgeBaseListPanel(props: KnowledgeBaseListPanelProps) {
+  const [collapsedByRoleGroup, setCollapsedByRoleGroup] = useState<Record<string, boolean>>({});
+
+  const toggleRoleGroup = (groupId: string) => {
+    setCollapsedByRoleGroup((current) => ({
+      ...current,
+      [groupId]: !current[groupId],
+    }));
+  };
+
   return (
     <section aria-label="데이터베이스 산출물 목록" className="knowledge-list panel-card knowledge-island" data-e2e="knowledge-list-panel">
       <header className="knowledge-list-head">
@@ -31,14 +41,14 @@ export function KnowledgeBaseListPanel(props: KnowledgeBaseListPanelProps) {
             <section key={group.id} className="knowledge-group">
               <div className="knowledge-group-head">
                 <button
-                  aria-label={`${group.taskId} 그룹 ${collapsed ? "펼치기" : "접기"}`}
+                  aria-label={`${group.promptLabel} 그룹 ${collapsed ? "펼치기" : "접기"}`}
                   className="knowledge-group-trigger"
                   data-e2e={`knowledge-group-${group.taskId}`}
                   onClick={() => props.onToggleGroup(group.id)}
-                  title={`${group.taskId} · ${group.entries.length}개`}
+                  title={`${group.promptLabel} · ${group.entries.length}개`}
                   type="button"
                 >
-                  <strong>{group.taskId}</strong>
+                  <strong>{group.promptLabel}</strong>
                   <span className="knowledge-group-count">
                     <img
                       alt=""
@@ -46,14 +56,18 @@ export function KnowledgeBaseListPanel(props: KnowledgeBaseListPanelProps) {
                       className={`knowledge-group-arrow${collapsed ? " is-collapsed" : ""}`}
                       src="/down-arrow2.svg"
                     />
-                    <span>{`${group.entries.length}개`}</span>
+                    <span className="knowledge-group-count-copy">
+                      <span className="knowledge-group-count-value">{`${group.roleGroups.length}명`}</span>
+                      <span aria-hidden="true" className="knowledge-group-count-dot">·</span>
+                      <span className="knowledge-group-count-value">{`${group.entries.length}개`}</span>
+                    </span>
                   </span>
                 </button>
                 <button
                   aria-label={`${group.taskId} 그룹 삭제`}
                   className="knowledge-group-delete"
                   data-e2e={`knowledge-delete-group-${group.taskId}`}
-                  onClick={() => props.onDeleteGroup(group.runId, group.taskId)}
+                  onClick={() => props.onDeleteGroup(group.runIds, group.taskId, group.promptLabel)}
                   type="button"
                 >
                   그룹 삭제
@@ -61,25 +75,68 @@ export function KnowledgeBaseListPanel(props: KnowledgeBaseListPanelProps) {
               </div>
               {!collapsed ? (
                 <div className="knowledge-group-items">
-                  {group.entries.map((entry) => (
-                    <button
-                      aria-label={`${entry.title} 문서 선택`}
-                      key={entry.id}
-                      className={`knowledge-row${props.selectedEntry?.id === entry.id ? " is-selected" : ""}`}
-                      data-e2e={`knowledge-entry-${entry.id}`}
-                      onClick={() => props.onSelectEntry(entry.id)}
-                      title={`${entry.title} · ${entry.taskAgentLabel || entry.studioRoleLabel || entry.roleId}`}
-                      type="button"
-                    >
-                      <strong>{entry.title}</strong>
-                      <span>
-                        {entry.taskAgentLabel || entry.studioRoleLabel || entry.roleId}
-                        {entry.orchestratorAgentLabel ? ` · 총괄 ${entry.orchestratorAgentLabel}` : ""}
-                      </span>
-                      <span>{`${formatSourceKindLabel(entry.sourceKind)} · ${formatArtifactFileNames(entry)}`}</span>
-                      <small>{new Date(entry.createdAt).toLocaleString()}</small>
-                    </button>
-                  ))}
+                  {group.roleGroups.map((roleGroup) => {
+                    const roleCollapsed = collapsedByRoleGroup[roleGroup.id] === true;
+                    const hasSelectedEntry = roleGroup.entries.some((entry) => entry.id === props.selectedEntry?.id);
+                    return (
+                      <section
+                        className={`knowledge-role-tree${hasSelectedEntry ? " is-selected" : ""}`}
+                        key={roleGroup.id}
+                      >
+                        <div className="knowledge-role-head">
+                          <button
+                            aria-label={`${roleGroup.label} ${roleCollapsed ? "펼치기" : "접기"}`}
+                            className="knowledge-role-toggle"
+                            onClick={() => toggleRoleGroup(roleGroup.id)}
+                            type="button"
+                          >
+                            <img
+                              alt=""
+                              aria-hidden="true"
+                              className={roleCollapsed ? "" : "is-expanded"}
+                              src="/down-arrow2.svg"
+                            />
+                          </button>
+                          <button
+                            aria-label={`${roleGroup.label} 문서 목록 ${roleCollapsed ? "펼치기" : "접기"}`}
+                            className={`knowledge-role-trigger${hasSelectedEntry ? " is-selected" : ""}`}
+                            onClick={() => toggleRoleGroup(roleGroup.id)}
+                            title={`${roleGroup.label} · ${roleGroup.entries.length}개`}
+                            type="button"
+                          >
+                            <div className="knowledge-role-copy">
+                              <strong>{roleGroup.label}</strong>
+                              <span>{roleGroup.detail}</span>
+                              <small>{`${roleGroup.entries.length}개 문서`}</small>
+                            </div>
+                          </button>
+                        </div>
+                        {!roleCollapsed ? (
+                          <div className="knowledge-role-items">
+                            {roleGroup.entries.map((entry) => {
+                              const artifactName = formatArtifactFileNames(entry);
+                              const displayTitle = artifactName !== "-" ? artifactName : entry.title;
+                              return (
+                                <button
+                                  aria-label={`${displayTitle} 문서 선택`}
+                                  key={entry.id}
+                                  className={`knowledge-row${props.selectedEntry?.id === entry.id ? " is-selected" : ""}`}
+                                  data-e2e={`knowledge-entry-${entry.id}`}
+                                  onClick={() => props.onSelectEntry(entry.id)}
+                                  title={`${entry.title} · ${formatSourceKindLabel(entry.sourceKind)}`}
+                                  type="button"
+                                >
+                                  <strong>{displayTitle}</strong>
+                                  <span>{entry.title}</span>
+                                  <small>{new Date(entry.createdAt).toLocaleString()}</small>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        ) : null}
+                      </section>
+                    );
+                  })}
                 </div>
               ) : null}
             </section>

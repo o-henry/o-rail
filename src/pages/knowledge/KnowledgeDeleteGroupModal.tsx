@@ -25,7 +25,7 @@ export function KnowledgeDeleteGroupModal({
     <div className="modal-backdrop">
       <section className="approval-modal web-turn-modal knowledge-delete-group-modal">
         <h2>그룹 삭제</h2>
-        <div>{`'${pendingGroupDelete.taskId} · ${pendingGroupDelete.runId}' 그룹을 삭제하시겠습니까?`}</div>
+        <div>{`'${pendingGroupDelete.promptLabel || pendingGroupDelete.taskId}' 그룹을 삭제하시겠습니까?`}</div>
         <div className="button-row">
           <button onClick={onCancel} type="button">
             {t("common.cancel")}

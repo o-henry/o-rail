@@ -20,6 +20,7 @@ export default function KnowledgeBasePage({
   onOpenInVisualize,
 }: KnowledgeBasePageProps) {
   const state = useKnowledgeBaseState({ cwd, isActive, posts });
+  const showLoadingOverlay = state.loading && state.grouped.length === 0;
 
   return (
     <section aria-label="데이터베이스 작업공간" className="panel-card knowledge-view workspace-tab-panel" data-e2e="knowledge-page">
@@ -52,7 +53,7 @@ export default function KnowledgeBasePage({
           onRevealPath={state.onRevealPath}
           selected={state.selected}
         />
-        {state.loading ? (
+        {showLoadingOverlay ? (
           <div className="knowledge-loading-overlay" aria-hidden="true">
             <div className="knowledge-loading-skeleton">
               <span />

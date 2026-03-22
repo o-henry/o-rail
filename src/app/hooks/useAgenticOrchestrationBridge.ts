@@ -204,11 +204,12 @@ export function useAgenticOrchestrationBridge(params: {
   setStatus: (message: string) => void;
   applyPreset: (presetKind: PresetKind) => void;
     onRoleRunCompleted?: (payload: {
-      runId: string;
-      roleId: string;
-      taskId: string;
-      prompt?: string;
-      summary?: string;
+    runId: string;
+    roleId: string;
+    taskId: string;
+    prompt?: string;
+    requestPrompt?: string;
+    summary?: string;
       internal?: boolean;
       handoffToRole?: string;
       handoffRequest?: string;
@@ -311,6 +312,7 @@ export function useAgenticOrchestrationBridge(params: {
     roleId: string;
     taskId: string;
     prompt?: string;
+    requestPrompt?: string;
     sourceTab: "tasks" | "tasks-thread";
     summary?: string;
     artifactPaths: string[];
@@ -372,6 +374,7 @@ export function useAgenticOrchestrationBridge(params: {
       roleId: params.roleId,
       taskId: params.taskId,
       prompt: params.prompt,
+      requestPrompt: params.requestPrompt,
       summary: params.summary,
       internal: params.internal,
       handoffToRole: params.handoffToRole,
@@ -388,6 +391,7 @@ export function useAgenticOrchestrationBridge(params: {
     roleId: string;
     taskId: string;
     prompt?: string;
+    requestPrompt?: string;
     sourceTab: "tasks" | "tasks-thread";
     internal?: boolean;
     model?: string;
@@ -400,6 +404,7 @@ export function useAgenticOrchestrationBridge(params: {
   }) => {
     const sourceTab = params.sourceTab;
     const promptText = String(params.prompt ?? "").trim();
+    const requestPromptText = String(params.requestPrompt ?? params.prompt ?? "").trim();
     const promptMode = params.promptMode ?? "direct";
     if (shouldDeduplicateTaskRoleRun(promptMode) && shouldSkipRecentTaskRoleRun({
       taskId: params.taskId,
@@ -521,6 +526,7 @@ export function useAgenticOrchestrationBridge(params: {
       roleId: params.roleId,
       taskId: params.taskId,
       prompt: params.prompt,
+      requestPrompt: requestPromptText || undefined,
       summary: taskCodexSummary,
       internal: params.internal,
       handoffToRole: params.handoffToRole,
@@ -591,6 +597,7 @@ export function useAgenticOrchestrationBridge(params: {
             roleId: runParams.roleId,
             taskId: params.taskId,
             prompt: runParams.prompt,
+            requestPrompt: params.prompt,
             sourceTab,
             internal: runParams.internal,
             model: runParams.model,

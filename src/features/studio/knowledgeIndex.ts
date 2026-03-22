@@ -93,6 +93,7 @@ function normalizeEntry(raw: unknown): KnowledgeEntry | null {
     sourceKind,
     sourceUrl,
     title,
+    requestLabel: String(row.requestLabel ?? "").trim() || undefined,
     summary: String(row.summary ?? "").trim(),
     createdAt: String(row.createdAt ?? "").trim() || new Date().toISOString(),
     markdownPath: String(row.markdownPath ?? "").trim() || undefined,

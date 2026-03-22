@@ -16,6 +16,7 @@ export type KnowledgeEntry = {
   sourceKind: KnowledgeSourceKind;
   sourceUrl?: string;
   title: string;
+  requestLabel?: string;
   summary: string;
   createdAt: string;
   markdownPath?: string;

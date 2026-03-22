@@ -34,18 +34,20 @@ type UseKnowledgeBaseStateParams = {
 type DeleteFileFn = (path: string) => Promise<void>;
 
 export type PendingKnowledgeGroupDelete = {
-  runId: string;
+  runIds: string[];
   taskId: string;
+  promptLabel: string;
 };
 
-export function buildKnowledgeGroupDeleteRequest(runId: string, taskId: string): PendingKnowledgeGroupDelete | null {
-  const normalizedRunId = String(runId ?? "").trim();
-  if (!normalizedRunId) {
+export function buildKnowledgeGroupDeleteRequest(runIds: string[], taskId: string, promptLabel: string): PendingKnowledgeGroupDelete | null {
+  const normalizedRunIds = [...new Set((runIds ?? []).map((runId) => String(runId ?? "").trim()).filter(Boolean))];
+  if (normalizedRunIds.length === 0) {
     return null;
   }
   return {
-    runId: normalizedRunId,
+    runIds: normalizedRunIds,
     taskId: String(taskId ?? "").trim(),
+    promptLabel: String(promptLabel ?? "").trim(),
   };
 }
 
@@ -422,13 +424,14 @@ export function useKnowledgeBaseState({ cwd, isActive, posts }: UseKnowledgeBase
     })();
   };
 
-  const executeDeleteGroup = (runId: string) => {
-    const normalizedRunId = String(runId ?? "").trim();
-    if (!normalizedRunId) {
+  const executeDeleteGroup = (runIds: string[]) => {
+    const normalizedRunIds = [...new Set((runIds ?? []).map((runId) => String(runId ?? "").trim()).filter(Boolean))];
+    if (normalizedRunIds.length === 0) {
       return;
     }
     void (async () => {
-      const targetGroup = grouped.find((group) => String(group.runId ?? "").trim() === normalizedRunId) ?? null;
+      const targetRunIds = new Set(normalizedRunIds);
+      const targetGroup = grouped.find((group) => group.runIds.some((runId) => targetRunIds.has(String(runId ?? "").trim()))) ?? null;
       const targetEntries = Array.isArray(targetGroup?.entries) ? targetGroup.entries : [];
       const deleteErrors: string[] = [];
 
@@ -481,9 +484,12 @@ export function useKnowledgeBaseState({ cwd, isActive, posts }: UseKnowledgeBase
         }
       }
 
-      const next = removeKnowledgeEntriesByRunId(normalizedRunId);
+      let next = entries;
+      for (const runId of normalizedRunIds) {
+        next = removeKnowledgeEntriesByRunId(runId);
+      }
       persistRows(next);
-      if (selected && String(selected.runId ?? "").trim() === normalizedRunId) {
+      if (selected && targetRunIds.has(String(selected.runId ?? "").trim())) {
         setSelectedId("");
       }
       if (deleteErrors.length > 0) {
@@ -492,8 +498,8 @@ export function useKnowledgeBaseState({ cwd, isActive, posts }: UseKnowledgeBase
     })();
   };
 
-  const onDeleteGroup = (runId: string, taskId: string) => {
-    setPendingGroupDelete(buildKnowledgeGroupDeleteRequest(runId, taskId));
+  const onDeleteGroup = (runIds: string[], taskId: string, promptLabel: string) => {
+    setPendingGroupDelete(buildKnowledgeGroupDeleteRequest(runIds, taskId, promptLabel));
   };
 
   const onConfirmDeleteGroup = () => {
@@ -502,7 +508,7 @@ export function useKnowledgeBaseState({ cwd, isActive, posts }: UseKnowledgeBase
     }
     const current = pendingGroupDelete;
     setPendingGroupDelete(null);
-    executeDeleteGroup(current.runId);
+    executeDeleteGroup(current.runIds);
   };
 
   const onCancelDeleteGroup = () => {

@@ -9,14 +9,15 @@ import { isRuntimeNoiseKnowledgeEntry } from "./knowledgeEntryMapping";
 
 describe("buildKnowledgeGroupDeleteRequest", () => {
   it("creates a pending delete request without deleting anything immediately", () => {
-    expect(buildKnowledgeGroupDeleteRequest("run-123", "task-abc")).toEqual({
-      runId: "run-123",
+    expect(buildKnowledgeGroupDeleteRequest(["run-123", "run-456"], "task-abc", "게임 아이디어 요청")).toEqual({
+      runIds: ["run-123", "run-456"],
       taskId: "task-abc",
+      promptLabel: "게임 아이디어 요청",
     });
   });
 
-  it("returns null when run id is empty", () => {
-    expect(buildKnowledgeGroupDeleteRequest("", "task-abc")).toBeNull();
+  it("returns null when run ids are empty", () => {
+    expect(buildKnowledgeGroupDeleteRequest([], "task-abc", "게임 아이디어 요청")).toBeNull();
   });
 
   it("allows workspace-aware filtering to hide runtime noise records", () => {

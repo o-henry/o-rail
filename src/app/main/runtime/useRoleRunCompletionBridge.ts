@@ -3,6 +3,7 @@ import { STUDIO_ROLE_TEMPLATES } from "../../../features/studio/roleTemplates";
 import type { StudioRoleId } from "../../../features/studio/handoffTypes";
 import { STUDIO_ROLE_PROMPTS, toStudioRoleId } from "../../../features/studio/roleUtils";
 import { persistKnowledgeIndexToWorkspace, readKnowledgeEntries, upsertKnowledgeEntry } from "../../../features/studio/knowledgeIndex";
+import { extractKnowledgeRequestSummary } from "../../../features/studio/knowledgeRequestSummary";
 import { resolveTaskAgentMetadata } from "../../../features/studio/taskAgentMetadata";
 
 type Params = {
@@ -20,6 +21,7 @@ export function buildKnowledgeEntriesFromRoleRunCompletion(params: {
     runId?: string;
     taskId?: string;
     prompt?: string;
+    requestPrompt?: string;
     handoffRequest?: string;
     artifactPaths?: unknown[];
     internal?: boolean;
@@ -32,7 +34,9 @@ export function buildKnowledgeEntriesFromRoleRunCompletion(params: {
     ? STUDIO_ROLE_TEMPLATES.find((row) => row.id === roleId)?.label ?? params.payload.roleId
     : params.payload.roleId;
   const taskAgentMetadata = resolveTaskAgentMetadata(String(params.payload.roleId ?? ""), Boolean(params.payload.internal));
+  const requestPrompt = String(params.payload.requestPrompt ?? "").trim();
   const promptSummary = String(params.payload.prompt ?? params.payload.handoffRequest ?? "").trim();
+  const requestSummary = extractKnowledgeRequestSummary(requestPrompt || promptSummary) || requestPrompt || promptSummary;
   const dedupedArtifactPaths = [
     ...new Set((params.payload.artifactPaths ?? []).map((row: unknown) => String(row ?? "").trim()).filter(Boolean)),
   ];
@@ -51,7 +55,8 @@ export function buildKnowledgeEntriesFromRoleRunCompletion(params: {
       orchestratorAgentLabel: taskAgentMetadata.orchestratorAgentLabel,
       sourceKind: "artifact" as const,
       title: `${roleLabel} · ${normalizedTaskId} · ${fileName}`,
-      summary: promptSummary || `${roleLabel} 역할 실행 산출물`,
+      requestLabel: requestSummary || undefined,
+      summary: requestSummary || `${roleLabel} 역할 실행 산출물`,
       createdAt: new Date().toISOString(),
       markdownPath: /\.(md|markdown)$/i.test(artifactPath) ? artifactPath : undefined,
       jsonPath: /\.json$/i.test(artifactPath) ? artifactPath : undefined,

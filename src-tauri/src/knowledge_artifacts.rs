@@ -51,6 +51,7 @@ struct WorkspaceArtifactRunRef {
     task_id: String,
     run_dir: PathBuf,
     signature_ms: u128,
+    prompt_label: Option<String>,
 }
 
 pub fn scan_workspace_artifacts(workspace: &Path) -> Result<Vec<WorkspaceKnowledgeArtifactEntry>, String> {
@@ -145,6 +146,7 @@ fn collect_workspace_artifact_runs(tasks_root: &Path) -> Result<Vec<WorkspaceArt
                 task_id: task_id.clone(),
                 signature_ms: file_timestamp_ms(&run_dir),
                 run_dir,
+                prompt_label: read_task_prompt_label(&task_dir),
             });
         }
     }
@@ -167,7 +169,10 @@ fn scan_run_artifacts(workspace: &Path, run_ref: &WorkspaceArtifactRunRef) -> Ve
             workspace_path: workspace.to_string_lossy().to_string(),
             source_kind: "artifact".to_string(),
             title: format!("리서처 · {} · {}", run_ref.task_id, artifact_name),
-            summary: "복구된 리서치 산출물".to_string(),
+            summary: run_ref
+                .prompt_label
+                .clone()
+                .unwrap_or_else(|| "복구된 리서치 산출물".to_string()),
             created_at: file_timestamp_iso8601(&artifact_path),
             markdown_path: artifact_name.ends_with(".md").then_some(artifact_path_string.clone()),
             json_path: artifact_name.ends_with(".json").then_some(artifact_path_string.clone()),
@@ -227,6 +232,19 @@ fn stable_file_id(path: &str) -> String {
     let mut hasher = DefaultHasher::new();
     path.hash(&mut hasher);
     format!("{:x}", hasher.finish())
+}
+
+fn read_task_prompt_label(task_dir: &Path) -> Option<String> {
+    let raw = fs::read_to_string(task_dir.join("thread.json")).ok()?;
+    let parsed = serde_json::from_str::<serde_json::Value>(&raw).ok()?;
+    let prompt = parsed
+        .get("userPrompt")
+        .and_then(|value| value.as_str())
+        .or_else(|| parsed.get("title").and_then(|value| value.as_str()))
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    (!prompt.is_empty()).then_some(prompt)
 }
 
 #[cfg(test)]

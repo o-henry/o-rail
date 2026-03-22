@@ -2,9 +2,10 @@ import type { CoordinationMode } from "../../features/orchestration/agentic/coor
 import { UNITY_TASK_AGENT_PRESETS, type TaskAgentPresetId } from "./taskAgentPresets";
 
 export type TaskAgentMentionOption = {
-  kind: "agent" | "mode";
+  kind: "agent" | "mode" | "provider";
   presetId?: TaskAgentPresetId;
   mode?: CoordinationMode;
+  modelValue?: string;
   label: string;
   description: string;
   mention: string;
@@ -63,7 +64,30 @@ const MODE_MENTION_OPTIONS: TaskAgentMentionOption[] = [
   },
 ];
 
-const MENTION_OPTIONS: TaskAgentMentionOption[] = [...AGENT_MENTION_OPTIONS, ...MODE_MENTION_OPTIONS];
+const PROVIDER_MENTION_OPTIONS: TaskAgentMentionOption[] = [
+  {
+    kind: "provider",
+    modelValue: "WEB / STEEL",
+    label: "WEB / STEEL",
+    description: "Steel 외부 브라우저 런타임으로 검색/페이지 접근을 수행합니다.",
+    mention: "@steel",
+    searchText: "steel web browser provider search cdp runtime external 검색 브라우저",
+  },
+  {
+    kind: "provider",
+    modelValue: "WEB / LIGHTPANDA",
+    label: "WEB / LIGHTPANDA",
+    description: "Lightpanda 실험 브라우저 런타임으로 검색/페이지 접근을 수행합니다.",
+    mention: "@lightpanda",
+    searchText: "lightpanda web browser provider search cdp runtime external 검색 브라우저",
+  },
+];
+
+const MENTION_OPTIONS: TaskAgentMentionOption[] = [
+  ...AGENT_MENTION_OPTIONS,
+  ...PROVIDER_MENTION_OPTIONS,
+  ...MODE_MENTION_OPTIONS,
+];
 
 export function getTaskAgentMentionMatch(input: string, cursor: number): TaskAgentMentionMatch | null {
   const safeInput = String(input ?? "");

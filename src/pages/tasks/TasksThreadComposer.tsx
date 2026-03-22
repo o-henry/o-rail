@@ -17,7 +17,10 @@ type AttachedFile = {
 type RuntimeModelOption = {
   value: string;
   label: string;
+  executor?: string;
 };
+
+const HIDDEN_TASKS_MODEL_VALUES = new Set(["WEB / STEEL", "WEB / LIGHTPANDA"]);
 
 type TasksThreadComposerProps = {
   composerRef: RefObject<HTMLTextAreaElement | null>;
@@ -27,6 +30,7 @@ type TasksThreadComposerProps = {
   mentionIndex: number;
   attachedFiles: AttachedFile[];
   selectedComposerRoleIds: ThreadRoleId[];
+  autoSelectedComposerRoleIds?: ThreadRoleId[];
   composerCoordinationModeOverride: CoordinationMode | null;
   composerDraft: string;
   selectedModelOption: RuntimeModelOption;
@@ -67,7 +71,7 @@ export function shouldShowTasksComposerStopButton(params: {
 
 type SelectedTasksComposerBadge = {
   key: string;
-  kind: "agent" | "mode";
+  kind: "agent" | "auto-agent" | "mode";
   label: string;
   roleId?: ThreadRoleId;
   mode?: CoordinationMode;
@@ -85,6 +89,7 @@ function coordinationModeLabel(mode: CoordinationMode): string {
 
 export function buildSelectedTasksComposerBadges(params: {
   roleIds: ThreadRoleId[];
+  autoRoleIds?: ThreadRoleId[];
   modeOverride: CoordinationMode | null;
 }): SelectedTasksComposerBadge[] {
   const badges: SelectedTasksComposerBadge[] = params.roleIds.map((roleId) => ({
@@ -93,6 +98,17 @@ export function buildSelectedTasksComposerBadges(params: {
     label: getTaskAgentLabel(roleId),
     roleId,
   }));
+  for (const roleId of params.autoRoleIds ?? []) {
+    if (params.roleIds.includes(roleId)) {
+      continue;
+    }
+    badges.push({
+      key: `auto-agent:${roleId}`,
+      kind: "auto-agent",
+      label: getTaskAgentLabel(roleId),
+      roleId,
+    });
+  }
   if (params.modeOverride) {
     badges.push({
       key: `mode:${params.modeOverride}`,
@@ -109,8 +125,10 @@ export function TasksThreadComposer(props: TasksThreadComposerProps) {
   const canSubmit = canSubmitTasksComposer(props.composerDraft);
   const composerDisabled = false;
   const composerPlaceholder = t("tasks.composer.placeholder");
+  const visibleModelOptions = RUNTIME_MODEL_OPTIONS.filter((option) => !HIDDEN_TASKS_MODEL_VALUES.has(option.value));
   const selectedBadges = buildSelectedTasksComposerBadges({
     roleIds: props.selectedComposerRoleIds,
+    autoRoleIds: props.autoSelectedComposerRoleIds ?? [],
     modeOverride: props.composerCoordinationModeOverride,
   });
 
@@ -171,21 +189,27 @@ export function TasksThreadComposer(props: TasksThreadComposerProps) {
       {selectedBadges.length > 0 ? (
         <div aria-label="Selected agents" className="tasks-thread-selected-mentions" data-e2e="tasks-selected-badges">
           {selectedBadges.map((badge) => (
-            <span className="tasks-thread-selected-mention-chip" key={badge.key}>
-              <span>{badge.label}</span>
-              <button
-                aria-label={`Remove ${badge.label}`}
-                onClick={() => {
-                  if (badge.kind === "agent" && badge.roleId) {
-                    props.onRemoveComposerRole(badge.roleId);
-                    return;
-                  }
-                  props.onClearCoordinationModeOverride();
-                }}
-                type="button"
-              >
-                ×
-              </button>
+            <span
+              className={`tasks-thread-selected-mention-chip${badge.kind === "auto-agent" ? " is-auto" : ""}`}
+              key={badge.key}
+              title={badge.kind === "auto-agent" ? "Orchestrator selected this agent automatically." : undefined}
+            >
+              <span>{badge.kind === "auto-agent" ? `AUTO: ${badge.label}` : badge.label}</span>
+              {badge.kind === "auto-agent" ? null : (
+                <button
+                  aria-label={`Remove ${badge.label}`}
+                  onClick={() => {
+                    if (badge.kind === "agent" && badge.roleId) {
+                      props.onRemoveComposerRole(badge.roleId);
+                      return;
+                    }
+                    props.onClearCoordinationModeOverride();
+                  }}
+                  type="button"
+                >
+                  ×
+                </button>
+              )}
             </span>
           ))}
         </div>
@@ -236,7 +260,7 @@ export function TasksThreadComposer(props: TasksThreadComposerProps) {
             </button>
             {props.isModelMenuOpen ? (
               <ul aria-label={t("tasks.aria.modelMenu")} className="agents-model-menu" data-e2e="tasks-model-menu" role="listbox">
-                {RUNTIME_MODEL_OPTIONS.map((option) => (
+                {visibleModelOptions.map((option) => (
                   <li key={option.value}>
                     <button
                       aria-selected={option.value === props.selectedModelOption.value}

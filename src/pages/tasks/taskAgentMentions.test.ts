@@ -18,6 +18,11 @@ describe("getTaskAgentMentionMatch", () => {
     expect(match?.options.some((option) => option.mention === "@researcher")).toBe(true);
   });
 
+  it("surfaces external provider mentions in mention search", () => {
+    const match = getTaskAgentMentionMatch("please ask @ste", "please ask @ste".length);
+    expect(match?.options.some((option) => option.mention === "@steel")).toBe(true);
+  });
+
   it("surfaces orchestration mode tags with descriptions", () => {
     const match = getTaskAgentMentionMatch("please use @te", "please use @te".length);
     const option = match?.options.find((entry) => entry.mention === "@team");

@@ -34,6 +34,20 @@ const INTENT_ROLE_PRIORITY: Record<TaskPromptIntent, TaskAgentPresetId[]> = {
   planning: ["game_designer", "unity_architect", "unity_refactor_specialist", "researcher"],
 };
 
+const ORCHESTRATOR_FALLBACK_ROLE_PRIORITY: TaskAgentPresetId[] = [
+  "researcher",
+  "game_designer",
+  "unity_architect",
+  "unity_refactor_specialist",
+  "unity_implementer",
+  "qa_playtester",
+  "technical_artist",
+  "unity_editor_tools",
+  "level_designer",
+  "release_steward",
+  "handoff_writer",
+];
+
 function includesPattern(prompt: string, patterns: RegExp[]): boolean {
   return patterns.some((pattern) => pattern.test(prompt));
 }
@@ -140,7 +154,26 @@ function desiredParticipantCount(intent: TaskPromptIntent, prompt: string, reque
   return 1;
 }
 
-function selectPrimaryRole(intent: TaskPromptIntent, prompt: string, availableRoleIds: TaskAgentPresetId[]): TaskAgentPresetId {
+function shouldUseNeutralFallbackPriority(intent: TaskPromptIntent, requestedRoleCount: number): boolean {
+  if (requestedRoleCount > 0) {
+    return false;
+  }
+  return intent === "research" || intent === "ideation" || intent === "review" || intent === "planning";
+}
+
+function selectPrimaryRole(
+  intent: TaskPromptIntent,
+  prompt: string,
+  availableRoleIds: TaskAgentPresetId[],
+  requestedRoleCount: number,
+): TaskAgentPresetId {
+  if (shouldUseNeutralFallbackPriority(intent, requestedRoleCount)) {
+    return (
+      ORCHESTRATOR_FALLBACK_ROLE_PRIORITY.find((roleId) => availableRoleIds.includes(roleId))
+      ?? availableRoleIds[0]
+      ?? "game_designer"
+    );
+  }
   if (
     intent === "implementation"
     && availableRoleIds.includes("unity_refactor_specialist")
@@ -161,7 +194,12 @@ function pickParticipantRoles(params: {
   const requestedRoleIds = uniqueRoleIds(params.requestedRoleIds);
   const enabledRoleIds = uniqueRoleIds(params.enabledRoleIds);
   const availableRoleIds = uniqueRoleIds([...requestedRoleIds, ...enabledRoleIds]);
-  const primaryRoleId = selectPrimaryRole(params.intent, params.prompt, availableRoleIds);
+  const primaryRoleId = selectPrimaryRole(
+    params.intent,
+    params.prompt,
+    availableRoleIds,
+    requestedRoleIds.length,
+  );
   const desiredCount = Math.min(params.maxParticipants, desiredParticipantCount(params.intent, params.prompt, requestedRoleIds.length));
   const ordered: TaskAgentPresetId[] = [primaryRoleId];
   for (const roleId of requestedRoleIds) {
@@ -169,7 +207,13 @@ function pickParticipantRoles(params: {
       ordered.push(roleId);
     }
   }
-  if (requestedRoleIds.length <= 1) {
+  if (requestedRoleIds.length === 0 && shouldUseNeutralFallbackPriority(params.intent, requestedRoleIds.length)) {
+    for (const roleId of ORCHESTRATOR_FALLBACK_ROLE_PRIORITY) {
+      if (availableRoleIds.includes(roleId) && !ordered.includes(roleId)) {
+        ordered.push(roleId);
+      }
+    }
+  } else if (requestedRoleIds.length <= 1) {
     for (const roleId of INTENT_ROLE_PRIORITY[params.intent]) {
       if (availableRoleIds.includes(roleId) && !ordered.includes(roleId)) {
         ordered.push(roleId);

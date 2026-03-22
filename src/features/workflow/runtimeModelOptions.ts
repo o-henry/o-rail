@@ -95,6 +95,18 @@ export const RUNTIME_MODEL_OPTIONS: ReadonlyArray<RuntimeModelOption> = [
     allowsReasonLevel: false,
     executor: "web_claude",
   },
+  {
+    value: "WEB / STEEL",
+    label: "WEB / STEEL",
+    allowsReasonLevel: false,
+    executor: "web_steel",
+  },
+  {
+    value: "WEB / LIGHTPANDA",
+    label: "WEB / LIGHTPANDA",
+    allowsReasonLevel: false,
+    executor: "web_lightpanda_experimental",
+  },
 ];
 
 export const DEFAULT_RUNTIME_MODEL_VALUE = RUNTIME_MODEL_OPTIONS[0].value;

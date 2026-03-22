@@ -29,6 +29,7 @@ describe("buildSelectedTasksComposerBadges", () => {
   it("includes coordination mode badges alongside agent badges", () => {
     expect(buildSelectedTasksComposerBadges({
       roleIds: ["researcher"],
+      autoRoleIds: ["game_designer"],
       modeOverride: "fanout",
     })).toEqual([
       {
@@ -36,6 +37,12 @@ describe("buildSelectedTasksComposerBadges", () => {
         kind: "agent",
         label: "RESEARCHER",
         roleId: "researcher",
+      },
+      {
+        key: "auto-agent:game_designer",
+        kind: "auto-agent",
+        label: "GAME DESIGNER",
+        roleId: "game_designer",
       },
       {
         key: "mode:fanout",
@@ -75,6 +82,7 @@ describe("TasksThreadComposer", () => {
     const html = renderToStaticMarkup(
       createElement(TasksThreadComposer, {
         attachedFiles: [],
+        autoSelectedComposerRoleIds: [],
         canInterruptCurrentThread: false,
         canUseStopButton: false,
         composerCoordinationModeOverride: null,
@@ -111,5 +119,92 @@ describe("TasksThreadComposer", () => {
 
     expect(html).not.toContain("<textarea disabled");
     expect(html).toContain("Unity 작업 내용을 입력하거나 @로 에이전트를 선택하세요");
+  });
+
+  it("hides WEB / STEEL and WEB / LIGHTPANDA from the task model menu", () => {
+    const html = renderToStaticMarkup(
+      createElement(TasksThreadComposer, {
+        attachedFiles: [],
+        autoSelectedComposerRoleIds: [],
+        canInterruptCurrentThread: false,
+        canUseStopButton: false,
+        composerCoordinationModeOverride: null,
+        composerDraft: "",
+        composerRef: createRef<HTMLTextAreaElement>(),
+        isModelMenuOpen: true,
+        isReasonMenuOpen: false,
+        mentionIndex: 0,
+        mentionMatch: null,
+        modelMenuRef: createRef<HTMLDivElement>(),
+        onClearCoordinationModeOverride: () => undefined,
+        onComposerCursorChange: () => undefined,
+        onComposerDraftChange: () => undefined,
+        onComposerKeyDown: () => undefined,
+        onOpenAttachmentPicker: () => undefined,
+        onRemoveAttachedFile: () => undefined,
+        onRemoveComposerRole: () => undefined,
+        onSelectMention: () => undefined,
+        onSetModel: () => undefined,
+        onSetReasoning: () => undefined,
+        onStop: () => undefined,
+        onSubmit: () => undefined,
+        onToggleModelMenu: () => undefined,
+        onToggleReasonMenu: () => undefined,
+        reasonMenuRef: createRef<HTMLDivElement>(),
+        reasoning: "중간",
+        reasoningLabel: "MEDIUM",
+        selectedComposerRoleIds: [],
+        selectedModelOption: { value: "GPT-5.4", label: "GPT-5.4" },
+        showStopButton: false,
+        stoppingComposerRun: false,
+      }),
+    );
+
+    expect(html).not.toContain("WEB / STEEL");
+    expect(html).not.toContain("WEB / LIGHTPANDA");
+  });
+
+  it("renders orchestrator-selected badges with a distinct auto style", () => {
+    const html = renderToStaticMarkup(
+      createElement(TasksThreadComposer, {
+        attachedFiles: [],
+        autoSelectedComposerRoleIds: ["researcher", "game_designer"],
+        canInterruptCurrentThread: false,
+        canUseStopButton: false,
+        composerCoordinationModeOverride: null,
+        composerDraft: "인디게임 아이디어 추천해줘",
+        composerRef: createRef<HTMLTextAreaElement>(),
+        isModelMenuOpen: false,
+        isReasonMenuOpen: false,
+        mentionIndex: 0,
+        mentionMatch: null,
+        modelMenuRef: createRef<HTMLDivElement>(),
+        onClearCoordinationModeOverride: () => undefined,
+        onComposerCursorChange: () => undefined,
+        onComposerDraftChange: () => undefined,
+        onComposerKeyDown: () => undefined,
+        onOpenAttachmentPicker: () => undefined,
+        onRemoveAttachedFile: () => undefined,
+        onRemoveComposerRole: () => undefined,
+        onSelectMention: () => undefined,
+        onSetModel: () => undefined,
+        onSetReasoning: () => undefined,
+        onStop: () => undefined,
+        onSubmit: () => undefined,
+        onToggleModelMenu: () => undefined,
+        onToggleReasonMenu: () => undefined,
+        reasonMenuRef: createRef<HTMLDivElement>(),
+        reasoning: "중간",
+        reasoningLabel: "MEDIUM",
+        selectedComposerRoleIds: [],
+        selectedModelOption: { value: "GPT-5.4", label: "GPT-5.4" },
+        showStopButton: false,
+        stoppingComposerRun: false,
+      }),
+    );
+
+    expect(html).toContain("tasks-thread-selected-mention-chip is-auto");
+    expect(html).toContain("AUTO: GAME DESIGNER");
+    expect(html).toContain("AUTO: RESEARCHER");
   });
 });

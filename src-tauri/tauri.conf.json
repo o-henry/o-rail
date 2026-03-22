@@ -35,6 +35,7 @@
             "../scripts/via_runtime/scrapy_playwright_batch.py",
             "../scripts/via_runtime/requirements.lock",
             "../scripts/crawl_providers/crawl4ai_fetch.py",
+            "../scripts/crawl_providers/browser_use_fetch.py",
             "../scripts/crawl_providers/cdp_extract.mjs"
         ],
         "icon": [

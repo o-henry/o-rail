@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  resolveAutomaticResearchModel,
   isTasksCodexExecutionBlocked,
   rememberTasksProjectPath,
   resolveTasksProjectSelection,
   revealTasksProjectPathState,
+  shouldAutoUseExternalResearchProvider,
 } from "./useTasksThreadState";
 
 describe("rememberTasksProjectPath", () => {
@@ -77,5 +79,64 @@ describe("isTasksCodexExecutionBlocked", () => {
       loginCompleted: false,
       codexAuthCheckPending: false,
     })).toBe(false);
+  });
+});
+
+describe("shouldAutoUseExternalResearchProvider", () => {
+  it("turns on for researcher-tagged prompts on codex models", () => {
+    expect(shouldAutoUseExternalResearchProvider({
+      currentModel: "GPT-5.4",
+      prompt: "게임 반응을 조사해줘",
+      taggedRoles: ["researcher"],
+    })).toBe(true);
+  });
+
+  it("stays off when the user already picked a non-codex runtime", () => {
+    expect(shouldAutoUseExternalResearchProvider({
+      currentModel: "GPT-Web",
+      prompt: "게임 반응을 조사해줘",
+      taggedRoles: ["researcher"],
+    })).toBe(false);
+  });
+});
+
+describe("resolveAutomaticResearchModel", () => {
+  it("prefers WEB / STEEL when researcher-style requests have a ready steel runtime", async () => {
+    const invokeFn = (async (_command: string, args?: Record<string, unknown>) => {
+      const provider = String(args?.provider ?? "");
+      if (provider === "steel") {
+        return { ready: true };
+      }
+      return { ready: false };
+    }) as <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
+    await expect(resolveAutomaticResearchModel({
+      invokeFn,
+      cwd: "/repo",
+      currentModel: "GPT-5.4",
+      prompt: "최근 인디게임 시장 반응을 조사해줘",
+      taggedRoles: ["researcher"],
+      hasTauriRuntime: true,
+    })).resolves.toBe("WEB / STEEL");
+  });
+
+  it("falls back to WEB / LIGHTPANDA when steel is unavailable", async () => {
+    const invokeFn = (async (_command: string, args?: Record<string, unknown>) => {
+      const provider = String(args?.provider ?? "");
+      if (provider === "steel") {
+        return { ready: false };
+      }
+      if (provider === "lightpanda_experimental") {
+        return { ready: true };
+      }
+      return { ready: false };
+    }) as <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
+    await expect(resolveAutomaticResearchModel({
+      invokeFn,
+      cwd: "/repo",
+      currentModel: "GPT-5.4",
+      prompt: "최근 인디게임 시장 반응을 조사해줘",
+      taggedRoles: ["researcher"],
+      hasTauriRuntime: true,
+    })).resolves.toBe("WEB / LIGHTPANDA");
   });
 });

@@ -260,6 +260,20 @@ fn extract_first_http_url(prompt: &str) -> Option<String> {
     None
 }
 
+fn build_search_bootstrap_url(prompt: &str) -> Option<String> {
+    let query = prompt
+        .split_whitespace()
+        .map(str::trim)
+        .filter(|token| !token.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ");
+    if query.is_empty() {
+        return None;
+    }
+    let encoded = url::form_urlencoded::byte_serialize(query.as_bytes()).collect::<String>();
+    Some(format!("https://duckduckgo.com/html/?q={encoded}"))
+}
+
 fn resolve_external_web_provider_cwd(
     app: &AppHandle,
     cwd: Option<String>,
@@ -296,11 +310,16 @@ async fn run_external_web_provider(
     prompt: &str,
     cwd: Option<String>,
 ) -> Result<WebProviderRunResult, String> {
-    let url = extract_first_http_url(prompt).ok_or_else(|| {
-        format!(
-            "{provider} web provider requires an explicit http(s) URL in the prompt"
-        )
-    })?;
+    let (url, extraction_strategy) = if let Some(explicit_url) = extract_first_http_url(prompt) {
+        (explicit_url, "external_crawl_provider")
+    } else {
+        let fallback_url = build_search_bootstrap_url(prompt).ok_or_else(|| {
+            format!(
+                "{provider} web provider requires either an explicit URL or a non-empty prompt"
+            )
+        })?;
+        (fallback_url, "search_bootstrap")
+    };
     let resolved_cwd = resolve_external_web_provider_cwd(app, cwd)?;
     let started = Instant::now();
     let fetch = crate::crawl_providers::dashboard_crawl_provider_fetch_url(
@@ -325,7 +344,7 @@ async fn run_external_web_provider(
             started_at: None,
             finished_at: Some(fetch.fetched_at.clone()),
             elapsed_ms,
-            extraction_strategy: Some("external_crawl_provider".to_string()),
+            extraction_strategy: Some(extraction_strategy.to_string()),
         }),
         error: None,
         error_code: None,
@@ -2595,7 +2614,7 @@ pub async fn ollama_generate(model: String, prompt: String) -> Result<Value, Str
 
 #[cfg(test)]
 mod tests {
-    use super::extract_first_http_url;
+    use super::{build_search_bootstrap_url, extract_first_http_url};
 
     #[test]
     fn extracts_first_http_url_from_prompt_text() {
@@ -2610,5 +2629,14 @@ mod tests {
     fn ignores_non_http_urls() {
         let prompt = "Open ftp://example.com first and then maybe nothing else.";
         assert_eq!(extract_first_http_url(prompt), None);
+    }
+
+    #[test]
+    fn builds_search_bootstrap_url_when_prompt_has_no_explicit_url() {
+        let prompt = "latest indie game retention ideas";
+        assert_eq!(
+            build_search_bootstrap_url(prompt).as_deref(),
+            Some("https://duckduckgo.com/html/?q=latest+indie+game+retention+ideas")
+        );
     }
 }

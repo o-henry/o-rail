@@ -8,7 +8,9 @@ import {
 import { RUNTIME_MODEL_OPTIONS } from "../../features/workflow/runtimeModelOptions";
 import { t as translate, useI18n } from "../../i18n";
 import {
+  getDefaultTaskAgentPresetIds,
   getThreadStageLabel,
+  parseCoordinationModeTag,
   type ThreadStageId,
 } from "./taskAgentPresets";
 import {
@@ -16,6 +18,7 @@ import {
   stripTaskAgentMentionMatch,
   type TaskAgentMentionOption,
 } from "./taskAgentMentions";
+import { deriveAutoSelectedComposerRoleIds } from "./taskComposerAutoSelection";
 import { buildThreadFileTree } from "./threadFileTree";
 import { buildLiveAgentCards } from "./liveAgentState";
 import { useTasksThreadState } from "./useTasksThreadState";
@@ -244,6 +247,20 @@ export default function TasksPage(props: TasksPageProps) {
     () => (isMentionMenuHidden ? null : getTaskAgentMentionMatch(state.composerDraft, composerCursor)),
     [composerCursor, isMentionMenuHidden, state.composerDraft],
   );
+  const autoSelectedComposerRoleIds = useMemo(
+    () => deriveAutoSelectedComposerRoleIds({
+      draft: state.composerDraft,
+      selectedComposerRoleIds: state.selectedComposerRoleIds,
+      enabledRoleIds: state.activeThread?.agents.map((agent) => agent.roleId) ?? getDefaultTaskAgentPresetIds("full-squad"),
+      modeOverride: state.composerCoordinationModeOverride ?? parseCoordinationModeTag(state.composerDraft),
+    }),
+    [
+      state.activeThread?.agents,
+      state.composerCoordinationModeOverride,
+      state.composerDraft,
+      state.selectedComposerRoleIds,
+    ],
+  );
 
   useEffect(() => {
     setMentionIndex(0);
@@ -258,6 +275,22 @@ export default function TasksPage(props: TasksPageProps) {
       const nextValue = stripTaskAgentMentionMatch(state.composerDraft, activeMatch);
       const nextCursor = activeMatch.rangeStart;
       state.setComposerCoordinationModeOverride(option.mode ?? null);
+      state.setComposerDraft(nextValue);
+      setComposerCursor(nextCursor);
+      setMentionIndex(0);
+      setIsMentionMenuHidden(true);
+      requestAnimationFrame(() => {
+        composerRef.current?.focus();
+        composerRef.current?.setSelectionRange(nextCursor, nextCursor);
+      });
+      return;
+    }
+    if (option.kind === "provider") {
+      const nextValue = stripTaskAgentMentionMatch(state.composerDraft, activeMatch);
+      const nextCursor = activeMatch.rangeStart;
+      if (option.modelValue) {
+        state.setModel(option.modelValue);
+      }
       state.setComposerDraft(nextValue);
       setComposerCursor(nextCursor);
       setMentionIndex(0);
@@ -405,6 +438,7 @@ export default function TasksPage(props: TasksPageProps) {
 
         <TasksThreadComposer
           attachedFiles={state.attachedFiles}
+          autoSelectedComposerRoleIds={autoSelectedComposerRoleIds}
           canUseStopButton={state.canInterruptCurrentThread}
           canInterruptCurrentThread={state.canInterruptCurrentThread}
           composerCoordinationModeOverride={state.composerCoordinationModeOverride}

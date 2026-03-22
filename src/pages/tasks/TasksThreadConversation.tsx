@@ -3,6 +3,7 @@ import type { AgenticCoordinationState, SessionIndexEntry } from "../../features
 import { useI18n } from "../../i18n";
 import { TasksThreadOrchestrationCard } from "./TasksThreadOrchestrationCard";
 import { TasksThreadMessageContent } from "./TasksThreadMessageContent";
+import { getTaskAgentLabel, orderedTaskAgentPresetIds } from "./taskAgentPresets";
 import {
   formatRelativeUpdateAge,
   inferNextLiveAction,
@@ -80,6 +81,35 @@ export function isFinishedThreadMessage(message: ThreadMessage): boolean {
 
 export function isFailedThreadMessage(message: ThreadMessage): boolean {
   return message.role === "assistant" && String(message.eventKind ?? "").trim() === "agent_failed";
+}
+
+function latestAssistantOutcomeMessageId(messages: ThreadMessage[]): string {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message && (isFinishedThreadMessage(message) || isFailedThreadMessage(message))) {
+      return String(message.id ?? "").trim();
+    }
+  }
+  return "";
+}
+
+export function resolveAssistantParticipationBadgeRoleIds(params: {
+  message: ThreadMessage;
+  messages: ThreadMessage[];
+  orchestration: AgenticCoordinationState | null;
+}): ThreadRoleId[] {
+  if (!isFinishedThreadMessage(params.message) && !isFailedThreadMessage(params.message)) {
+    return [];
+  }
+  if (String(params.message.id ?? "").trim() !== latestAssistantOutcomeMessageId(params.messages)) {
+    return [];
+  }
+  const orchestrationRoleIds = orderedTaskAgentPresetIds(params.orchestration?.requestedRoleIds ?? []);
+  if (orchestrationRoleIds.length > 0) {
+    return orchestrationRoleIds;
+  }
+  const sourceRoleId = String(params.message.sourceRoleId ?? "").trim() as ThreadRoleId;
+  return sourceRoleId ? [sourceRoleId] : [];
 }
 
 function formatArtifactStamp(input: string) {
@@ -190,9 +220,23 @@ export function TasksThreadConversation(props: TasksThreadConversationProps) {
       <section className="tasks-thread-timeline">
         {props.messages.map((message) => {
           const parsed = resolveTimelineMessage(message, props.visibleAgentLabels);
+          const participantRoleIds = resolveAssistantParticipationBadgeRoleIds({
+            message,
+            messages: props.messages,
+            orchestration: props.orchestration,
+          });
           return (
             <article className={`tasks-thread-message-row is-${message.role}`} key={message.id}>
               {parsed.label ? <span className="tasks-thread-message-label">{parsed.label}</span> : null}
+              {participantRoleIds.length > 0 ? (
+                <div className="tasks-thread-message-agent-list">
+                  {participantRoleIds.map((roleId) => (
+                    <span className="tasks-thread-message-agent-chip" key={`${message.id}:${roleId}`}>
+                      {getTaskAgentLabel(roleId)}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
               <div className="tasks-thread-log-line">
                 {message.role === "assistant" ? <TasksThreadMessageContent content={parsed.body} /> : parsed.body}
               </div>

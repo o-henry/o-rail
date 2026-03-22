@@ -17,6 +17,8 @@ use url::Url;
 const USER_AGENT: &str = "RAIL-Crawl-Providers/1.0";
 const DEFAULT_TIMEOUT_MS: u64 = 15_000;
 const ENV_CRAWL4AI_PYTHON: &str = "RAIL_CRAWL4AI_PYTHON";
+const ENV_BROWSER_USE_PYTHON: &str = "RAIL_BROWSER_USE_PYTHON";
+const ENV_BROWSER_USE_API_KEY: &str = "BROWSER_USE_API_KEY";
 const ENV_STEEL_CDP_URL: &str = "RAIL_STEEL_CDP_URL";
 const ENV_LIGHTPANDA_CDP_URL: &str = "RAIL_LIGHTPANDA_CDP_URL";
 const ENV_NODE_BIN: &str = "RAIL_NODE_BIN";
@@ -421,6 +423,36 @@ fn crawl4ai_health(workspace: &Path) -> DashboardCrawlProviderHealth {
     }
 }
 
+fn browser_use_health(workspace: &Path) -> DashboardCrawlProviderHealth {
+    let python = workspace_python(workspace, ENV_BROWSER_USE_PYTHON, "browser_use");
+    let venv_path = workspace_venv_dir(workspace, "browser_use");
+    let has_module = python_has_module(&python, "browser_use_sdk");
+    let api_key = first_non_empty_env(&[ENV_BROWSER_USE_API_KEY]);
+    let configured = api_key.is_some();
+    DashboardCrawlProviderHealth {
+        provider: "browser_use".to_string(),
+        available: has_module,
+        ready: has_module && configured,
+        configured,
+        installed: venv_path.exists(),
+        installable: true,
+        message: if !has_module {
+            "browser_use runtime not installed".to_string()
+        } else if !configured {
+            "BROWSER_USE_API_KEY is not configured".to_string()
+        } else {
+            "ready".to_string()
+        },
+        capabilities: provider_capabilities("browser_use"),
+        base_url: None,
+        details: json!({
+            "pythonPath": python,
+            "venvPath": venv_path.to_string_lossy().to_string(),
+            "apiKeyConfigured": configured,
+        }),
+    }
+}
+
 fn install_crawl4ai(workspace: &Path) -> Result<DashboardCrawlProviderInstallResult, String> {
     let rail_dir = workspace.join(".rail");
     fs::create_dir_all(&rail_dir).map_err(|error| format!("failed to create .rail directory: {error}"))?;
@@ -478,6 +510,63 @@ fn install_crawl4ai(workspace: &Path) -> Result<DashboardCrawlProviderInstallRes
         provider: "crawl4ai".to_string(),
         installed: true,
         configured: true,
+        venv_path: Some(venv_path.to_string_lossy().to_string()),
+        executable_path: Some(python_path.to_string_lossy().to_string()),
+        log: Some(
+            logs.into_iter()
+                .filter(|value| !value.trim().is_empty())
+                .collect::<Vec<_>>()
+                .join("\n"),
+        ),
+    })
+}
+
+fn install_browser_use(workspace: &Path) -> Result<DashboardCrawlProviderInstallResult, String> {
+    let rail_dir = workspace.join(".rail");
+    fs::create_dir_all(&rail_dir).map_err(|error| format!("failed to create .rail directory: {error}"))?;
+    let venv_path = workspace_venv_dir(workspace, "browser_use");
+    let python_bootstrap =
+        first_non_empty_env(&[ENV_BROWSER_USE_PYTHON]).unwrap_or_else(|| "python3".to_string());
+    if !venv_path.exists() {
+        run_command(
+            Command::new(&python_bootstrap)
+                .arg("-m")
+                .arg("venv")
+                .arg(&venv_path),
+            "browser_use install",
+        )?;
+    }
+    let python_path = if cfg!(target_os = "windows") {
+        venv_path.join("Scripts/python.exe")
+    } else {
+        venv_path.join("bin/python")
+    };
+    if !python_path.is_file() {
+        return Err("browser_use install: python executable not found in venv".to_string());
+    }
+    let mut logs: Vec<String> = Vec::new();
+    logs.push(run_command(
+        Command::new(&python_path)
+            .arg("-m")
+            .arg("pip")
+            .arg("install")
+            .arg("--upgrade")
+            .arg("pip"),
+        "browser_use install",
+    )?);
+    logs.push(run_command(
+        Command::new(&python_path)
+            .arg("-m")
+            .arg("pip")
+            .arg("install")
+            .arg("browser-use-sdk"),
+        "browser_use install",
+    )?);
+
+    Ok(DashboardCrawlProviderInstallResult {
+        provider: "browser_use".to_string(),
+        installed: true,
+        configured: first_non_empty_env(&[ENV_BROWSER_USE_API_KEY]).is_some(),
         venv_path: Some(venv_path.to_string_lossy().to_string()),
         executable_path: Some(python_path.to_string_lossy().to_string()),
         log: Some(
@@ -574,6 +663,51 @@ fn fetch_with_crawl4ai(
         write_provider_artifacts(workspace, "crawl4ai", url, &summary, &content, markdown, metadata.clone())?;
     Ok(DashboardCrawlProviderFetchResult {
         provider: "crawl4ai".to_string(),
+        status: "ok".to_string(),
+        url: payload
+            .get("url")
+            .and_then(Value::as_str)
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| url.to_string()),
+        fetched_at: now_iso(),
+        summary,
+        content,
+        markdown_path,
+        json_path,
+        source_meta: metadata,
+        error: None,
+    })
+}
+
+fn fetch_with_browser_use(
+    app: &AppHandle,
+    workspace: &Path,
+    url: &str,
+) -> Result<DashboardCrawlProviderFetchResult, String> {
+    let python = workspace_python(workspace, ENV_BROWSER_USE_PYTHON, "browser_use");
+    if !python_has_module(&python, "browser_use_sdk") {
+        let _ = install_browser_use(workspace)?;
+    }
+    if first_non_empty_env(&[ENV_BROWSER_USE_API_KEY]).is_none() {
+        return Err("browser_use fetch: BROWSER_USE_API_KEY is not configured".to_string());
+    }
+    let script_path = resolve_resource_script_path(app, "scripts/crawl_providers/browser_use_fetch.py")?;
+    let output = Command::new(&python)
+        .arg(script_path)
+        .arg("--url")
+        .arg(url)
+        .current_dir(workspace)
+        .output()
+        .map_err(|error| format!("browser_use fetch: failed to execute runtime ({error})"))?;
+    let payload = parse_json_output(output, "browser_use fetch")?;
+    let summary = trim_text(payload.get("summary").and_then(Value::as_str).unwrap_or(""), 480);
+    let content = trim_text(payload.get("content").and_then(Value::as_str).unwrap_or(""), 12_000);
+    let markdown = payload.get("markdown").and_then(Value::as_str).unwrap_or("");
+    let metadata = payload.get("metadata").cloned().unwrap_or_else(|| json!({}));
+    let (markdown_path, json_path) =
+        write_provider_artifacts(workspace, "browser_use", url, &summary, &content, markdown, metadata.clone())?;
+    Ok(DashboardCrawlProviderFetchResult {
+        provider: "browser_use".to_string(),
         status: "ok".to_string(),
         url: payload
             .get("url")
@@ -692,10 +826,10 @@ pub async fn dashboard_crawl_provider_health(
         "lightpanda_experimental" => {
             cdp_provider_health("lightpanda_experimental", ENV_LIGHTPANDA_CDP_URL).await
         }
-        "browser_use" => Ok(unsupported_provider_health(
-            "browser_use",
-            "browser_use provider registry slot is reserved but not wired yet",
-        )),
+        "browser_use" => {
+            let workspace = normalize_workspace_cwd(cwd.as_deref().unwrap_or("."))?;
+            Ok(browser_use_health(&workspace))
+        }
         "scrapy_playwright" => Ok(unsupported_provider_health(
             "scrapy_playwright",
             "scrapy_playwright provider registry slot is reserved but not wired yet",
@@ -738,7 +872,8 @@ pub fn dashboard_crawl_provider_install(
             })
         }
         "crawl4ai" => install_crawl4ai(&workspace),
-        "steel" | "lightpanda_experimental" | "browser_use" | "scrapy_playwright" | "playwright_local" => Err(format!(
+        "browser_use" => install_browser_use(&workspace),
+        "steel" | "lightpanda_experimental" | "scrapy_playwright" | "playwright_local" => Err(format!(
             "{provider} does not support in-app installation; configure the external runtime separately"
         )),
         _ => Err(format!("unsupported crawl provider: {provider}")),
@@ -787,7 +922,8 @@ pub async fn dashboard_crawl_provider_fetch_url(
             ENV_LIGHTPANDA_CDP_URL,
             &normalized_url,
         ),
-        "browser_use" | "scrapy_playwright" | "playwright_local" => Err(format!(
+        "browser_use" => fetch_with_browser_use(&app, &workspace, &normalized_url),
+        "scrapy_playwright" | "playwright_local" => Err(format!(
             "{provider} fetch is not wired yet; use provider health metadata for capability routing"
         )),
         _ => Err(format!("unsupported crawl provider: {provider}")),

@@ -37,6 +37,7 @@ import {
   runBrowserExecutionPlan,
   runRuntimeExecutionPlan,
 } from "./taskExecutionRuntime";
+import { inferTaskPromptIntent } from "./taskPromptOrchestration";
 import {
   approveCoordinationPlanAction,
   cancelCoordinationAction,
@@ -113,6 +114,7 @@ import {
 } from "./taskRuntimeHydration";
 import { getDefaultTaskCreationIsolation } from "./taskCreationDefaults";
 import { t as translate } from "../../i18n";
+import { findRuntimeModelOption } from "../../features/workflow/runtimeModelOptions";
 
 type InvokeFn = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
 
@@ -155,6 +157,62 @@ function nowIso(): string {
 
 function nextId(prefix: string): string {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}_${Date.now().toString(36)}`;
+}
+
+export const AUTO_EXTERNAL_PROVIDER_MODEL_VALUES = ["WEB / STEEL", "WEB / LIGHTPANDA"] as const;
+
+export function shouldAutoUseExternalResearchProvider(params: {
+  currentModel: string;
+  prompt: string;
+  taggedRoles: ThreadRoleId[];
+}): boolean {
+  const currentExecutor = findRuntimeModelOption(params.currentModel).executor;
+  if (currentExecutor !== "codex") {
+    return false;
+  }
+  if (params.taggedRoles.includes("researcher")) {
+    return true;
+  }
+  return inferTaskPromptIntent(params.prompt) === "research";
+}
+
+export async function resolveAutomaticResearchModel(params: {
+  invokeFn: InvokeFn;
+  cwd: string;
+  currentModel: string;
+  prompt: string;
+  taggedRoles: ThreadRoleId[];
+  hasTauriRuntime: boolean;
+}): Promise<string> {
+  if (!params.hasTauriRuntime || !params.cwd) {
+    return params.currentModel;
+  }
+  if (!shouldAutoUseExternalResearchProvider(params)) {
+    return params.currentModel;
+  }
+  try {
+    const steelHealth = await params.invokeFn<{ ready?: boolean }>("dashboard_crawl_provider_health", {
+      cwd: params.cwd,
+      provider: "steel",
+    });
+    if (steelHealth?.ready) {
+      return "WEB / STEEL";
+    }
+  } catch {
+    // Ignore provider probe failures and keep falling back.
+  }
+  try {
+    const lightpandaHealth = await params.invokeFn<{ ready?: boolean }>("dashboard_crawl_provider_health", {
+      cwd: params.cwd,
+      provider: "lightpanda_experimental",
+    });
+    if (lightpandaHealth?.ready) {
+      return "WEB / LIGHTPANDA";
+    }
+  } catch {
+    // Ignore provider probe failures and keep the current model.
+  }
+  return params.currentModel;
 }
 
 export function isTasksCodexExecutionBlocked(_params: {
@@ -1082,11 +1140,23 @@ export function useTasksThreadState(params: Params) {
     const selectedProjectPath = String(projectPath || params.cwd || "/workspace").trim();
     try {
       const promptWithAttachments = await buildPromptWithAttachments(prompt);
+      const taggedRoles = [...new Set([...selectedComposerRoleIds, ...parseTaskAgentTags(prompt)])];
+      const resolvedModel = await resolveAutomaticResearchModel({
+        invokeFn: params.invokeFn,
+        cwd: params.cwd,
+        currentModel: model,
+        prompt,
+        taggedRoles,
+        hasTauriRuntime: params.hasTauriRuntime,
+      });
+      if (resolvedModel !== model) {
+        setModel(resolvedModel);
+      }
       if (!params.hasTauriRuntime || !params.cwd) {
         const store = cloneStore(browserStoreRef.current);
         const existingDetail = activeThread ? store.details[activeThread.thread.threadId] : undefined;
         const detail: ThreadDetail = existingDetail
-          ?? buildBrowserThread(params.cwd || "/workspace", selectedProjectPath, prompt, model, reasoning, accessMode);
+          ?? buildBrowserThread(params.cwd || "/workspace", selectedProjectPath, prompt, resolvedModel, reasoning, accessMode);
         if (!existingDetail) {
           store.details[detail.thread.threadId] = detail;
           store.order = [detail.thread.threadId, ...store.order.filter((id) => id !== detail.thread.threadId)];
@@ -1098,7 +1168,7 @@ export function useTasksThreadState(params: Params) {
         detail.thread.userPrompt = detail.thread.userPrompt || prompt;
         detail.thread.status = "running";
         detail.thread.updatedAt = timestamp;
-        detail.thread.model = model;
+        detail.thread.model = resolvedModel;
         detail.thread.reasoning = reasoning;
         detail.thread.accessMode = accessMode;
         detail.task.goal = isPlaceholderTitle(detail.task.goal) ? prompt : detail.task.goal;
@@ -1108,7 +1178,6 @@ export function useTasksThreadState(params: Params) {
             eventKind: "user_prompt",
           }),
         );
-        const taggedRoles = [...new Set([...selectedComposerRoleIds, ...parseTaskAgentTags(prompt)])];
         const executionPlan = deriveExecutionPlan({
           enabledRoleIds: detail.agents.map((agent) => agent.roleId),
           requestedRoleIds: taggedRoles,
@@ -1186,7 +1255,7 @@ export function useTasksThreadState(params: Params) {
           mode: "balanced",
           team: "full-squad",
           isolation: getDefaultTaskCreationIsolation(),
-          model,
+          model: resolvedModel,
           reasoning,
           accessMode,
         }));
@@ -1203,7 +1272,6 @@ export function useTasksThreadState(params: Params) {
         setActiveThread(detail);
       }
 
-      const taggedRoles = [...new Set([...selectedComposerRoleIds, ...parseTaskAgentTags(prompt)])];
       const executionPlan = deriveExecutionPlan({
         enabledRoleIds: detail.agents.map((agent) => agent.roleId),
         requestedRoleIds: taggedRoles,

@@ -83,6 +83,10 @@ export function isFailedThreadMessage(message: ThreadMessage): boolean {
   return message.role === "assistant" && String(message.eventKind ?? "").trim() === "agent_failed";
 }
 
+function shouldRenderMessageMarkdown(message: ThreadMessage): boolean {
+  return isFinishedThreadMessage(message) || isFailedThreadMessage(message);
+}
+
 function latestUserMessageId(messages: ThreadMessage[]): string {
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index];
@@ -91,16 +95,6 @@ function latestUserMessageId(messages: ThreadMessage[]): string {
     }
   }
   return "";
-}
-
-function latestAssistantOutcomeMessage(messages: ThreadMessage[]): ThreadMessage | null {
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    const message = messages[index];
-    if (message && (isFinishedThreadMessage(message) || isFailedThreadMessage(message))) {
-      return message;
-    }
-  }
-  return null;
 }
 
 export function resolveThreadParticipationBadgeRoleIds(orchestration: AgenticCoordinationState | null): ThreadRoleId[] {
@@ -115,11 +109,52 @@ export function resolveThreadParticipationBadgeRoleIds(orchestration: AgenticCoo
   return [];
 }
 
+export function resolveLatestRunParticipationBadgeRoleIds(params: {
+  orchestration: AgenticCoordinationState | null;
+  messages: ThreadMessage[];
+  liveAgents: LiveAgentCard[];
+}): ThreadRoleId[] {
+  const orchestrationRoleIds = resolveThreadParticipationBadgeRoleIds(params.orchestration);
+  if (orchestrationRoleIds.length > 0) {
+    return orchestrationRoleIds;
+  }
+  const liveRoleIds = orderedTaskAgentPresetIds(params.liveAgents.map((agent) => agent.roleId));
+  if (liveRoleIds.length > 0) {
+    return liveRoleIds;
+  }
+  const latestUserId = latestUserMessageId(params.messages);
+  if (!latestUserId) {
+    return [];
+  }
+  const latestUserIndex = params.messages.findIndex((message) => String(message.id ?? "").trim() === latestUserId);
+  if (latestUserIndex < 0) {
+    return [];
+  }
+  return orderedTaskAgentPresetIds(
+    params.messages
+      .slice(latestUserIndex + 1)
+      .map((message) => message.sourceRoleId)
+      .filter((roleId): roleId is ThreadRoleId => Boolean(roleId)),
+  );
+}
+
 export function resolveProgressiveRevealStep(contentLength: number): number {
   if (contentLength <= 0) {
     return 0;
   }
   return Math.max(48, Math.min(220, Math.ceil(contentLength / 36)));
+}
+
+export function shouldProgressivelyRevealMessage(message: ThreadMessage, body: string): boolean {
+  const contentLength = body.trim().length;
+  if (contentLength < 180) {
+    return false;
+  }
+  const eventKind = String(message.eventKind ?? "").trim();
+  if (message.role === "assistant") {
+    return true;
+  }
+  return message.role === "system" && eventKind !== "run_interrupted";
 }
 
 function formatArtifactStamp(input: string) {
@@ -195,8 +230,7 @@ function TasksThreadConversationImpl(props: TasksThreadConversationProps) {
   const { t } = useI18n();
   const [pulseFrame, setPulseFrame] = useState(0);
   const [liveNowMs, setLiveNowMs] = useState(() => Date.now());
-  const [streamingMessageId, setStreamingMessageId] = useState("");
-  const [streamingVisibleChars, setStreamingVisibleChars] = useState(0);
+  const [streamingVisibleCharsById, setStreamingVisibleCharsById] = useState<Record<string, number>>({});
   const latestProcessEventByRole = useMemo(
     () => buildLatestProcessEventByRole(props.liveProcessEvents),
     [props.liveProcessEvents],
@@ -206,17 +240,31 @@ function TasksThreadConversationImpl(props: TasksThreadConversationProps) {
     [props.liveProcessEvents],
   );
   const currentRunBadgeRoleIds = useMemo(
-    () => resolveThreadParticipationBadgeRoleIds(props.orchestration),
-    [props.orchestration],
+    () => resolveLatestRunParticipationBadgeRoleIds({
+      orchestration: props.orchestration,
+      messages: props.messages,
+      liveAgents: props.liveAgents,
+    }),
+    [props.liveAgents, props.messages, props.orchestration],
   );
   const latestUserPromptMessageId = useMemo(
     () => latestUserMessageId(props.messages),
     [props.messages],
   );
-  const latestOutcomeMessage = useMemo(
-    () => latestAssistantOutcomeMessage(props.messages),
-    [props.messages],
-  );
+  const progressiveMessages = useMemo(() => (
+    props.messages
+      .slice(-8)
+      .map((message) => {
+        const body = resolveTimelineMessage(message, props.visibleAgentLabels).body;
+        return {
+          id: String(message.id ?? "").trim(),
+          body,
+          step: resolveProgressiveRevealStep(body.length),
+          progressive: shouldProgressivelyRevealMessage(message, body),
+        };
+      })
+      .filter((entry) => entry.id && entry.progressive && entry.step > 0)
+  ), [props.messages, props.visibleAgentLabels]);
 
   useEffect(() => {
     if (props.liveAgents.length === 0 && props.liveProcessEvents.length === 0) {
@@ -230,43 +278,52 @@ function TasksThreadConversationImpl(props: TasksThreadConversationProps) {
   }, [props.liveAgents.length, props.liveProcessEvents.length]);
 
   useEffect(() => {
-    const latestMessageId = String(latestOutcomeMessage?.id ?? "").trim();
-    const latestBody = latestOutcomeMessage
-      ? resolveTimelineMessage(latestOutcomeMessage, props.visibleAgentLabels).body
-      : "";
-    if (!latestMessageId || !latestBody) {
-      setStreamingMessageId("");
-      setStreamingVisibleChars(0);
-      return;
-    }
-    const step = resolveProgressiveRevealStep(latestBody.length);
-    setStreamingMessageId(latestMessageId);
-    setStreamingVisibleChars((current) => (
-      latestMessageId === streamingMessageId
-        ? Math.min(Math.max(current, step), latestBody.length)
-        : Math.min(step, latestBody.length)
-    ));
-    if (latestBody.length <= step) {
+    setStreamingVisibleCharsById((current) => {
+      if (progressiveMessages.length === 0) {
+        return {};
+      }
+      const next: Record<string, number> = {};
+      for (const entry of progressiveMessages) {
+        const previous = current[entry.id] ?? 0;
+        next[entry.id] = Math.min(
+          entry.body.length,
+          previous > 0 ? previous : Math.min(entry.step, entry.body.length),
+        );
+      }
+      const sameKeys = Object.keys(next).length === Object.keys(current).length
+        && Object.entries(next).every(([key, value]) => current[key] === value);
+      return sameKeys ? current : next;
+    });
+  }, [progressiveMessages]);
+
+  useEffect(() => {
+    if (progressiveMessages.length === 0) {
       return;
     }
     const intervalId = window.setInterval(() => {
-      setStreamingVisibleChars((current) => {
-        if (current >= latestBody.length) {
-          window.clearInterval(intervalId);
-          return latestBody.length;
+      setStreamingVisibleCharsById((current) => {
+        let changed = false;
+        const next = { ...current };
+        for (const entry of progressiveMessages) {
+          const currentValue = next[entry.id] ?? 0;
+          if (currentValue >= entry.body.length) {
+            continue;
+          }
+          next[entry.id] = Math.min(entry.body.length, currentValue + entry.step);
+          changed = true;
         }
-        return Math.min(latestBody.length, current + step);
+        return changed ? next : current;
       });
     }, 20);
     return () => window.clearInterval(intervalId);
-  }, [latestOutcomeMessage, props.visibleAgentLabels, streamingMessageId]);
+  }, [progressiveMessages]);
 
   useEffect(() => {
-    if (!streamingMessageId || !props.conversationRef.current) {
+    if (progressiveMessages.length === 0 || !props.conversationRef.current) {
       return;
     }
     props.conversationRef.current.scrollTop = props.conversationRef.current.scrollHeight;
-  }, [props.conversationRef, streamingMessageId, streamingVisibleChars]);
+  }, [props.conversationRef, progressiveMessages.length, streamingVisibleCharsById]);
 
   return (
     <div className="tasks-thread-conversation-scroll" ref={props.conversationRef}>
@@ -283,16 +340,18 @@ function TasksThreadConversationImpl(props: TasksThreadConversationProps) {
       <section className="tasks-thread-timeline">
         {props.messages.map((message) => {
           const parsed = resolveTimelineMessage(message, props.visibleAgentLabels);
+          const messageId = String(message.id ?? "").trim();
+          const streamedChars = streamingVisibleCharsById[messageId] ?? 0;
           const displayedBody =
-            String(message.id ?? "").trim() === streamingMessageId && streamingVisibleChars > 0
-              ? parsed.body.slice(0, Math.min(parsed.body.length, streamingVisibleChars))
+            streamedChars > 0
+              ? parsed.body.slice(0, Math.min(parsed.body.length, streamedChars))
               : parsed.body;
           return (
             <Fragment key={message.id}>
               <article className={`tasks-thread-message-row is-${message.role}`} key={message.id}>
                 {parsed.label ? <span className="tasks-thread-message-label">{parsed.label}</span> : null}
                 <div className="tasks-thread-log-line">
-                  {message.role === "assistant" ? <TasksThreadMessageContent content={displayedBody} /> : displayedBody}
+                  {shouldRenderMessageMarkdown(message) ? <TasksThreadMessageContent content={displayedBody} /> : displayedBody}
                 </div>
                 {isFinishedThreadMessage(message) || isFailedThreadMessage(message) ? (
                   <div className="tasks-thread-message-badges">

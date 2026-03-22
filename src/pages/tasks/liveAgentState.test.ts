@@ -145,6 +145,44 @@ describe("buildLiveAgentCards", () => {
     expect(cards[0]?.summary).toBe("중단되었습니다.");
     expect(cards[0]?.latestArtifactPath).toBe("");
   });
+
+  it("hides stale running agents after the runtime stops reporting progress", () => {
+    const originalNow = Date.now;
+    Date.now = () => Date.parse("2026-03-18T00:06:30.000Z");
+    try {
+      const detail = buildDetail();
+      detail.orchestration = {
+        threadId: "thread-1",
+        prompt: "hello",
+        requestedRoleIds: ["game_designer"],
+        recommendedMode: "team",
+        mode: "team",
+        intent: "multi_step",
+        status: "running",
+        nextAction: "Wait",
+        blockedReason: null,
+        plan: null,
+        delegateTasks: [],
+        delegateResults: [],
+        teamSession: null,
+        resumePointer: null,
+        guidance: [],
+        updatedAt: "2026-03-18T00:00:00.000Z",
+      };
+
+      expect(buildLiveAgentCards(detail)).toEqual([]);
+    } finally {
+      Date.now = originalNow;
+    }
+  });
+
+  it("hides stale live cards when the task is already archived", () => {
+    const detail = buildDetail();
+    detail.task.status = "archived";
+    detail.thread.status = "active";
+
+    expect(buildLiveAgentCards(detail)).toEqual([]);
+  });
 });
 
 describe("displayArtifactName", () => {

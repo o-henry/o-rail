@@ -1,5 +1,7 @@
 import type { ThreadDetail, ThreadRoleId, BackgroundAgentStatus } from "./threadTypes";
 
+const LIVE_RUNTIME_STALE_WINDOW_MS = 4 * 60 * 1000;
+
 export type LiveRoleNote = {
   message: string;
   updatedAt: string;
@@ -44,16 +46,45 @@ export function buildLiveAgentCards(
     return [];
   }
 
+  const orchestrationStatus = String(detail.orchestration?.status ?? "").trim().toLowerCase();
+  const taskStatus = String(detail.task.status ?? "").trim().toLowerCase();
+  const threadStatus = String(detail.thread.status ?? "").trim().toLowerCase();
   const interrupted =
-    detail.orchestration?.status === "needs_resume"
-    || detail.orchestration?.status === "cancelled";
+    orchestrationStatus === "needs_resume"
+    || orchestrationStatus === "cancelled";
   const interruptedSummary =
     detail.orchestration?.blockedReason === "Interrupted by operator."
       ? "중단되었습니다."
       : String(detail.orchestration?.blockedReason ?? "").trim() || "중단되었습니다.";
 
-  return detail.agents
-    .filter((agent) => isLiveBackgroundAgentStatus(agent.status))
+  const liveAgents = detail.agents.filter((agent) => isLiveBackgroundAgentStatus(agent.status));
+  const freshestAgentUpdateMs = liveAgents
+    .map((agent) => Date.parse(String(agent.lastUpdatedAt ?? "").trim()))
+    .filter(Number.isFinite)
+    .reduce<number | null>((latest, current) => (latest === null || current > latest ? current : latest), null);
+  const coordinationUpdatedMs = Date.parse(String(detail.orchestration?.updatedAt ?? "").trim());
+  const referenceMs = freshestAgentUpdateMs ?? (Number.isFinite(coordinationUpdatedMs) ? coordinationUpdatedMs : null);
+  const staleRunningRuntime =
+    orchestrationStatus === "running"
+    && liveAgents.length > 0
+    && typeof referenceMs === "number"
+    && Date.now() - referenceMs >= LIVE_RUNTIME_STALE_WINDOW_MS;
+  const taskLooksSettled = taskStatus === "archived" || taskStatus === "completed" || taskStatus === "cancelled" || taskStatus === "failed";
+  const threadLooksSettled = threadStatus === "completed" || threadStatus === "cancelled" || threadStatus === "failed" || threadStatus === "error";
+
+  if (
+    !interrupted
+    && (
+      orchestrationStatus === "blocked"
+      || orchestrationStatus === "completed"
+      || staleRunningRuntime
+      || (liveAgents.length > 0 && (taskLooksSettled || threadLooksSettled))
+    )
+  ) {
+    return [];
+  }
+
+  return liveAgents
     .map((agent) => {
       const roleState = detail.task.roles.find((role) => role.id === agent.roleId);
       const note = liveNotes?.[agent.roleId];

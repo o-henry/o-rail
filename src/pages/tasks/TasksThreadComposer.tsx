@@ -371,7 +371,7 @@ export function TasksThreadComposer(props: TasksThreadComposerProps) {
         </div>
 
         <div className="agents-composer-actions">
-          {props.showStopButton ? (
+          {props.showStopButton && !props.stoppingComposerRun ? (
             <button
               aria-label={props.stoppingComposerRun ? t("common.loading") : t("tasks.actions.stop")}
               className="agents-stop-button"
@@ -385,12 +385,12 @@ export function TasksThreadComposer(props: TasksThreadComposerProps) {
             </button>
           ) : (
             <button
-              aria-label={t("tasks.actions.send")}
+              aria-label={props.stoppingComposerRun ? t("common.loading") : t("tasks.actions.send")}
               className="agents-send-button"
               data-e2e="tasks-send-button"
-              disabled={composerDisabled || !canSubmit}
+              disabled={props.stoppingComposerRun || composerDisabled || !canSubmit}
               onClick={props.onSubmit}
-              title={t("tasks.actions.send")}
+              title={props.stoppingComposerRun ? t("common.loading") : t("tasks.actions.send")}
               type="button"
             >
               <img alt="" aria-hidden="true" className="question-create-icon" src="/up.svg" />

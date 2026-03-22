@@ -1978,6 +1978,7 @@ pub async fn web_provider_cancel(
 ) -> Result<(), String> {
     let provider_key = provider.trim().to_lowercase();
     if is_external_web_provider(&provider_key) {
+        let _ = crate::crawl_providers::cancel_running_provider(&provider_key).await?;
         return Ok(());
     }
     let _ = request_web_worker_with_recovery(

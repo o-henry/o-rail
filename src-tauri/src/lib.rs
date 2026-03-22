@@ -119,6 +119,7 @@ pub fn run() {
             threads::thread_create,
             threads::thread_load,
             threads::thread_append_message,
+            threads::thread_interrupt_run,
             threads::thread_rename,
             threads::thread_spawn_agents,
             threads::thread_list_agents,

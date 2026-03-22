@@ -7,11 +7,14 @@ use std::{
     fs,
     net::IpAddr,
     path::{Path, PathBuf},
-    process::Command,
+    process::Command as StdCommand,
+    sync::OnceLock,
     time::Duration,
 };
 use tauri::path::BaseDirectory;
 use tauri::{AppHandle, Manager};
+use tokio::process::Command as TokioCommand;
+use tokio::sync::Mutex;
 use url::Url;
 
 const USER_AGENT: &str = "RAIL-Crawl-Providers/1.0";
@@ -22,6 +25,13 @@ const ENV_BROWSER_USE_API_KEY: &str = "BROWSER_USE_API_KEY";
 const ENV_STEEL_CDP_URL: &str = "RAIL_STEEL_CDP_URL";
 const ENV_LIGHTPANDA_CDP_URL: &str = "RAIL_LIGHTPANDA_CDP_URL";
 const ENV_NODE_BIN: &str = "RAIL_NODE_BIN";
+
+type RunningProviderMap = Mutex<std::collections::HashMap<String, Vec<u32>>>;
+
+fn running_provider_registry() -> &'static RunningProviderMap {
+    static REGISTRY: OnceLock<RunningProviderMap> = OnceLock::new();
+    REGISTRY.get_or_init(|| Mutex::new(std::collections::HashMap::new()))
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -164,7 +174,7 @@ fn sanitize_file_component(raw: &str) -> String {
     }
 }
 
-fn run_command(command: &mut Command, step: &str) -> Result<String, String> {
+fn run_command(command: &mut StdCommand, step: &str) -> Result<String, String> {
     let output = command
         .output()
         .map_err(|error| format!("{step}: failed to execute command ({error})"))?;
@@ -197,7 +207,7 @@ fn workspace_venv_dir(workspace: &Path, venv_name: &str) -> PathBuf {
 }
 
 fn python_has_module(python: &str, module_name: &str) -> bool {
-    let output = Command::new(python)
+    let output = StdCommand::new(python)
         .arg("-c")
         .arg(format!(
             "import importlib.util,sys; sys.stdout.write('1' if importlib.util.find_spec({module_name:?}) else '0')"
@@ -461,7 +471,7 @@ fn install_crawl4ai(workspace: &Path) -> Result<DashboardCrawlProviderInstallRes
         first_non_empty_env(&[ENV_CRAWL4AI_PYTHON]).unwrap_or_else(|| "python3".to_string());
     if !venv_path.exists() {
         run_command(
-            Command::new(&python_bootstrap)
+            StdCommand::new(&python_bootstrap)
                 .arg("-m")
                 .arg("venv")
                 .arg(&venv_path),
@@ -478,7 +488,7 @@ fn install_crawl4ai(workspace: &Path) -> Result<DashboardCrawlProviderInstallRes
     }
     let mut logs: Vec<String> = Vec::new();
     logs.push(run_command(
-        Command::new(&python_path)
+        StdCommand::new(&python_path)
             .arg("-m")
             .arg("pip")
             .arg("install")
@@ -487,7 +497,7 @@ fn install_crawl4ai(workspace: &Path) -> Result<DashboardCrawlProviderInstallRes
         "crawl4ai install",
     )?);
     logs.push(run_command(
-        Command::new(&python_path)
+        StdCommand::new(&python_path)
             .arg("-m")
             .arg("pip")
             .arg("install")
@@ -501,7 +511,7 @@ fn install_crawl4ai(workspace: &Path) -> Result<DashboardCrawlProviderInstallRes
         venv_path.join("bin/crawl4ai-setup")
     };
     if setup_executable.is_file() {
-        if let Ok(output) = run_command(&mut Command::new(&setup_executable), "crawl4ai setup") {
+        if let Ok(output) = run_command(&mut StdCommand::new(&setup_executable), "crawl4ai setup") {
             logs.push(output);
         }
     }
@@ -529,7 +539,7 @@ fn install_browser_use(workspace: &Path) -> Result<DashboardCrawlProviderInstall
         first_non_empty_env(&[ENV_BROWSER_USE_PYTHON]).unwrap_or_else(|| "python3".to_string());
     if !venv_path.exists() {
         run_command(
-            Command::new(&python_bootstrap)
+            StdCommand::new(&python_bootstrap)
                 .arg("-m")
                 .arg("venv")
                 .arg(&venv_path),
@@ -546,7 +556,7 @@ fn install_browser_use(workspace: &Path) -> Result<DashboardCrawlProviderInstall
     }
     let mut logs: Vec<String> = Vec::new();
     logs.push(run_command(
-        Command::new(&python_path)
+        StdCommand::new(&python_path)
             .arg("-m")
             .arg("pip")
             .arg("install")
@@ -555,7 +565,7 @@ fn install_browser_use(workspace: &Path) -> Result<DashboardCrawlProviderInstall
         "browser_use install",
     )?);
     logs.push(run_command(
-        Command::new(&python_path)
+        StdCommand::new(&python_path)
             .arg("-m")
             .arg("pip")
             .arg("install")
@@ -637,7 +647,7 @@ fn parse_json_output(output: std::process::Output, step: &str) -> Result<Value, 
         .map_err(|error| format!("{step}: failed to parse json output: {error}"))
 }
 
-fn fetch_with_crawl4ai(
+async fn fetch_with_crawl4ai(
     app: &AppHandle,
     workspace: &Path,
     url: &str,
@@ -647,14 +657,13 @@ fn fetch_with_crawl4ai(
         let _ = install_crawl4ai(workspace)?;
     }
     let script_path = resolve_resource_script_path(app, "scripts/crawl_providers/crawl4ai_fetch.py")?;
-    let output = Command::new(&python)
+    let mut command = TokioCommand::new(&python);
+    command
         .arg(script_path)
         .arg("--url")
         .arg(url)
-        .current_dir(workspace)
-        .output()
-        .map_err(|error| format!("crawl4ai fetch: failed to execute runtime ({error})"))?;
-    let payload = parse_json_output(output, "crawl4ai fetch")?;
+        .current_dir(workspace);
+    let payload = run_json_command(&mut command, "crawl4ai", "crawl4ai fetch").await?;
     let summary = trim_text(payload.get("summary").and_then(Value::as_str).unwrap_or(""), 480);
     let content = trim_text(payload.get("content").and_then(Value::as_str).unwrap_or(""), 12_000);
     let markdown = payload.get("markdown").and_then(Value::as_str).unwrap_or("");
@@ -679,7 +688,7 @@ fn fetch_with_crawl4ai(
     })
 }
 
-fn fetch_with_browser_use(
+async fn fetch_with_browser_use(
     app: &AppHandle,
     workspace: &Path,
     url: &str,
@@ -692,14 +701,13 @@ fn fetch_with_browser_use(
         return Err("browser_use fetch: BROWSER_USE_API_KEY is not configured".to_string());
     }
     let script_path = resolve_resource_script_path(app, "scripts/crawl_providers/browser_use_fetch.py")?;
-    let output = Command::new(&python)
+    let mut command = TokioCommand::new(&python);
+    command
         .arg(script_path)
         .arg("--url")
         .arg(url)
-        .current_dir(workspace)
-        .output()
-        .map_err(|error| format!("browser_use fetch: failed to execute runtime ({error})"))?;
-    let payload = parse_json_output(output, "browser_use fetch")?;
+        .current_dir(workspace);
+    let payload = run_json_command(&mut command, "browser_use", "browser_use fetch").await?;
     let summary = trim_text(payload.get("summary").and_then(Value::as_str).unwrap_or(""), 480);
     let content = trim_text(payload.get("content").and_then(Value::as_str).unwrap_or(""), 12_000);
     let markdown = payload.get("markdown").and_then(Value::as_str).unwrap_or("");
@@ -759,7 +767,7 @@ async fn cdp_provider_health(provider: &str, env_key: &str) -> Result<DashboardC
     }
 }
 
-fn fetch_with_cdp_provider(
+async fn fetch_with_cdp_provider(
     app: &AppHandle,
     workspace: &Path,
     provider: &str,
@@ -770,7 +778,8 @@ fn fetch_with_cdp_provider(
         .ok_or_else(|| format!("{provider} CDP endpoint is not configured"))?;
     let node = resolve_executable("node", ENV_NODE_BIN)?;
     let script_path = resolve_resource_script_path(app, "scripts/crawl_providers/cdp_extract.mjs")?;
-    let output = Command::new(&node)
+    let mut command = TokioCommand::new(&node);
+    command
         .arg(script_path)
         .arg("--provider")
         .arg(provider)
@@ -778,10 +787,8 @@ fn fetch_with_cdp_provider(
         .arg(&cdp_url)
         .arg("--url")
         .arg(url)
-        .current_dir(workspace)
-        .output()
-        .map_err(|error| format!("{provider} fetch: failed to execute node runtime ({error})"))?;
-    let payload = parse_json_output(output, &format!("{provider} fetch"))?;
+        .current_dir(workspace);
+    let payload = run_json_command(&mut command, provider, &format!("{provider} fetch")).await?;
     let summary = trim_text(payload.get("summary").and_then(Value::as_str).unwrap_or(""), 480);
     let content = trim_text(payload.get("content").and_then(Value::as_str).unwrap_or(""), 12_000);
     let markdown = payload.get("markdown").and_then(Value::as_str).unwrap_or("");
@@ -913,19 +920,122 @@ pub async fn dashboard_crawl_provider_fetch_url(
                 error: None,
             })
         }
-        "crawl4ai" => fetch_with_crawl4ai(&app, &workspace, &normalized_url),
-        "steel" => fetch_with_cdp_provider(&app, &workspace, "steel", ENV_STEEL_CDP_URL, &normalized_url),
+        "crawl4ai" => fetch_with_crawl4ai(&app, &workspace, &normalized_url).await,
+        "steel" => fetch_with_cdp_provider(&app, &workspace, "steel", ENV_STEEL_CDP_URL, &normalized_url).await,
         "lightpanda_experimental" => fetch_with_cdp_provider(
             &app,
             &workspace,
             "lightpanda_experimental",
             ENV_LIGHTPANDA_CDP_URL,
             &normalized_url,
-        ),
-        "browser_use" => fetch_with_browser_use(&app, &workspace, &normalized_url),
+        )
+        .await,
+        "browser_use" => fetch_with_browser_use(&app, &workspace, &normalized_url).await,
         "scrapy_playwright" | "playwright_local" => Err(format!(
             "{provider} fetch is not wired yet; use provider health metadata for capability routing"
         )),
         _ => Err(format!("unsupported crawl provider: {provider}")),
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn register_and_cancel_provider_pid_lifecycle() {
+        tauri::async_runtime::block_on(async {
+            register_running_provider_pid("steel", 101).await;
+            register_running_provider_pid("steel", 202).await;
+            let cancelled = cancel_running_provider("steel").await.unwrap();
+            assert!(cancelled);
+            let registry = running_provider_registry().lock().await;
+            assert!(registry.get("steel").is_none());
+        });
+    }
+}
+async fn register_running_provider_pid(provider: &str, pid: u32) {
+    let mut registry = running_provider_registry().lock().await;
+    registry.entry(provider.to_string()).or_default().push(pid);
+}
+
+async fn unregister_running_provider_pid(provider: &str, pid: u32) {
+    let mut registry = running_provider_registry().lock().await;
+    if let Some(entries) = registry.get_mut(provider) {
+        entries.retain(|entry| *entry != pid);
+        if entries.is_empty() {
+            registry.remove(provider);
+        }
+    }
+}
+
+#[cfg(unix)]
+fn terminate_pid(pid: u32) -> Result<(), String> {
+    let status = StdCommand::new("kill")
+        .arg("-TERM")
+        .arg(pid.to_string())
+        .status()
+        .map_err(|error| format!("failed to send TERM to pid {pid}: {error}"))?;
+    if status.success() {
+        return Ok(());
+    }
+    let fallback = StdCommand::new("kill")
+        .arg("-KILL")
+        .arg(pid.to_string())
+        .status()
+        .map_err(|error| format!("failed to send KILL to pid {pid}: {error}"))?;
+    if fallback.success() {
+        Ok(())
+    } else {
+        Err(format!("failed to terminate pid {pid}"))
+    }
+}
+
+#[cfg(windows)]
+fn terminate_pid(pid: u32) -> Result<(), String> {
+    let status = StdCommand::new("taskkill")
+        .arg("/PID")
+        .arg(pid.to_string())
+        .arg("/T")
+        .arg("/F")
+        .status()
+        .map_err(|error| format!("failed to terminate pid {pid}: {error}"))?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(format!("failed to terminate pid {pid}"))
+    }
+}
+
+pub async fn cancel_running_provider(provider: &str) -> Result<bool, String> {
+    let pids = {
+        let mut registry = running_provider_registry().lock().await;
+        registry.remove(provider).unwrap_or_default()
+    };
+    if pids.is_empty() {
+        return Ok(false);
+    }
+    for pid in pids {
+        let _ = terminate_pid(pid);
+    }
+    Ok(true)
+}
+
+async fn run_json_command(command: &mut TokioCommand, provider: &str, step: &str) -> Result<Value, String> {
+    let child = command
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .map_err(|error| format!("{step}: failed to execute runtime ({error})"))?;
+    let pid = child
+        .id()
+        .ok_or_else(|| format!("{step}: failed to resolve child pid"))?;
+    register_running_provider_pid(provider, pid).await;
+    let output = child
+        .wait_with_output()
+        .await
+        .map_err(|error| format!("{step}: failed while waiting for runtime ({error})"));
+    unregister_running_provider_pid(provider, pid).await;
+    let output = output?;
+    parse_json_output(output, step)
 }

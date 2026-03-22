@@ -157,7 +157,13 @@ type TasksRoleRuntimeEvent = {
   type?: string;
   stage?: string | null;
   message?: string;
+  payload?: Record<string, unknown> | null;
   at?: string;
+};
+
+type RuntimeTarget = {
+  codexThreadIds: string[];
+  provider: string | null;
 };
 
 function formatError(error: unknown): string {
@@ -362,6 +368,50 @@ export function reduceLiveRoleEventBatch(params: {
   };
 }
 
+export function reduceRuntimeTargetsByRole(
+  current: Partial<Record<ThreadRoleId, RuntimeTarget>>,
+  detail: TasksRoleRuntimeEvent,
+): Partial<Record<ThreadRoleId, RuntimeTarget>> {
+  const roleId = getTaskAgentPresetIdByStudioRoleId(detail.studioRoleId);
+  if (!roleId) {
+    return current;
+  }
+  const eventType = String(detail.type ?? "").trim().toLowerCase();
+  if (eventType === "run_done" || eventType === "run_error") {
+    if (!current[roleId]) {
+      return current;
+    }
+    const next = { ...current };
+    delete next[roleId];
+    return next;
+  }
+  const payload = detail.payload ?? {};
+  const codexThreadId = String(payload.codexThreadId ?? "").trim();
+  const provider = String(payload.provider ?? "").trim();
+  if (!codexThreadId && !provider) {
+    return current;
+  }
+  const previous = current[roleId] ?? { codexThreadIds: [], provider: null };
+  const nextThreadIds = codexThreadId && !previous.codexThreadIds.includes(codexThreadId)
+    ? [...previous.codexThreadIds, codexThreadId]
+    : previous.codexThreadIds;
+  const nextProvider = provider || previous.provider;
+  if (
+    nextThreadIds.length === previous.codexThreadIds.length
+    && nextThreadIds.every((value, index) => value === previous.codexThreadIds[index])
+    && nextProvider === previous.provider
+  ) {
+    return current;
+  }
+  return {
+    ...current,
+    [roleId]: {
+      codexThreadIds: nextThreadIds,
+      provider: nextProvider || null,
+    },
+  };
+}
+
 export function isTasksCodexExecutionBlocked(_params: {
   hasTauriRuntime: boolean;
   loginCompleted: boolean;
@@ -476,6 +526,7 @@ export function useTasksThreadState(params: Params) {
   const orchestrationLedgerRef = useRef<Record<string, RuntimeLedgerEvent[]>>({});
   const liveRoleNotesRef = useRef(liveRoleNotes);
   const liveProcessEventsRef = useRef(liveProcessEvents);
+  const runtimeTargetsByRoleRef = useRef<Partial<Record<ThreadRoleId, RuntimeTarget>>>({});
   const pendingRoleEventsRef = useRef<TasksRoleRuntimeEvent[]>([]);
   const liveRoleEventFlushTimeoutRef = useRef<number | null>(null);
   const refreshThreadTimeoutRef = useRef<number | null>(null);
@@ -988,6 +1039,7 @@ export function useTasksThreadState(params: Params) {
       if (!detail || String(detail.taskId ?? "").trim() !== String(activeThreadId ?? "").trim()) {
         return;
       }
+      runtimeTargetsByRoleRef.current = reduceRuntimeTargetsByRole(runtimeTargetsByRoleRef.current, detail);
       pendingRoleEventsRef.current = [...pendingRoleEventsRef.current, detail];
       if (liveRoleEventFlushTimeoutRef.current !== null) {
         return;
@@ -1038,6 +1090,7 @@ export function useTasksThreadState(params: Params) {
   useEffect(() => {
     pendingRoleEventsRef.current = [];
     setLiveProcessEvents([]);
+    runtimeTargetsByRoleRef.current = {};
     if (typeof window !== "undefined" && refreshThreadTimeoutRef.current !== null) {
       window.clearTimeout(refreshThreadTimeoutRef.current);
       refreshThreadTimeoutRef.current = null;
@@ -1626,7 +1679,7 @@ export function useTasksThreadState(params: Params) {
           createBrowserMessage(
             detail.thread.threadId,
             "system",
-            "사용자가 현재 작업을 중단했습니다.",
+            "현재 작업을 중단했습니다.",
             timestamp,
             { eventKind: "run_interrupted" },
           ),
@@ -1659,11 +1712,17 @@ export function useTasksThreadState(params: Params) {
         runningAgents.map((agent) => loadAgentDetail(activeThread.thread.threadId, agent.id).catch(() => null)),
       );
       const codexThreadIds = [...new Set(
-        agentDetails
+        [
+          ...agentDetails
           .map((detail) => String(detail?.codexThreadId ?? "").trim())
           .filter(Boolean),
+          ...runningAgents.flatMap((agent) => runtimeTargetsByRoleRef.current[agent.roleId]?.codexThreadIds ?? []),
+        ],
       )];
-      const threadWebProvider = resolveTasksThreadWebProvider(String(activeThread.thread.model ?? model));
+      const runtimeProviders = runningAgents
+        .map((agent) => String(runtimeTargetsByRoleRef.current[agent.roleId]?.provider ?? "").trim())
+        .filter(Boolean);
+      const threadWebProvider = runtimeProviders[0] || resolveTasksThreadWebProvider(String(activeThread.thread.model ?? model));
       const cancelOperations: Promise<unknown>[] = [
         ...codexThreadIds.map((threadId) => params.invokeFn("turn_interrupt", { threadId })),
       ];
@@ -1672,13 +1731,9 @@ export function useTasksThreadState(params: Params) {
           params.invokeFn("web_provider_cancel", { provider: threadWebProvider }).catch(() => undefined),
         );
       }
-
-      if (cancelOperations.length === 0) {
-        params.setStatus("중단할 실행 세션을 찾지 못했습니다.");
-        return;
+      if (cancelOperations.length > 0) {
+        await Promise.allSettled(cancelOperations);
       }
-
-      await Promise.all(cancelOperations);
       const interruptedCoordination = updateThreadCoordination(
         activeThread.thread.threadId,
         (current) => (
@@ -1692,55 +1747,50 @@ export function useTasksThreadState(params: Params) {
         ),
         { kind: "run_blocked", summary: "Run interrupted by operator" },
       );
-      setActiveThread((current) => (
-        current && current.thread.threadId === activeThread.thread.threadId
-          ? withTaskCoordination({
-            ...current,
-            thread: {
-              ...current.thread,
-              status: "idle",
-              updatedAt: timestamp,
-            },
-            agents: current.agents.map((agent) => (
-              runningAgents.some((entry) => entry.id === agent.id)
-                ? { ...agent, status: "idle", lastUpdatedAt: timestamp, summary: "중단되었습니다." }
-                : agent
-            )),
-            messages: [
-              ...current.messages,
-              createBrowserMessage(
-                current.thread.threadId,
-                "system",
-                "사용자가 현재 작업을 중단했습니다.",
-                timestamp,
-                { eventKind: "run_interrupted" },
-              ),
-            ],
-          }, interruptedCoordination ?? current.orchestration ?? null)
-          : current
-      ));
+      const interruptedDetail = await params.invokeFn<ThreadDetail>("thread_interrupt_run", {
+        cwd: params.cwd,
+        threadId: activeThread.thread.threadId,
+        roleIds: [...runningRoleIds],
+        message: "현재 작업을 중단했습니다.",
+      }).catch(() => null);
       setLiveRoleNotes((current) => Object.fromEntries(
         Object.entries(current).filter(([roleId]) => !runningRoleIds.has(roleId as ThreadRoleId)),
       ) as Partial<Record<ThreadRoleId, { message: string; updatedAt: string }>>);
       setLiveProcessEvents((current) => current.filter((event) => !runningRoleIds.has(event.roleId)));
-      await refreshCurrentThreadSilently(activeThread.thread.threadId);
-      setActiveThread((current) => (
-        current && current.thread.threadId === activeThread.thread.threadId
-          ? withTaskCoordination({
-            ...current,
-            thread: {
-              ...current.thread,
-              status: "idle",
-              updatedAt: timestamp,
-            },
-            agents: current.agents.map((agent) => (
-              runningAgents.some((entry) => entry.id === agent.id)
-                ? { ...agent, status: "idle", lastUpdatedAt: timestamp, summary: "중단되었습니다." }
-                : agent
-            )),
-          }, interruptedCoordination ?? current.orchestration ?? null)
-          : current
-      ));
+      runtimeTargetsByRoleRef.current = Object.fromEntries(
+        Object.entries(runtimeTargetsByRoleRef.current).filter(([roleId]) => !runningRoleIds.has(roleId as ThreadRoleId)),
+      ) as Partial<Record<ThreadRoleId, RuntimeTarget>>;
+      setActiveThread((current) => {
+        if (!current || current.thread.threadId !== activeThread.thread.threadId) {
+          return current;
+        }
+        if (interruptedDetail) {
+          return withTaskCoordination(interruptedDetail, interruptedCoordination ?? interruptedDetail.orchestration ?? null);
+        }
+        return withTaskCoordination({
+          ...current,
+          thread: {
+            ...current.thread,
+            status: "idle",
+            updatedAt: timestamp,
+          },
+          agents: current.agents.map((agent) => (
+            runningAgents.some((entry) => entry.id === agent.id)
+              ? { ...agent, status: "idle", lastUpdatedAt: timestamp, summary: "중단되었습니다." }
+              : agent
+          )),
+          messages: [
+            ...current.messages,
+            createBrowserMessage(
+              current.thread.threadId,
+              "system",
+              "현재 작업을 중단했습니다.",
+              timestamp,
+              { eventKind: "run_interrupted" },
+            ),
+          ],
+        }, interruptedCoordination ?? current.orchestration ?? null);
+      });
       if (selectedAgentDetail?.agent.id) {
         const refreshedDetail = await loadAgentDetail(activeThread.thread.threadId, selectedAgentDetail.agent.id).catch(() => null);
         setSelectedAgentDetail(refreshedDetail);
@@ -1757,7 +1807,6 @@ export function useTasksThreadState(params: Params) {
     canInterruptCurrentThread,
     loadAgentDetail,
     params,
-    refreshCurrentThreadSilently,
     selectedAgentDetail?.agent.id,
     stoppingComposerRun,
   ]);

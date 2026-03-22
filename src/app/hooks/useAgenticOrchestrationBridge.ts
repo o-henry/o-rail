@@ -153,6 +153,7 @@ function dispatchTasksRoleEvent(params: {
   type: string;
   stage?: string | null;
   message?: string;
+  payload?: Record<string, unknown>;
 }) {
   if (typeof window === "undefined") {
     return;
@@ -166,6 +167,7 @@ function dispatchTasksRoleEvent(params: {
       type: params.type,
       stage: params.stage ?? null,
       message: params.message ?? "",
+      payload: params.payload ?? null,
       at: new Date().toISOString(),
     },
   }));
@@ -479,6 +481,22 @@ export function useAgenticOrchestrationBridge(params: {
           outputArtifactName: params.outputArtifactName,
           sourceTab,
           runId,
+          onRuntimeSession: (runtime) => {
+            dispatchTasksRoleEvent({
+              sourceTab,
+              taskId: params.taskId,
+              studioRoleId: params.roleId,
+              runId,
+              type: "runtime_attached",
+              stage: "codex",
+              message: "runtime attached",
+              payload: {
+                codexThreadId: runtime.codexThreadId ?? null,
+                codexTurnId: runtime.codexTurnId ?? null,
+                provider: runtime.provider ?? null,
+              },
+            });
+          },
         });
         taskCodexArtifactPaths = [...codexTaskRun.artifactPaths];
         taskCodexSummary = codexTaskRun.summary;
@@ -493,6 +511,7 @@ export function useAgenticOrchestrationBridge(params: {
           type: event.type,
           stage: event.stage ?? null,
           message: event.message ?? "",
+          payload: event.payload,
         });
       },
       roleKnowledgePipeline: normalizedRoleId && params.includeRoleKnowledge !== false

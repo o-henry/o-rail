@@ -224,4 +224,51 @@ describe("TasksThreadComposer", () => {
     expect(html).toContain("AUTO: RESEARCHER");
     expect(html).toContain("AUTO: WEB / STEEL");
   });
+
+  it("switches back to a disabled send button while a stop request is in flight", () => {
+    const html = renderToStaticMarkup(
+      createElement(TasksThreadComposer, {
+        attachedFiles: [],
+        autoSelectedComposerRoleIds: [],
+        autoSelectedProviderModel: null,
+        canInterruptCurrentThread: true,
+        canUseStopButton: true,
+        composerProviderOverride: null,
+        composerCoordinationModeOverride: null,
+        composerDraft: "인디게임 아이디어 정리해줘",
+        composerRef: createRef<HTMLTextAreaElement>(),
+        isModelMenuOpen: false,
+        isReasonMenuOpen: false,
+        mentionIndex: 0,
+        mentionMatch: null,
+        modelMenuRef: createRef<HTMLDivElement>(),
+        onClearCoordinationModeOverride: () => undefined,
+        onComposerCursorChange: () => undefined,
+        onComposerDraftChange: () => undefined,
+        onComposerKeyDown: () => undefined,
+        onClearComposerProviderOverride: () => undefined,
+        onOpenAttachmentPicker: () => undefined,
+        onRemoveAttachedFile: () => undefined,
+        onRemoveComposerRole: () => undefined,
+        onSelectMention: () => undefined,
+        onSetModel: () => undefined,
+        onSetReasoning: () => undefined,
+        onStop: () => undefined,
+        onSubmit: () => undefined,
+        onToggleModelMenu: () => undefined,
+        onToggleReasonMenu: () => undefined,
+        reasonMenuRef: createRef<HTMLDivElement>(),
+        reasoning: "중간",
+        reasoningLabel: "MEDIUM",
+        selectedComposerRoleIds: [],
+        selectedModelOption: { value: "GPT-5.4", label: "GPT-5.4" },
+        showStopButton: true,
+        stoppingComposerRun: true,
+      }),
+    );
+
+    expect(html).not.toContain("tasks-stop-button");
+    expect(html).toContain("tasks-send-button");
+    expect(html).toContain("disabled");
+  });
 });

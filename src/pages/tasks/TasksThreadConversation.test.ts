@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   isFailedThreadMessage,
   isFinishedThreadMessage,
+  resolveLatestRunParticipationBadgeRoleIds,
   resolveProgressiveRevealStep,
   resolveThreadParticipationBadgeRoleIds,
+  shouldProgressivelyRevealMessage,
 } from "./TasksThreadConversation";
 
 describe("isFinishedThreadMessage", () => {
@@ -112,6 +114,42 @@ describe("resolveThreadParticipationBadgeRoleIds", () => {
   });
 });
 
+describe("resolveLatestRunParticipationBadgeRoleIds", () => {
+  it("falls back to message-emitted role ids when orchestration is gone", () => {
+    expect(resolveLatestRunParticipationBadgeRoleIds({
+      orchestration: null,
+      liveAgents: [],
+      messages: [
+        {
+          id: "user-1",
+          threadId: "thread-1",
+          role: "user",
+          content: "아이디어 줘",
+          createdAt: "2026-03-22T00:00:00Z",
+        },
+        {
+          id: "assistant-1",
+          threadId: "thread-1",
+          role: "assistant",
+          content: "Created GAME DESIGNER ...",
+          sourceRoleId: "game_designer",
+          eventKind: "agent_created",
+          createdAt: "2026-03-22T00:00:01Z",
+        },
+        {
+          id: "assistant-2",
+          threadId: "thread-1",
+          role: "assistant",
+          content: "Created UNITY ARCHITECT ...",
+          sourceRoleId: "unity_architect",
+          eventKind: "agent_created",
+          createdAt: "2026-03-22T00:00:02Z",
+        },
+      ],
+    })).toEqual(["game_designer", "unity_architect"]);
+  });
+});
+
 describe("resolveProgressiveRevealStep", () => {
   it("keeps a sensible minimum chunk size for short answers", () => {
     expect(resolveProgressiveRevealStep(12)).toBe(48);
@@ -119,5 +157,29 @@ describe("resolveProgressiveRevealStep", () => {
 
   it("caps chunk size for large answers", () => {
     expect(resolveProgressiveRevealStep(20000)).toBe(220);
+  });
+});
+
+describe("shouldProgressivelyRevealMessage", () => {
+  it("reveals large assistant logs progressively", () => {
+    expect(shouldProgressivelyRevealMessage({
+      id: "1",
+      threadId: "thread-1",
+      role: "assistant",
+      content: "",
+      eventKind: "agent_created",
+      createdAt: "2026-03-22T00:00:00Z",
+    }, "x".repeat(240))).toBe(true);
+  });
+
+  it("skips short system interruptions", () => {
+    expect(shouldProgressivelyRevealMessage({
+      id: "2",
+      threadId: "thread-1",
+      role: "system",
+      content: "",
+      eventKind: "run_interrupted",
+      createdAt: "2026-03-22T00:00:00Z",
+    }, "중단")).toBe(false);
   });
 });

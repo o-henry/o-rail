@@ -4,6 +4,7 @@ import {
   resolveAutomaticResearchModel,
   isTasksCodexExecutionBlocked,
   reduceLiveRoleEventBatch,
+  reduceRuntimeTargetsByRole,
   rememberTasksProjectPath,
   resolveTasksThreadWebProvider,
   resolveTasksProjectSelection,
@@ -251,5 +252,39 @@ describe("reduceLiveRoleEventBatch", () => {
     expect(reduced.nextNotes.researcher).toBeUndefined();
     expect(reduced.nextEvents).toHaveLength(1);
     expect(reduced.shouldRefresh).toBe(true);
+  });
+});
+
+describe("reduceRuntimeTargetsByRole", () => {
+  it("stores codex thread ids and provider overrides from runtime attachment events", () => {
+    const next = reduceRuntimeTargetsByRole({}, {
+      taskId: "thread-1",
+      studioRoleId: "research_analyst",
+      type: "runtime_attached",
+      payload: {
+        codexThreadId: "codex-thread-1",
+        provider: "steel",
+      },
+    });
+
+    expect(next.researcher).toEqual({
+      codexThreadIds: ["codex-thread-1"],
+      provider: "steel",
+    });
+  });
+
+  it("clears stored runtime targets after the run finishes", () => {
+    const current = {
+      researcher: {
+        codexThreadIds: ["codex-thread-1"],
+        provider: "steel",
+      },
+    };
+
+    expect(reduceRuntimeTargetsByRole(current, {
+      taskId: "thread-1",
+      studioRoleId: "research_analyst",
+      type: "run_done",
+    })).toEqual({});
   });
 });

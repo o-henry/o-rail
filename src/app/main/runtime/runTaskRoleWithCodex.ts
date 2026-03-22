@@ -57,6 +57,11 @@ type RunTaskRoleWithCodexInput = {
   outputArtifactName?: string;
   sourceTab: "tasks" | "tasks-thread";
   runId: string;
+  onRuntimeSession?: (runtime: {
+    codexThreadId?: string | null;
+    codexTurnId?: string | null;
+    provider?: string | null;
+  }) => void;
 };
 
 export type TaskRoleCodexRunResult = {
@@ -634,6 +639,11 @@ export async function runTaskRoleWithCodex(input: RunTaskRoleWithCodexInput): Pr
   let codexTurnId: string | undefined;
 
   if (webProvider) {
+    input.onRuntimeSession?.({
+      provider: webProvider,
+      codexThreadId: null,
+      codexTurnId: null,
+    });
     const webResult = await input.invokeFn<WebProviderRunResult>("web_provider_run", {
       provider: webProvider,
       prompt: promptText,
@@ -655,6 +665,11 @@ export async function runTaskRoleWithCodex(input: RunTaskRoleWithCodexInput): Pr
       sandboxMode,
     });
     codexThreadId = threadStart.threadId;
+    input.onRuntimeSession?.({
+      codexThreadId,
+      codexTurnId: null,
+      provider: null,
+    });
     const turnStart = await startCodexTurnWithRecovery({
       invokeFn: input.invokeFn,
       threadId: threadStart.threadId,
@@ -691,6 +706,11 @@ export async function runTaskRoleWithCodex(input: RunTaskRoleWithCodexInput): Pr
       throw new Error("Codex turn finished without a readable response");
     }
     codexTurnId = extractStringByPaths(rawResponse, ["turnId", "turn_id", "id", "turn.id", "response.id"]) ?? undefined;
+    input.onRuntimeSession?.({
+      codexThreadId: codexThreadId ?? null,
+      codexTurnId: codexTurnId ?? null,
+      provider: null,
+    });
   }
 
   const promptArtifactPath = await input.invokeFn<string>("workspace_write_text", {

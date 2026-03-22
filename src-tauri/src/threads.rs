@@ -396,6 +396,20 @@ fn default_studio_role_id(role_id: &str) -> Option<String> {
     task_presets::task_agent_studio_role_id(role_id)
 }
 
+fn is_terminal_thread_status(status: &str) -> bool {
+    matches!(
+        status.trim().to_ascii_lowercase().as_str(),
+        "completed" | "cancelled" | "failed" | "error" | "archived"
+    )
+}
+
+fn is_live_thread_agent_status(status: &str) -> bool {
+    !matches!(
+        status.trim().to_ascii_lowercase().as_str(),
+        "" | "idle" | "done" | "failed" | "cancelled"
+    )
+}
+
 fn role_label_for(task: &TaskRecordView, role_id: &str) -> String {
     let canonical = task_presets::canonical_task_agent_id(role_id).unwrap_or(role_id);
     task.roles
@@ -594,10 +608,14 @@ fn ensure_thread_state(
         &thread_record_path(task_dir),
         default_thread_record(task, model, reasoning, access_mode),
     )?;
-    thread.status = task.status.clone();
     thread.cwd = task.workspace_path.clone();
     thread.branch_label = task.branch_name.clone().or_else(|| Some(task.isolation_resolved.clone()));
-    thread.updated_at = task.updated_at.clone();
+    if thread.status.trim().is_empty() || is_terminal_thread_status(&task.status) {
+        thread.status = task.status.clone();
+    }
+    if thread.updated_at.trim().is_empty() || task.updated_at > thread.updated_at {
+        thread.updated_at = task.updated_at.clone();
+    }
 
     let messages = read_json_or_default(&thread_messages_path(task_dir), default_messages(&thread))?;
     let mut agents = read_json_or_default(&thread_agents_path(task_dir), default_agents(&thread, task))?;
@@ -621,7 +639,9 @@ fn ensure_thread_state(
         if let Some(agent) = agents.iter_mut().find(|agent| agent.role_id == role.id) {
             agent.label = role.label.clone();
             agent.worktree_path = task.worktree_path.clone().or_else(|| Some(task.workspace_path.clone()));
-            agent.summary = Some(role_summary(&role.id));
+            if agent.summary.as_ref().map(|value| value.trim().is_empty()).unwrap_or(true) {
+                agent.summary = Some(role_summary(&role.id));
+            }
         } else {
             agents.push(BackgroundAgentRecord {
                 id: format!("{}:{}", thread.thread_id, role.id),
@@ -1310,7 +1330,7 @@ pub fn thread_spawn_agents(
             &mut messages,
             &thread.thread_id,
             "assistant",
-            &format!("Created {label} with instructions: {}", role_instruction(&task.record, role_id, prompt)),
+            &format!("Created {label}. {}", role_discussion_line(role_id)),
             Some(agent_id.as_str()),
             Some(label.as_str()),
             Some(role_id.as_str()),
@@ -1682,6 +1702,68 @@ pub fn thread_record_role_result(
     write_json_pretty(&thread_approvals_path(&task_path), &approvals)?;
     storage::cleanup_workspace_runtime_noise(&workspace)?;
     Ok(true)
+}
+
+#[tauri::command]
+pub fn thread_interrupt_run(
+    cwd: String,
+    thread_id: String,
+    role_ids: Vec<String>,
+    message: Option<String>,
+) -> Result<ThreadDetail, String> {
+    let workspace = normalize_workspace_root(&cwd)?;
+    let thread_id = thread_id.trim().to_string();
+    if thread_id.is_empty() {
+        return Err("threadId is required".to_string());
+    }
+    let task = task_detail_view(storage::task_load(cwd.clone(), thread_id.clone())?)?;
+    let task_path = task_dir(&workspace, &thread_id);
+    let (mut thread, mut messages, mut agents, approvals) =
+        ensure_thread_state(&task_path, &task.record, "5.4", "MEDIUM", "Local")?;
+    let target_role_ids: BTreeSet<String> = role_ids
+        .iter()
+        .filter_map(|role_id| task_presets::canonical_task_agent_id(role_id.trim()).map(|value| value.to_string()))
+        .collect();
+    let target_all_live = target_role_ids.is_empty();
+    let interrupted_at = now_iso();
+    let interruption_message = message
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("현재 작업을 중단했습니다.");
+
+    for agent in agents.iter_mut() {
+        let should_interrupt = if target_all_live {
+            is_live_thread_agent_status(&agent.status)
+        } else {
+            target_role_ids.contains(&agent.role_id)
+        };
+        if should_interrupt {
+            agent.status = "idle".to_string();
+            agent.summary = Some("중단되었습니다.".to_string());
+            agent.last_updated_at = interrupted_at.clone();
+        }
+    }
+
+    thread.status = "idle".to_string();
+    thread.updated_at = interrupted_at.clone();
+    append_message_with_meta(
+        &mut messages,
+        &thread.thread_id,
+        "system",
+        interruption_message,
+        None,
+        None,
+        None,
+        Some("run_interrupted"),
+        None,
+    );
+
+    write_json_pretty(&thread_record_path(&task_path), &thread)?;
+    write_json_pretty(&thread_messages_path(&task_path), &messages)?;
+    write_json_pretty(&thread_agents_path(&task_path), &agents)?;
+    write_json_pretty(&thread_approvals_path(&task_path), &approvals)?;
+    build_thread_detail(&task_path, task, &thread.model, &thread.reasoning, &thread.access_mode)
 }
 
 #[tauri::command]
@@ -2075,5 +2157,57 @@ mod tests {
 
         let project_b_items = thread_list(cwd, Some(project_b.to_string_lossy().to_string())).unwrap();
         assert_eq!(project_b_items.len(), 1);
+    }
+
+    #[test]
+    fn thread_interrupt_run_persists_idle_status_and_message() {
+        let workspace = temp_workspace("interrupt");
+        let cwd = workspace.to_string_lossy().to_string();
+        let detail = thread_create(
+            cwd.clone(),
+            None,
+            "inspect repo".to_string(),
+            None,
+            Some("full-squad".to_string()),
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        let spawned = thread_spawn_agents(
+            cwd.clone(),
+            detail.thread.thread_id.clone(),
+            "@designer inspect repo".to_string(),
+            vec!["game_designer".to_string()],
+            Some(true),
+        )
+        .unwrap();
+        assert!(spawned
+            .agents
+            .iter()
+            .any(|agent| agent.role_id == "game_designer" && agent.status == "thinking"));
+
+        let interrupted = thread_interrupt_run(
+            cwd.clone(),
+            detail.thread.thread_id.clone(),
+            vec!["game_designer".to_string()],
+            Some("현재 작업을 중단했습니다.".to_string()),
+        )
+        .unwrap();
+
+        assert_eq!(interrupted.thread.status, "idle");
+        assert!(interrupted
+            .agents
+            .iter()
+            .any(|agent| agent.role_id == "game_designer" && agent.status == "idle"));
+        assert!(interrupted
+            .messages
+            .iter()
+            .any(|message| message.event_kind.as_deref() == Some("run_interrupted")));
+        assert!(interrupted
+            .messages
+            .iter()
+            .any(|message| message.content == "현재 작업을 중단했습니다."));
     }
 }

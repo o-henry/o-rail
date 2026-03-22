@@ -163,7 +163,7 @@ export function runBrowserExecutionPlan(params: {
         createBrowserMessage(
           detail.thread.threadId,
           "assistant",
-          `Created ${getTaskAgentLabel(roleId)} with instructions: ${plan.rolePrompts[roleId] ?? rolePrompt(detail, roleId, prompt)}`,
+          `${getTaskAgentLabel(roleId)} agent is ready. ${getTaskAgentSummary(roleId)}`,
           timestamp,
           {
             agentId: `${detail.thread.threadId}:${roleId}`,

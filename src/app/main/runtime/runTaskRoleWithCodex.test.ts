@@ -71,6 +71,57 @@ describe("runTaskRoleWithCodex", () => {
     }));
   });
 
+  it("reports the codex thread id as soon as the runtime session starts", async () => {
+    const onRuntimeSession = vi.fn();
+    const invokeFn = (vi.fn(async (command: string) => {
+      switch (command) {
+        case "task_agent_pack_read":
+          return {
+            id: "unity_implementer",
+            label: "UNITY IMPLEMENTER",
+            studioRoleId: "client_programmer",
+            model: "gpt-5.4-mini",
+            modelReasoningEffort: "medium",
+            sandboxMode: "workspace-write",
+            outputArtifactName: "implementation_report.md",
+            promptDocFile: "unity_implementer.md",
+            developerInstructions: "구현하고 수정 파일을 한국어로 요약하라.",
+          };
+        case "thread_load":
+          return {
+            thread: { model: "GPT-5.4", reasoning: "중간" },
+            task: { workspacePath: "/tmp/mockking", worktreePath: null },
+          };
+        case "thread_start":
+          return { threadId: "thread-codex-early" };
+        case "turn_start_blocking":
+          return {
+            status: "completed",
+            output_text: "초기 세션 정보가 있습니다.",
+          };
+        case "workspace_write_text":
+          return `/tmp/out/${Math.random().toString(36).slice(2)}.json`;
+        default:
+          throw new Error(`unexpected command: ${command}`);
+      }
+    }) as unknown) as <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
+
+    await runTaskRoleWithCodex({
+      invokeFn,
+      storageCwd: "/tmp/rail-storage",
+      taskId: "thread-early",
+      studioRoleId: "client_programmer",
+      prompt: "중간에 stop 가능해야 해",
+      sourceTab: "tasks-thread",
+      runId: "role-run-early",
+      onRuntimeSession,
+    });
+
+    expect(onRuntimeSession).toHaveBeenCalledWith(expect.objectContaining({
+      codexThreadId: "thread-codex-early",
+    }));
+  });
+
   it("allows collaboration runs to override the artifact file name", async () => {
     const invokeFn = (vi.fn(async (command: string, args?: Record<string, unknown>) => {
       switch (command) {
@@ -120,6 +171,7 @@ describe("runTaskRoleWithCodex", () => {
   });
 
   it("routes task role execution through web providers when the thread model is web-backed", async () => {
+    const onRuntimeSession = vi.fn();
     const invokeFn = (vi.fn(async (command: string, args?: Record<string, unknown>) => {
       switch (command) {
         case "task_agent_pack_read":
@@ -177,6 +229,7 @@ describe("runTaskRoleWithCodex", () => {
       prompt: "웹에서 반응을 조사해줘",
       sourceTab: "tasks-thread",
       runId: "role-run-web",
+      onRuntimeSession,
     });
 
     expect(result.summary).toContain("웹 GPT");
@@ -185,6 +238,9 @@ describe("runTaskRoleWithCodex", () => {
       provider: "gpt",
       mode: "bridgeAssisted",
       cwd: "/tmp/mockking",
+    }));
+    expect(onRuntimeSession).toHaveBeenCalledWith(expect.objectContaining({
+      provider: "gpt",
     }));
     expect(invokeFn).not.toHaveBeenCalledWith("thread_start", expect.anything());
     expect(result.artifactPaths).toContain("/tmp/rail-storage/.rail/tasks/thread-web/codex_runs/role-run-web/research_findings.md");

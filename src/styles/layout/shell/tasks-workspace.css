@@ -1221,6 +1221,13 @@
   flex-wrap: wrap;
 }
 
+.tasks-thread-message-badges {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
 .tasks-thread-finish-badge {
   display: inline-flex;
   align-items: center;
@@ -1239,6 +1246,33 @@
   white-space: nowrap;
   width: fit-content;
   flex: 0 0 auto;
+}
+
+.tasks-thread-status-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: start;
+  margin-top: 10px;
+  min-height: 20px;
+  padding: 0 8px;
+  border-radius: 4px;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  white-space: nowrap;
+  width: fit-content;
+  flex: 0 0 auto;
+}
+
+.tasks-thread-status-badge.is-success {
+  background: #2da44e;
+}
+
+.tasks-thread-status-badge.is-fail {
+  background: #d1242f;
 }
 
 .tasks-thread-orchestration-card {

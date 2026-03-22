@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isFinishedThreadMessage } from "./TasksThreadConversation";
+import { isFailedThreadMessage, isFinishedThreadMessage } from "./TasksThreadConversation";
 
 describe("isFinishedThreadMessage", () => {
   it("returns true for completed assistant result messages", () => {
@@ -27,6 +27,30 @@ describe("isFinishedThreadMessage", () => {
       threadId: "thread-1",
       role: "system",
       content: "완료",
+      eventKind: "agent_result",
+      createdAt: "2026-03-20T00:00:00Z",
+    })).toBe(false);
+  });
+});
+
+describe("isFailedThreadMessage", () => {
+  it("returns true for failed assistant result messages", () => {
+    expect(isFailedThreadMessage({
+      id: "4",
+      threadId: "thread-1",
+      role: "assistant",
+      content: "실패했습니다.",
+      eventKind: "agent_failed",
+      createdAt: "2026-03-20T00:00:00Z",
+    })).toBe(true);
+  });
+
+  it("returns false for non-failed messages", () => {
+    expect(isFailedThreadMessage({
+      id: "5",
+      threadId: "thread-1",
+      role: "assistant",
+      content: "완료했습니다.",
       eventKind: "agent_result",
       createdAt: "2026-03-20T00:00:00Z",
     })).toBe(false);

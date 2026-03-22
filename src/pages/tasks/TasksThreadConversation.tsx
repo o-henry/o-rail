@@ -78,6 +78,10 @@ export function isFinishedThreadMessage(message: ThreadMessage): boolean {
   return message.role === "assistant" && String(message.eventKind ?? "").trim() === "agent_result";
 }
 
+export function isFailedThreadMessage(message: ThreadMessage): boolean {
+  return message.role === "assistant" && String(message.eventKind ?? "").trim() === "agent_failed";
+}
+
 function formatArtifactStamp(input: string) {
   const normalized = String(input ?? "").trim();
   if (!normalized) {
@@ -192,7 +196,13 @@ export function TasksThreadConversation(props: TasksThreadConversationProps) {
               <div className="tasks-thread-log-line">
                 {message.role === "assistant" ? <TasksThreadMessageContent content={parsed.body} /> : parsed.body}
               </div>
-              {isFinishedThreadMessage(message) ? <span className="tasks-thread-finish-badge">FINISH</span> : null}
+              {isFinishedThreadMessage(message) || isFailedThreadMessage(message) ? (
+                <div className="tasks-thread-message-badges">
+                  {isFinishedThreadMessage(message) ? <span className="tasks-thread-finish-badge">FINISH</span> : null}
+                  {isFinishedThreadMessage(message) ? <span className="tasks-thread-status-badge is-success">SUCCESS</span> : null}
+                  {isFailedThreadMessage(message) ? <span className="tasks-thread-status-badge is-fail">FAIL</span> : null}
+                </div>
+              ) : null}
               {parsed.artifactPath ? (
                 <div className="tasks-thread-message-meta">
                   <small className="tasks-thread-message-artifact">{parsed.artifactPath}</small>

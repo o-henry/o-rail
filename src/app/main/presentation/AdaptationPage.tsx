@@ -201,7 +201,11 @@ export default function AdaptationPage(props: AdaptationPageProps) {
                       <tr key={row.id}>
                         <td>{formatTaskRoleLearningRoleLabel(row.roleId)}</td>
                         <td>{formatTaskLearningStatus(row.status)}</td>
-                        <td>{memo}</td>
+                        <td>
+                          <div className="adaptation-memo-cell" title={memo}>
+                            {memo}
+                          </div>
+                        </td>
                         <td>
                           <div className="adaptation-summary-cell" title={summary}>
                             {summary}

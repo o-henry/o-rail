@@ -152,6 +152,12 @@
   line-clamp: 2;
 }
 
+.adaptation-memo-cell {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .adaptation-table th:nth-child(1),
 .adaptation-table td:nth-child(1) {
   width: 110px;

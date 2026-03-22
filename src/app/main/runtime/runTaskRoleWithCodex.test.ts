@@ -719,6 +719,174 @@ describe("runTaskRoleWithCodex", () => {
     expect(capturedPrompts[0]).toBe("스팀 장르 인기 순위와 고평가 장르, 대표 게임 리스트를 조사해줘");
   });
 
+  it("extracts markdown user-request sections before planning researcher collection jobs", async () => {
+    const capturedPrompts: string[] = [];
+    const invokeFn = (vi.fn(async (command: string, args?: Record<string, unknown>) => {
+      switch (command) {
+        case "task_agent_pack_read":
+          return {
+            id: "researcher",
+            label: "RESEARCHER",
+            studioRoleId: "research_analyst",
+            model: "gpt-5.4",
+            modelReasoningEffort: "medium",
+            sandboxMode: "workspace-write",
+            outputArtifactName: "research_findings.md",
+            promptDocFile: "researcher.md",
+            developerInstructions: "자료 조사와 웹 리서치를 수행하라.",
+          };
+        case "thread_load":
+          return {
+            thread: { model: "GPT-5.4", reasoning: "중간" },
+            task: { workspacePath: "/tmp/mockking" },
+          };
+        case "research_storage_plan_agent_job":
+          capturedPrompts.push(String(args?.prompt ?? ""));
+          return {
+            job: {
+              jobId: "collect-markdown-request",
+              label: "Researcher · markdown request",
+              resolvedSourceType: "community",
+              collectorStrategy: "dynamic_search",
+              keywords: ["steam community trends"],
+              domains: ["steamcommunity.com"],
+              planner: {
+                analysisMode: "topic_research",
+                aggregationUnit: "evidence",
+                dataScope: "cross_source_topic",
+                metricFocus: [],
+                instructions: [],
+              },
+            },
+          };
+        case "research_storage_execute_job":
+          return { job: { jobId: "collect-markdown-request" } };
+        case "research_storage_collection_metrics":
+          return {
+            totals: { items: 0, sources: 0, verified: 0, warnings: 0, conflicted: 0, avgScore: 0 },
+            bySourceType: [],
+            byVerificationStatus: [],
+            timeline: [],
+            topSources: [],
+          };
+        case "research_storage_list_collection_items":
+          return { items: [] };
+        case "research_storage_collection_genre_rankings":
+          return { popular: [], quality: [] };
+        case "thread_start":
+          return { threadId: "thread-codex-md-request" };
+        case "turn_start_blocking":
+          return { status: "completed", output_text: "조사 결과를 정리했습니다." };
+        case "workspace_write_text":
+          return `${String(args?.cwd)}/${String(args?.name)}`;
+        default:
+          throw new Error(`unexpected command: ${command}`);
+      }
+    }) as unknown) as <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
+
+    await runTaskRoleWithCodex({
+      invokeFn,
+      storageCwd: "/tmp/rail-storage",
+      taskId: "thread-md-request",
+      studioRoleId: "research_analyst",
+      prompt: [
+        "# 작업 모드",
+        "내부 멀티에이전트 1차 브리프",
+        "",
+        "# 사용자 요청",
+        "2026년 기준 스팀 커뮤니티 반응을 바탕으로 인디게임 장르 트렌드를 조사해줘",
+        "",
+        "# 역할별 배정",
+        "- researcher: 자료 조사",
+        "- game_designer: 발산",
+      ].join("\n"),
+      sourceTab: "tasks-thread",
+      runId: "role-run-md-request",
+    });
+
+    expect(capturedPrompts[0]).toBe("2026년 기준 스팀 커뮤니티 반응을 바탕으로 인디게임 장르 트렌드를 조사해줘");
+  });
+
+  it("injects explicit empty-evidence guidance when researcher collection returns zero items", async () => {
+    const capturedPrompts: string[] = [];
+    const invokeFn = (vi.fn(async (command: string, args?: Record<string, unknown>) => {
+      switch (command) {
+        case "task_agent_pack_read":
+          return {
+            id: "researcher",
+            label: "RESEARCHER",
+            studioRoleId: "research_analyst",
+            model: "gpt-5.4",
+            modelReasoningEffort: "medium",
+            sandboxMode: "workspace-write",
+            outputArtifactName: "research_findings.md",
+            promptDocFile: "researcher.md",
+            developerInstructions: "자료 조사와 웹 리서치를 수행하라.",
+          };
+        case "thread_load":
+          return {
+            thread: { model: "GPT-5.4", reasoning: "중간" },
+            task: { workspacePath: "/tmp/mockking" },
+          };
+        case "research_storage_plan_agent_job":
+          return {
+            job: {
+              jobId: "collect-empty",
+              label: "Researcher · empty",
+              resolvedSourceType: "community",
+              collectorStrategy: "dynamic_search",
+              keywords: ["steam community sentiment"],
+              domains: ["steamcommunity.com"],
+              planner: {
+                analysisMode: "topic_research",
+                aggregationUnit: "evidence",
+                dataScope: "cross_source_topic",
+                metricFocus: [],
+                queryPlan: [{ query: "steam community sentiment", axis: "primary", language: "auto", intent: "topic_research" }],
+                instructions: [],
+              },
+            },
+          };
+        case "research_storage_execute_job":
+          return { job: { jobId: "collect-empty" } };
+        case "research_storage_collection_metrics":
+          return {
+            totals: { items: 0, sources: 0, verified: 0, warnings: 0, conflicted: 0, avgScore: 0 },
+            bySourceType: [],
+            byVerificationStatus: [],
+            timeline: [],
+            topSources: [],
+          };
+        case "research_storage_list_collection_items":
+          return { items: [] };
+        case "research_storage_collection_genre_rankings":
+          return { popular: [], quality: [] };
+        case "thread_start":
+          return { threadId: "thread-codex-empty-collection" };
+        case "turn_start_blocking":
+          capturedPrompts.push(String(args?.text ?? ""));
+          return { status: "completed", output_text: "조사 결과를 정리했습니다." };
+        case "workspace_write_text":
+          return `${String(args?.cwd)}/${String(args?.name)}`;
+        default:
+          throw new Error(`unexpected command: ${command}`);
+      }
+    }) as unknown) as <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
+
+    await runTaskRoleWithCodex({
+      invokeFn,
+      storageCwd: "/tmp/rail-storage",
+      taskId: "thread-empty-collection",
+      studioRoleId: "research_analyst",
+      prompt: "@researcher 스팀 커뮤니티 반응을 조사해줘",
+      sourceTab: "tasks-thread",
+      runId: "role-run-empty-collection",
+    });
+
+    expect(capturedPrompts[0]).toContain("이번 자동 수집에서는 공개 근거를 확보하지 못했습니다.");
+    expect(capturedPrompts[0]).toContain("추측을 사실처럼 단정하지 마세요.");
+  });
+
   it("fails researcher runs without a readable final answer even if collection artifacts exist", async () => {
     const invokeFn = (vi.fn(async (command: string, args?: Record<string, unknown>) => {
       switch (command) {

@@ -313,32 +313,43 @@ export function orchestrateTaskPrompt(params: {
   prompt: string;
   maxParticipants: number;
 }): TaskPromptOrchestration & { cappedParticipantCount: boolean } {
-  const intent = inferTaskPromptIntent(params.prompt);
   const requestedRoleIds = uniqueRoleIds(params.requestedRoleIds);
-  const picked = pickParticipantRoles({
-    intent,
-    prompt: params.prompt,
-    enabledRoleIds: uniqueRoleIds(params.enabledRoleIds),
-    requestedRoleIds,
-    maxParticipants: params.maxParticipants,
-  });
+  const enabledRoleIds = uniqueRoleIds(params.enabledRoleIds);
+  const fallbackIntent = requestedRoleIds.length > 0 ? inferTaskPromptIntent(params.prompt) : "planning";
+  const picked = requestedRoleIds.length > 0
+    ? pickParticipantRoles({
+        intent: fallbackIntent,
+        prompt: params.prompt,
+        enabledRoleIds,
+        requestedRoleIds,
+        maxParticipants: params.maxParticipants,
+      })
+    : pickParticipantRoles({
+        intent: "planning",
+        prompt: params.prompt,
+        enabledRoleIds,
+        requestedRoleIds,
+        maxParticipants: params.maxParticipants,
+      });
   const candidateRoleIds = buildCandidateRoleIds({
-    enabledRoleIds: uniqueRoleIds(params.enabledRoleIds),
+    enabledRoleIds,
     requestedRoleIds,
     primaryRoleId: picked.primaryRoleId,
   });
-  const useAdaptiveOrchestrator = shouldUseAdaptiveOrchestrator({
-    intent,
-    prompt: params.prompt,
-    requestedRoleIds,
-    participantRoleIds: picked.participantRoleIds,
-  });
+  const useAdaptiveOrchestrator = requestedRoleIds.length === 0
+    ? true
+    : shouldUseAdaptiveOrchestrator({
+        intent: fallbackIntent,
+        prompt: params.prompt,
+        requestedRoleIds,
+        participantRoleIds: picked.participantRoleIds,
+      });
   const rolePrompts = Object.fromEntries(
     candidateRoleIds.map((roleId) => [
       roleId,
       buildRoleAssignmentPrompt({
         roleId,
-        intent,
+        intent: fallbackIntent,
         userPrompt: params.prompt,
         primaryRoleId: picked.primaryRoleId,
         participantRoleIds: picked.participantRoleIds,
@@ -347,13 +358,13 @@ export function orchestrateTaskPrompt(params: {
     ]),
   ) as Partial<Record<TaskAgentPresetId, string>>;
   return {
-    intent,
+    intent: fallbackIntent,
     candidateRoleIds,
     participantRoleIds: picked.participantRoleIds,
     primaryRoleId: picked.primaryRoleId,
     synthesisRoleId: picked.primaryRoleId,
     rolePrompts,
-    orchestrationSummary: buildOrchestrationSummary(intent, picked.participantRoleIds, picked.primaryRoleId),
+    orchestrationSummary: buildOrchestrationSummary(fallbackIntent, picked.participantRoleIds, picked.primaryRoleId),
     useAdaptiveOrchestrator,
     cappedParticipantCount: picked.cappedParticipantCount,
   };

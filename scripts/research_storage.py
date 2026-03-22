@@ -638,7 +638,8 @@ def infer_domains_from_prompt(prompt: str) -> list[str]:
 
 
 def build_prompt_keywords(prompt: str) -> list[str]:
-    text = re.sub(r"@[a-z0-9_-]+", " ", str(prompt or "").strip(), flags=re.IGNORECASE)
+    text = extract_task_request_text(str(prompt or "").strip())
+    text = re.sub(r"@[a-z0-9_-]+", " ", text, flags=re.IGNORECASE)
     text = re.sub(r"\s+", " ", text).strip()
     if not text:
         return []
@@ -839,10 +840,23 @@ def extract_task_request_text(prompt: str) -> str:
     tagged = re.search(r"<task_request>\s*([\s\S]*?)\s*</task_request>", normalized, re.IGNORECASE)
     if tagged:
         return str(tagged.group(1) or "").strip()
+    markdown_request = re.search(
+        r"(?ims)^\s*#{1,6}\s*(?:user request|사용자 요청)\s*$\s*([\s\S]*?)(?=^\s*#{1,6}\s+\S|\Z)",
+        normalized,
+    )
+    if markdown_request:
+        extracted = str(markdown_request.group(1) or "").strip()
+        if extracted:
+            normalized = extracted
     if "[ROLE_KB_INJECT]" in normalized:
         trimmed = normalized.split("[ROLE_KB_INJECT]", 1)[0].strip()
         if trimmed and trimmed != normalized:
             return extract_task_request_text(trimmed)
+    normalized = re.sub(
+        r"(?ims)^\s*#{1,6}\s*(?:작업 모드|role|workspace|developer instructions|협업 규칙|역할별 배정|압축된 스레드 컨텍스트|output rules)\s*$[\s\S]*?(?=^\s*#{1,6}\s+\S|\Z)",
+        " ",
+        normalized,
+    )
     instruction_split = re.split(r"\s+(?:집중할 점:|focus:|focus points?:)\s*", normalized, maxsplit=1, flags=re.IGNORECASE)
     if len(instruction_split) > 1 and instruction_split[0].strip():
         normalized = instruction_split[0].strip()

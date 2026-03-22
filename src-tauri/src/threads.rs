@@ -419,10 +419,6 @@ fn role_label_for(task: &TaskRecordView, role_id: &str) -> String {
         .unwrap_or_else(|| default_role_label(canonical))
 }
 
-fn role_instruction(_task: &TaskRecordView, role_id: &str, prompt: &str) -> String {
-    task_presets::task_agent_instruction(role_id, prompt)
-}
-
 fn role_summary(role_id: &str) -> String {
     task_presets::task_agent_summary(role_id)
 }

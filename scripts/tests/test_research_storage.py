@@ -500,6 +500,34 @@ class ResearchStorageTests(unittest.TestCase):
             self.assertEqual(planner["prompt"], "스팀 평가 기준으로 가장 인기있는 장르와 대표 게임 리스트를 조사해줘")
             self.assertTrue(all("Formatting re-enabled" not in keyword for keyword in job["keywords"]))
 
+    def test_plan_agent_collection_job_extracts_user_request_section_from_orchestration_markdown(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace = Path(temp_dir)
+            planned = plan_agent_collection_job(
+                workspace,
+                prompt=(
+                    "# 작업 모드\n"
+                    "내부 멀티에이전트 1차 브리프\n\n"
+                    "# 사용자 요청\n"
+                    "2026년 기준 스팀 커뮤니티 반응과 메타크리틱 평가를 바탕으로 창의적인 인디게임 아이디어 방향을 조사해줘\n\n"
+                    "# 역할별 배정\n"
+                    "- researcher: 자료 조사\n"
+                    "- game_designer: 아이디어 발산\n"
+                ),
+                label="",
+                requested_source_type="auto",
+                max_items=40,
+            )
+
+            job = planned["job"]
+            planner = job["planner"]
+            self.assertEqual(
+                planner["prompt"],
+                "2026년 기준 스팀 커뮤니티 반응과 메타크리틱 평가를 바탕으로 창의적인 인디게임 아이디어 방향을 조사해줘",
+            )
+            self.assertTrue(all("# 작업 모드" not in keyword for keyword in job["keywords"]))
+            self.assertTrue(all("역할별 배정" not in keyword for keyword in job["keywords"]))
+
     def test_plan_agent_collection_job_prefers_free_official_sources_for_generic_requests(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace = Path(temp_dir)

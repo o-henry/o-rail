@@ -173,6 +173,10 @@ type PrepareResearcherCollectionContextResult = {
   fallbackSummary?: string;
 };
 
+type SemanticRequestExtractionResult = {
+  task_request?: string;
+};
+
 function extractResearchCollectionPrompt(input: string) {
   const normalized = String(input ?? "").trim();
   if (!normalized) {
@@ -182,14 +186,108 @@ function extractResearchCollectionPrompt(input: string) {
   if (taggedRequest) {
     return taggedRequest;
   }
+  const markdownRequest = normalized.match(
+    /^\s*#{1,6}\s*(?:USER REQUEST|사용자 요청)\s*$\s*([\s\S]*?)(?=^\s*#{1,6}\s+\S|$)/im,
+  )?.[1]?.trim();
+  if (markdownRequest) {
+    return extractResearchCollectionPrompt(markdownRequest);
+  }
   const roleKbTrimmed = normalized.split("[ROLE_KB_INJECT]")[0]?.trim();
   if (roleKbTrimmed && roleKbTrimmed !== normalized) {
     return extractResearchCollectionPrompt(roleKbTrimmed);
   }
-  const strippedMentions = normalized.replace(/^\s*(?:@[a-z0-9_-]+\s+)+/i, "").trim();
+  const strippedHeadings = normalized.replace(
+    /^\s*#{1,6}\s*(?:작업 모드|ROLE|WORKSPACE|DEVELOPER INSTRUCTIONS|협업 규칙|역할별 배정|압축된 스레드 컨텍스트|OUTPUT RULES)\s*$[\s\S]*?(?=^\s*#{1,6}\s+\S|$)/gim,
+    " ",
+  ).trim();
+  const strippedMentions = strippedHeadings.replace(/^\s*(?:@[a-z0-9_-]+\s+)+/i, "").trim();
   const strippedInstructions =
     strippedMentions.split(/\s+(?:집중할 점:|focus:|focus points?:)\s*/i, 1)[0]?.trim() || strippedMentions;
   return strippedInstructions;
+}
+
+function resolveExtractionText(raw: unknown): string {
+  if (!raw || typeof raw !== "object") {
+    return String(raw ?? "").trim();
+  }
+  const record = raw as Record<string, unknown>;
+  const direct = [record.output_text, record.text, record.response, record.result]
+    .map((value) => String(value ?? "").trim())
+    .find(Boolean);
+  if (direct) {
+    return direct;
+  }
+  return "";
+}
+
+function parseSemanticRequestExtraction(text: string): string {
+  const normalized = String(text ?? "").trim();
+  if (!normalized) {
+    return "";
+  }
+  const fenced = normalized.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1]?.trim();
+  const payload = fenced || normalized;
+  try {
+    const parsed = JSON.parse(payload) as SemanticRequestExtractionResult;
+    return String(parsed.task_request ?? "").trim();
+  } catch {
+    return "";
+  }
+}
+
+function shouldUseSemanticRequestExtraction(input: string, fallback: string) {
+  const normalized = String(input ?? "").trim();
+  if (!normalized) {
+    return false;
+  }
+  if (fallback && fallback.length < normalized.length * 0.7) {
+    return false;
+  }
+  return /<role_profile>|#\s*작업 모드|#\s*역할별 배정|#\s*압축된 스레드 컨텍스트|Formatting re-enabled/i.test(normalized);
+}
+
+async function normalizeResearchCollectionPrompt(params: {
+  invokeFn: InvokeFn;
+  prompt: string;
+  storageCwd: string;
+}) {
+  const fallbackPrompt = extractResearchCollectionPrompt(params.prompt);
+  if (!shouldUseSemanticRequestExtraction(params.prompt, fallbackPrompt)) {
+    return fallbackPrompt;
+  }
+  try {
+    const started = await params.invokeFn<{ threadId: string }>("thread_start", {
+      model: "GPT-5.4",
+      cwd: params.storageCwd,
+      sandboxMode: "read-only",
+    });
+    const response = await params.invokeFn<unknown>("turn_start_blocking", {
+      threadId: started.threadId,
+      text: [
+        "# ROLE",
+        "REQUEST NORMALIZER",
+        "",
+        "# GOAL",
+        "오케스트레이션/역할 문서/포맷팅 노이즈를 제거하고 사용자의 실제 요청 한 문단만 추출한다.",
+        "",
+        "# RULES",
+        "- role/workspace/output/orchestration/assignment/focus/noise 섹션은 제거한다.",
+        "- 사용자의 금지 조건, 선호 조건, 기준일, 비교 대상은 유지한다.",
+        "- 요약하지 말고 실제 요청 의미를 보존한 채 한 문단으로 정리한다.",
+        "- 반드시 JSON만 출력한다.",
+        '- 형식: {"task_request":"..."}',
+        "",
+        "# INPUT",
+        params.prompt.trim(),
+      ].join("\n"),
+      reasoningEffort: "low",
+      sandboxMode: "read-only",
+    });
+    const extracted = parseSemanticRequestExtraction(resolveExtractionText(response));
+    return extracted || fallbackPrompt;
+  } catch {
+    return fallbackPrompt;
+  }
 }
 
 function isResearcherPack(pack: TaskAgentPromptPack) {
@@ -590,6 +688,32 @@ function buildPromptContext(params: {
   ].join("\n");
 }
 
+function buildEmptyCollectionPromptContext(params: {
+  jobId: string;
+  label: string;
+  resolvedSourceType: string;
+  collectorStrategy: string;
+  planner?: ResearchCollectionJobPlanResult["job"]["planner"];
+  keywords: string[];
+  domains: string[];
+  metrics: ResearchCollectionMetricsResult;
+}) {
+  return [
+    `# 사전 수집 데이터셋`,
+    `- researcher 수집 작업 ID: ${params.jobId}`,
+    `- 라벨: ${params.label}`,
+    `- 소스 유형: ${params.resolvedSourceType}`,
+    `- 수집 전략: ${params.collectorStrategy}`,
+    `- 질의 계획: ${(params.planner?.queryPlan ?? []).map((row) => row.query).filter(Boolean).slice(0, 4).join(" | ") || "-"}`,
+    `- 키워드: ${params.keywords.join(", ") || "-"}`,
+    `- 도메인: ${params.domains.join(", ") || "-"}`,
+    `- 합계: 항목 ${params.metrics.totals.items}, 출처 ${params.metrics.totals.sources}, 검증 ${params.metrics.totals.verified}, 경고 ${params.metrics.totals.warnings}, 충돌 ${params.metrics.totals.conflicted}`,
+    `- 이번 자동 수집에서는 공개 근거를 확보하지 못했습니다.`,
+    `- 외부 근거 부족 사실을 먼저 밝히고, 추측을 사실처럼 단정하지 마세요.`,
+    `- 필요하면 일반 지식 기반 아이디어/가설을 제시하되 '수집 근거 없음'을 명시하세요.`,
+  ].join("\n");
+}
+
 export async function prepareResearcherCollectionContext(
   input: PrepareResearcherCollectionContextInput,
 ): Promise<PrepareResearcherCollectionContextResult> {
@@ -600,7 +724,11 @@ export async function prepareResearcherCollectionContext(
   if (!normalizedPrompt) {
     return { artifactPaths: [], promptContext: "" };
   }
-  const collectionPrompt = extractResearchCollectionPrompt(normalizedPrompt);
+  const collectionPrompt = await normalizeResearchCollectionPrompt({
+    invokeFn: input.invokeFn,
+    prompt: normalizedPrompt,
+    storageCwd: input.storageCwd,
+  });
   if (!collectionPrompt) {
     return { artifactPaths: [], promptContext: "" };
   }
@@ -664,6 +792,7 @@ export async function prepareResearcherCollectionContext(
       genreRankings,
       reportSpec,
     };
+    const hasEvidence = metrics.totals.items > 0 && (metrics.totals.sources > 0 || items.items.length > 0);
 
     const markdownPath = await input.invokeFn<string>("workspace_write_text", {
       cwd: input.artifactDir,
@@ -678,15 +807,26 @@ export async function prepareResearcherCollectionContext(
 
     return {
       artifactPaths: [markdownPath, jsonPath],
-      promptContext: buildPromptContext({
-        jobId: planned.job.jobId,
-        label: planned.job.label,
-        resolvedSourceType: planned.job.resolvedSourceType,
-        collectorStrategy: planned.job.collectorStrategy,
-        planner: planned.job.planner,
-        metrics,
-        items,
-      }),
+      promptContext: hasEvidence
+        ? buildPromptContext({
+            jobId: planned.job.jobId,
+            label: planned.job.label,
+            resolvedSourceType: planned.job.resolvedSourceType,
+            collectorStrategy: planned.job.collectorStrategy,
+            planner: planned.job.planner,
+            metrics,
+            items,
+          })
+        : buildEmptyCollectionPromptContext({
+            jobId: planned.job.jobId,
+            label: planned.job.label,
+            resolvedSourceType: planned.job.resolvedSourceType,
+            collectorStrategy: planned.job.collectorStrategy,
+            planner: planned.job.planner,
+            keywords: planned.job.keywords ?? [],
+            domains: planned.job.domains ?? [],
+            metrics,
+          }),
       fallbackSummary: markdown,
     };
   } catch (error) {

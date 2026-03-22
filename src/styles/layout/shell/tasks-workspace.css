@@ -1604,7 +1604,7 @@
   border-radius: 12px;
   box-shadow: 0 14px 32px rgba(15, 23, 42, 0.08);
   background: #ffffff;
-  gap: 10px;
+  gap: 0;
   align-self: end;
   overflow: visible;
   isolation: isolate;
@@ -1928,7 +1928,7 @@
 }
 
 .tasks-thread-composer-toolbar {
-  margin-top: 6px;
+  /* margin-top: 6px; */
 }
 
 .tasks-thread-composer-controls {

@@ -2,16 +2,17 @@ import { describe, expect, it } from "vitest";
 import { createTaskExecutionPlan } from "./taskExecutionPolicy";
 
 describe("taskExecutionPolicy", () => {
-  it("routes untagged code work to a single implementer run", () => {
+  it("routes untagged code work to an orchestrator-first discussion fallback", () => {
     const plan = createTaskExecutionPlan({
       enabledRoleIds: ["game_designer", "unity_implementer", "qa_playtester"],
       requestedRoleIds: [],
       prompt: "플레이어 점프 버그를 고쳐줘",
     });
 
-    expect(plan.mode).toBe("single");
-    expect(plan.participantRoleIds).toEqual(["unity_implementer"]);
-    expect(plan.primaryRoleId).toBe("unity_implementer");
+    expect(plan.mode).toBe("discussion");
+    expect(plan.useAdaptiveOrchestrator).toBe(true);
+    expect(plan.candidateRoleIds).toEqual(["game_designer", "unity_implementer", "qa_playtester"]);
+    expect(plan.participantRoleIds.length).toBeGreaterThan(1);
   });
 
   it("routes multi-tagged code work to implementer-led bounded discussion", () => {
@@ -34,7 +35,7 @@ describe("taskExecutionPolicy", () => {
     expect(plan.maxRounds).toBe(2);
   });
 
-  it("routes refactor-heavy prompts to the refactor specialist when available", () => {
+  it("keeps refactor specialists available but lets the orchestrator decide the final lead", () => {
     const plan = createTaskExecutionPlan({
       enabledRoleIds: ["unity_refactor_specialist", "unity_architect", "unity_implementer", "qa_playtester"],
       requestedRoleIds: [],
@@ -42,12 +43,10 @@ describe("taskExecutionPolicy", () => {
     });
 
     expect(plan.mode).toBe("discussion");
-    expect(plan.primaryRoleId).toBe("unity_refactor_specialist");
-    expect(plan.participantRoleIds).toEqual([
-      "unity_refactor_specialist",
-      "unity_implementer",
-      "unity_architect",
-    ]);
+    expect(plan.useAdaptiveOrchestrator).toBe(true);
+    expect(plan.candidateRoleIds).toContain("unity_refactor_specialist");
+    expect(plan.candidateRoleIds).toContain("unity_architect");
+    expect(plan.participantRoleIds.length).toBeGreaterThan(1);
   });
 
   it("caps discussion participants to three roles", () => {

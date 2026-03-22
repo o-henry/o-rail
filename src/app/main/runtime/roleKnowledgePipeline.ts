@@ -1,4 +1,5 @@
 import type { StudioRoleId } from "../../../features/studio/handoffTypes";
+import { extractKnowledgeRequestSummary } from "../../../features/studio/knowledgeRequestSummary";
 import {
   getRoleKnowledgeProfile,
   persistRoleKnowledgeProfilesToWorkspace,
@@ -166,6 +167,20 @@ function buildRoleKnowledgeBlock(profile: RoleKnowledgeProfile): string {
   ].join("\n");
 }
 
+function shouldBypassRoleEnvelope(prompt: string): boolean {
+  const normalized = String(prompt ?? "").trim();
+  if (!normalized) {
+    return false;
+  }
+  return (
+    /<task_request>[\s\S]*<\/task_request>/i.test(normalized) ||
+    /^#\s*작업 모드\b/im.test(normalized) ||
+    /^#\s*참여 브리프\b/im.test(normalized) ||
+    /^#\s*비평\b/im.test(normalized) ||
+    /^#\s*최종 합성\b/im.test(normalized)
+  );
+}
+
 export async function bootstrapRoleKnowledgeProfile(input: RoleKnowledgeBootstrapInput): Promise<RoleKnowledgeBootstrapResult> {
   const roleTemplate = resolveRoleTemplate(input.roleId);
   const urls = buildRoleKnowledgeBootstrapCandidates({
@@ -190,7 +205,7 @@ export async function bootstrapRoleKnowledgeProfile(input: RoleKnowledgeBootstra
     .map((row) => truncateText(row.summary || row.content, 180))
     .filter(Boolean)
     .slice(0, 6);
-  const userPromptLine = truncateText(input.userPrompt, 180);
+  const userPromptLine = truncateText(extractKnowledgeRequestSummary(input.userPrompt ?? ""), 180);
   const keyPoints =
     successfulSources.length > 0
       ? [
@@ -294,6 +309,13 @@ export async function injectRoleKnowledgePrompt(input: RoleKnowledgeInjectInput)
     };
   }
   const kbBlock = buildRoleKnowledgeBlock(profile);
+  if (shouldBypassRoleEnvelope(basePrompt)) {
+    return {
+      prompt: [basePrompt, kbBlock].filter(Boolean).join("\n\n"),
+      usedProfile: true,
+      message: "ROLE_KB_INJECT 완료",
+    };
+  }
   const mergedPrompt = buildStudioRolePromptEnvelope({
     roleId: profile.roleId,
     roleLabel: profile.roleLabel,

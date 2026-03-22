@@ -77,4 +77,56 @@ describe("roleKnowledgeProviders", () => {
       expect.arrayContaining(["scrapling", "steel", "lightpanda_experimental", "browser_use", "crawl4ai"]),
     );
   });
+
+  it("skips non-installable providers that are explicitly not configured before fetching", async () => {
+    const invokeFn = vi.fn(async (command: string, args?: Record<string, unknown>) => {
+      if (command === "dashboard_crawl_provider_health") {
+        const provider = String(args?.provider ?? "");
+        if (provider === "scrapling") {
+          return {
+            provider,
+            ready: true,
+            available: true,
+            configured: true,
+            installable: true,
+            message: "ready",
+          };
+        }
+        return {
+          provider,
+          ready: false,
+          available: false,
+          configured: false,
+          installable: false,
+          message: `${provider} not configured`,
+        };
+      }
+      if (command === "dashboard_crawl_provider_fetch_url") {
+        return {
+          provider: String(args?.provider ?? ""),
+          status: "ok",
+          url: String(args?.url ?? ""),
+          fetched_at: "2026-03-23T00:00:00Z",
+          summary: "ok",
+          content: "ok",
+        };
+      }
+      throw new Error(`unexpected command: ${command}`);
+    }) as unknown as <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
+
+    const result = await fetchRoleKnowledgeSourceWithProviders({
+      cwd: "/tmp/workspace",
+      invokeFn,
+      url: "https://example.com/community",
+      roleId: "research_analyst",
+      userPrompt: "시장 반응을 조사해줘",
+    });
+
+    expect(result.status).toBe("ok");
+    const fetchProviders = (invokeFn as ReturnType<typeof vi.fn>).mock.calls
+      .filter((call) => String((call as [unknown])[0]) === "dashboard_crawl_provider_fetch_url")
+      .map((call) => String((call as [string, Record<string, unknown> | undefined])[1]?.provider ?? ""));
+
+    expect(fetchProviders).toEqual(["scrapling"]);
+  });
 });

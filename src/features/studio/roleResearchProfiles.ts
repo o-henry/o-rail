@@ -96,10 +96,10 @@ export const ROLE_RESEARCH_PROFILES: Record<StudioRoleId, RoleResearchProfile> =
         label: "시장·레퍼런스 조사",
         executor: "web_perplexity",
         prompt:
-          "시장 흐름, 유사 장르 레퍼런스, 플레이어 기대치를 조사해 기획 판단용 기준선을 만듭니다.",
-        keywords: "game design, indie game, core loop, retention, progression, player fantasy",
+          "시장 흐름, 판매/위시리스트/평가 신호, 유사 장르 레퍼런스, 플레이어 기대치를 조사해 기획 판단용 기준선을 만듭니다.",
+        keywords: "steam market signals, top sellers, wishlist, reviews, genre trend, indie game, core loop, retention, player fantasy",
         countries: COMMON_REGION,
-        sites: "gamedeveloper.com, gdcvault.com, gamasutra.com, gameanalytics.com",
+        sites: "store.steampowered.com, steamcommunity.com, steamdb.info, metacritic.com, opencritic.com, howtomarketagame.com",
         maxItems: 22,
       },
       {
@@ -110,7 +110,7 @@ export const ROLE_RESEARCH_PROFILES: Record<StudioRoleId, RoleResearchProfile> =
           "플레이어 동기, 코어 루프 몰입 포인트, 자주 실패하는 기획 패턴을 조사해 차별화와 리스크를 동시에 정리합니다.",
         keywords: "player motivation, core loop, progression design, indie retention, game design pitfalls",
         countries: COMMON_REGION,
-        sites: "reddit.com, gamedeveloper.com, youtube.com, steamcommunity.com",
+        sites: "reddit.com, steamcommunity.com, youtube.com, x.com, howtomarketagame.com",
         maxItems: 20,
       },
     ],

@@ -376,23 +376,54 @@ function shouldShowLiveDots(eventType: string, liveState: "active" | "delayed" |
 }
 
 const StaticTimelineMessageRow = memo(function StaticTimelineMessageRow(props: {
-  messageId: string;
   messageRole: ThreadMessage["role"];
   label: string;
-  displayedBody: string;
+  body: string;
   renderMarkdown: boolean;
   artifactPath: string;
   createdAt: string;
   showFinish: boolean;
   showSuccess: boolean;
   showFail: boolean;
+  progressivelyReveal: boolean;
+  progressiveStep: number;
+  conversationRef: React.RefObject<HTMLDivElement | null>;
 }) {
+  const [visibleChars, setVisibleChars] = useState(() => (
+    props.progressivelyReveal ? Math.min(props.progressiveStep, props.body.length) : props.body.length
+  ));
+
+  useEffect(() => {
+    setVisibleChars(props.progressivelyReveal ? Math.min(props.progressiveStep, props.body.length) : props.body.length);
+  }, [props.body, props.progressiveStep, props.progressivelyReveal]);
+
+  useEffect(() => {
+    if (!props.progressivelyReveal || visibleChars >= props.body.length) {
+      return;
+    }
+    const intervalId = window.setInterval(() => {
+      setVisibleChars((current) => Math.min(props.body.length, current + props.progressiveStep));
+    }, 45);
+    return () => window.clearInterval(intervalId);
+  }, [props.body.length, props.progressiveStep, props.progressivelyReveal, visibleChars]);
+
+  useEffect(() => {
+    const element = props.conversationRef.current;
+    if (!element) {
+      return;
+    }
+    element.scrollTop = element.scrollHeight;
+  }, [props.conversationRef, visibleChars]);
+
+  const displayedBody = props.progressivelyReveal
+    ? props.body.slice(0, Math.min(props.body.length, visibleChars))
+    : props.body;
   const isTerminalResult = props.showFinish || props.showSuccess || props.showFail;
   return (
     <article className={`tasks-thread-message-row is-${props.messageRole}${isTerminalResult ? " is-terminal-result" : ""}`}>
       {props.label ? <span className="tasks-thread-message-label">{props.label}</span> : null}
       <div className="tasks-thread-log-line">
-        {props.renderMarkdown ? <TasksThreadMessageContent content={props.displayedBody} /> : props.displayedBody}
+        {props.renderMarkdown ? <TasksThreadMessageContent content={displayedBody} /> : displayedBody}
       </div>
       {props.showFinish || props.showSuccess || props.showFail ? (
         <div className="tasks-thread-message-badges">
@@ -424,7 +455,6 @@ const GroupedTimelineLogRow = memo(function GroupedTimelineLogRow(props: {
 function TasksThreadConversationImpl(props: TasksThreadConversationProps) {
   const { t } = useI18n();
   const [liveNowMs, setLiveNowMs] = useState(() => Date.now());
-  const [streamingVisibleCharsById, setStreamingVisibleCharsById] = useState<Record<string, number>>({});
   const latestProcessEventByRole = useMemo(
     () => buildLatestProcessEventByRole(props.liveProcessEvents),
     [props.liveProcessEvents],
@@ -460,22 +490,16 @@ function TasksThreadConversationImpl(props: TasksThreadConversationProps) {
     ),
     [props.messages, props.orchestration],
   );
-  const progressiveMessages = useMemo(() => {
+  const latestProgressiveMessageId = useMemo(() => {
     for (let index = props.messages.length - 1; index >= 0; index -= 1) {
       const message = props.messages[index];
       const body = resolveTimelineMessage(message, props.visibleAgentLabels).body;
-      const step = resolveProgressiveRevealStep(body.length);
-      if (!String(message.id ?? "").trim() || !shouldProgressivelyRevealMessage(message, body) || step <= 0) {
+      if (!String(message.id ?? "").trim() || !shouldProgressivelyRevealMessage(message, body)) {
         continue;
       }
-      return [{
-        id: String(message.id ?? "").trim(),
-        body,
-        step,
-        progressive: true,
-      }];
+      return String(message.id ?? "").trim();
     }
-    return [];
+    return "";
   }, [props.messages, props.visibleAgentLabels]);
 
   useEffect(() => {
@@ -487,54 +511,6 @@ function TasksThreadConversationImpl(props: TasksThreadConversationProps) {
     }, 10_000);
     return () => window.clearInterval(intervalId);
   }, [props.liveAgents.length, props.liveProcessEvents.length]);
-
-  useEffect(() => {
-    setStreamingVisibleCharsById((current) => {
-      if (progressiveMessages.length === 0) {
-        return {};
-      }
-      const next: Record<string, number> = {};
-      for (const entry of progressiveMessages) {
-        const previous = current[entry.id] ?? 0;
-        next[entry.id] = Math.min(
-          entry.body.length,
-          previous > 0 ? previous : Math.min(entry.step, entry.body.length),
-        );
-      }
-      const sameKeys = Object.keys(next).length === Object.keys(current).length
-        && Object.entries(next).every(([key, value]) => current[key] === value);
-      return sameKeys ? current : next;
-    });
-  }, [progressiveMessages]);
-
-  useEffect(() => {
-    if (progressiveMessages.length === 0) {
-      return;
-    }
-    const intervalId = window.setInterval(() => {
-      setStreamingVisibleCharsById((current) => {
-        let changed = false;
-        const next = { ...current };
-        for (const entry of progressiveMessages) {
-          const currentValue = next[entry.id] ?? 0;
-          if (currentValue >= entry.body.length) {
-            continue;
-          }
-          next[entry.id] = Math.min(entry.body.length, currentValue + entry.step);
-          changed = true;
-        }
-        return changed ? next : current;
-      });
-    }, 45);
-    return () => window.clearInterval(intervalId);
-  }, [progressiveMessages]);
-
-  useEffect(() => {
-    if (progressiveMessages.length === 0 || !props.conversationRef.current) {
-      return;
-    }
-    props.conversationRef.current.scrollTop = props.conversationRef.current.scrollHeight;
-  }, [props.conversationRef, progressiveMessages.length, streamingVisibleCharsById]);
 
   return (
     <div className="tasks-thread-conversation-scroll" ref={props.conversationRef}>
@@ -566,21 +542,20 @@ function TasksThreadConversationImpl(props: TasksThreadConversationProps) {
           const { message } = entry;
           const parsed = resolveTimelineMessage(message, props.visibleAgentLabels);
           const messageId = String(message.id ?? "").trim();
-          const streamedChars = streamingVisibleCharsById[messageId] ?? 0;
           const renderedBody = normalizeTasksTimelineCopy(parsed.body);
-          const displayedBody =
-            streamedChars > 0
-              ? renderedBody.slice(0, Math.min(renderedBody.length, streamedChars))
-              : renderedBody;
+          const progressivelyReveal = messageId === latestProgressiveMessageId && shouldProgressivelyRevealMessage(message, parsed.body);
+          const progressiveStep = resolveProgressiveRevealStep(renderedBody.length);
           return (
             <Fragment key={message.id}>
               <StaticTimelineMessageRow
                 artifactPath={parsed.artifactPath}
+                body={renderedBody}
+                conversationRef={props.conversationRef}
                 createdAt={parsed.createdAt}
-                displayedBody={displayedBody}
                 label={parsed.label}
-                messageId={messageId}
                 messageRole={message.role}
+                progressiveStep={progressiveStep}
+                progressivelyReveal={progressivelyReveal}
                 renderMarkdown={shouldRenderMessageMarkdown(message)}
                 showFail={isFailedThreadMessage(message)}
                 showFinish={isFinishedThreadMessage(message)}

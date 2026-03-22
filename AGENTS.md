@@ -42,6 +42,11 @@
 4. Run tests and report results.
 5. Commit atomically.
 
+## In-Flight Follow-Ups
+- When the user sends additional requirements while work is already in progress, treat them as modifications to the active task instead of abandoning the original task by default.
+- Re-plan the current work to absorb the new requirement, then continue the original work with the updated constraints unless the user explicitly cancels or replaces it.
+- Do not stop at answering the follow-up question alone if there is still unfinished work from the active task.
+
 ## Testing Rules
 - Every behavior change requires tests or explicit justification.
 - Bug fixes require regression tests.

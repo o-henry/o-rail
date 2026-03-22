@@ -296,6 +296,64 @@ async function ensureProviderReady(params: {
   }
 }
 
+function shouldAttemptProviderFetch(params: {
+  provider: RoleKnowledgeProviderId;
+  health: RoleKnowledgeProviderHealth | null;
+}): boolean {
+  if (!params.health) {
+    return true;
+  }
+  if (params.health.ready) {
+    return true;
+  }
+  const providerDefinition = getProviderDefinition(params.provider);
+  if (providerDefinition.installable && params.health.installable !== false) {
+    return true;
+  }
+  if (params.health.available === false) {
+    return false;
+  }
+  if (params.health.configured === false) {
+    return false;
+  }
+  if (params.health.installed === false) {
+    return false;
+  }
+  return true;
+}
+
+async function resolveUsableProviderOrder(params: {
+  cwd: string;
+  invokeFn: InvokeFn;
+  providerOrder: RoleKnowledgeProviderId[];
+}): Promise<RoleKnowledgeProviderId[]> {
+  const healthResults = await Promise.all(
+    params.providerOrder.map(async (provider) => {
+      try {
+        return {
+          provider,
+          health: await readProviderHealth({
+            cwd: params.cwd,
+            invokeFn: params.invokeFn,
+            provider,
+          }),
+        };
+      } catch {
+        return { provider, health: null };
+      }
+    }),
+  );
+
+  const filtered = healthResults
+    .filter((entry) => shouldAttemptProviderFetch({
+      provider: entry.provider,
+      health: entry.health,
+    }))
+    .map((entry) => entry.provider);
+
+  return filtered.length > 0 ? filtered : params.providerOrder;
+}
+
 function normalizeFetchResult(
   params: {
     provider: RoleKnowledgeProviderId;
@@ -368,10 +426,15 @@ async function fetchRoleKnowledgeSourceWithProvider(
 export async function fetchRoleKnowledgeSourceWithProviders(
   params: FetchRoleKnowledgeSourceInput,
 ): Promise<RoleKnowledgeSource> {
-  const providerOrder = resolveRoleKnowledgeProviderOrder({
+  const desiredProviderOrder = resolveRoleKnowledgeProviderOrder({
     url: params.url,
     roleId: params.roleId,
     userPrompt: params.userPrompt,
+  });
+  const providerOrder = await resolveUsableProviderOrder({
+    cwd: params.cwd,
+    invokeFn: params.invokeFn,
+    providerOrder: desiredProviderOrder,
   });
   const providerResults = await Promise.all(
     providerOrder.map((provider) =>

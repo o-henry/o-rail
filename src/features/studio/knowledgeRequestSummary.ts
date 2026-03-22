@@ -12,7 +12,7 @@ function truncateLine(value: string, maxChars = 180): string {
 
 function extractTaggedSection(text: string, tagName: string): string {
   const match = text.match(new RegExp(`<${tagName}>\\s*([\\s\\S]*?)\\s*<\\/${tagName}>`, "i"));
-  return cleanLine(match?.[1] ?? "");
+  return String(match?.[1] ?? "").trim();
 }
 
 function extractHeaderSection(text: string, header: string): string {
@@ -28,6 +28,7 @@ function extractHeaderSection(text: string, header: string): string {
 
 function stripKnownContextBlocks(text: string): string {
   return text
+    .replace(/^Formatting re-enabled\s*$/gim, "")
     .replace(/\[첨부 참고자료][\s\S]*?\[\/첨부 참고자료]\s*/gi, "")
     .replace(/\[ROLE_KB_INJECT][\s\S]*?\[\/ROLE_KB_INJECT]\s*/gi, "")
     .replace(/<role_profile>[\s\S]*?<\/role_profile>\s*/gi, "")
@@ -53,6 +54,14 @@ function extractMeaningfulLines(text: string): string[] {
     .filter((line) => line && !isMetaLine(line));
 }
 
+function summarizeSection(text: string): string {
+  const meaningfulLines = extractMeaningfulLines(text);
+  if (meaningfulLines.length > 0) {
+    return truncateLine(meaningfulLines.join(" "));
+  }
+  return truncateLine(cleanLine(stripKnownContextBlocks(text)));
+}
+
 export function extractKnowledgeRequestSummary(input: string): string {
   const normalized = String(input ?? "").trim();
   if (!normalized) {
@@ -61,18 +70,18 @@ export function extractKnowledgeRequestSummary(input: string): string {
 
   const taggedRequest = extractTaggedSection(normalized, "task_request");
   if (taggedRequest) {
-    return truncateLine(taggedRequest);
+    return summarizeSection(taggedRequest);
   }
 
   const userRequestSection = extractHeaderSection(normalized, "USER REQUEST");
   if (userRequestSection) {
     const sectionTaskRequest = extractTaggedSection(userRequestSection, "task_request");
     if (sectionTaskRequest) {
-      return truncateLine(sectionTaskRequest);
+      return summarizeSection(sectionTaskRequest);
     }
-    const sectionLines = extractMeaningfulLines(userRequestSection);
-    if (sectionLines.length > 0) {
-      return truncateLine(sectionLines.join(" "));
+    const summarizedSection = summarizeSection(userRequestSection);
+    if (summarizedSection) {
+      return summarizedSection;
     }
   }
 

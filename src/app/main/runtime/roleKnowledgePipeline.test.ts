@@ -165,9 +165,9 @@ describe("roleKnowledgePipeline", () => {
     expect(urls.length).toBeGreaterThanOrEqual(4);
     expect(urls.length).toBeLessThanOrEqual(7);
     expect(urls[0]).toBe("https://opencritic.com/");
-    expect(urls.some((url) => url.includes("duckduckgo.com/html/?q="))).toBe(true);
-    expect(urls.some((url) => url.includes("bing.com/search?q="))).toBe(true);
-    expect(urls.some((url) => url.includes("duckduckgo.com/html/?q="))).toBe(true);
+    expect(urls.some((url) => url === "https://store.steampowered.com/")).toBe(true);
+    expect(urls.some((url) => url === "https://steamcommunity.com/")).toBe(true);
+    expect(urls.some((url) => url.includes("duckduckgo.com/html/?q="))).toBe(false);
   });
 
   it("keeps bootstrap candidates on public https pages without duplicates", () => {
@@ -184,14 +184,26 @@ describe("roleKnowledgePipeline", () => {
     }
   });
 
-  it("restores search-result bootstrap candidates for crawling and browser automation prompts", () => {
+  it("falls back to search-result bootstrap candidates when no direct domain target exists", () => {
     const urls = buildRoleKnowledgeBootstrapCandidates({
       roleId: "research_analyst",
-      userPrompt: "크롤링과 브라우저 자동화 스택 비교: Crawl4AI, Lightpanda, Browser Use, Steel.dev, Playwright",
+      userPrompt: "짧고 중독성 있는 인디게임 아이디어를 조사해줘",
     });
 
     expect(urls.some((url) => url.includes("duckduckgo.com"))).toBe(true);
     expect(urls.some((url) => url.includes("bing.com/search"))).toBe(true);
+  });
+
+  it("prefers steam market sources over legacy pm planning domains for game ideation", () => {
+    const urls = buildRoleKnowledgeBootstrapCandidates({
+      roleId: "pm_planner",
+      userPrompt: "스팀 기준으로 2026년 게임 장르 트렌드와 시장 신호를 조사해줘",
+    });
+
+    expect(urls.some((url) => url === "https://store.steampowered.com/")).toBe(true);
+    expect(urls.some((url) => url === "https://steamcommunity.com/")).toBe(true);
+    expect(urls.some((url) => url === "https://steamdb.info/")).toBe(true);
+    expect(urls.some((url) => url.includes("gdcvault.com"))).toBe(false);
   });
 
   it("retries researcher bootstrap until it reaches at least half successful sources", async () => {

@@ -1,9 +1,11 @@
 import type { StudioRoleId } from "../../../features/studio/handoffTypes";
+import { extractKnowledgeRequestSummary } from "../../../features/studio/knowledgeRequestSummary";
 import { getRoleResearchProfile } from "../../../features/studio/roleResearchProfiles";
 
 const MAX_BOOTSTRAP_CANDIDATES = 7;
 const MAX_DOMAIN_TARGETS = 4;
-const MAX_DIRECT_DOMAIN_URLS = 2;
+const MAX_DIRECT_DOMAIN_URLS = 4;
+const MAX_SEARCH_URLS = 2;
 const MAX_QUERY_CHARS = 180;
 
 const DUCKDUCKGO_SEARCH = (query: string) => `https://duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
@@ -98,7 +100,7 @@ function extractRoleProfileDomains(roleId: StudioRoleId): string[] {
 
 function buildQuerySeed(roleId: StudioRoleId, userPrompt?: string): string {
   const profile = getRoleResearchProfile(roleId);
-  const prompt = truncateQuery(userPrompt ?? "");
+  const prompt = truncateQuery(extractKnowledgeRequestSummary(userPrompt ?? ""));
   if (prompt) {
     return prompt;
   }
@@ -122,14 +124,17 @@ export function buildRoleKnowledgeBootstrapCandidates(params: {
   const profileDomains = extractRoleProfileDomains(params.roleId);
   const domainTargets = uniqueStrings([...promptDomains, ...profileDomains]).slice(0, MAX_DOMAIN_TARGETS);
 
+  const directDomainUrls = uniqueStrings([
+    ...domainTargets.slice(0, MAX_DIRECT_DOMAIN_URLS).map((domain) => `https://${domain}/`),
+  ]);
   const searchUrls = uniqueStrings([
     DUCKDUCKGO_SEARCH(querySeed),
     BING_SEARCH(querySeed),
     ...domainTargets.map((domain) => DUCKDUCKGO_SEARCH(`${querySeed} site:${domain}`)),
-  ]);
-  const directDomainUrls = uniqueStrings([
-    ...domainTargets.slice(0, MAX_DIRECT_DOMAIN_URLS).map((domain) => `https://${domain}/`),
-  ]);
+  ]).slice(0, MAX_SEARCH_URLS);
 
-  return uniqueStrings([...explicitUrls, ...searchUrls, ...directDomainUrls]).slice(0, MAX_BOOTSTRAP_CANDIDATES);
+  const preferredTargets = uniqueStrings([...explicitUrls, ...directDomainUrls]);
+  const fallbackSearchTargets = preferredTargets.length > 0 ? [] : searchUrls;
+
+  return uniqueStrings([...preferredTargets, ...fallbackSearchTargets]).slice(0, MAX_BOOTSTRAP_CANDIDATES);
 }

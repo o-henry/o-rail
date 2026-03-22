@@ -1669,6 +1669,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+  margin-bottom: 5px;
 }
 
 .tasks-thread-coordination-preview {

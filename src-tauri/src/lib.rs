@@ -122,6 +122,7 @@ pub fn run() {
             threads::thread_interrupt_run,
             threads::thread_rename,
             threads::thread_spawn_agents,
+            threads::thread_sync_orchestrated_roles,
             threads::thread_list_agents,
             threads::thread_open_agent_detail,
             threads::thread_create_approval,

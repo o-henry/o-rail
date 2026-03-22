@@ -44,4 +44,18 @@ describe("taskPromptOrchestration", () => {
     expect(orchestration.candidateRoleIds).toEqual(["game_designer", "researcher", "unity_architect", "qa_playtester"]);
     expect(orchestration.useAdaptiveOrchestrator).toBe(true);
   });
+
+  it("keeps untagged ideation requests on the ideation path instead of collapsing them to planning", () => {
+    const orchestration = orchestrateTaskPrompt({
+      enabledRoleIds: ["game_designer", "researcher", "unity_architect", "qa_playtester"],
+      requestedRoleIds: [],
+      prompt: "아류작이 아닌 장르 불문 게임 아이디어 10개를 제안해줘",
+      maxParticipants: 3,
+    });
+
+    expect(orchestration.intent).toBe("ideation");
+    expect(orchestration.primaryRoleId).toBe("game_designer");
+    expect(orchestration.participantRoleIds).toEqual(["game_designer", "unity_architect"]);
+    expect(orchestration.useAdaptiveOrchestrator).toBe(true);
+  });
 });

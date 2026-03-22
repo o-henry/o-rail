@@ -240,3 +240,17 @@
   display: block;
   opacity: 0.7;
 }
+
+.adaptation-table-toggle-badge {
+  border: 1px solid color-mix(in srgb, var(--border-strong) 82%, transparent);
+  background: color-mix(in srgb, var(--surface-elevated) 92%, #ffffff);
+  color: var(--text-main);
+  border-radius: 999px;
+  height: 24px;
+  padding: 0 10px;
+  font-size: 11px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}

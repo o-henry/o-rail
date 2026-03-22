@@ -125,10 +125,10 @@ export function TasksThreadNavPane(props: TasksThreadNavPaneProps) {
     <aside className="tasks-thread-nav">
       <section className="tasks-thread-nav-island">
         <div className="tasks-thread-nav-actions">
-          <button className="tasks-thread-new-button" onClick={props.onNewThread} type="button">
+          <button aria-label={t("tasks.thread.new")} className="tasks-thread-new-button" onClick={props.onNewThread} type="button">
             {t("tasks.thread.new")}
           </button>
-          <button className="tasks-thread-new-button" onClick={props.onOpenProjectDirectory} type="button">
+          <button aria-label={t("tasks.project.open")} className="tasks-thread-new-button" onClick={props.onOpenProjectDirectory} type="button">
             {t("tasks.project.open")}
           </button>
           <div className="tasks-thread-project-card">
@@ -186,6 +186,7 @@ export function TasksThreadNavPane(props: TasksThreadNavPaneProps) {
                         key={item.thread.threadId}
                       >
                         <button
+                          aria-label={`${displayThreadTitle(item.thread.title, t("tasks.thread.new"))} 선택`}
                           className={`tasks-thread-list-item${props.activeThreadId === item.thread.threadId ? " is-active" : ""}`}
                           onClick={() => props.onSelectThread(item.thread.threadId)}
                           type="button"

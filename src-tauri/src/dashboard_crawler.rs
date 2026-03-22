@@ -892,8 +892,13 @@ fn resolve_runtime_bridge_token() -> Option<String> {
         .and_then(|state| state.bridge_token.clone())
 }
 
-fn generate_bridge_token() -> String {
-    format!("rail-{}-{}", now_epoch_millis(), std::process::id())
+fn default_bridge_token() -> String {
+    "rail-local-scrapling-bridge".to_string()
+}
+
+fn is_scrapling_health_unauthorized(message: &str) -> bool {
+    let lower = message.to_lowercase();
+    lower.contains("unauthorized") || lower.contains("401")
 }
 
 fn resolve_bridge_base_url() -> Result<String, String> {
@@ -1088,7 +1093,7 @@ async fn resolve_scrapling_health(
 fn update_runtime_bridge_defaults() -> Result<(), String> {
     let base_url = resolve_bridge_base_url()?;
     let bridge_token =
-        first_non_empty_env(&[ENV_SCRAPLING_TOKEN]).or_else(|| Some(generate_bridge_token()));
+        first_non_empty_env(&[ENV_SCRAPLING_TOKEN]).or_else(|| Some(default_bridge_token()));
     let mut state = bridge_runtime()
         .lock()
         .map_err(|_| "failed to lock scrapling bridge runtime".to_string())?;
@@ -1113,6 +1118,9 @@ async fn ensure_scrapling_bridge_running_inner(
     if let Ok(health) = resolve_scrapling_health(client).await {
         if health.running && health.scrapling_ready {
             return Ok(health);
+        }
+        if is_scrapling_health_unauthorized(&health.message) {
+            stop_scrapling_bridge_process();
         }
     }
 
@@ -1187,7 +1195,7 @@ fn spawn_scrapling_bridge_process(workspace: Option<&PathBuf>) -> Result<(), Str
     let port = parsed.port_or_known_default().unwrap_or(9871).to_string();
     let python = resolve_bridge_python(workspace);
     let bridge_token =
-        first_non_empty_env(&[ENV_SCRAPLING_TOKEN]).or_else(|| Some(generate_bridge_token()));
+        first_non_empty_env(&[ENV_SCRAPLING_TOKEN]).or_else(|| Some(default_bridge_token()));
 
     let mut state = bridge_runtime()
         .lock()
@@ -2094,6 +2102,22 @@ mod tests {
         let error = validate_local_bridge_base_url("https://example.com").unwrap_err();
         assert!(error.contains("localhost/loopback"));
         assert!(validate_local_bridge_base_url("http://127.0.0.1:8931").is_ok());
+    }
+
+    #[test]
+    fn scrapling_default_bridge_token_is_stable() {
+        assert_eq!(
+            default_bridge_token(),
+            "rail-local-scrapling-bridge".to_string()
+        );
+    }
+
+    #[test]
+    fn scrapling_health_unauthorized_detection_matches_401_errors() {
+        assert!(is_scrapling_health_unauthorized(
+            "health check failed (401 Unauthorized): unauthorized"
+        ));
+        assert!(!is_scrapling_health_unauthorized("ready"));
     }
 
     #[test]

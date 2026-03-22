@@ -1416,6 +1416,71 @@ pub fn thread_list_agents(cwd: String, thread_id: String) -> Result<Vec<Backgrou
 }
 
 #[tauri::command]
+pub fn thread_sync_orchestrated_roles(
+    cwd: String,
+    thread_id: String,
+    assigned_roles: Vec<String>,
+) -> Result<ThreadDetail, String> {
+    let workspace = normalize_workspace_root(&cwd)?;
+    let thread_id = thread_id.trim().to_string();
+    if thread_id.is_empty() {
+        return Err("threadId is required".to_string());
+    }
+    let canonical_assigned: Vec<String> = assigned_roles
+        .into_iter()
+        .filter_map(|role_id| task_presets::canonical_task_agent_id(role_id.trim()).map(str::to_string))
+        .collect();
+    let assigned_set: std::collections::HashSet<String> = canonical_assigned.into_iter().collect();
+    let task_path = task_dir(&workspace, &thread_id);
+    let mut task = task_detail_view(storage::task_load(cwd, thread_id.clone())?)?;
+    let (thread, messages, mut agents, approvals) =
+        ensure_thread_state(&task_path, &task.record, "5.4", "MEDIUM", "Local")?;
+    let now = now_iso();
+
+    for role in task.record.roles.iter_mut() {
+        if assigned_set.contains(&role.id) {
+            continue;
+        }
+        if !role.last_run_id.as_ref().map(|value| value.trim()).unwrap_or("").is_empty() {
+            continue;
+        }
+        if is_live_thread_agent_status(&role.status) {
+            role.status = "idle".to_string();
+            role.updated_at = now.clone();
+        }
+    }
+
+    for agent in agents.iter_mut() {
+        if assigned_set.contains(&agent.role_id) {
+            continue;
+        }
+        let last_run_id = task
+            .record
+            .roles
+            .iter()
+            .find(|role| role.id == agent.role_id)
+            .and_then(|role| role.last_run_id.as_ref())
+            .map(|value| value.trim().to_string())
+            .unwrap_or_default();
+        if !last_run_id.is_empty() {
+            continue;
+        }
+        if is_live_thread_agent_status(&agent.status) {
+            agent.status = "idle".to_string();
+            agent.last_updated_at = now.clone();
+        }
+    }
+
+    task.record.updated_at = now;
+    write_task_record_view(&task_path, &task.record)?;
+    write_json_pretty(&thread_agents_path(&task_path), &agents)?;
+    write_json_pretty(&thread_approvals_path(&task_path), &approvals)?;
+    write_json_pretty(&thread_record_path(&task_path), &thread)?;
+    write_json_pretty(&thread_messages_path(&task_path), &messages)?;
+    build_thread_detail(&task_path, task, "5.4", "MEDIUM", "Local")
+}
+
+#[tauri::command]
 pub fn thread_open_agent_detail(cwd: String, thread_id: String, agent_id: String) -> Result<ThreadAgentDetail, String> {
     let workspace = normalize_workspace_root(&cwd)?;
     let detail = thread_load(cwd, thread_id)?;
@@ -1547,9 +1612,12 @@ pub fn thread_record_role_result(
     artifact_paths: Vec<String>,
     summary: Option<String>,
     internal: Option<bool>,
+    prompt_mode: Option<String>,
+    intent: Option<String>,
 ) -> Result<bool, String> {
     let workspace = normalize_workspace_root(&cwd)?;
     let thread_id = thread_id.trim().to_string();
+    let normalized_run_status = run_status.trim().to_ascii_lowercase();
     if !storage::task_record_role_result(
         cwd.clone(),
         thread_id.clone(),
@@ -1560,10 +1628,32 @@ pub fn thread_record_role_result(
     )? {
         return Ok(false);
     }
+    let normalized_prompt_mode = prompt_mode
+        .as_deref()
+        .unwrap_or_default()
+        .trim()
+        .to_lowercase();
+    let should_finalize_thread = !internal.unwrap_or(false)
+        && matches!(normalized_prompt_mode.as_str(), "direct" | "final");
+    if should_finalize_thread {
+        let next_status = if normalized_run_status == "done" {
+            "completed"
+        } else {
+            "failed"
+        };
+        let _ = storage::task_mark_status(cwd.clone(), thread_id.clone(), next_status.to_string())?;
+    }
     let task = task_detail_view(storage::task_load(cwd.clone(), thread_id.clone())?)?;
     let task_path = task_dir(&workspace, &thread_id);
     let (mut thread, mut messages, mut agents, mut approvals) = ensure_thread_state(&task_path, &task.record, "5.4", "MEDIUM", "Local")?;
     let is_internal = internal.unwrap_or(false);
+    let is_ideation = intent
+        .as_deref()
+        .unwrap_or_default()
+        .trim()
+        .eq_ignore_ascii_case("ideation");
+    let suppress_internal_thread_message =
+        is_internal && is_ideation && matches!(normalized_prompt_mode.as_str(), "orchestrate" | "brief" | "critique");
 
     let Some(task_role) = task.record.roles.iter().find(|role| role.studio_role_id == studio_role_id.trim()) else {
         return Ok(true);
@@ -1572,7 +1662,7 @@ pub fn thread_record_role_result(
     let agent_id = format!("{}:{}", thread.thread_id, task_role.id);
     for agent in agents.iter_mut() {
         if agent.id == agent_id {
-            agent.status = if run_status.trim().eq_ignore_ascii_case("done") {
+            agent.status = if normalized_run_status == "done" {
                 "done".to_string()
             } else {
                 "failed".to_string()
@@ -1593,33 +1683,35 @@ pub fn thread_record_role_result(
         .rev()
         .find(|path| !path.trim().is_empty())
         .map(|path| path.trim().to_string());
-    append_message_with_meta(
-        &mut messages,
-        &thread.thread_id,
-        "assistant",
-        &summary.clone().unwrap_or_else(|| {
-            format!(
-                "{} {}.",
-                task_role.label,
-                if run_status.trim().eq_ignore_ascii_case("done") {
-                    "completed"
-                } else {
-                    "failed"
-                }
-            )
-        }),
-        Some(agent_id.as_str()),
-        Some(task_role.label.as_str()),
-        Some(task_role.id.as_str()),
-        Some(if run_status.trim().eq_ignore_ascii_case("done") {
-            "agent_result"
-        } else {
-            "agent_failed"
-        }),
-        latest_artifact_path.as_deref(),
-    );
+    if !suppress_internal_thread_message {
+        append_message_with_meta(
+            &mut messages,
+            &thread.thread_id,
+            "assistant",
+            &summary.clone().unwrap_or_else(|| {
+                format!(
+                    "{} {}.",
+                    task_role.label,
+                    if normalized_run_status == "done" {
+                        "completed"
+                    } else {
+                        "failed"
+                    }
+                )
+            }),
+            Some(agent_id.as_str()),
+            Some(task_role.label.as_str()),
+            Some(task_role.id.as_str()),
+            Some(if normalized_run_status == "done" {
+                "agent_result"
+            } else {
+                "agent_failed"
+            }),
+            latest_artifact_path.as_deref(),
+        );
+    }
 
-    if run_status.trim().eq_ignore_ascii_case("done") && !is_internal {
+    if normalized_run_status == "done" && !is_internal && !is_ideation && !should_finalize_thread {
         let mut created_handoff = false;
         if let Some(target_role) = next_handoff_target(&task.record, &task_role.id) {
             let target_already_started = task
@@ -2051,6 +2143,8 @@ mod tests {
             vec![artifact_path_str.clone()],
             Some("GAME DESIGNER: Investigated systems.".to_string()),
             None,
+            None,
+            None,
         )
         .unwrap();
         assert!(recorded);
@@ -2105,12 +2199,231 @@ mod tests {
             vec![],
             Some("GAME DESIGNER: internal brief".to_string()),
             Some(true),
+            Some("brief".to_string()),
+            Some("planning".to_string()),
         )
         .unwrap();
         assert!(recorded);
 
         let loaded = thread_load(cwd, detail.thread.thread_id.clone()).unwrap();
         assert!(loaded.approvals.is_empty());
+    }
+
+    #[test]
+    fn thread_record_role_result_hides_internal_ideation_briefs_and_skips_handoff_messages() {
+        let workspace = temp_workspace("ideation-role-result");
+        let cwd = workspace.to_string_lossy().to_string();
+        let detail = thread_create(
+            cwd.clone(),
+            None,
+            "게임 아이디어 10개를 제안해줘".to_string(),
+            None,
+            Some("full-squad".to_string()),
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+
+        let recorded_internal = thread_record_role_result(
+            cwd.clone(),
+            detail.thread.thread_id.clone(),
+            "pm_planner".to_string(),
+            "run-idea-1".to_string(),
+            "done".to_string(),
+            vec![],
+            Some("GAME DESIGNER: 내부 브리프".to_string()),
+            Some(true),
+            Some("brief".to_string()),
+            Some("ideation".to_string()),
+        )
+        .unwrap();
+        assert!(recorded_internal);
+
+        let loaded_after_internal = thread_load(cwd.clone(), detail.thread.thread_id.clone()).unwrap();
+        assert!(loaded_after_internal
+            .messages
+            .iter()
+            .all(|message| message.event_kind.as_deref() != Some("agent_result")));
+
+        let recorded_final = thread_record_role_result(
+            cwd.clone(),
+            detail.thread.thread_id.clone(),
+            "pm_planner".to_string(),
+            "run-idea-2".to_string(),
+            "done".to_string(),
+            vec![],
+            Some("1. 아이디어 A\n2. 아이디어 B".to_string()),
+            Some(false),
+            Some("final".to_string()),
+            Some("ideation".to_string()),
+        )
+        .unwrap();
+        assert!(recorded_final);
+
+        let loaded_final = thread_load(cwd, detail.thread.thread_id.clone()).unwrap();
+        assert!(loaded_final.approvals.is_empty());
+        assert!(loaded_final
+            .messages
+            .iter()
+            .all(|message| message.event_kind.as_deref() != Some("thread_synthesis_ready")));
+        assert!(loaded_final
+            .messages
+            .iter()
+            .all(|message| message.event_kind.as_deref() != Some("handoff_required")));
+        assert!(loaded_final
+            .messages
+            .iter()
+            .any(|message| message.event_kind.as_deref() == Some("agent_result")));
+    }
+
+    #[test]
+    fn thread_record_role_result_final_run_marks_thread_completed() {
+        let workspace = temp_workspace("final-completed");
+        let cwd = workspace.to_string_lossy().to_string();
+        let detail = thread_create(
+            cwd.clone(),
+            None,
+            "최종 답변을 작성해줘".to_string(),
+            None,
+            Some("full-squad".to_string()),
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+
+        let recorded = thread_record_role_result(
+            cwd.clone(),
+            detail.thread.thread_id.clone(),
+            "pm_planner".to_string(),
+            "run-final-1".to_string(),
+            "done".to_string(),
+            vec![],
+            Some("최종 답변".to_string()),
+            Some(false),
+            Some("final".to_string()),
+            None,
+        )
+        .unwrap();
+        assert!(recorded);
+
+        let loaded = thread_load(cwd.clone(), detail.thread.thread_id.clone()).unwrap();
+        assert_eq!(loaded.thread.status, "completed");
+        assert_eq!(loaded.task.status, "completed");
+    }
+
+    #[test]
+    fn thread_record_role_result_direct_run_marks_thread_failed_on_error() {
+        let workspace = temp_workspace("direct-failed");
+        let cwd = workspace.to_string_lossy().to_string();
+        let detail = thread_create(
+            cwd.clone(),
+            None,
+            "바로 답변해줘".to_string(),
+            None,
+            Some("full-squad".to_string()),
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+
+        let recorded = thread_record_role_result(
+            cwd.clone(),
+            detail.thread.thread_id.clone(),
+            "game_designer".to_string(),
+            "run-direct-1".to_string(),
+            "error".to_string(),
+            vec![],
+            Some("실패".to_string()),
+            Some(false),
+            Some("direct".to_string()),
+            None,
+        )
+        .unwrap();
+        assert!(recorded);
+
+        let loaded = thread_load(cwd.clone(), detail.thread.thread_id.clone()).unwrap();
+        assert_eq!(loaded.thread.status, "failed");
+        assert_eq!(loaded.task.status, "failed");
+    }
+
+    #[test]
+    fn thread_record_role_result_direct_run_marks_thread_completed_on_success() {
+        let workspace = temp_workspace("direct-completed");
+        let cwd = workspace.to_string_lossy().to_string();
+        let detail = thread_create(
+            cwd.clone(),
+            None,
+            "바로 답변해줘".to_string(),
+            None,
+            Some("full-squad".to_string()),
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+
+        let recorded = thread_record_role_result(
+            cwd.clone(),
+            detail.thread.thread_id.clone(),
+            "game_designer".to_string(),
+            "run-direct-ok".to_string(),
+            "done".to_string(),
+            vec![],
+            Some("정상 완료".to_string()),
+            Some(false),
+            Some("direct".to_string()),
+            None,
+        )
+        .unwrap();
+        assert!(recorded);
+
+        let loaded = thread_load(cwd.clone(), detail.thread.thread_id.clone()).unwrap();
+        assert_eq!(loaded.thread.status, "completed");
+        assert_eq!(loaded.task.status, "completed");
+    }
+
+    #[test]
+    fn thread_record_role_result_final_run_marks_thread_failed_on_error() {
+        let workspace = temp_workspace("final-failed");
+        let cwd = workspace.to_string_lossy().to_string();
+        let detail = thread_create(
+            cwd.clone(),
+            None,
+            "최종 답변을 작성해줘".to_string(),
+            None,
+            Some("full-squad".to_string()),
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+
+        let recorded = thread_record_role_result(
+            cwd.clone(),
+            detail.thread.thread_id.clone(),
+            "pm_planner".to_string(),
+            "run-final-error".to_string(),
+            "error".to_string(),
+            vec![],
+            Some("실패".to_string()),
+            Some(false),
+            Some("final".to_string()),
+            None,
+        )
+        .unwrap();
+        assert!(recorded);
+
+        let loaded = thread_load(cwd.clone(), detail.thread.thread_id.clone()).unwrap();
+        assert_eq!(loaded.thread.status, "failed");
+        assert_eq!(loaded.task.status, "failed");
     }
 
     #[test]
@@ -2205,5 +2518,56 @@ mod tests {
             .messages
             .iter()
             .any(|message| message.content == "현재 작업을 중단했습니다."));
+    }
+
+    #[test]
+    fn thread_sync_orchestrated_roles_idles_unassigned_placeholder_agents() {
+        let workspace = temp_workspace("sync-orchestrated-roles");
+        let cwd = workspace.to_string_lossy().to_string();
+        let detail = thread_create(
+            cwd.clone(),
+            None,
+            "ideation".to_string(),
+            None,
+            Some("full-squad".to_string()),
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        let spawned = thread_spawn_agents(
+            cwd.clone(),
+            detail.thread.thread_id.clone(),
+            "아이디어".to_string(),
+            vec!["game_designer".to_string(), "unity_architect".to_string()],
+            Some(true),
+        )
+        .unwrap();
+        assert!(spawned
+            .agents
+            .iter()
+            .any(|agent| agent.role_id == "unity_architect" && agent.status == "thinking"));
+
+        let synced = thread_sync_orchestrated_roles(
+            cwd.clone(),
+            detail.thread.thread_id.clone(),
+            vec!["game_designer".to_string()],
+        )
+        .unwrap();
+
+        assert!(synced
+            .agents
+            .iter()
+            .any(|agent| agent.role_id == "game_designer" && agent.status == "thinking"));
+        assert!(synced
+            .agents
+            .iter()
+            .any(|agent| agent.role_id == "unity_architect" && agent.status == "idle"));
+        assert!(synced
+            .task
+            .roles
+            .iter()
+            .any(|role| role.id == "unity_architect" && role.status == "idle"));
     }
 }

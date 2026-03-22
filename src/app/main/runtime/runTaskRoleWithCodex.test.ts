@@ -170,6 +170,108 @@ describe("runTaskRoleWithCodex", () => {
     expect(result.artifactPaths[1]).toBe("/tmp/rail-storage/.rail/tasks/thread-2/codex_runs/role-run-2/discussion_critique.md");
   });
 
+  it("uses generic final synthesis instructions instead of role-specific developer instructions", async () => {
+    let capturedPrompt = "";
+    const invokeFn = (vi.fn(async (command: string, args?: Record<string, unknown>) => {
+      switch (command) {
+        case "task_agent_pack_read":
+          return {
+            id: "pm_planner",
+            label: "PM PLANNER",
+            studioRoleId: "pm_planner",
+            model: "gpt-5.4",
+            modelReasoningEffort: "medium",
+            sandboxMode: "workspace-write",
+            outputArtifactName: "final_response.md",
+            promptDocFile: "pm_planner.md",
+            developerInstructions: "기준 확정과 다음 handoff를 중심으로 정리하라.",
+          };
+        case "thread_load":
+          return {
+            thread: { model: "GPT-5.4", reasoning: "중간" },
+            task: { workspacePath: "/tmp/mockking" },
+          };
+        case "thread_start":
+          return { threadId: "thread-codex-final" };
+        case "turn_start_blocking":
+          capturedPrompt = String(args?.text ?? "");
+          return {
+            status: "completed",
+            output_text: "1. 아이디어 A\n2. 아이디어 B",
+          };
+        case "workspace_write_text":
+          return `${String(args?.cwd)}/${String(args?.name)}`;
+        default:
+          throw new Error(`unexpected command: ${command}`);
+      }
+    }) as unknown) as <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
+
+    await runTaskRoleWithCodex({
+      invokeFn,
+      storageCwd: "/tmp/rail-storage",
+      taskId: "thread-final",
+      studioRoleId: "pm_planner",
+      prompt: "최종 답변만 합성해줘",
+      sourceTab: "tasks-thread",
+      runId: "role-run-final",
+      promptMode: "final",
+    });
+
+    expect(capturedPrompt).toContain("당신은 최종 합성 담당자다.");
+    expect(capturedPrompt).not.toContain("기준 확정과 다음 handoff");
+  });
+
+  it("uses generic internal brief instructions instead of leaking role-specific handoff instructions", async () => {
+    let capturedPrompt = "";
+    const invokeFn = (vi.fn(async (command: string, args?: Record<string, unknown>) => {
+      switch (command) {
+        case "task_agent_pack_read":
+          return {
+            id: "pm_planner",
+            label: "PM PLANNER",
+            studioRoleId: "pm_planner",
+            model: "gpt-5.4",
+            modelReasoningEffort: "medium",
+            sandboxMode: "workspace-write",
+            outputArtifactName: "discussion_brief.md",
+            promptDocFile: "pm_planner.md",
+            developerInstructions: "기준 확정과 다음 handoff를 먼저 작성하라.",
+          };
+        case "thread_load":
+          return {
+            thread: { model: "GPT-5.4", reasoning: "중간" },
+            task: { workspacePath: "/tmp/mockking" },
+          };
+        case "thread_start":
+          return { threadId: "thread-codex-brief" };
+        case "turn_start_blocking":
+          capturedPrompt = String(args?.text ?? "");
+          return {
+            status: "completed",
+            output_text: "- 핵심 사실만 정리했습니다.",
+          };
+        case "workspace_write_text":
+          return `${String(args?.cwd)}/${String(args?.name)}`;
+        default:
+          throw new Error(`unexpected command: ${command}`);
+      }
+    }) as unknown) as <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
+
+    await runTaskRoleWithCodex({
+      invokeFn,
+      storageCwd: "/tmp/rail-storage",
+      taskId: "thread-brief",
+      studioRoleId: "pm_planner",
+      prompt: "내부 브리프만 작성해줘",
+      sourceTab: "tasks-thread",
+      runId: "role-run-brief",
+      promptMode: "brief",
+    });
+
+    expect(capturedPrompt).toContain("당신은 멀티에이전트 협업에 참여하는 전문 기여자다.");
+    expect(capturedPrompt).not.toContain("기준 확정과 다음 handoff");
+  });
+
   it("routes task role execution through web providers when the thread model is web-backed", async () => {
     const onRuntimeSession = vi.fn();
     const invokeFn = (vi.fn(async (command: string, args?: Record<string, unknown>) => {
@@ -1525,7 +1627,7 @@ describe("runTaskRoleWithCodex", () => {
         runId: "role-run-timeout-start",
       });
       const guarded = promise.catch((error) => error);
-      await vi.advanceTimersByTimeAsync(60000);
+      await vi.advanceTimersByTimeAsync(100000);
       await expect(guarded).resolves.toBeInstanceOf(Error);
       await expect(guarded).resolves.toMatchObject({ message: expect.stringContaining("thread_start timed out") });
     } finally {

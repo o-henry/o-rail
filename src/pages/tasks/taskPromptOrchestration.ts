@@ -136,7 +136,10 @@ function desiredParticipantCount(intent: TaskPromptIntent, prompt: string, reque
   ) {
     return 3;
   }
-  if (intent === "implementation" || intent === "documentation") {
+  if (intent === "implementation") {
+    return requestedRoleCount === 0 ? 2 : 1;
+  }
+  if (intent === "documentation") {
     return 1;
   }
   if (intent === "validation" || intent === "review") {
@@ -158,7 +161,7 @@ function shouldUseNeutralFallbackPriority(intent: TaskPromptIntent, requestedRol
   if (requestedRoleCount > 0) {
     return false;
   }
-  return intent === "research" || intent === "ideation" || intent === "review" || intent === "planning";
+  return intent === "research" || intent === "review" || intent === "planning";
 }
 
 function selectPrimaryRole(
@@ -315,22 +318,14 @@ export function orchestrateTaskPrompt(params: {
 }): TaskPromptOrchestration & { cappedParticipantCount: boolean } {
   const requestedRoleIds = uniqueRoleIds(params.requestedRoleIds);
   const enabledRoleIds = uniqueRoleIds(params.enabledRoleIds);
-  const fallbackIntent = requestedRoleIds.length > 0 ? inferTaskPromptIntent(params.prompt) : "planning";
-  const picked = requestedRoleIds.length > 0
-    ? pickParticipantRoles({
-        intent: fallbackIntent,
-        prompt: params.prompt,
-        enabledRoleIds,
-        requestedRoleIds,
-        maxParticipants: params.maxParticipants,
-      })
-    : pickParticipantRoles({
-        intent: "planning",
-        prompt: params.prompt,
-        enabledRoleIds,
-        requestedRoleIds,
-        maxParticipants: params.maxParticipants,
-      });
+  const fallbackIntent = inferTaskPromptIntent(params.prompt);
+  const picked = pickParticipantRoles({
+    intent: fallbackIntent,
+    prompt: params.prompt,
+    enabledRoleIds,
+    requestedRoleIds,
+    maxParticipants: params.maxParticipants,
+  });
   const candidateRoleIds = buildCandidateRoleIds({
     enabledRoleIds,
     requestedRoleIds,

@@ -57,6 +57,8 @@ type RunTaskRoleWithCodexInput = {
   outputArtifactName?: string;
   sourceTab: "tasks" | "tasks-thread";
   runId: string;
+  intent?: string;
+  promptMode?: "direct" | "orchestrate" | "brief" | "critique" | "final";
   onRuntimeSession?: (runtime: {
     codexThreadId?: string | null;
     codexTurnId?: string | null;
@@ -81,6 +83,22 @@ function resolvePreferredRuntimeModel(params: {
   return toTurnModelDisplayName(resolved || "GPT-5.4");
 }
 
+function resolveRolePollTimeoutMs(params: {
+  studioRoleId: string;
+  intent?: string;
+  promptMode?: "direct" | "orchestrate" | "brief" | "critique" | "final";
+}): number {
+  if (params.studioRoleId === "research_analyst") {
+    return RESEARCH_POLL_TIMEOUT_MS;
+  }
+  if (String(params.intent ?? "").trim().toLowerCase() === "ideation") {
+    if (params.promptMode === "brief" || params.promptMode === "final") {
+      return IDEATION_POLL_TIMEOUT_MS;
+    }
+  }
+  return POLL_TIMEOUT_MS;
+}
+
 const INCOMPLETE_TURN_STATUSES = new Set([
   "inprogress",
   "running",
@@ -94,11 +112,12 @@ const FAILED_TURN_STATUSES = new Set(["failed", "error", "cancelled", "rejected"
 const POLL_INTERVAL_MS = 1500;
 const POLL_TIMEOUT_MS = 180000;
 const RESEARCH_POLL_TIMEOUT_MS = 600000;
+const IDEATION_POLL_TIMEOUT_MS = 600000;
 const MAX_POLL_READ_ERRORS = 6;
 const MAX_TURN_START_ATTEMPTS = 3;
-const MAX_THREAD_START_ATTEMPTS = 3;
+const MAX_THREAD_START_ATTEMPTS = 2;
 const TURN_START_RECOVERY_WINDOW_MS = 12000;
-const THREAD_START_TIMEOUT_MS = 15000;
+const THREAD_START_TIMEOUT_MS = 45000;
 const TURN_START_TIMEOUT_MS = 30000;
 const THREAD_READ_TIMEOUT_MS = 30000;
 
@@ -154,9 +173,14 @@ function buildRoleTurnPrompt(
   pack: TaskAgentPromptPack,
   userPrompt: string,
   projectPath: string,
+  promptMode: RunTaskRoleWithCodexInput["promptMode"],
   precollectedContext = "",
 ): string {
   const trimmedPrompt = String(userPrompt ?? "").trim();
+  const developerInstructions = resolvePromptModeDeveloperInstructions({
+    pack,
+    promptMode,
+  });
   return [
     `# ROLE`,
     `${pack.label}`,
@@ -165,7 +189,7 @@ function buildRoleTurnPrompt(
     projectPath,
     ``,
     `# DEVELOPER INSTRUCTIONS`,
-    pack.developerInstructions.trim(),
+    developerInstructions,
     ``,
     `# USER REQUEST`,
     trimmedPrompt,
@@ -176,6 +200,48 @@ function buildRoleTurnPrompt(
     `- 실제로 수정한 파일이 있으면 파일 경로와 변경 이유를 짧게 적는다.`,
     `- 작업을 못 했다면 못 한 이유를 숨기지 않는다.`,
   ].join("\n");
+}
+
+function resolvePromptModeDeveloperInstructions(params: {
+  pack: TaskAgentPromptPack;
+  promptMode: RunTaskRoleWithCodexInput["promptMode"];
+}): string {
+  const promptMode = String(params.promptMode ?? "direct").trim().toLowerCase();
+  if (promptMode === "orchestrate") {
+    return [
+      "당신은 멀티에이전트 작업의 오케스트레이터다.",
+      "- 아래 사용자 요청과 컨텍스트를 읽고 가장 적절한 역할 배치를 결정한다.",
+      "- 사용자 최종 답변을 대신 작성하지 않는다.",
+      "- 역할별 기존 프롬프트 스타일이나 handoff 문체를 따라 하지 않는다.",
+      "- 출력 규칙에 지정된 형식만 엄격히 따른다.",
+    ].join("\n");
+  }
+  if (promptMode === "brief") {
+    return [
+      "당신은 멀티에이전트 협업에 참여하는 전문 기여자다.",
+      "- 최종 답변 전체를 대신 쓰지 말고, 자신의 전문영역 기준으로 바로 최종 합성에 쓸 수 있는 실질 정보만 제공한다.",
+      "- 기준 정리, handoff, 다음 단계 제안, 파일 수정 보고만 남기고 끝내지 않는다.",
+      "- 아래 작업 모드와 출력 규칙을 우선한다.",
+    ].join("\n");
+  }
+  if (promptMode === "critique") {
+    return [
+      "당신은 멀티에이전트 협업 결과를 검토하는 비평자다.",
+      "- 충돌, 누락, 검증 공백, 논리적 약점만 지적한다.",
+      "- 사용자 최종 답변을 대신 쓰지 않는다.",
+      "- 아래 출력 규칙을 우선한다.",
+    ].join("\n");
+  }
+  if (promptMode === "final") {
+    return [
+      "당신은 최종 합성 담당자다.",
+      "- 아래 참여 브리프와 비평을 바탕으로 사용자에게 바로 전달할 최종 답변만 작성한다.",
+      "- 내부 브리프, 기준 확정, handoff, 다음 단계 제안, 파일 수정 보고로 답변을 대체하지 않는다.",
+      "- 역할별 원문을 나열하지 말고 하나의 완결된 사용자 답변으로 합친다.",
+      "- 아래 작업 모드와 출력 규칙을 최우선으로 따른다.",
+    ].join("\n");
+  }
+  return params.pack.developerInstructions.trim();
 }
 
 function resolveRoleContextLayerBudget(roleId: string): RoleContextLayerBudget {
@@ -628,8 +694,14 @@ export async function runTaskRoleWithCodex(input: RunTaskRoleWithCodexInput): Pr
     pack,
     input.prompt ?? "",
     context.projectPath,
+    input.promptMode,
     layeredPromptContext,
   );
+  const pollTimeoutMs = resolveRolePollTimeoutMs({
+    studioRoleId: pack.studioRoleId,
+    intent: input.intent,
+    promptMode: input.promptMode,
+  });
 
   let rawResponse: unknown = null;
   let turnError: unknown = null;
@@ -647,7 +719,7 @@ export async function runTaskRoleWithCodex(input: RunTaskRoleWithCodexInput): Pr
     const webResult = await input.invokeFn<WebProviderRunResult>("web_provider_run", {
       provider: webProvider,
       prompt: promptText,
-      timeoutMs: pack.studioRoleId === "research_analyst" ? RESEARCH_POLL_TIMEOUT_MS : POLL_TIMEOUT_MS,
+      timeoutMs: pollTimeoutMs,
       mode: "bridgeAssisted",
       cwd: context.projectPath,
     });
@@ -686,7 +758,7 @@ export async function runTaskRoleWithCodex(input: RunTaskRoleWithCodexInput): Pr
         invokeFn: input.invokeFn,
         threadId: threadStart.threadId,
         initialResponse: rawResponse,
-        pollTimeoutMs: pack.studioRoleId === "research_analyst" ? RESEARCH_POLL_TIMEOUT_MS : POLL_TIMEOUT_MS,
+        pollTimeoutMs,
       });
       rawResponse = completion.raw;
       completedStatus = completion.completedStatus;

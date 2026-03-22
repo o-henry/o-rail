@@ -1,7 +1,14 @@
 import { useCallback, useEffect, type MutableRefObject } from "react";
 import type { DashboardTopicId } from "../../features/dashboard/intelligence";
 import type { AgenticAction, AgenticActionSubscriber } from "../../features/orchestration/agentic/actionBus";
-import type { AgenticRunEnvelope, AgenticRunEvent } from "../../features/orchestration/agentic/runContract";
+import {
+  createAgenticRunEnvelope,
+  createAgenticRunId,
+  patchRunStage,
+  patchRunStatus,
+  type AgenticRunEnvelope,
+  type AgenticRunEvent,
+} from "../../features/orchestration/agentic/runContract";
 import { toStudioRoleId } from "../../features/studio/roleUtils";
 import { resolveTaskAgentMetadata } from "../../features/studio/taskAgentMetadata";
 import type { PresetKind } from "../../features/workflow/domain";
@@ -229,17 +236,19 @@ export function useAgenticOrchestrationBridge(params: {
   setNodeSelection: (nodeIds: string[], selectedNodeId?: string) => void;
   setStatus: (message: string) => void;
   applyPreset: (presetKind: PresetKind) => void;
-    onRoleRunCompleted?: (payload: {
+  onRoleRunCompleted?: (payload: {
     runId: string;
     roleId: string;
     taskId: string;
     prompt?: string;
     requestPrompt?: string;
     summary?: string;
-      internal?: boolean;
-      handoffToRole?: string;
-      handoffRequest?: string;
-      sourceTab: "agents" | "workflow" | "workbench" | "tasks" | "tasks-thread";
+    internal?: boolean;
+    promptMode?: "direct" | "orchestrate" | "brief" | "critique" | "final";
+    intent?: string;
+    handoffToRole?: string;
+    handoffRequest?: string;
+    sourceTab: "agents" | "workflow" | "workbench" | "tasks" | "tasks-thread";
     artifactPaths: string[];
     runStatus: "done" | "error";
     envelope?: AgenticRunEnvelope;
@@ -345,6 +354,8 @@ export function useAgenticOrchestrationBridge(params: {
     envelope: AgenticRunEnvelope;
     runStatus: "done" | "error";
     internal?: boolean;
+    promptMode?: "direct" | "orchestrate" | "brief" | "critique" | "final";
+    intent?: string;
     handoffToRole?: string;
     handoffRequest?: string;
   }) => {
@@ -403,6 +414,8 @@ export function useAgenticOrchestrationBridge(params: {
       requestPrompt: params.requestPrompt,
       summary: params.summary,
       internal: params.internal,
+      promptMode: params.promptMode,
+      intent: params.intent,
       handoffToRole: params.handoffToRole,
       handoffRequest: params.handoffRequest,
       sourceTab: params.sourceTab,
@@ -420,6 +433,7 @@ export function useAgenticOrchestrationBridge(params: {
     requestPrompt?: string;
     sourceTab: "tasks" | "tasks-thread";
     internal?: boolean;
+    intent?: string;
     model?: string;
     reasoning?: string;
     outputArtifactName?: string;
@@ -452,9 +466,163 @@ export function useAgenticOrchestrationBridge(params: {
     const normalizedRoleId = toStudioRoleId(params.roleId);
     let taskCodexArtifactPaths: string[] = [];
     let taskCodexSummary: string | undefined;
+    if (params.internal) {
+      const runId = String(params.runId ?? "").trim() || createAgenticRunId("role");
+      let inlineEnvelope = createAgenticRunEnvelope({
+        runId,
+        sourceTab,
+        queueKey: `inline:${promptMode}:${params.roleId}:${params.taskId}`,
+        roleId: params.roleId,
+        taskId: params.taskId,
+        approvalState: "pending",
+      });
+      inlineEnvelope = patchRunStatus(inlineEnvelope, "running");
+      dispatchTasksRoleEvent({
+        sourceTab,
+        taskId: params.taskId,
+        studioRoleId: params.roleId,
+        runId,
+        type: "run_started",
+        message: "started",
+      });
+      dispatchTasksRoleEvent({
+        sourceTab,
+        taskId: params.taskId,
+        studioRoleId: params.roleId,
+        runId,
+        type: "stage_started",
+        stage: "codex",
+        message: "역할 실행 시작",
+      });
+      try {
+        const codexTaskRun = await runTaskRoleWithCodex({
+          invokeFn,
+          storageCwd: cwd,
+          taskId: params.taskId,
+          studioRoleId: params.roleId,
+          prompt: promptText || undefined,
+          model: params.model,
+          reasoning: params.reasoning,
+          outputArtifactName: params.outputArtifactName,
+          sourceTab,
+          runId,
+          intent: params.intent,
+          promptMode: params.promptMode,
+          onRuntimeSession: (runtime) => {
+            dispatchTasksRoleEvent({
+              sourceTab,
+              taskId: params.taskId,
+              studioRoleId: params.roleId,
+              runId,
+              type: "runtime_attached",
+              stage: "codex",
+              message: "RUNTIME ATTACHED",
+              payload: {
+                codexThreadId: runtime.codexThreadId ?? null,
+                codexTurnId: runtime.codexTurnId ?? null,
+                provider: runtime.provider ?? null,
+              },
+            });
+          },
+        });
+        taskCodexArtifactPaths = [...codexTaskRun.artifactPaths];
+        taskCodexSummary = codexTaskRun.summary;
+        inlineEnvelope.artifacts = codexTaskRun.artifactPaths.map((path) => ({
+          kind: "raw" as const,
+          path,
+        }));
+        inlineEnvelope = patchRunStage(inlineEnvelope, "codex", "done", "역할 실행 완료");
+        inlineEnvelope = patchRunStatus(inlineEnvelope, "done");
+        dispatchTasksRoleEvent({
+          sourceTab,
+          taskId: params.taskId,
+          studioRoleId: params.roleId,
+          runId,
+          type: "stage_done",
+          stage: "codex",
+          message: "역할 실행 완료",
+        });
+        dispatchTasksRoleEvent({
+          sourceTab,
+          taskId: params.taskId,
+          studioRoleId: params.roleId,
+          runId,
+          type: "run_done",
+          message: "done",
+        });
+        await finalizeTaskRoleRun({
+          runId,
+          roleId: params.roleId,
+          taskId: params.taskId,
+          prompt: params.prompt,
+          requestPrompt: requestPromptText || undefined,
+          summary: taskCodexSummary,
+          internal: true,
+          promptMode,
+          intent: params.intent,
+          handoffToRole: params.handoffToRole,
+          handoffRequest: params.handoffRequest,
+          sourceTab,
+          artifactPaths: taskCodexArtifactPaths,
+          runStatus: "done",
+          envelope: inlineEnvelope,
+        });
+        return {
+          runId,
+          summary: taskCodexSummary ?? "",
+          artifactPaths: [...taskCodexArtifactPaths],
+          envelope: inlineEnvelope,
+          runStatus: "done" as const,
+        };
+      } catch (error) {
+        const errorText = String(error ?? "unknown error").trim() || "unknown error";
+        inlineEnvelope = patchRunStage(inlineEnvelope, "codex", "error", errorText, errorText);
+        inlineEnvelope = patchRunStatus(inlineEnvelope, "error");
+        dispatchTasksRoleEvent({
+          sourceTab,
+          taskId: params.taskId,
+          studioRoleId: params.roleId,
+          runId,
+          type: "stage_error",
+          stage: "codex",
+          message: errorText,
+          payload: { error: errorText },
+        });
+        dispatchTasksRoleEvent({
+          sourceTab,
+          taskId: params.taskId,
+          studioRoleId: params.roleId,
+          runId,
+          type: "run_error",
+          message: errorText,
+          payload: { error: errorText },
+        });
+        await finalizeTaskRoleRun({
+          runId,
+          roleId: params.roleId,
+          taskId: params.taskId,
+          prompt: params.prompt,
+          requestPrompt: requestPromptText || undefined,
+          summary: taskCodexSummary,
+          internal: true,
+          promptMode,
+          intent: params.intent,
+          handoffToRole: params.handoffToRole,
+          handoffRequest: params.handoffRequest,
+          sourceTab,
+          artifactPaths: taskCodexArtifactPaths,
+          runStatus: "error",
+          envelope: inlineEnvelope,
+        });
+        throw error;
+      }
+    }
+    const queueScope = params.internal
+      ? `:${promptMode}`
+      : "";
     const queueKeyOverride = sourceTab === "tasks-thread"
-      ? `role:${params.roleId}:thread:${params.taskId}`
-      : `role:${params.roleId}:task:${params.taskId}`;
+      ? `role:${params.roleId}:thread:${params.taskId}${queueScope}`
+      : `role:${params.roleId}:task:${params.taskId}${queueScope}`;
     const result = await runRoleWithCoordinator({
       runId: params.runId,
       queueKeyOverride,
@@ -481,6 +649,8 @@ export function useAgenticOrchestrationBridge(params: {
           outputArtifactName: params.outputArtifactName,
           sourceTab,
           runId,
+          intent: params.intent,
+          promptMode: params.promptMode,
           onRuntimeSession: (runtime) => {
             dispatchTasksRoleEvent({
               sourceTab,
@@ -489,7 +659,7 @@ export function useAgenticOrchestrationBridge(params: {
               runId,
               type: "runtime_attached",
               stage: "codex",
-              message: "runtime attached",
+              message: "RUNTIME ATTACHED",
               payload: {
                 codexThreadId: runtime.codexThreadId ?? null,
                 codexTurnId: runtime.codexTurnId ?? null,
@@ -572,6 +742,8 @@ export function useAgenticOrchestrationBridge(params: {
       requestPrompt: requestPromptText || undefined,
       summary: taskCodexSummary,
       internal: params.internal,
+      promptMode,
+      intent: params.intent,
       handoffToRole: params.handoffToRole,
       handoffRequest: params.handoffRequest,
       sourceTab,
@@ -653,6 +825,7 @@ export function useAgenticOrchestrationBridge(params: {
             requestPrompt: params.prompt,
             sourceTab,
             internal: runParams.internal,
+            intent: runParams.intent,
             model: runParams.model,
             reasoning: runParams.reasoning,
             outputArtifactName: runParams.outputArtifactName,

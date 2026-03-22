@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 import type { AgenticCoordinationState } from "../../features/orchestration/agentic/coordinationTypes";
-import { buildExecutionPlanFromCoordination, deriveExecutionPlan, dispatchTaskExecutionPlan, runBrowserExecutionPlan } from "./taskExecutionRuntime";
+import {
+  buildExecutionPlanFromCoordination,
+  deriveExecutionPlan,
+  dispatchTaskExecutionPlan,
+  runBrowserExecutionPlan,
+  runRuntimeExecutionPlan,
+} from "./taskExecutionRuntime";
 import type { ThreadDetail } from "./threadTypes";
 
 function buildThreadDetail(): ThreadDetail {
@@ -153,6 +159,167 @@ describe("taskExecutionRuntime", () => {
         rolePrompts: expect.any(Object),
       }),
     }));
+  });
+
+  it("dispatches a single-role runtime action with the mapped studio role id", () => {
+    const publishAction = vi.fn();
+    dispatchTaskExecutionPlan({
+      detail: buildThreadDetail(),
+      prompt: "구조를 검토해줘",
+      plan: {
+        mode: "single",
+        intent: "review",
+        candidateRoleIds: ["unity_architect"],
+        participantRoleIds: ["unity_architect"],
+        requestedRoleIds: ["unity_architect"],
+        primaryRoleId: "unity_architect",
+        synthesisRoleId: "unity_architect",
+        criticRoleId: undefined,
+        maxParticipants: 1,
+        maxRounds: 1,
+        cappedParticipantCount: false,
+        rolePrompts: {
+          unity_architect: "아키텍처 경계를 점검해줘",
+        },
+        orchestrationSummary: "",
+        useAdaptiveOrchestrator: false,
+      },
+      publishAction,
+    });
+
+    expect(publishAction).toHaveBeenCalledWith({
+      type: "run_role",
+      payload: {
+        roleId: "system_programmer",
+        taskId: "task_1",
+        prompt: "아키텍처 경계를 점검해줘",
+        sourceTab: "tasks-thread",
+      },
+    });
+  });
+
+  it("runs the runtime collaboration flow end-to-end with add-agent, spawn, and collaboration dispatch", async () => {
+    const publishAction = vi.fn();
+    const invokeFn = vi.fn(async (command: string, args?: Record<string, unknown>) => {
+      if (command === "thread_add_agent") {
+        const detail = buildThreadDetail();
+        detail.agents = detail.agents.filter((agent) => agent.roleId !== "unity_architect");
+        detail.agents.push({
+          id: "thread_1:unity_architect",
+          threadId: "thread_1",
+          label: "UNITY ARCHITECT",
+          roleId: "unity_architect",
+          status: "idle",
+          summary: "Review architecture",
+          worktreePath: "/workspace/demo",
+          lastUpdatedAt: "2026-03-20T00:00:00.000Z",
+        });
+        return detail;
+      }
+      if (command === "thread_spawn_agents") {
+        expect(args).toMatchObject({
+          cwd: "/workspace/demo",
+          threadId: "thread_1",
+          prompt: "시장성과 구조를 같이 검토해줘",
+          roles: ["researcher", "unity_architect"],
+          suppressApproval: true,
+        });
+        return buildThreadDetail();
+      }
+      throw new Error(`unexpected command: ${command}`);
+    }) as <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
+
+    const detail = buildThreadDetail();
+    detail.agents = detail.agents.filter((agent) => agent.roleId !== "unity_architect");
+    const plan = deriveExecutionPlan({
+      enabledRoleIds: ["researcher", "unity_architect"],
+      requestedRoleIds: ["researcher", "unity_architect"],
+      prompt: "시장성과 구조를 같이 검토해줘",
+    });
+
+    const result = await runRuntimeExecutionPlan({
+      detail,
+      prompt: "시장성과 구조를 같이 검토해줘",
+      plan,
+      cwd: "/workspace/demo",
+      invokeFn,
+      hydrateThreadDetail: (next) => next,
+      publishAction,
+    });
+
+    expect(result.thread.threadId).toBe("thread_1");
+    expect(invokeFn).toHaveBeenNthCalledWith(1, "thread_add_agent", expect.objectContaining({
+      cwd: "/workspace/demo",
+      threadId: "thread_1",
+      roleId: "unity_architect",
+      label: "UNITY ARCHITECT",
+    }));
+    expect(invokeFn).toHaveBeenNthCalledWith(2, "thread_spawn_agents", expect.any(Object));
+    expect(publishAction).toHaveBeenCalledWith(expect.objectContaining({
+      type: "run_task_collaboration",
+      payload: expect.objectContaining({
+        taskId: "task_1",
+        sourceTab: "tasks-thread",
+        roleIds: ["research_analyst", "system_programmer"],
+        candidateRoleIds: expect.arrayContaining(["research_analyst", "system_programmer"]),
+        requestedRoleIds: ["research_analyst", "system_programmer"],
+        primaryRoleId: "research_analyst",
+        synthesisRoleId: "research_analyst",
+      }),
+    }));
+  });
+
+  it("runs the runtime single-role flow without adding agents that already exist", async () => {
+    const publishAction = vi.fn();
+    const invokeFn = vi.fn(async (command: string, args?: Record<string, unknown>) => {
+      if (command === "thread_spawn_agents") {
+        expect(args).toMatchObject({
+          roles: ["researcher"],
+          suppressApproval: false,
+        });
+        return buildThreadDetail();
+      }
+      throw new Error(`unexpected command: ${command}`);
+    }) as <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
+
+    await runRuntimeExecutionPlan({
+      detail: buildThreadDetail(),
+      prompt: "자료 조사해줘",
+      plan: {
+        mode: "single",
+        intent: "research",
+        candidateRoleIds: ["researcher"],
+        participantRoleIds: ["researcher"],
+        requestedRoleIds: ["researcher"],
+        primaryRoleId: "researcher",
+        synthesisRoleId: "researcher",
+        criticRoleId: undefined,
+        maxParticipants: 1,
+        maxRounds: 1,
+        cappedParticipantCount: false,
+        rolePrompts: {
+          researcher: "자료 조사해줘",
+        },
+        orchestrationSummary: "",
+        useAdaptiveOrchestrator: false,
+      },
+      cwd: "/workspace/demo",
+      invokeFn,
+      hydrateThreadDetail: (next) => next,
+      publishAction,
+    });
+
+    expect(invokeFn).toHaveBeenCalledTimes(1);
+    expect(invokeFn).not.toHaveBeenCalledWith("thread_add_agent", expect.anything());
+    expect(publishAction).toHaveBeenCalledWith({
+      type: "run_role",
+      payload: {
+        roleId: "research_analyst",
+        taskId: "task_1",
+        prompt: "자료 조사해줘",
+        sourceTab: "tasks-thread",
+      },
+    });
   });
 
   it("creates a browser approval when multiple roles run in sequence", () => {

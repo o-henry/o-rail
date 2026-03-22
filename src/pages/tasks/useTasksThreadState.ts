@@ -318,7 +318,13 @@ export function reduceLiveRoleEventBatch(params: {
         }
         delete nextNotes[roleId];
       }
+      const filteredEvents = nextEvents.filter((event) => event.roleId !== roleId);
+      if (filteredEvents.length !== nextEvents.length) {
+        nextEvents = filteredEvents;
+        eventsChanged = true;
+      }
       shouldRefresh = true;
+      continue;
     } else {
       const previous = nextNotes[roleId];
       if (!previous || previous.message !== message || previous.updatedAt !== updatedAt) {
@@ -449,12 +455,20 @@ export function revealTasksProjectPathState(params: {
 export function isTasksThreadInterruptible(params: {
   agentStatuses: Array<string | null | undefined>;
   coordinationStatus?: string | null;
+  runtimeTargetCount?: number;
+  activeLiveEventCount?: number;
 }): boolean {
   const coordinationStatus = String(params.coordinationStatus ?? "").trim().toLowerCase();
   if (coordinationStatus === "needs_resume" || coordinationStatus === "cancelled") {
     return false;
   }
   if (coordinationStatus === "running") {
+    return true;
+  }
+  if ((params.runtimeTargetCount ?? 0) > 0) {
+    return true;
+  }
+  if ((params.activeLiveEventCount ?? 0) > 0) {
     return true;
   }
   return params.agentStatuses.some((status) => isLiveBackgroundAgentStatus(status));
@@ -529,6 +543,7 @@ export function useTasksThreadState(params: Params) {
   const [hiddenProjectPaths, setHiddenProjectPaths] = useState<string[]>(initialHiddenProjectList);
   const [liveRoleNotes, setLiveRoleNotes] = useState<Partial<Record<ThreadRoleId, { message: string; updatedAt: string }>>>({});
   const [liveProcessEvents, setLiveProcessEvents] = useState<LiveProcessEvent[]>([]);
+  const [runtimeTargetCount, setRuntimeTargetCount] = useState(0);
   const [stoppingComposerRun, setStoppingComposerRun] = useState(false);
   const [composerSubmitPending, setComposerSubmitPending] = useState(false);
   const [composerCoordinationModeOverride, setComposerCoordinationModeOverride] = useState<CoordinationMode | null>(null);
@@ -1054,6 +1069,7 @@ export function useTasksThreadState(params: Params) {
         return;
       }
       runtimeTargetsByRoleRef.current = reduceRuntimeTargetsByRole(runtimeTargetsByRoleRef.current, detail);
+      setRuntimeTargetCount(Object.keys(runtimeTargetsByRoleRef.current).length);
       pendingRoleEventsRef.current = [...pendingRoleEventsRef.current, detail];
       if (liveRoleEventFlushTimeoutRef.current !== null) {
         return;
@@ -1085,26 +1101,78 @@ export function useTasksThreadState(params: Params) {
       if (!threadId) {
         return;
       }
+      const assignedRoleIds = [...new Set((detail?.participantRoleIds ?? []).map((roleId) => String(roleId ?? "").trim()).filter(Boolean))] as ThreadRoleId[];
       updateThreadCoordination(threadId, (current) => {
         if (!current) {
           return current;
         }
         return {
           ...current,
-          assignedRoleIds: [...new Set((detail?.participantRoleIds ?? []).map((roleId) => String(roleId ?? "").trim()).filter(Boolean))],
+          assignedRoleIds,
           nextAction: String(detail?.orchestrationSummary ?? "").trim() || current.nextAction,
           updatedAt: nowIso(),
         };
       });
+      setLiveRoleNotes((current) => Object.fromEntries(
+        Object.entries(current).filter(([roleId]) => assignedRoleIds.includes(roleId as ThreadRoleId)),
+      ) as Partial<Record<ThreadRoleId, { message: string; updatedAt: string }>>);
+      setLiveProcessEvents((current) => current.filter((item) => assignedRoleIds.includes(item.roleId)));
+      if (!activeThreadId || threadId !== activeThreadId) {
+        return;
+      }
+      setActiveThread((current) => {
+        if (!current || current.thread.threadId !== threadId) {
+          return current;
+        }
+        const nextTaskRoles = current.task.roles.map((role) => (
+          assignedRoleIds.includes(role.id)
+            ? role
+            : (!String(role.lastRunId ?? "").trim() && isLiveBackgroundAgentStatus(role.status))
+              ? { ...role, status: "idle" as const, updatedAt: nowIso() }
+              : role
+        ));
+        const nextAgents = current.agents.map((agent) => {
+          const matchingRole = current.task.roles.find((role) => role.id === agent.roleId);
+          return assignedRoleIds.includes(agent.roleId)
+            ? agent
+            : (!String(matchingRole?.lastRunId ?? "").trim() && isLiveBackgroundAgentStatus(agent.status))
+              ? { ...agent, status: "idle" as const, lastUpdatedAt: nowIso() }
+              : agent;
+        });
+        return {
+          ...current,
+          task: {
+            ...current.task,
+            roles: nextTaskRoles,
+          },
+          agents: nextAgents,
+        };
+      });
+      if (params.hasTauriRuntime && params.cwd) {
+        void params.invokeFn<ThreadDetail>("thread_sync_orchestrated_roles", {
+          cwd: params.cwd,
+          threadId,
+          assignedRoles: assignedRoleIds,
+        }).then((synced) => {
+          const hydrated = hydrateThreadDetail(synced);
+          if (!hydrated) {
+            return;
+          }
+          setActiveThread((current) => (
+            current && current.thread.threadId === threadId ? hydrated : current
+          ));
+        }).catch(() => {});
+      }
     };
     window.addEventListener("rail:tasks-orchestration-resolved", handler as EventListener);
     return () => window.removeEventListener("rail:tasks-orchestration-resolved", handler as EventListener);
-  }, [updateThreadCoordination]);
+  }, [activeThreadId, hydrateThreadDetail, params.cwd, params.hasTauriRuntime, params.invokeFn, updateThreadCoordination]);
 
   useEffect(() => {
     pendingRoleEventsRef.current = [];
     setLiveProcessEvents([]);
     runtimeTargetsByRoleRef.current = {};
+    setRuntimeTargetCount(0);
     if (typeof window !== "undefined" && refreshThreadTimeoutRef.current !== null) {
       window.clearTimeout(refreshThreadTimeoutRef.current);
       refreshThreadTimeoutRef.current = null;
@@ -1128,12 +1196,18 @@ export function useTasksThreadState(params: Params) {
       if (!activeThread) {
         return false;
       }
+      const activeLiveEventCount = liveProcessEvents.filter((event) => {
+        const normalized = String(event.type ?? "").trim().toLowerCase();
+        return !["run_done", "run_error", "stage_done", "stage_error"].includes(normalized);
+      }).length;
       return isTasksThreadInterruptible({
         agentStatuses: activeThread.agents.map((agent) => agent.status),
         coordinationStatus: activeThreadCoordination?.status,
+        runtimeTargetCount,
+        activeLiveEventCount,
       });
     },
-    [activeThread, activeThreadCoordination?.status],
+    [activeThread, activeThreadCoordination?.status, liveProcessEvents, runtimeTargetCount],
   );
 
   useEffect(() => {
@@ -1727,23 +1801,28 @@ export function useTasksThreadState(params: Params) {
           Object.entries(current).filter(([roleId]) => !runningRoleIds.has(roleId as ThreadRoleId)),
         ) as Partial<Record<ThreadRoleId, { message: string; updatedAt: string }>>);
         setLiveProcessEvents((current) => current.filter((event) => !runningRoleIds.has(event.roleId)));
+        setRuntimeTargetCount(0);
         params.setStatus("현재 작업을 중단했습니다.");
         return;
       }
 
+      const targetedAgents = activeThread.agents.filter((agent) => runningRoleIds.has(agent.roleId));
       const agentDetails = await Promise.all(
-        runningAgents.map((agent) => loadAgentDetail(activeThread.thread.threadId, agent.id).catch(() => null)),
+        targetedAgents.map((agent) => loadAgentDetail(activeThread.thread.threadId, agent.id).catch(() => null)),
       );
+      const activeRuntimeTargets = [...runningRoleIds]
+        .map((roleId) => runtimeTargetsByRoleRef.current[roleId])
+        .filter(Boolean);
       const codexThreadIds = [...new Set(
         [
           ...agentDetails
           .map((detail) => String(detail?.codexThreadId ?? "").trim())
           .filter(Boolean),
-          ...runningAgents.flatMap((agent) => runtimeTargetsByRoleRef.current[agent.roleId]?.codexThreadIds ?? []),
+          ...activeRuntimeTargets.flatMap((target) => target?.codexThreadIds ?? []),
         ],
       )];
-      const runtimeProviders = runningAgents
-        .map((agent) => String(runtimeTargetsByRoleRef.current[agent.roleId]?.provider ?? "").trim())
+      const runtimeProviders = activeRuntimeTargets
+        .map((target) => String(target?.provider ?? "").trim())
         .filter(Boolean);
       const threadWebProvider = runtimeProviders[0] || resolveTasksThreadWebProvider(String(activeThread.thread.model ?? model));
       const cancelOperations: Promise<unknown>[] = [
@@ -1783,6 +1862,7 @@ export function useTasksThreadState(params: Params) {
       runtimeTargetsByRoleRef.current = Object.fromEntries(
         Object.entries(runtimeTargetsByRoleRef.current).filter(([roleId]) => !runningRoleIds.has(roleId as ThreadRoleId)),
       ) as Partial<Record<ThreadRoleId, RuntimeTarget>>;
+      setRuntimeTargetCount(Object.keys(runtimeTargetsByRoleRef.current).length);
       setActiveThread((current) => {
         if (!current || current.thread.threadId !== activeThread.thread.threadId) {
           return current;

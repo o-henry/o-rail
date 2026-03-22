@@ -32,6 +32,10 @@ type LiveConversationEntry = {
   latestEvent: LiveProcessEvent | null;
 };
 
+type TimelineRenderEntry =
+  | { kind: "single"; message: ThreadMessage }
+  | { kind: "group"; id: string; messages: ThreadMessage[] };
+
 type TasksThreadConversationProps = {
   orchestration: AgenticCoordinationState | null;
   messages: ThreadMessage[];
@@ -82,6 +86,14 @@ function resolveTimelineMessage(message: ThreadMessage, agentLabels: string[]) {
   };
 }
 
+export function normalizeTasksTimelineCopy(content: string): string {
+  return String(content ?? "")
+    .replace(/\bCreated\b/g, "CREATED")
+    .replace(/\[(?:Codex|코덱스) 실행\]/g, "[코덱스 실행]")
+    .replace(/\bCodex\b/g, "코덱스")
+    .replace(/\bruntime attached\b/gi, "RUNTIME ATTACHED");
+}
+
 export function isFinishedThreadMessage(message: ThreadMessage): boolean {
   return message.role === "assistant" && String(message.eventKind ?? "").trim() === "agent_result";
 }
@@ -92,6 +104,61 @@ export function isFailedThreadMessage(message: ThreadMessage): boolean {
 
 function shouldRenderMessageMarkdown(message: ThreadMessage): boolean {
   return isFinishedThreadMessage(message) || isFailedThreadMessage(message);
+}
+
+function shouldHideTimelineMessage(message: ThreadMessage, assignedRoleIds: ThreadRoleId[]): boolean {
+  const eventKind = String(message.eventKind ?? "").trim();
+  if (eventKind === "agent_created") {
+    return true;
+  }
+  if (
+    assignedRoleIds.length > 0 &&
+    (eventKind === "agent_status" || eventKind === "agent_result" || eventKind === "agent_failed") &&
+    message.sourceRoleId &&
+    !assignedRoleIds.includes(message.sourceRoleId)
+  ) {
+    return true;
+  }
+  return false;
+}
+
+function shouldGroupTimelineMessage(message: ThreadMessage): boolean {
+  const eventKind = String(message.eventKind ?? "").trim();
+  if (eventKind === "run_interrupted") {
+    return false;
+  }
+  return !shouldRenderMessageMarkdown(message) && (message.role === "assistant" || message.role === "system");
+}
+
+export function buildTimelineRenderEntries(messages: ThreadMessage[], assignedRoleIds: ThreadRoleId[] = []): TimelineRenderEntry[] {
+  const entries: TimelineRenderEntry[] = [];
+  let currentGroup: ThreadMessage[] = [];
+
+  const flushGroup = () => {
+    if (currentGroup.length === 0) {
+      return;
+    }
+    entries.push({
+      kind: "group",
+      id: currentGroup.map((message) => String(message.id ?? "").trim()).filter(Boolean).join(":"),
+      messages: currentGroup,
+    });
+    currentGroup = [];
+  };
+
+  for (const message of messages) {
+    if (shouldHideTimelineMessage(message, assignedRoleIds)) {
+      continue;
+    }
+    if (shouldGroupTimelineMessage(message)) {
+      currentGroup.push(message);
+      continue;
+    }
+    flushGroup();
+    entries.push({ kind: "single", message });
+  }
+  flushGroup();
+  return entries;
 }
 
 function latestUserMessageId(messages: ThreadMessage[]): string {
@@ -192,6 +259,22 @@ function displayProcessStage(stage: string, t: (key: string) => string) {
   return stage || t("tasks.processStage.progress");
 }
 
+function displayProcessEventBadgeLabel(type: string, t: (key: string) => string) {
+  const normalized = String(type ?? "").trim().toLowerCase();
+  if (normalized === "run_queued") return t("tasks.processEvent.queued");
+  if (normalized === "run_started") return t("tasks.processEvent.started");
+  if (normalized === "stage_started") return "";
+  if (normalized === "stage_done") return t("tasks.processEvent.done");
+  if (normalized === "run_done") return t("tasks.processEvent.finished");
+  if (normalized === "run_error" || normalized === "stage_error") return t("tasks.processEvent.failed");
+  return "";
+}
+
+function shouldHideBareLiveStatusMessage(message: string) {
+  const normalized = String(message ?? "").trim().toLowerCase();
+  return ["queued", "started", "done", "failed", "error"].includes(normalized);
+}
+
 function buildLatestProcessEventByRole(events: LiveProcessEvent[]) {
   const latest = new Map<ThreadRoleId, LiveProcessEvent>();
   for (const event of events) {
@@ -262,13 +345,54 @@ function shouldShowLiveDots(eventType: string, liveState: "active" | "delayed" |
   return !["run_done", "run_error", "stage_done", "stage_error"].includes(normalized);
 }
 
-function animatedDots(frame: number) {
-  return [".", "..", "..."][frame % 3] ?? "...";
-}
+const StaticTimelineMessageRow = memo(function StaticTimelineMessageRow(props: {
+  messageId: string;
+  messageRole: ThreadMessage["role"];
+  label: string;
+  displayedBody: string;
+  renderMarkdown: boolean;
+  artifactPath: string;
+  createdAt: string;
+  showFinish: boolean;
+  showSuccess: boolean;
+  showFail: boolean;
+}) {
+  const isTerminalResult = props.showFinish || props.showSuccess || props.showFail;
+  return (
+    <article className={`tasks-thread-message-row is-${props.messageRole}${isTerminalResult ? " is-terminal-result" : ""}`}>
+      {props.label ? <span className="tasks-thread-message-label">{props.label}</span> : null}
+      <div className="tasks-thread-log-line">
+        {props.renderMarkdown ? <TasksThreadMessageContent content={props.displayedBody} /> : props.displayedBody}
+      </div>
+      {props.showFinish || props.showSuccess || props.showFail ? (
+        <div className="tasks-thread-message-badges">
+          {props.showFinish ? <span className="tasks-thread-finish-badge">FINISH</span> : null}
+          {props.showSuccess ? <span className="tasks-thread-status-badge is-success">SUCCESS</span> : null}
+          {props.showFail ? <span className="tasks-thread-status-badge is-fail">FAIL</span> : null}
+        </div>
+      ) : null}
+      {props.artifactPath ? (
+        <div className="tasks-thread-message-meta">
+          <small className="tasks-thread-message-artifact">{props.artifactPath}</small>
+          {props.createdAt ? <small className="tasks-thread-message-time">{formatArtifactStamp(props.createdAt)}</small> : null}
+        </div>
+      ) : null}
+    </article>
+  );
+});
+
+const GroupedTimelineLogRow = memo(function GroupedTimelineLogRow(props: {
+  text: string;
+}) {
+  return (
+    <article className="tasks-thread-message-row is-assistant is-log-group">
+      <pre className="tasks-thread-log-pre">{props.text}</pre>
+    </article>
+  );
+});
 
 function TasksThreadConversationImpl(props: TasksThreadConversationProps) {
   const { t } = useI18n();
-  const [pulseFrame, setPulseFrame] = useState(0);
   const [liveNowMs, setLiveNowMs] = useState(() => Date.now());
   const [streamingVisibleCharsById, setStreamingVisibleCharsById] = useState<Record<string, number>>({});
   const latestProcessEventByRole = useMemo(
@@ -298,29 +422,38 @@ function TasksThreadConversationImpl(props: TasksThreadConversationProps) {
     () => latestUserMessageId(props.messages),
     [props.messages],
   );
-  const progressiveMessages = useMemo(() => (
-    props.messages
-      .slice(-8)
-      .map((message) => {
-        const body = resolveTimelineMessage(message, props.visibleAgentLabels).body;
-        return {
-          id: String(message.id ?? "").trim(),
-          body,
-          step: resolveProgressiveRevealStep(body.length),
-          progressive: shouldProgressivelyRevealMessage(message, body),
-        };
-      })
-      .filter((entry) => entry.id && entry.progressive && entry.step > 0)
-  ), [props.messages, props.visibleAgentLabels]);
+  const timelineEntries = useMemo(
+    () => buildTimelineRenderEntries(
+      props.messages,
+      resolveThreadParticipationBadgeRoleIds(props.orchestration),
+    ),
+    [props.messages, props.orchestration],
+  );
+  const progressiveMessages = useMemo(() => {
+    for (let index = props.messages.length - 1; index >= 0; index -= 1) {
+      const message = props.messages[index];
+      const body = resolveTimelineMessage(message, props.visibleAgentLabels).body;
+      const step = resolveProgressiveRevealStep(body.length);
+      if (!String(message.id ?? "").trim() || !shouldProgressivelyRevealMessage(message, body) || step <= 0) {
+        continue;
+      }
+      return [{
+        id: String(message.id ?? "").trim(),
+        body,
+        step,
+        progressive: true,
+      }];
+    }
+    return [];
+  }, [props.messages, props.visibleAgentLabels]);
 
   useEffect(() => {
     if (props.liveAgents.length === 0 && props.liveProcessEvents.length === 0) {
       return;
     }
     const intervalId = window.setInterval(() => {
-      setPulseFrame((current) => (current + 1) % 3);
       setLiveNowMs(Date.now());
-    }, 450);
+    }, 10_000);
     return () => window.clearInterval(intervalId);
   }, [props.liveAgents.length, props.liveProcessEvents.length]);
 
@@ -361,7 +494,7 @@ function TasksThreadConversationImpl(props: TasksThreadConversationProps) {
         }
         return changed ? next : current;
       });
-    }, 20);
+    }, 45);
     return () => window.clearInterval(intervalId);
   }, [progressiveMessages]);
 
@@ -385,35 +518,43 @@ function TasksThreadConversationImpl(props: TasksThreadConversationProps) {
         onVerifyReview={props.onVerifyReview}
       />
       <section className="tasks-thread-timeline">
-        {props.messages.map((message) => {
+        {timelineEntries.map((entry) => {
+          if (entry.kind === "group") {
+            const groupText = entry.messages
+              .map((message) => {
+                const parsed = resolveTimelineMessage(message, props.visibleAgentLabels);
+                const body = normalizeTasksTimelineCopy(parsed.body);
+                return parsed.label ? `${parsed.label}\n${body}` : body;
+              })
+              .filter(Boolean)
+              .join("\n\n");
+            return (
+              <GroupedTimelineLogRow key={entry.id} text={groupText} />
+            );
+          }
+          const { message } = entry;
           const parsed = resolveTimelineMessage(message, props.visibleAgentLabels);
           const messageId = String(message.id ?? "").trim();
           const streamedChars = streamingVisibleCharsById[messageId] ?? 0;
+          const renderedBody = normalizeTasksTimelineCopy(parsed.body);
           const displayedBody =
             streamedChars > 0
-              ? parsed.body.slice(0, Math.min(parsed.body.length, streamedChars))
-              : parsed.body;
+              ? renderedBody.slice(0, Math.min(renderedBody.length, streamedChars))
+              : renderedBody;
           return (
             <Fragment key={message.id}>
-              <article className={`tasks-thread-message-row is-${message.role}`} key={message.id}>
-                {parsed.label ? <span className="tasks-thread-message-label">{parsed.label}</span> : null}
-                <div className="tasks-thread-log-line">
-                  {shouldRenderMessageMarkdown(message) ? <TasksThreadMessageContent content={displayedBody} /> : displayedBody}
-                </div>
-                {isFinishedThreadMessage(message) || isFailedThreadMessage(message) ? (
-                  <div className="tasks-thread-message-badges">
-                    {isFinishedThreadMessage(message) ? <span className="tasks-thread-finish-badge">FINISH</span> : null}
-                    {isFinishedThreadMessage(message) ? <span className="tasks-thread-status-badge is-success">SUCCESS</span> : null}
-                    {isFailedThreadMessage(message) ? <span className="tasks-thread-status-badge is-fail">FAIL</span> : null}
-                  </div>
-                ) : null}
-                {parsed.artifactPath ? (
-                  <div className="tasks-thread-message-meta">
-                    <small className="tasks-thread-message-artifact">{parsed.artifactPath}</small>
-                    {parsed.createdAt ? <small className="tasks-thread-message-time">{formatArtifactStamp(parsed.createdAt)}</small> : null}
-                  </div>
-                ) : null}
-              </article>
+              <StaticTimelineMessageRow
+                artifactPath={parsed.artifactPath}
+                createdAt={parsed.createdAt}
+                displayedBody={displayedBody}
+                label={parsed.label}
+                messageId={messageId}
+                messageRole={message.role}
+                renderMarkdown={shouldRenderMessageMarkdown(message)}
+                showFail={isFailedThreadMessage(message)}
+                showFinish={isFinishedThreadMessage(message)}
+                showSuccess={isFinishedThreadMessage(message)}
+              />
               {String(message.id ?? "").trim() === latestUserPromptMessageId && currentRunBadgeRoleIds.length > 0 ? (
                 <article className="tasks-thread-message-row is-assistant is-participant-summary" key={`${message.id}:participants`}>
                   <div className="tasks-thread-message-agent-list">
@@ -461,6 +602,12 @@ function TasksThreadConversationImpl(props: TasksThreadConversationProps) {
               interrupted: (entry.agent?.summary || "").includes("중단"),
               recentSourceCount,
             });
+            const eventBadgeLabel = latestEvent?.type
+              ? displayProcessEventBadgeLabel(latestEvent.type, t)
+              : "";
+            const displayLogLine =
+              !(eventBadgeLabel && shouldHideBareLiveStatusMessage(currentWorkLabel))
+              || Boolean(latestEvent?.stage);
             return (
               <article className="tasks-thread-message-row is-assistant is-live-placeholder" key={`live:${entry.roleId}`}>
                 <div className="tasks-thread-live-header">
@@ -473,16 +620,25 @@ function TasksThreadConversationImpl(props: TasksThreadConversationProps) {
                   <span className={`tasks-thread-live-state is-${liveState}`}>
                     {stateLabel}
                   </span>
-                </div>
-                <div className="tasks-thread-log-line">
-                  {latestEvent?.stage ? `[${displayProcessStage(String(latestEvent.stage ?? ""), t)}] ` : ""}
-                  {currentWorkLabel}
                   {shouldShowLiveDots(latestEvent?.type ?? "", liveState) ? (
-                    <span aria-hidden="true" className="tasks-thread-live-pulse is-inline">
-                      {animatedDots(pulseFrame)}
+                    <span aria-hidden="true" className="tasks-thread-live-dots">
+                      <span className="tasks-thread-live-dot" />
+                      <span className="tasks-thread-live-dot" />
+                      <span className="tasks-thread-live-dot" />
+                    </span>
+                  ) : null}
+                  {eventBadgeLabel ? (
+                    <span className="tasks-thread-live-event">
+                      {eventBadgeLabel}
                     </span>
                   ) : null}
                 </div>
+                {displayLogLine ? (
+                  <div className="tasks-thread-log-line">
+                    {latestEvent?.stage ? `[${displayProcessStage(String(latestEvent.stage ?? ""), t)}] ` : ""}
+                    {normalizeTasksTimelineCopy(currentWorkLabel)}
+                  </div>
+                ) : null}
                 <div className="tasks-thread-live-detail">
                   {t("tasks.live.lastUpdate", { value: lastSeenLabel })}
                 </div>

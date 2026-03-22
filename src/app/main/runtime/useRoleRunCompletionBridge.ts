@@ -127,6 +127,8 @@ export function useRoleRunCompletionBridge(params: Params) {
         artifactPaths: Array.isArray(payload.artifactPaths) ? payload.artifactPaths : [],
         summary: payload.summary ?? payload.envelope?.record?.summary ?? null,
         internal: Boolean(payload.internal),
+        promptMode: payload.promptMode ?? null,
+        intent: payload.intent ?? null,
       })
         .then((updated) => {
           if (updated) {

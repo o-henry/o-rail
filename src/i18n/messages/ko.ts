@@ -93,7 +93,7 @@ export const KO_MESSAGES: Dictionary = {
     "tasks.stage.awaitingApproval": "승인 대기",
     "tasks.processStage.crawler": "수집",
     "tasks.processStage.rag": "지식 정리",
-    "tasks.processStage.codex": "Codex 실행",
+    "tasks.processStage.codex": "코덱스 실행",
     "tasks.processStage.critic": "검토",
     "tasks.processStage.save": "저장",
     "tasks.processStage.approval": "승인",

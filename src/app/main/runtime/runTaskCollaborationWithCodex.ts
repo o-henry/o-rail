@@ -16,6 +16,7 @@ type ExecuteRoleRun = (params: {
   roleId: string;
   prompt: string;
   promptMode: "orchestrate" | "brief" | "critique" | "final";
+  intent?: string;
   internal: boolean;
   model?: string;
   reasoning?: string;
@@ -88,11 +89,13 @@ function renderRoleSummary(result: CollaborationRoleRunResult): string {
 
 function buildBriefPrompt(params: {
   prompt: string;
+  intent?: string;
   participantPrompt: string;
   contextSummary: string;
   participantRoleIds: string[];
   cappedParticipantCount: boolean;
 }): string {
+  const isIdeation = String(params.intent ?? "").trim().toLowerCase() === "ideation";
   return [
     "# 작업 모드",
     "내부 멀티에이전트 1차 브리프",
@@ -108,7 +111,12 @@ function buildBriefPrompt(params: {
     "",
     "# 협업 규칙",
     `- 참여 에이전트 수: ${params.participantRoleIds.length}${params.cappedParticipantCount ? " (상한 적용)" : ""}`,
-    "- 최종 답변을 쓰지 말고, 자기 전문영역 기준 핵심 사실/리스크/권장 접근만 짧게 정리한다.",
+    isIdeation
+      ? "- 최종 사용자 답변 형식은 아니어도 되지만, 실제 아이디어 후보/시장 검증/탈락 사유처럼 최종 산출에 바로 쓸 수 있는 재료를 남긴다."
+      : "- 최종 답변을 쓰지 말고, 자기 전문영역 기준 핵심 사실/리스크/권장 접근만 짧게 정리한다.",
+    isIdeation
+      ? "- 기준 정리, 다음 단계 제안, handoff 문구만 남기고 끝내지 않는다."
+      : "- 다음 단계 제안만 남기고 끝내지 않는다.",
     "- 불필요한 서론 없이 6개 이하 bullet로 답한다.",
     "- 추정과 사실을 구분한다.",
   ].join("\n");
@@ -141,11 +149,13 @@ function buildCritiquePrompt(params: {
 
 function buildFinalPrompt(params: {
   prompt: string;
+  intent?: string;
   contextSummary: string;
   roleSummaries: CollaborationRoleRunResult[];
   criticSummary?: string;
   failedRoleIds?: string[];
 }): string {
+  const isIdeation = String(params.intent ?? "").trim().toLowerCase() === "ideation";
   return [
     "# 작업 모드",
     "최종 합성 답변",
@@ -167,8 +177,18 @@ function buildFinalPrompt(params: {
     "",
     "# 출력 규칙",
     "- 한국어로 최종 답변을 작성한다.",
-    "- 필요한 경우 수정 후보 파일, 확인해야 할 리스크, 다음 행동을 짧게 정리한다.",
-    "- 역할별 원문을 나열하지 말고 하나의 응답으로 합친다.",
+    isIdeation
+      ? "- 지금 바로 사용자에게 전달할 최종 아이디어 답변만 작성한다."
+      : "- 필요한 경우 수정 후보 파일, 확인해야 할 리스크, 다음 행동을 짧게 정리한다.",
+    isIdeation
+      ? "- 내부 브리프, 기준 확정, handoff, 다음 단계 제안, 파일 수정 보고로 답변을 대체하지 않는다."
+      : "- 역할별 원문을 나열하지 말고 하나의 응답으로 합친다.",
+    isIdeation
+      ? "- 사용자 요청에 숫자 요구가 있으면 그 수를 충족하도록 번호 목록으로 아이디어를 제시한다."
+      : "",
+    isIdeation
+      ? "- 각 아이디어마다 한 줄 훅, 핵심 루프, 왜 지금 먹히는지, 왜 아류작 냄새가 약한지까지 포함한다."
+      : "",
     "- 일부 참여 에이전트가 실패했다면 그 한계를 숨기지 말고 답변에 짧게 명시한다.",
   ].filter(Boolean).join("\n");
 }
@@ -199,6 +219,7 @@ async function executeRoleRunWithRetry(params: {
   roleId: string;
   prompt: string;
   promptMode: "orchestrate" | "brief" | "critique" | "final";
+  intent?: string;
   internal: boolean;
   model?: string;
   reasoning?: string;
@@ -214,6 +235,7 @@ async function executeRoleRunWithRetry(params: {
         roleId: params.roleId,
         prompt: params.prompt,
         promptMode: params.promptMode,
+        intent: params.intent,
         internal: params.internal,
         model: params.model,
         reasoning: params.reasoning,
@@ -294,6 +316,7 @@ export async function runTaskCollaborationWithCodex(params: {
             heuristicParticipantRoleIds: participantRoleIds,
           }),
           promptMode: "orchestrate",
+          intent: params.intent,
           internal: true,
           model: orchestrationRuntime.model,
           reasoning: orchestrationRuntime.reasoning,
@@ -364,14 +387,16 @@ export async function runTaskCollaborationWithCodex(params: {
       participantResults.push(await executeRoleRunWithRetry({
         executeRoleRun: params.executeRoleRun,
         roleId,
-        prompt: buildBriefPrompt({
-          prompt: params.prompt,
-          participantPrompt,
-          contextSummary: params.contextSummary,
-          participantRoleIds,
-          cappedParticipantCount: params.cappedParticipantCount,
-        }),
+          prompt: buildBriefPrompt({
+            prompt: params.prompt,
+            intent: params.intent,
+            participantPrompt,
+            contextSummary: params.contextSummary,
+            participantRoleIds,
+            cappedParticipantCount: params.cappedParticipantCount,
+          }),
         promptMode: "brief",
+        intent: params.intent,
         internal: true,
         model: briefRuntime.model,
         reasoning: briefRuntime.reasoning,
@@ -422,6 +447,7 @@ export async function runTaskCollaborationWithCodex(params: {
           roleSummaries: participantResults,
         }),
         promptMode: "critique",
+        intent: params.intent,
         internal: true,
         model: critiqueRuntime.model,
         reasoning: critiqueRuntime.reasoning,
@@ -462,12 +488,14 @@ export async function runTaskCollaborationWithCodex(params: {
     roleId: synthesisRoleId,
     prompt: buildFinalPrompt({
       prompt: params.prompt,
+      intent: params.intent,
       contextSummary: params.contextSummary,
       roleSummaries: participantResults,
       criticSummary: criticResult?.summary,
       failedRoleIds,
     }),
     promptMode: "final",
+    intent: params.intent,
     internal: false,
     model: finalRuntime.model,
     reasoning: finalRuntime.reasoning,
@@ -480,6 +508,9 @@ export async function runTaskCollaborationWithCodex(params: {
       message,
     }),
   });
+  if (!String(finalResult.summary ?? "").trim()) {
+    throw new Error("최종 합성 답변이 비어 있어 성공 처리할 수 없습니다.");
+  }
 
   return {
     participantResults,

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { formatAdaptiveFamilyLabel } from "../../adaptation/families";
 import type { AdaptiveWorkspaceData } from "../../adaptation/types";
 import {
@@ -111,7 +112,10 @@ export default function AdaptationPage(props: AdaptationPageProps) {
   const shadowCandidates = props.data.candidates
     .filter((row) => row.candidateKind !== "current")
     .slice(0, 6);
+  const [showAllTaskRuns, setShowAllTaskRuns] = useState(false);
   const recentTaskRuns = (props.taskRoleRuns ?? []).slice(0, 12);
+  const visibleTaskRuns = showAllTaskRuns ? recentTaskRuns : recentTaskRuns.slice(0, 3);
+  const canExpandTaskRuns = recentTaskRuns.length > 3;
   const handleReset = () => {
     if (!confirmAdaptiveReset()) {
       return;
@@ -166,6 +170,15 @@ export default function AdaptationPage(props: AdaptationPageProps) {
             <p>에이전트 실행의 성공/실패를 구조화해서 다음 비슷한 요청에 자동으로 반영합니다.</p>
           </div>
           <div className="settings-badges">
+            {canExpandTaskRuns ? (
+              <button
+                className="adaptation-table-toggle-badge"
+                onClick={() => setShowAllTaskRuns((current) => !current)}
+                type="button"
+              >
+                {showAllTaskRuns ? "접기" : "더보기"}
+              </button>
+            ) : null}
             <span className="status-tag neutral">
               {props.taskLearningLoading ? "불러오는 중" : `역할 ${props.taskRoleSummaries?.length ?? 0}`}
             </span>
@@ -173,63 +186,66 @@ export default function AdaptationPage(props: AdaptationPageProps) {
         </div>
         <div className="adaptation-card-list">
           {recentTaskRuns.length > 0 ? (
-            <div className="adaptation-table-wrap">
-              <table className="adaptation-table">
-                <thead>
-                  <tr>
-                    <th>역할</th>
-                    <th>상태</th>
-                    <th>메모</th>
-                    <th>요약</th>
-                    <th>시각</th>
-                    <th>관리</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {recentTaskRuns.map((row) => {
-                    const aggregate = props.taskRoleSummaries?.find((item) => item.roleId === row.roleId);
-                    const improvement = taskImprovementByRole.get(row.roleId);
-                    const memo = row.status === "done"
-                      ? aggregate
-                        ? `성공 ${aggregate.successCount} / 실패 ${aggregate.failureCount}`
-                        : "최근 성공"
-                      : (row.failureReason || "실패 이유 미기록");
-                    const summary = row.status === "done"
-                      ? (row.summaryExcerpt || row.promptExcerpt || "-")
-                      : (improvement ? `${formatSuccessDelta(improvement.successRateDelta)} · 최근 성공률 ${formatPercent(improvement.currentSuccessRate)}` : row.promptExcerpt || "-");
-                    return (
-                      <tr key={row.id}>
-                        <td>{formatTaskRoleLearningRoleLabel(row.roleId)}</td>
-                        <td>{formatTaskLearningStatus(row.status)}</td>
-                        <td>
-                          <div className="adaptation-memo-cell" title={memo}>
-                            {memo}
-                          </div>
-                        </td>
-                        <td>
-                          <div className="adaptation-summary-cell" title={summary}>
-                            {summary}
-                          </div>
-                        </td>
-                        <td className="adaptation-table-time-cell">{formatStamp(row.createdAt)}</td>
-                        <td className="adaptation-table-action-cell">
-                          <button
-                            className="adaptation-row-action"
-                            aria-label="학습 메모리 삭제"
-                            disabled={props.loading || !props.onDeleteTaskRoleRun}
-                            onClick={() => props.onDeleteTaskRoleRun?.(row.id)}
-                            title="삭제"
-                            type="button"
-                          >
-                            <img alt="" aria-hidden="true" className="adaptation-row-action-icon" src="/xmark-small-svgrepo-com.svg" />
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+            <>
+              <div className="adaptation-table-wrap">
+                <table className="adaptation-table">
+                  <thead>
+                    <tr>
+                      <th>역할</th>
+                      <th>상태</th>
+                      <th>메모</th>
+                      <th>요약</th>
+                      <th>시각</th>
+                      <th>관리</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {visibleTaskRuns.map((row) => {
+                      const aggregate = props.taskRoleSummaries?.find((item) => item.roleId === row.roleId);
+                      const improvement = taskImprovementByRole.get(row.roleId);
+                      const memo = row.status === "done"
+                        ? aggregate
+                          ? `성공 ${aggregate.successCount} / 실패 ${aggregate.failureCount}`
+                          : "최근 성공"
+                        : (row.failureReason || "실패 이유 미기록");
+                      const summary = row.status === "done"
+                        ? (row.summaryExcerpt || row.promptExcerpt || "-")
+                        : (improvement ? `${formatSuccessDelta(improvement.successRateDelta)} · 최근 성공률 ${formatPercent(improvement.currentSuccessRate)}` : row.promptExcerpt || "-");
+                      return (
+                        <tr key={row.id}>
+                          <td>{formatTaskRoleLearningRoleLabel(row.roleId)}</td>
+                          <td>{formatTaskLearningStatus(row.status)}</td>
+                          <td>
+                            <div className="adaptation-memo-cell" title={memo}>
+                              {memo}
+                            </div>
+                          </td>
+                          <td>
+                            <div className="adaptation-summary-cell" title={summary}>
+                              {summary}
+                            </div>
+                          </td>
+                          <td className="adaptation-table-time-cell">{formatStamp(row.createdAt)}</td>
+                          <td className="adaptation-table-action-cell">
+                            <button
+                              className="adaptation-row-action"
+                              aria-label="학습 메모리 삭제"
+                              disabled={props.loading || !props.onDeleteTaskRoleRun}
+                              onClick={() => props.onDeleteTaskRoleRun?.(row.id)}
+                              title="삭제"
+                              type="button"
+                            >
+                              <img alt="" aria-hidden="true" className="adaptation-row-action-icon" src="/xmark-small-svgrepo-com.svg" />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </>
+            
           ) : (
             <div className="adaptation-empty">아직 Tasks 학습 기록이 없습니다.</div>
           )}

@@ -322,6 +322,146 @@ describe("runTaskCollaborationWithCodex", () => {
     }));
   });
 
+  it("builds an ideation final prompt that demands final numbered ideas instead of handoff text", async () => {
+    let finalPrompt = "";
+    const executeRoleRun = vi.fn(async (params: {
+      roleId: string;
+      prompt: string;
+      promptMode: "orchestrate" | "brief" | "critique" | "final";
+      internal: boolean;
+    }) => {
+      if (params.promptMode === "final") {
+        finalPrompt = params.prompt;
+      }
+      return {
+        roleId: params.roleId,
+        runId: `${params.roleId}-${params.promptMode}`,
+        summary: params.promptMode === "final" ? "1. 아이디어 A\n2. 아이디어 B" : `${params.roleId}-${params.promptMode}-summary`,
+        artifactPaths: [`/${params.roleId}/${params.promptMode}.md`],
+      };
+    });
+
+    await runTaskCollaborationWithCodex({
+      prompt: "장르 불문 게임 아이디어 10개를 제안해줘",
+      intent: "ideation",
+      contextSummary: "최근 Steam 흐름 참고",
+      participantRoleIds: ["game_designer", "researcher"],
+      synthesisRoleId: "game_designer",
+      criticRoleId: "researcher",
+      cappedParticipantCount: false,
+      executeRoleRun,
+    });
+
+    expect(finalPrompt).toContain("지금 바로 사용자에게 전달할 최종 아이디어 답변만 작성한다.");
+    expect(finalPrompt).toContain("번호 목록으로 아이디어를 제시");
+    expect(finalPrompt).toContain("handoff");
+  });
+
+  it("passes failed participant ids into the final synthesis prompt when a brief fails", async () => {
+    let finalPrompt = "";
+    const executeRoleRun = vi.fn(async (params: {
+      roleId: string;
+      prompt: string;
+      promptMode: "orchestrate" | "brief" | "critique" | "final";
+      internal: boolean;
+    }) => {
+      if (params.roleId === "researcher" && params.promptMode === "brief") {
+        throw new Error("researcher failed");
+      }
+      if (params.promptMode === "final") {
+        finalPrompt = params.prompt;
+      }
+      return {
+        roleId: params.roleId,
+        runId: `${params.roleId}-${params.promptMode}`,
+        summary: `${params.roleId}-${params.promptMode}-summary`,
+        artifactPaths: [`/${params.roleId}/${params.promptMode}.md`],
+      };
+    });
+
+    await runTaskCollaborationWithCodex({
+      prompt: "정리해줘",
+      contextSummary: "최근 스레드 있음",
+      participantRoleIds: ["game_designer", "researcher"],
+      synthesisRoleId: "game_designer",
+      criticRoleId: "game_designer",
+      cappedParticipantCount: false,
+      executeRoleRun,
+    });
+
+    expect(finalPrompt).toContain("# 실패한 참여 에이전트");
+    expect(finalPrompt).toContain("- researcher");
+  });
+
+  it("maps adaptive orchestration task-agent ids back onto studio role ids for execution", async () => {
+    const executeRoleRun = vi.fn(async (params: {
+      roleId: string;
+      prompt: string;
+      promptMode: "orchestrate" | "brief" | "critique" | "final";
+      internal: boolean;
+      model?: string;
+      reasoning?: string;
+    }) => {
+      if (params.promptMode === "orchestrate") {
+        return {
+          roleId: params.roleId,
+          runId: `${params.roleId}-orchestrate`,
+          summary: JSON.stringify({
+            participant_role_ids: ["game_designer", "researcher"],
+            primary_role_id: "game_designer",
+            critic_role_id: "researcher",
+            orchestration_summary: "designer + researcher",
+            role_assignments: {
+              game_designer: "designer-plan",
+              researcher: "research-plan",
+            },
+          }),
+          artifactPaths: ["/orchestration.json"],
+        };
+      }
+      return {
+        roleId: params.roleId,
+        runId: `${params.roleId}-${params.promptMode}`,
+        summary: `${params.roleId}-${params.promptMode}-summary`,
+        artifactPaths: [`/${params.roleId}/${params.promptMode}.md`],
+      };
+    });
+
+    await runTaskCollaborationWithCodex({
+      prompt: "10개 게임 아이디어를 만들어줘",
+      contextSummary: "",
+      participantRoleIds: ["pm_planner", "system_programmer"],
+      candidateRoleIds: ["pm_planner", "research_analyst", "system_programmer"],
+      requestedRoleIds: [],
+      participantPrompts: {
+        pm_planner: "designer-fallback",
+        research_analyst: "research-fallback",
+        system_programmer: "architect-fallback",
+      },
+      intent: "ideation",
+      synthesisRoleId: "pm_planner",
+      criticRoleId: "system_programmer",
+      cappedParticipantCount: false,
+      useAdaptiveOrchestrator: true,
+      executeRoleRun,
+    });
+
+    expect(executeRoleRun).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      roleId: "pm_planner",
+      promptMode: "brief",
+      prompt: expect.stringContaining("designer-plan"),
+    }));
+    expect(executeRoleRun).toHaveBeenNthCalledWith(3, expect.objectContaining({
+      roleId: "research_analyst",
+      promptMode: "brief",
+      prompt: expect.stringContaining("research-plan"),
+    }));
+    expect(executeRoleRun).not.toHaveBeenCalledWith(expect.objectContaining({
+      roleId: "system_programmer",
+      promptMode: "brief",
+    }));
+  });
+
   it("keeps the selected web-backed task model for collaboration stages", async () => {
     const executeRoleRun = vi.fn(async (params: {
       roleId: string;
@@ -371,6 +511,41 @@ describe("runTaskCollaborationWithCodex", () => {
       promptMode: "final",
       model: "GPT-Web",
       reasoning: "중간",
+    }));
+  });
+
+  it("forces ideation final synthesis to produce direct numbered idea output instead of handoff guidance", async () => {
+    const executeRoleRun = vi.fn(async (params: {
+      roleId: string;
+      prompt: string;
+      promptMode: "orchestrate" | "brief" | "critique" | "final";
+      internal: boolean;
+      intent?: string;
+    }) => ({
+      roleId: params.roleId,
+      runId: `${params.roleId}-${params.promptMode}`,
+      summary: params.promptMode === "final" ? "1. 아이디어 A\n2. 아이디어 B" : `${params.roleId}-${params.promptMode}-summary`,
+      artifactPaths: [`/${params.roleId}/${params.promptMode}.md`],
+    }));
+
+    await runTaskCollaborationWithCodex({
+      prompt: "장르 불문 게임 아이디어 10개를 제안해줘",
+      contextSummary: "",
+      participantRoleIds: ["game_designer", "researcher"],
+      synthesisRoleId: "game_designer",
+      criticRoleId: "researcher",
+      intent: "ideation",
+      cappedParticipantCount: false,
+      executeRoleRun,
+    });
+
+    expect(executeRoleRun).toHaveBeenLastCalledWith(expect.objectContaining({
+      promptMode: "final",
+      intent: "ideation",
+      prompt: expect.stringContaining("지금 바로 사용자에게 전달할 최종 아이디어 답변만 작성한다."),
+    }));
+    expect(executeRoleRun).toHaveBeenLastCalledWith(expect.objectContaining({
+      prompt: expect.stringContaining("사용자 요청에 숫자 요구가 있으면 그 수를 충족하도록 번호 목록으로 아이디어를 제시한다."),
     }));
   });
 });

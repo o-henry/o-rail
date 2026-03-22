@@ -1225,8 +1225,12 @@ pub fn task_record_role_result(
 pub fn task_mark_status(cwd: String, task_id: String, status: String) -> Result<TaskDetail, String> {
     let workspace = normalize_workspace_root(&cwd)?;
     let normalized_status = match status.trim().to_lowercase().as_str() {
+        "active" => "active",
         "queued" => "queued",
         "completed" => "completed",
+        "failed" => "failed",
+        "cancelled" => "cancelled",
+        "error" => "error",
         "archived" => "archived",
         _ => "active",
     };

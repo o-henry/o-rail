@@ -1,4 +1,9 @@
-import { getTaskAgentOrchestrationProfiles } from "../../../pages/tasks/taskAgentPresets";
+import {
+  getTaskAgentOrchestrationProfile,
+  getTaskAgentPresetIdByStudioRoleId,
+  getTaskAgentStudioRoleId,
+  resolveTaskAgentPresetId,
+} from "../../../pages/tasks/taskAgentPresets";
 
 type AdaptiveTaskOrchestrationPlan = {
   participantRoleIds: string[];
@@ -33,6 +38,59 @@ function normalizeJsonBlock(value: string): string {
   return trimmed;
 }
 
+function canonicalTaskRoleId(value: unknown): string {
+  const normalized = String(value ?? "").trim();
+  if (!normalized) {
+    return "";
+  }
+  return (
+    resolveTaskAgentPresetId(normalized)
+    ?? getTaskAgentPresetIdByStudioRoleId(normalized)
+    ?? ""
+  );
+}
+
+function buildAllowedRoleMaps(allowedRoleIds: string[]): {
+  canonicalToOriginal: Map<string, string>;
+  originalToCanonical: Map<string, string>;
+} {
+  const canonicalToOriginal = new Map<string, string>();
+  const originalToCanonical = new Map<string, string>();
+  for (const roleId of allowedRoleIds) {
+    const original = String(roleId ?? "").trim();
+    if (!original) {
+      continue;
+    }
+    const canonical = canonicalTaskRoleId(original) || original;
+    if (!canonicalToOriginal.has(canonical)) {
+      canonicalToOriginal.set(canonical, original);
+    }
+    originalToCanonical.set(original, canonical);
+  }
+  return {
+    canonicalToOriginal,
+    originalToCanonical,
+  };
+}
+
+function resolveAllowedRoleId(
+  value: unknown,
+  maps: {
+    canonicalToOriginal: Map<string, string>;
+    originalToCanonical: Map<string, string>;
+  },
+): string {
+  const normalized = String(value ?? "").trim();
+  if (!normalized) {
+    return "";
+  }
+  if (maps.originalToCanonical.has(normalized)) {
+    return normalized;
+  }
+  const canonical = canonicalTaskRoleId(normalized) || normalized;
+  return maps.canonicalToOriginal.get(canonical) ?? "";
+}
+
 function normalizeRoleIds(
   roleIds: unknown,
   allowedRoleIds: string[],
@@ -41,11 +99,11 @@ function normalizeRoleIds(
   if (!Array.isArray(roleIds)) {
     return [];
   }
-  const allowed = new Set(allowedRoleIds);
+  const maps = buildAllowedRoleMaps(allowedRoleIds);
   const normalized: string[] = [];
   for (const item of roleIds) {
-    const roleId = String(item ?? "").trim();
-    if (!roleId || !allowed.has(roleId) || normalized.includes(roleId)) {
+    const roleId = resolveAllowedRoleId(item, maps);
+    if (!roleId || normalized.includes(roleId)) {
       continue;
     }
     normalized.push(roleId);
@@ -67,15 +125,31 @@ export function buildAdaptiveOrchestrationPrompt(params: {
   heuristicPrimaryRoleId: string;
   heuristicParticipantRoleIds: string[];
 }): string {
-  const roleBlocks = getTaskAgentOrchestrationProfiles(params.candidateRoleIds).map((profile) => [
+  const roleBlocks = params.candidateRoleIds.flatMap((roleId) => {
+    const profile = getTaskAgentOrchestrationProfile(roleId);
+    if (!profile) {
+      return [];
+    }
+    const baselineAssignment =
+      clip(
+        String(
+          params.candidateRolePrompts[roleId]
+          ?? params.candidateRolePrompts[profile.roleId]
+          ?? params.candidateRolePrompts[getTaskAgentStudioRoleId(profile.roleId) ?? ""]
+          ?? "",
+        ).trim(),
+        700,
+      ) || "없음";
+    return [[
     `- role_id: ${profile.roleId}`,
     `  label: ${profile.label}`,
     `  summary: ${clip(profile.summary, 220)}`,
     `  strengths: ${profile.strengths.join(" / ")}`,
     `  limits: ${profile.limits.join(" / ")}`,
     `  use_when: ${profile.useWhen.join(" / ")}`,
-    `  baseline_assignment: ${clip(params.candidateRolePrompts[profile.roleId] ?? "", 700) || "없음"}`,
-  ].join("\n"));
+    `  baseline_assignment: ${baselineAssignment}`,
+  ].join("\n")];
+  });
   return [
     "# 작업 모드",
     "메인 오케스트레이터",
@@ -133,6 +207,7 @@ export function parseAdaptiveOrchestrationPlan(params: {
   }
   try {
     const parsed = JSON.parse(payload) as Record<string, unknown>;
+    const allowedMaps = buildAllowedRoleMaps(params.allowedRoleIds);
     const participantRoleIds = normalizeRoleIds(
       parsed.participant_role_ids,
       params.allowedRoleIds,
@@ -141,11 +216,11 @@ export function parseAdaptiveOrchestrationPlan(params: {
     if (participantRoleIds.length === 0) {
       return null;
     }
-    const primaryCandidate = String(parsed.primary_role_id ?? "").trim();
+    const primaryCandidate = resolveAllowedRoleId(parsed.primary_role_id, allowedMaps);
     const primaryRoleId = participantRoleIds.includes(primaryCandidate)
       ? primaryCandidate
       : (participantRoleIds.includes(params.fallbackPrimaryRoleId) ? params.fallbackPrimaryRoleId : participantRoleIds[0]);
-    const criticCandidate = String(parsed.critic_role_id ?? "").trim();
+    const criticCandidate = resolveAllowedRoleId(parsed.critic_role_id, allowedMaps);
     const criticRoleId = criticCandidate && criticCandidate !== primaryRoleId && participantRoleIds.includes(criticCandidate)
       ? criticCandidate
       : (params.fallbackCriticRoleId && params.fallbackCriticRoleId !== primaryRoleId && participantRoleIds.includes(params.fallbackCriticRoleId)
@@ -156,8 +231,25 @@ export function parseAdaptiveOrchestrationPlan(params: {
       : {};
     const rolePrompts = Object.fromEntries(
       participantRoleIds.map((roleId) => {
-        const assignment = clip(String(rawAssignments[roleId] ?? "").trim(), 1200);
-        return [roleId, assignment || params.fallbackRolePrompts[roleId] || ""];
+        const canonicalRoleId = allowedMaps.originalToCanonical.get(roleId) ?? roleId;
+        const studioRoleId = getTaskAgentStudioRoleId(canonicalRoleId) ?? "";
+        const assignment = clip(
+          String(
+            rawAssignments[roleId]
+            ?? rawAssignments[canonicalRoleId]
+            ?? rawAssignments[studioRoleId]
+            ?? "",
+          ).trim(),
+          1200,
+        );
+        return [
+          roleId,
+          assignment
+          || params.fallbackRolePrompts[roleId]
+          || params.fallbackRolePrompts[canonicalRoleId]
+          || params.fallbackRolePrompts[studioRoleId]
+          || "",
+        ];
       }),
     ) as Record<string, string>;
     const orchestrationSummary = clip(String(parsed.orchestration_summary ?? "").trim(), 280)

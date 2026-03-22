@@ -105,6 +105,22 @@ describe("isTasksThreadInterruptible", () => {
       coordinationStatus: "cancelled",
     })).toBe(false);
   });
+
+  it("stays interruptible while runtime targets are still attached", () => {
+    expect(isTasksThreadInterruptible({
+      agentStatuses: ["idle", "done"],
+      coordinationStatus: "completed",
+      runtimeTargetCount: 1,
+    })).toBe(true);
+  });
+
+  it("stays interruptible while non-terminal live events are still present", () => {
+    expect(isTasksThreadInterruptible({
+      agentStatuses: ["idle", "done"],
+      coordinationStatus: "completed",
+      activeLiveEventCount: 1,
+    })).toBe(true);
+  });
 });
 
 describe("shouldAutoUseExternalResearchProvider", () => {
@@ -122,6 +138,47 @@ describe("shouldAutoUseExternalResearchProvider", () => {
       prompt: "게임 반응을 조사해줘",
       taggedRoles: ["researcher"],
     })).toBe(false);
+  });
+});
+
+describe("reduceLiveRoleEventBatch", () => {
+  it("drops lingering live events for a role once run_done arrives", () => {
+    const reduced = reduceLiveRoleEventBatch({
+      activeThreadId: "task-1",
+      details: [
+        {
+          taskId: "task-1",
+          studioRoleId: "research_analyst",
+          runId: "run-1",
+          type: "run_done",
+          stage: "codex",
+          message: "done",
+          at: "2026-03-22T00:00:02Z",
+        },
+      ],
+      currentNotes: {
+        researcher: {
+          message: "진행 중",
+          updatedAt: "2026-03-22T00:00:01Z",
+        },
+      },
+      currentEvents: [
+        {
+          id: "event-1",
+          runId: "run-1",
+          roleId: "researcher",
+          agentLabel: "RESEARCHER",
+          type: "stage_started",
+          stage: "codex",
+          message: "역할 실행 시작",
+          at: "2026-03-22T00:00:01Z",
+        },
+      ],
+    });
+
+    expect(reduced.nextNotes).toEqual({});
+    expect(reduced.nextEvents).toEqual([]);
+    expect(reduced.shouldRefresh).toBe(true);
   });
 });
 
@@ -271,7 +328,7 @@ describe("reduceLiveRoleEventBatch", () => {
     });
 
     expect(reduced.nextNotes.researcher).toBeUndefined();
-    expect(reduced.nextEvents).toHaveLength(1);
+    expect(reduced.nextEvents).toHaveLength(0);
     expect(reduced.shouldRefresh).toBe(true);
   });
 });

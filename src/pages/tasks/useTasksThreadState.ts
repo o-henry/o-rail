@@ -446,6 +446,20 @@ export function revealTasksProjectPathState(params: {
   };
 }
 
+export function isTasksThreadInterruptible(params: {
+  agentStatuses: Array<string | null | undefined>;
+  coordinationStatus?: string | null;
+}): boolean {
+  const coordinationStatus = String(params.coordinationStatus ?? "").trim().toLowerCase();
+  if (coordinationStatus === "needs_resume" || coordinationStatus === "cancelled") {
+    return false;
+  }
+  if (coordinationStatus === "running") {
+    return true;
+  }
+  return params.agentStatuses.some((status) => isLiveBackgroundAgentStatus(status));
+}
+
 export function resolveTasksProjectSelection(params: {
   cwd: string;
   projectPath: string;
@@ -1114,10 +1128,10 @@ export function useTasksThreadState(params: Params) {
       if (!activeThread) {
         return false;
       }
-      if (activeThreadCoordination?.status === "needs_resume" || activeThreadCoordination?.status === "cancelled") {
-        return false;
-      }
-      return activeThread.agents.some((agent) => isLiveBackgroundAgentStatus(agent.status));
+      return isTasksThreadInterruptible({
+        agentStatuses: activeThread.agents.map((agent) => agent.status),
+        coordinationStatus: activeThreadCoordination?.status,
+      });
     },
     [activeThread, activeThreadCoordination?.status],
   );
@@ -1654,13 +1668,22 @@ export function useTasksThreadState(params: Params) {
       return;
     }
     const runningAgents = activeThread.agents.filter((agent) => isLiveBackgroundAgentStatus(agent.status));
-    if (runningAgents.length === 0) {
+    const runtimeRoleIds = Object.keys(runtimeTargetsByRoleRef.current) as ThreadRoleId[];
+    const orchestrationRoleIds = [
+      ...(activeThreadCoordination?.assignedRoleIds ?? []),
+      ...(activeThreadCoordination?.requestedRoleIds ?? []),
+    ].filter(Boolean) as ThreadRoleId[];
+    const runningRoleIds = new Set<ThreadRoleId>([
+      ...runningAgents.map((agent) => agent.roleId),
+      ...runtimeRoleIds,
+      ...orchestrationRoleIds,
+    ]);
+    if (runningRoleIds.size === 0) {
       return;
     }
 
     setStoppingComposerRun(true);
     const timestamp = nowIso();
-    const runningRoleIds = new Set(runningAgents.map((agent) => agent.roleId));
     try {
       if (!params.hasTauriRuntime || !params.cwd) {
         const store = cloneStore(browserStoreRef.current);
@@ -1671,7 +1694,7 @@ export function useTasksThreadState(params: Params) {
         detail.thread.status = "idle";
         detail.thread.updatedAt = timestamp;
         detail.agents = detail.agents.map((agent) => (
-          runningAgents.some((entry) => entry.id === agent.id)
+          runningRoleIds.has(agent.roleId)
             ? { ...agent, status: "idle", lastUpdatedAt: timestamp }
             : agent
         ));
@@ -1775,7 +1798,7 @@ export function useTasksThreadState(params: Params) {
             updatedAt: timestamp,
           },
           agents: current.agents.map((agent) => (
-            runningAgents.some((entry) => entry.id === agent.id)
+            runningRoleIds.has(agent.roleId)
               ? { ...agent, status: "idle", lastUpdatedAt: timestamp, summary: "중단되었습니다." }
               : agent
           )),

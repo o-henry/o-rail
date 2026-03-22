@@ -25,6 +25,13 @@ type LiveProcessEvent = {
   at: string;
 };
 
+type LiveConversationEntry = {
+  roleId: ThreadRoleId;
+  label: string;
+  agent: LiveAgentCard | null;
+  latestEvent: LiveProcessEvent | null;
+};
+
 type TasksThreadConversationProps = {
   orchestration: AgenticCoordinationState | null;
   messages: ThreadMessage[];
@@ -185,19 +192,6 @@ function displayProcessStage(stage: string, t: (key: string) => string) {
   return stage || t("tasks.processStage.progress");
 }
 
-function displayProcessEventLabel(type: string, t: (key: string) => string) {
-  const normalized = String(type ?? "").trim().toLowerCase();
-  if (normalized === "run_queued") return t("tasks.processEvent.queued");
-  if (normalized === "run_started") return t("tasks.processEvent.started");
-  if (normalized === "stage_started") return t("tasks.processEvent.running");
-  if (normalized === "stage_done") return t("tasks.processEvent.done");
-  if (normalized === "stage_error") return t("tasks.processEvent.error");
-  if (normalized === "run_done") return t("tasks.processEvent.finished");
-  if (normalized === "run_error") return t("tasks.processEvent.failed");
-  if (normalized === "artifact_added") return t("tasks.processEvent.artifact");
-  return t("tasks.processEvent.progress");
-}
-
 function buildLatestProcessEventByRole(events: LiveProcessEvent[]) {
   const latest = new Map<ThreadRoleId, LiveProcessEvent>();
   for (const event of events) {
@@ -222,6 +216,52 @@ function buildRoleEventsByRole(events: LiveProcessEvent[]) {
   return grouped;
 }
 
+export function resolveLiveConversationEntries(params: {
+  liveAgents: LiveAgentCard[];
+  liveProcessEvents: LiveProcessEvent[];
+}): LiveConversationEntry[] {
+  const latestProcessEventByRole = buildLatestProcessEventByRole(params.liveProcessEvents);
+  const seen = new Set<ThreadRoleId>();
+  const entries: LiveConversationEntry[] = [];
+
+  for (const agent of params.liveAgents) {
+    seen.add(agent.roleId);
+    entries.push({
+      roleId: agent.roleId,
+      label: agent.label,
+      agent,
+      latestEvent: latestProcessEventByRole.get(agent.roleId) ?? null,
+    });
+  }
+
+  const remainingEvents = Array.from(latestProcessEventByRole.values()).sort((left, right) => (
+    Date.parse(right.at || "") - Date.parse(left.at || "")
+  ));
+
+  for (const event of remainingEvents) {
+    if (seen.has(event.roleId)) {
+      continue;
+    }
+    seen.add(event.roleId);
+    entries.push({
+      roleId: event.roleId,
+      label: event.agentLabel || getTaskAgentLabel(event.roleId),
+      agent: null,
+      latestEvent: event,
+    });
+  }
+
+  return entries;
+}
+
+function shouldShowLiveDots(eventType: string, liveState: "active" | "delayed" | "stalled") {
+  if (liveState === "stalled") {
+    return false;
+  }
+  const normalized = String(eventType ?? "").trim().toLowerCase();
+  return !["run_done", "run_error", "stage_done", "stage_error"].includes(normalized);
+}
+
 function animatedDots(frame: number) {
   return [".", "..", "..."][frame % 3] ?? "...";
 }
@@ -238,6 +278,13 @@ function TasksThreadConversationImpl(props: TasksThreadConversationProps) {
   const roleEventsByRole = useMemo(
     () => buildRoleEventsByRole(props.liveProcessEvents),
     [props.liveProcessEvents],
+  );
+  const liveConversationEntries = useMemo(
+    () => resolveLiveConversationEntries({
+      liveAgents: props.liveAgents,
+      liveProcessEvents: props.liveProcessEvents,
+    }),
+    [props.liveAgents, props.liveProcessEvents],
   );
   const currentRunBadgeRoleIds = useMemo(
     () => resolveLatestRunParticipationBadgeRoleIds({
@@ -381,22 +428,11 @@ function TasksThreadConversationImpl(props: TasksThreadConversationProps) {
             </Fragment>
           );
         })}
-        {props.liveProcessEvents.map((event) => (
-          <article className="tasks-thread-message-row is-system is-process" key={event.id}>
-            <span className="tasks-thread-message-label">
-              {event.agentLabel} · {displayProcessEventLabel(event.type, t)}
-            </span>
-            <div className="tasks-thread-log-line">
-              {event.stage ? `[${displayProcessStage(event.stage, t)}] ` : ""}
-              {event.message}
-            </div>
-          </article>
-        ))}
-        {props.liveAgents.map((agent) => (
+        {liveConversationEntries.map((entry) => (
           (() => {
-            const roleEvents = roleEventsByRole.get(agent.roleId) ?? [];
-            const latestEvent = latestProcessEventByRole.get(agent.roleId);
-            const freshestAt = String(latestEvent?.at ?? agent.updatedAt ?? "").trim();
+            const roleEvents = roleEventsByRole.get(entry.roleId) ?? [];
+            const latestEvent = entry.latestEvent ?? latestProcessEventByRole.get(entry.roleId) ?? null;
+            const freshestAt = String(latestEvent?.at ?? entry.agent?.updatedAt ?? "").trim();
             const liveState = resolveLiveActivityState(freshestAt, liveNowMs);
             const recentSourceCount = resolveRecentSourceCount(roleEvents);
             const failureReason = resolveLatestFailureReason(roleEvents);
@@ -417,18 +453,18 @@ function TasksThreadConversationImpl(props: TasksThreadConversationProps) {
             const currentWorkLabel =
               failureReason.includes("ROLE_KB_BOOTSTRAP 실패") && recentSourceCount === 0 && String(latestEvent?.stage ?? "").trim().toLowerCase() === "codex"
                 ? t("tasks.live.currentWork.degraded")
-                : latestEvent?.message || agent.summary || t("tasks.live.working");
+                : latestEvent?.message || entry.agent?.summary || t("tasks.live.working");
             const nextAction = inferNextLiveAction({
               stage: latestEvent?.stage,
               activityState: liveState,
               failureReason,
-              interrupted: (agent.summary || "").includes("중단"),
+              interrupted: (entry.agent?.summary || "").includes("중단"),
               recentSourceCount,
             });
             return (
-              <article className="tasks-thread-message-row is-assistant is-live-placeholder" key={`live:${agent.agentId}`}>
+              <article className="tasks-thread-message-row is-assistant is-live-placeholder" key={`live:${entry.roleId}`}>
                 <div className="tasks-thread-live-header">
-                  <span className="tasks-thread-message-label">{agent.label}</span>
+                  <span className="tasks-thread-message-label">{entry.label}</span>
                   {latestEvent?.stage ? (
                     <span className="tasks-thread-live-stage">
                       {displayProcessStage(String(latestEvent.stage ?? ""), t)}
@@ -437,18 +473,21 @@ function TasksThreadConversationImpl(props: TasksThreadConversationProps) {
                   <span className={`tasks-thread-live-state is-${liveState}`}>
                     {stateLabel}
                   </span>
-                  <span aria-hidden="true" className="tasks-thread-live-pulse">
-                    {animatedDots(pulseFrame)}
-                  </span>
                 </div>
                 <div className="tasks-thread-log-line">
+                  {latestEvent?.stage ? `[${displayProcessStage(String(latestEvent.stage ?? ""), t)}] ` : ""}
                   {currentWorkLabel}
+                  {shouldShowLiveDots(latestEvent?.type ?? "", liveState) ? (
+                    <span aria-hidden="true" className="tasks-thread-live-pulse is-inline">
+                      {animatedDots(pulseFrame)}
+                    </span>
+                  ) : null}
                 </div>
                 <div className="tasks-thread-live-detail">
                   {t("tasks.live.lastUpdate", { value: lastSeenLabel })}
                 </div>
-                {agent.summary && latestEvent?.message && latestEvent.message !== agent.summary ? (
-                  <div className="tasks-thread-live-detail">{agent.summary}</div>
+                {entry.agent?.summary && latestEvent?.message && latestEvent.message !== entry.agent.summary ? (
+                  <div className="tasks-thread-live-detail">{entry.agent.summary}</div>
                 ) : null}
                 <dl className="tasks-thread-live-metrics">
                   <div>
@@ -472,10 +511,10 @@ function TasksThreadConversationImpl(props: TasksThreadConversationProps) {
                     <dd>{nextAction}</dd>
                   </div>
                 </dl>
-                {agent.latestArtifactPath ? (
+                {entry.agent?.latestArtifactPath ? (
                   <div className="tasks-thread-message-meta">
-                    <small className="tasks-thread-message-artifact">{agent.latestArtifactPath}</small>
-                    {agent.updatedAt ? <small className="tasks-thread-message-time">{formatArtifactStamp(agent.updatedAt)}</small> : null}
+                    <small className="tasks-thread-message-artifact">{entry.agent.latestArtifactPath}</small>
+                    {entry.agent.updatedAt ? <small className="tasks-thread-message-time">{formatArtifactStamp(entry.agent.updatedAt)}</small> : null}
                   </div>
                 ) : null}
               </article>

@@ -1182,6 +1182,11 @@
   letter-spacing: 0.04em;
 }
 
+.tasks-thread-live-pulse.is-inline {
+  min-width: 14px;
+  margin-left: 2px;
+}
+
 .tasks-thread-live-detail {
   max-width: min(100%, 820px);
   color: var(--text-muted);

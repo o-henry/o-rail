@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   isFailedThreadMessage,
   isFinishedThreadMessage,
+  resolveLiveConversationEntries,
   resolveLatestRunParticipationBadgeRoleIds,
   resolveProgressiveRevealStep,
   resolveThreadParticipationBadgeRoleIds,
@@ -147,6 +148,79 @@ describe("resolveLatestRunParticipationBadgeRoleIds", () => {
         },
       ],
     })).toEqual(["game_designer", "unity_architect"]);
+  });
+});
+
+describe("resolveLiveConversationEntries", () => {
+  it("merges repeated live process events into one entry per role", () => {
+    expect(resolveLiveConversationEntries({
+      liveAgents: [
+        {
+          agentId: "agent-1",
+          roleId: "game_designer",
+          label: "GAME DESIGNER",
+          status: "thinking",
+          lastRunId: "run-1",
+          summary: "기능 목표를 정리하고 있습니다.",
+          updatedAt: "2026-03-22T00:00:01Z",
+          latestArtifactPath: "",
+        },
+      ],
+      liveProcessEvents: [
+        {
+          id: "event-1",
+          runId: "run-1",
+          roleId: "game_designer",
+          agentLabel: "GAME DESIGNER",
+          type: "run_started",
+          stage: "codex",
+          message: "역할 실행 시작",
+          at: "2026-03-22T00:00:01Z",
+        },
+        {
+          id: "event-2",
+          runId: "run-1",
+          roleId: "game_designer",
+          agentLabel: "GAME DESIGNER",
+          type: "stage_started",
+          stage: "codex",
+          message: "runtime attached",
+          at: "2026-03-22T00:00:03Z",
+        },
+      ],
+    })).toEqual([
+      expect.objectContaining({
+        roleId: "game_designer",
+        label: "GAME DESIGNER",
+        latestEvent: expect.objectContaining({
+          id: "event-2",
+          message: "runtime attached",
+        }),
+      }),
+    ]);
+  });
+
+  it("keeps event-only roles visible even before a live agent card arrives", () => {
+    expect(resolveLiveConversationEntries({
+      liveAgents: [],
+      liveProcessEvents: [
+        {
+          id: "event-3",
+          runId: "run-2",
+          roleId: "unity_architect",
+          agentLabel: "UNITY ARCHITECT",
+          type: "run_started",
+          stage: "codex",
+          message: "역할 실행 시작",
+          at: "2026-03-22T00:00:04Z",
+        },
+      ],
+    })).toEqual([
+      expect.objectContaining({
+        roleId: "unity_architect",
+        label: "UNITY ARCHITECT",
+      }),
+    ]);
   });
 });
 

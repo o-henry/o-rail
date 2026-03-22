@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   deriveAutomaticResearchProviderBadge,
+  isTasksThreadInterruptible,
   resolveAutomaticResearchModel,
   isTasksCodexExecutionBlocked,
   reduceLiveRoleEventBatch,
@@ -82,6 +83,26 @@ describe("isTasksCodexExecutionBlocked", () => {
       hasTauriRuntime: false,
       loginCompleted: false,
       codexAuthCheckPending: false,
+    })).toBe(false);
+  });
+});
+
+describe("isTasksThreadInterruptible", () => {
+  it("stays interruptible while coordination is still running even if no live agent status remains", () => {
+    expect(isTasksThreadInterruptible({
+      agentStatuses: ["idle", "done"],
+      coordinationStatus: "running",
+    })).toBe(true);
+  });
+
+  it("turns off once coordination is blocked or cancelled and no live agents remain", () => {
+    expect(isTasksThreadInterruptible({
+      agentStatuses: ["idle", "done"],
+      coordinationStatus: "needs_resume",
+    })).toBe(false);
+    expect(isTasksThreadInterruptible({
+      agentStatuses: ["idle", "done"],
+      coordinationStatus: "cancelled",
     })).toBe(false);
   });
 });

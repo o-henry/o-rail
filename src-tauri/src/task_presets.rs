@@ -7,7 +7,7 @@ pub struct TaskAgentPreset {
     pub discussion_line: &'static str,
 }
 
-pub const UNITY_TASK_AGENT_PRESETS: [TaskAgentPreset; 10] = [
+pub const UNITY_TASK_AGENT_PRESETS: [TaskAgentPreset; 11] = [
     TaskAgentPreset {
         id: "game_designer",
         label: "GAME DESIGNER",
@@ -39,6 +39,14 @@ pub const UNITY_TASK_AGENT_PRESETS: [TaskAgentPreset; 10] = [
         default_summary: "Unity 아키텍처, 코드맵, 데이터 흐름, 성능과 통합 리스크를 검토하고 있습니다.",
         default_instruction: "집중할 점: 아키텍처, 시스템 경계, 코드맵, 데이터 흐름, 성능 병목, Unity 통합 리스크와 리뷰 포인트를 한국어로 검토하세요.",
         discussion_line: "UNITY ARCHITECT: 아키텍처 경계, 코드 구조, 성능 병목, 통합 리스크를 한국어로 점검하고 있습니다.",
+    },
+    TaskAgentPreset {
+        id: "unity_refactor_specialist",
+        label: "UNITY REFACTOR SPECIALIST",
+        studio_role_id: "system_programmer",
+        default_summary: "대규모 Unity 코드 정리, 책임 분리, 파일 분해와 동작 보존 중심의 리팩토링 경로를 설계하고 있습니다.",
+        default_instruction: "집중할 점: Unity/C# 코드의 리팩토링, 책임 분리, 큰 파일 분해, 결합도 완화, 안전한 마이그레이션 순서와 회귀 방지 포인트를 한국어로 정리하거나 직접 적용하세요.",
+        discussion_line: "UNITY REFACTOR SPECIALIST: 구조 개선 범위, 추출 순서, 동작 보존 기준, 회귀 위험을 한국어로 정리하고 있습니다.",
     },
     TaskAgentPreset {
         id: "unity_implementer",
@@ -90,11 +98,12 @@ pub const UNITY_TASK_AGENT_PRESETS: [TaskAgentPreset; 10] = [
     },
 ];
 
-pub const UNITY_TASK_AGENT_ORDER: [&str; 10] = [
+pub const UNITY_TASK_AGENT_ORDER: [&str; 11] = [
     "game_designer",
     "level_designer",
     "researcher",
     "unity_architect",
+    "unity_refactor_specialist",
     "unity_implementer",
     "technical_artist",
     "unity_editor_tools",
@@ -138,6 +147,7 @@ pub fn canonical_task_agent_id(raw: &str) -> Option<&'static str> {
         "level_designer" | "level" | "encounter" | "pacing" | "pm_creative_director" => Some("level_designer"),
         "researcher" | "research" | "search" | "web" | "crawl" | "crawler" | "scrape" | "scraper" | "research_analyst" => Some("researcher"),
         "unity_architect" | "architect" | "reviewer" | "review" | "codemap" | "code_mapper" | "mapper" | "performance" | "perf" | "system_programmer" => Some("unity_architect"),
+        "unity_refactor_specialist" | "refactor" | "refactoring" | "refactor_specialist" | "refactoring_specialist" | "cleanup" | "restructure" | "extract" | "split" => Some("unity_refactor_specialist"),
         "unity_implementer" | "implementer" | "worker" | "csharp" | "csharp_developer" | "debug" | "debugger" | "fixer" | "ui" | "ui_fixer" | "client_programmer" => Some("unity_implementer"),
         "technical_artist" | "techart" | "shader" | "vfx" | "prefab" | "art_pipeline" => Some("technical_artist"),
         "unity_editor_tools" | "tools" | "automation" | "editor" | "validator" | "tooling_engineer" => Some("unity_editor_tools"),
@@ -256,6 +266,7 @@ mod tests {
         assert_eq!(canonical_task_agent_id("system_programmer"), Some("unity_architect"));
         assert_eq!(canonical_task_agent_id("client_programmer"), Some("unity_implementer"));
         assert_eq!(canonical_task_agent_id("codemap"), Some("unity_architect"));
+        assert_eq!(canonical_task_agent_id("refactor"), Some("unity_refactor_specialist"));
         assert_eq!(canonical_task_agent_id("performance"), Some("unity_architect"));
         assert_eq!(canonical_task_agent_id("csharp"), Some("unity_implementer"));
         assert_eq!(canonical_task_agent_id("debug"), Some("unity_implementer"));

@@ -66,6 +66,13 @@ const TASK_AGENT_PROMPT_PACK_SOURCES: &[TaskAgentPromptPackSource] = &[
         prompt_doc_text: include_str!("../resources/tasks_agents/unity_architect.md"),
     },
     TaskAgentPromptPackSource {
+        id: "unity_refactor_specialist",
+        toml_file_name: "unity_refactor_specialist.toml",
+        prompt_doc_file_name: "unity_refactor_specialist.md",
+        toml_text: include_str!("../resources/tasks_agents/unity_refactor_specialist.toml"),
+        prompt_doc_text: include_str!("../resources/tasks_agents/unity_refactor_specialist.md"),
+    },
+    TaskAgentPromptPackSource {
         id: "unity_implementer",
         toml_file_name: "unity_implementer.toml",
         prompt_doc_file_name: "unity_implementer.md",
@@ -207,6 +214,10 @@ mod tests {
         let researcher_pack = builtin_task_agent_prompt_pack("scraper").unwrap();
         assert_eq!(researcher_pack.id, "researcher");
         assert!(researcher_pack.developer_instructions.contains("검색"));
+
+        let refactor_pack = builtin_task_agent_prompt_pack("refactor").unwrap();
+        assert_eq!(refactor_pack.id, "unity_refactor_specialist");
+        assert!(refactor_pack.developer_instructions.contains("리팩토링"));
     }
 
     #[test]

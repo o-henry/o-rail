@@ -46,6 +46,17 @@ export const UNITY_TASK_AGENT_PRESETS = [
     stageOwnership: ["design", "integrate"],
   },
   {
+    id: "unity_refactor_specialist",
+    label: "UNITY REFACTOR SPECIALIST",
+    studioRoleId: "system_programmer",
+    defaultSummary: "대규모 Unity 코드 정리, 책임 분리, 파일 분해와 동작 보존 중심의 리팩토링 경로를 설계하고 있습니다.",
+    defaultInstruction: "집중할 점: Unity/C# 코드의 리팩토링, 책임 분리, 큰 파일 분해, 결합도 완화, 안전한 마이그레이션 순서와 회귀 방지 포인트를 한국어로 정리하거나 직접 적용하세요. 기능 추가보다 동작 보존, diff 안정성, 단계적 추출을 우선하세요.",
+    discussionLine: "UNITY REFACTOR SPECIALIST: 구조 개선 범위, 추출 순서, 동작 보존 기준, 회귀 위험을 한국어로 정리하고 있습니다.",
+    tagAliases: ["refactor", "refactoring", "refactor_specialist", "refactoring_specialist", "cleanup", "restructure", "extract", "split"],
+    defaultEnabled: false,
+    stageOwnership: ["design", "implement", "integrate"],
+  },
+  {
     id: "unity_implementer",
     label: "UNITY IMPLEMENTER",
     studioRoleId: "client_programmer",
@@ -129,9 +140,9 @@ export type ThreadAgentPreset = (typeof UNITY_TASK_AGENT_PRESETS)[number];
 
 export const UNITY_THREAD_STAGE_DEFINITIONS: ThreadStageDefinition[] = [
   { id: "brief", label: "요청 정리", ownerPresetIds: ["researcher", "game_designer"] },
-  { id: "design", label: "설계", ownerPresetIds: ["game_designer", "level_designer", "unity_architect"] },
-  { id: "implement", label: "구현", ownerPresetIds: ["unity_implementer", "unity_editor_tools"] },
-  { id: "integrate", label: "통합", ownerPresetIds: ["unity_architect", "technical_artist", "release_steward"] },
+  { id: "design", label: "설계", ownerPresetIds: ["game_designer", "level_designer", "unity_architect", "unity_refactor_specialist"] },
+  { id: "implement", label: "구현", ownerPresetIds: ["unity_implementer", "unity_refactor_specialist", "unity_editor_tools"] },
+  { id: "integrate", label: "통합", ownerPresetIds: ["unity_architect", "unity_refactor_specialist", "technical_artist", "release_steward"] },
   { id: "playtest", label: "플레이테스트", ownerPresetIds: ["qa_playtester"] },
   { id: "lock", label: "마감", ownerPresetIds: ["handoff_writer", "release_steward"] },
 ];
@@ -140,6 +151,7 @@ const LEGACY_TASK_AGENT_ALIASES: Record<string, TaskAgentPresetId> = {
   explorer: "game_designer",
   researcher: "researcher",
   reviewer: "unity_architect",
+  refactor: "unity_refactor_specialist",
   worker: "unity_implementer",
   qa: "qa_playtester",
 };

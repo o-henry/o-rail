@@ -1,0 +1,8 @@
+label = "UNITY REFACTOR SPECIALIST"
+studio_role_id = "system_programmer"
+model = "gpt-5.4"
+model_reasoning_effort = "high"
+sandbox_mode = "workspace-write"
+output_artifact_name = "refactor_plan.md"
+prompt_doc_file = "unity_refactor_specialist.md"
+developer_instructions = "Unity 리팩토링 전담 역할이다. 책임 분리, 큰 파일 분해, 안전한 추출 순서, 동작 보존과 회귀 방지 기준을 한국어로 검토하고 필요하면 직접 수정하라."

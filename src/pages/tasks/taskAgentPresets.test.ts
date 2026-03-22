@@ -20,15 +20,17 @@ describe("taskAgentPresets", () => {
     expect(resolveTaskAgentPresetId("researcher")).toBe("researcher");
     expect(resolveTaskAgentPresetId("scraper")).toBe("researcher");
     expect(resolveTaskAgentPresetId("codemap")).toBe("unity_architect");
+    expect(resolveTaskAgentPresetId("refactor")).toBe("unity_refactor_specialist");
     expect(resolveTaskAgentPresetId("csharp")).toBe("unity_implementer");
     expect(resolveTaskAgentPresetId("debug")).toBe("unity_implementer");
     expect(resolveTaskAgentPresetId("build")).toBe("release_steward");
   });
 
   it("parses Unity tag aliases and removes duplicates", () => {
-    expect(parseTaskAgentTags("@designer @researcher @csharp @playtest @debug @unknown @codemap")).toEqual([
+    expect(parseTaskAgentTags("@designer @researcher @refactor @csharp @playtest @debug @unknown @codemap")).toEqual([
       "game_designer",
       "researcher",
+      "unity_refactor_specialist",
       "unity_implementer",
       "qa_playtester",
       "unity_architect",
@@ -58,6 +60,7 @@ describe("taskAgentPresets", () => {
     expect(getTaskAgentWorkflowStageLabels("game_designer")).toEqual(["요청 정리", "설계"]);
     expect(getTaskAgentWorkflowStageLabels("researcher")).toEqual(["요청 정리"]);
     expect(getTaskAgentWorkflowStageLabels("unity_implementer")).toEqual(["구현"]);
+    expect(getTaskAgentWorkflowStageLabels("unity_refactor_specialist")).toEqual(["설계", "구현", "통합"]);
   });
 
   it("adds constrained creativity guidance only for design-facing task agents", () => {

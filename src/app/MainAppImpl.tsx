@@ -1125,6 +1125,7 @@ function App() {
           prompt: schedule.query,
           timeoutMs: 90_000,
           mode: "auto",
+          cwd,
         });
         if (result.ok) {
           return { ok: true };

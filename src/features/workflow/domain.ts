@@ -10,6 +10,8 @@ export type TurnExecutor =
   | "web_grok"
   | "web_perplexity"
   | "web_claude"
+  | "web_steel"
+  | "web_lightpanda_experimental"
   | "ollama";
 
 export type PresetKind =
@@ -30,7 +32,14 @@ export type PresetKind =
 export type CostPreset = "conservative" | "balanced" | "aggressive";
 export type WebAutomationMode = "bridgeAssisted" | "auto" | "manualPasteJson" | "manualPasteText";
 export type WebResultMode = WebAutomationMode;
-export type WebProvider = "gemini" | "gpt" | "grok" | "perplexity" | "claude";
+export type WebProvider =
+  | "gemini"
+  | "gpt"
+  | "grok"
+  | "perplexity"
+  | "claude"
+  | "steel"
+  | "lightpanda_experimental";
 
 export type QualityProfileId =
   | "code_implementation"
@@ -84,6 +93,8 @@ export const TURN_EXECUTOR_OPTIONS = [
   "web_grok",
   "web_perplexity",
   "web_claude",
+  "web_steel",
+  "web_lightpanda_experimental",
   "ollama",
 ] as const;
 
@@ -95,6 +106,8 @@ export const TURN_EXECUTOR_LABELS: Record<TurnExecutor, string> = {
   web_grok: "WEB / GROK",
   web_perplexity: "WEB / PERPLEXITY",
   web_claude: "WEB / CLAUDE",
+  web_steel: "WEB / STEEL",
+  web_lightpanda_experimental: "WEB / LIGHTPANDA",
   ollama: "Ollama",
 };
 
@@ -104,6 +117,8 @@ export const WEB_PROVIDER_OPTIONS: ReadonlyArray<WebProvider> = [
   "grok",
   "perplexity",
   "claude",
+  "steel",
+  "lightpanda_experimental",
 ];
 
 export const TURN_MODEL_OPTIONS = [
@@ -226,6 +241,10 @@ export function getWebProviderFromExecutor(executor: TurnExecutor): WebProvider 
       return "perplexity";
     case "web_claude":
       return "claude";
+    case "web_steel":
+      return "steel";
+    case "web_lightpanda_experimental":
+      return "lightpanda_experimental";
     default:
       return null;
   }
@@ -243,12 +262,24 @@ export function webProviderLabel(provider: WebProvider): string {
       return "PERPLEXITY";
     case "claude":
       return "CLAUDE";
+    case "steel":
+      return "STEEL";
+    case "lightpanda_experimental":
+      return "LIGHTPANDA";
     default:
       return String(provider).toUpperCase();
   }
 }
 
-export function webProviderHomeUrl(provider: WebProvider): string {
+export function isExternalWebProvider(provider: WebProvider): boolean {
+  return provider === "steel" || provider === "lightpanda_experimental";
+}
+
+export function webProviderUsesWorkerBridge(provider: WebProvider): boolean {
+  return !isExternalWebProvider(provider);
+}
+
+export function webProviderHomeUrl(provider: WebProvider): string | null {
   switch (provider) {
     case "gemini":
       return "https://gemini.google.com/app";
@@ -260,8 +291,11 @@ export function webProviderHomeUrl(provider: WebProvider): string {
       return "https://www.perplexity.ai/";
     case "claude":
       return "https://claude.ai/";
+    case "steel":
+    case "lightpanda_experimental":
+      return null;
     default:
-      return "about:blank";
+      return null;
   }
 }
 
@@ -296,14 +330,7 @@ export function inferQualityProfile(node: GraphNode, config: TurnConfig): Qualit
 
   const executor = getTurnExecutor(config);
   const signal = `${String(config.role ?? "")} ${String(config.promptTemplate ?? "")} ${node.id}`.toLowerCase();
-  if (
-    executor === "via_flow" ||
-    executor === "web_gemini" ||
-    executor === "web_gpt" ||
-    executor === "web_grok" ||
-    executor === "web_perplexity" ||
-    executor === "web_claude"
-  ) {
+  if (executor === "via_flow" || Boolean(getWebProviderFromExecutor(executor))) {
     return "research_evidence";
   }
   if (/impl|code|test|lint|build|refactor|fix|bug|개발|구현|코드/.test(signal)) {

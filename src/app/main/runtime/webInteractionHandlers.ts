@@ -1,5 +1,10 @@
+import { webProviderUsesWorkerBridge, type WebProvider } from "../../../features/workflow/domain";
+
 export function createWebInteractionHandlers(params: any) {
-  async function ensureWebWorkerReady() {
+  async function ensureWebWorkerReady(provider?: WebProvider) {
+    if (provider && !webProviderUsesWorkerBridge(provider)) {
+      return true;
+    }
     try {
       await params.invokeFn("web_worker_start");
       const health = await params.refreshWebWorkerHealth(true);

@@ -20,12 +20,14 @@ import { codexMultiAgentModeLabel, resolveNodeCwd } from "../../mainAppUtils";
 import {
   getTurnExecutor,
   getWebProviderFromExecutor,
+  isExternalWebProvider,
   inferQualityProfile,
   normalizeWebResultMode,
   toTurnModelDisplayName,
   toTurnModelEngineId,
   webProviderHomeUrl,
   webProviderLabel,
+  webProviderUsesWorkerBridge,
   type TurnConfig,
   type TurnExecutor,
   type WebProvider,
@@ -89,7 +91,7 @@ export type ExecuteTurnNodeContext = {
   setNodeStatus: (nodeId: string, status: any, message?: string) => void;
   setNodeRuntimeFields: (nodeId: string, fields: Record<string, unknown>) => void;
   requestWebTurnResponse: RequestWebTurnResponseFn;
-  ensureWebWorkerReady: () => Promise<boolean>;
+  ensureWebWorkerReady: (provider?: WebProvider) => Promise<boolean>;
   clearWebBridgeStageWarnTimer: (provider: WebProvider) => void;
   loadAgentRuleDocs: LoadAgentRuleDocsFn;
   injectKnowledgeContext: InjectKnowledgeContextFn;
@@ -241,14 +243,21 @@ export async function executeTurnNodeWithContext(
   if (webProvider) {
     const webResultMode = normalizeWebResultMode(config.webResultMode);
     const webTimeoutMs = Math.max(5_000, Number(config.webTimeoutMs ?? 180_000) || 180_000);
+    const providerHomeUrl = webProviderHomeUrl(webProvider);
+    const usesWorkerBridge = webProviderUsesWorkerBridge(webProvider);
     if (webResultMode === "bridgeAssisted") {
       ctx.activeWebNodeByProviderRef.current[webProvider] = node.id;
       ctx.activeWebPromptRef.current[webProvider] = textToSend;
       ctx.activeWebProviderByNodeRef.current[node.id] = webProvider;
       ctx.activeWebPromptByNodeRef.current[node.id] = textToSend;
       ctx.addNodeLog(node.id, `[WEB] ${webProviderLabel(webProvider)} 웹 연결 반자동 시작`);
-      ctx.addNodeLog(node.id, "[WEB] 프롬프트 자동 주입/전송을 시도합니다. 자동 전송 실패 시 웹 탭에서 전송 1회가 필요합니다.");
-      ctx.setStatus(`${webProviderLabel(webProvider)} 웹 연결 대기 중 - 자동 주입/전송 준비`);
+      if (usesWorkerBridge) {
+        ctx.addNodeLog(node.id, "[WEB] 프롬프트 자동 주입/전송을 시도합니다. 자동 전송 실패 시 웹 탭에서 전송 1회가 필요합니다.");
+        ctx.setStatus(`${webProviderLabel(webProvider)} 웹 연결 대기 중 - 자동 주입/전송 준비`);
+      } else {
+        ctx.addNodeLog(node.id, "[WEB] 외부 브라우저 런타임으로 직접 수집을 시도합니다.");
+        ctx.setStatus(`${webProviderLabel(webProvider)} 외부 웹 수집 실행 준비`);
+      }
       const requestManualFallback = async (reasonLine: string): Promise<ExecuteTurnNodeResult> => {
         ctx.addNodeLog(node.id, reasonLine);
         ctx.addNodeLog(node.id, "[WEB] 수동 입력 모달로 전환합니다.");
@@ -270,24 +279,28 @@ export async function executeTurnNodeWithContext(
           memoryTrace,
         };
       };
-      try {
-        await ctx.openUrlFn(webProviderHomeUrl(webProvider));
-        ctx.addNodeLog(node.id, `[WEB] ${webProviderLabel(webProvider)} 웹 탭을 자동으로 열었습니다.`);
-      } catch (error) {
-        ctx.addNodeLog(node.id, `[WEB] 웹 탭 자동 열기 실패: ${String(error)}`);
+      if (providerHomeUrl) {
+        try {
+          await ctx.openUrlFn(providerHomeUrl);
+          ctx.addNodeLog(node.id, `[WEB] ${webProviderLabel(webProvider)} 웹 탭을 자동으로 열었습니다.`);
+        } catch (error) {
+          ctx.addNodeLog(node.id, `[WEB] 웹 탭 자동 열기 실패: ${String(error)}`);
+        }
       }
-      const workerReady = await ctx.ensureWebWorkerReady();
-      if (!workerReady) {
-        ctx.clearWebBridgeStageWarnTimer(webProvider);
-        if (ctx.activeWebNodeByProviderRef.current[webProvider] === node.id) {
-          delete ctx.activeWebNodeByProviderRef.current[webProvider];
+      if (usesWorkerBridge) {
+        const workerReady = await ctx.ensureWebWorkerReady(webProvider);
+        if (!workerReady) {
+          ctx.clearWebBridgeStageWarnTimer(webProvider);
+          if (ctx.activeWebNodeByProviderRef.current[webProvider] === node.id) {
+            delete ctx.activeWebNodeByProviderRef.current[webProvider];
+          }
+          delete ctx.activeWebProviderByNodeRef.current[node.id];
+          if (ctx.activeWebPromptRef.current[webProvider] === textToSend) {
+            delete ctx.activeWebPromptRef.current[webProvider];
+          }
+          delete ctx.activeWebPromptByNodeRef.current[node.id];
+          return requestManualFallback("[WEB] 웹 연결 워커 준비 실패, 수동 입력으로 전환");
         }
-        delete ctx.activeWebProviderByNodeRef.current[node.id];
-        if (ctx.activeWebPromptRef.current[webProvider] === textToSend) {
-          delete ctx.activeWebPromptRef.current[webProvider];
-        }
-        delete ctx.activeWebPromptByNodeRef.current[node.id];
-        return requestManualFallback("[WEB] 웹 연결 워커 준비 실패, 수동 입력으로 전환");
       }
       const runBridgeAssisted = async (timeoutMs = webTimeoutMs) =>
         ctx.invokeFn<WebProviderRunResult>("web_provider_run", {
@@ -295,6 +308,7 @@ export async function executeTurnNodeWithContext(
           prompt: textToSend,
           timeoutMs,
           mode: "bridgeAssisted",
+          cwd: nodeCwd,
         });
       let result: WebProviderRunResult | null = null;
       try {
@@ -402,17 +416,21 @@ export async function executeTurnNodeWithContext(
         delete ctx.manualWebFallbackNodeRef.current[node.id];
       }
     }
-    try {
-      await ctx.openUrlFn(webProviderHomeUrl(webProvider));
-    } catch (error) {
-      return {
-        ok: false,
-        error: `웹 서비스 브라우저 열기 실패(${webProvider}): ${String(error)}`,
-        executor,
-        provider: webProvider,
-        knowledgeTrace,
-        memoryTrace,
-      };
+    if (providerHomeUrl) {
+      try {
+        await ctx.openUrlFn(providerHomeUrl);
+      } catch (error) {
+        return {
+          ok: false,
+          error: `웹 서비스 브라우저 열기 실패(${webProvider}): ${String(error)}`,
+          executor,
+          provider: webProvider,
+          knowledgeTrace,
+          memoryTrace,
+        };
+      }
+    } else if (isExternalWebProvider(webProvider)) {
+      ctx.addNodeLog(node.id, `[WEB] ${webProviderLabel(webProvider)} 외부 런타임은 브라우저 자동 열기를 사용하지 않습니다.`);
     }
     ctx.setNodeStatus(node.id, "waiting_user", `${webProvider} 응답 입력 대기`);
     ctx.setNodeRuntimeFields(node.id, { status: "waiting_user" });

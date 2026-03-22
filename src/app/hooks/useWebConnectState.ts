@@ -40,6 +40,8 @@ export function useWebConnectState() {
     grok: false,
     perplexity: false,
     claude: false,
+    steel: false,
+    lightpanda_experimental: false,
   });
 
   const activeWebNodeByProviderRef = useRef<Partial<Record<WebProvider, string>>>({});

@@ -9,25 +9,10 @@ import {
 import { buildStudioRolePromptEnvelope } from "../../../features/studio/rolePromptGuidance";
 import { STUDIO_ROLE_TEMPLATES } from "../../../features/studio/roleTemplates";
 import { buildRoleKnowledgeBootstrapCandidates } from "./roleKnowledgeBootstrapSources";
+import { fetchBootstrapSourcesWithRetry } from "./roleKnowledgeProviders";
 import { toCompactTimestamp, toRoleShortToken } from "./roleKnowledgePathUtils";
 
 type InvokeFn = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
-
-type ScraplingFetchResult = {
-  url?: string;
-  fetched_at?: string;
-  summary?: string;
-  content?: string;
-  markdown_path?: string;
-  json_path?: string;
-};
-
-type ScraplingBridgeHealth = {
-  running?: boolean;
-  scrapling_ready?: boolean;
-  scraplingReady?: boolean;
-  message?: string;
-};
 
 type RoleKnowledgeBootstrapInput = {
   cwd: string;
@@ -70,11 +55,6 @@ type RoleKnowledgeInjectResult = {
   message: string;
 };
 
-const ROLE_KB_TOPIC = "devEcosystem";
-const SCRAPLING_BRIDGE_NOT_READY = "SCRAPLING_BRIDGE_NOT_READY";
-const bridgeReadyPromiseByCwd = new Map<string, Promise<void>>();
-const ROLE_KB_BRIDGE_TIMEOUT_MS = 12000;
-const ROLE_KB_FETCH_TIMEOUT_MS = 10000;
 const ROLE_KB_MIN_SUCCESS_RATIO = 0.5;
 const ROLE_KB_MAX_ATTEMPTS = 3;
 
@@ -91,92 +71,6 @@ function resolveRoleTemplate(roleId: StudioRoleId) {
 
 function cleanLine(input: unknown): string {
   return String(input ?? "").replace(/\s+/g, " ").trim();
-}
-
-async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
-  let timer: ReturnType<typeof globalThis.setTimeout> | null = null;
-  try {
-    return await Promise.race([
-      promise,
-      new Promise<T>((_, reject) => {
-        timer = globalThis.setTimeout(() => {
-          reject(new Error(`${label} timed out after ${timeoutMs}ms`));
-        }, timeoutMs);
-      }),
-    ]);
-  } finally {
-    if (timer) {
-      globalThis.clearTimeout(timer);
-    }
-  }
-}
-
-function isBridgeReady(health: ScraplingBridgeHealth | null | undefined): boolean {
-  if (!health) {
-    return false;
-  }
-  return Boolean(health.running) && Boolean(health.scrapling_ready ?? health.scraplingReady);
-}
-
-async function ensureScraplingBridgeReady(params: { cwd: string; invokeFn: InvokeFn }): Promise<void> {
-  const normalizedCwd = cleanLine(params.cwd);
-  if (!normalizedCwd) {
-    throw new Error("cwd is required");
-  }
-  const cacheKey = normalizedCwd;
-  const existing = bridgeReadyPromiseByCwd.get(cacheKey);
-  if (existing) {
-    return existing;
-  }
-  const task = (async () => {
-    let health: ScraplingBridgeHealth | null = null;
-    try {
-      health = await withTimeout(
-        params.invokeFn<ScraplingBridgeHealth>("dashboard_scrapling_bridge_start", {
-          cwd: normalizedCwd,
-        }),
-        ROLE_KB_BRIDGE_TIMEOUT_MS,
-        "dashboard_scrapling_bridge_start",
-      );
-    } catch {
-      health = null;
-    }
-    if (isBridgeReady(health)) {
-      return;
-    }
-
-    await withTimeout(
-      params.invokeFn("dashboard_scrapling_bridge_install", {
-        cwd: normalizedCwd,
-      }),
-      ROLE_KB_BRIDGE_TIMEOUT_MS,
-      "dashboard_scrapling_bridge_install",
-    );
-
-    health = await withTimeout(
-      params.invokeFn<ScraplingBridgeHealth>("dashboard_scrapling_bridge_start", {
-        cwd: normalizedCwd,
-      }),
-      ROLE_KB_BRIDGE_TIMEOUT_MS,
-      "dashboard_scrapling_bridge_start",
-    );
-    if (!isBridgeReady(health)) {
-      const reason = cleanLine(health?.message);
-      throw new Error(
-        reason
-          ? `${SCRAPLING_BRIDGE_NOT_READY}: ${reason}`
-          : SCRAPLING_BRIDGE_NOT_READY,
-      );
-    }
-  })();
-
-  bridgeReadyPromiseByCwd.set(cacheKey, task);
-  try {
-    await task;
-  } catch (error) {
-    bridgeReadyPromiseByCwd.delete(cacheKey);
-    throw error;
-  }
 }
 
 function truncateText(input: unknown, max = 220): string {
@@ -203,10 +97,17 @@ function resolveBootstrapFailureReason(sourceResults: RoleKnowledgeSource[]): st
     .map((row) => cleanLine(row.error).toLowerCase())
     .filter(Boolean);
   if (loweredErrors.some((row) => row.includes("unauthorized"))) {
-    return "Scrapling bridge 인증 실패로 외부 근거를 수집하지 못했습니다.";
+    return "브라우저/크롤링 provider 인증 실패로 외부 근거를 수집하지 못했습니다.";
   }
-  if (loweredErrors.some((row) => row.includes("health check failed") || row.includes(SCRAPLING_BRIDGE_NOT_READY.toLowerCase()))) {
-    return "Scrapling bridge 상태 확인에 실패해 외부 근거를 수집하지 못했습니다.";
+  if (
+    loweredErrors.some(
+      (row) =>
+        row.includes("health check failed") ||
+        row.includes("is not ready") ||
+        row.includes("no provider succeeded"),
+    )
+  ) {
+    return "브라우저/크롤링 provider 상태 확인에 실패해 외부 근거를 수집하지 못했습니다.";
   }
   return "외부 근거 수집에 실패했습니다.";
 }
@@ -264,144 +165,6 @@ function buildRoleKnowledgeBlock(profile: RoleKnowledgeProfile): string {
   ].join("\n");
 }
 
-async function fetchRoleKnowledgeSource(params: {
-  cwd: string;
-  invokeFn: InvokeFn;
-  url: string;
-}): Promise<RoleKnowledgeSource> {
-  try {
-    await ensureScraplingBridgeReady({
-      cwd: params.cwd,
-      invokeFn: params.invokeFn,
-    });
-    const result = await withTimeout(
-      params.invokeFn<ScraplingFetchResult>("dashboard_scrapling_fetch_url", {
-        cwd: params.cwd,
-        url: params.url,
-        topic: ROLE_KB_TOPIC,
-      }),
-      ROLE_KB_FETCH_TIMEOUT_MS,
-      "dashboard_scrapling_fetch_url",
-    );
-    return {
-      url: cleanLine(result.url) || params.url,
-      status: "ok",
-      fetchedAt: cleanLine(result.fetched_at) || new Date().toISOString(),
-      summary: truncateText(result.summary, 320),
-      content: truncateText(result.content, 480),
-      markdownPath: undefined,
-      jsonPath: cleanLine(result.json_path) || undefined,
-    };
-  } catch (error) {
-    const errorText = truncateText(error, 320);
-    const shouldRetry =
-      errorText.includes("scrapling bridge is not ready") ||
-      errorText.includes(SCRAPLING_BRIDGE_NOT_READY);
-    if (shouldRetry) {
-      try {
-        bridgeReadyPromiseByCwd.delete(cleanLine(params.cwd));
-        await ensureScraplingBridgeReady({
-          cwd: params.cwd,
-          invokeFn: params.invokeFn,
-        });
-        const retried = await withTimeout(
-          params.invokeFn<ScraplingFetchResult>("dashboard_scrapling_fetch_url", {
-            cwd: params.cwd,
-            url: params.url,
-            topic: ROLE_KB_TOPIC,
-          }),
-          ROLE_KB_FETCH_TIMEOUT_MS,
-          "dashboard_scrapling_fetch_url",
-        );
-        return {
-          url: cleanLine(retried.url) || params.url,
-          status: "ok",
-          fetchedAt: cleanLine(retried.fetched_at) || new Date().toISOString(),
-          summary: truncateText(retried.summary, 320),
-          content: truncateText(retried.content, 480),
-          markdownPath: undefined,
-          jsonPath: cleanLine(retried.json_path) || undefined,
-        };
-      } catch (retryError) {
-        return {
-          url: params.url,
-          status: "error",
-          error: truncateText(retryError, 320),
-        };
-      }
-    }
-    return {
-      url: params.url,
-      status: "error",
-      error: errorText,
-    };
-  }
-}
-
-function resolveBootstrapMinSuccessCount(sourceCount: number): number {
-  if (sourceCount <= 0) {
-    return 0;
-  }
-  return Math.max(1, Math.ceil(sourceCount * ROLE_KB_MIN_SUCCESS_RATIO));
-}
-
-function mergeBootstrapSourceResults(
-  previous: RoleKnowledgeSource[] | null,
-  current: RoleKnowledgeSource[],
-): RoleKnowledgeSource[] {
-  if (!previous || previous.length === 0) {
-    return current;
-  }
-  return current.map((row, index) => {
-    const prior = previous[index];
-    if (!prior) {
-      return row;
-    }
-    if (prior.status === "ok" && row.status !== "ok") {
-      return prior;
-    }
-    return row;
-  });
-}
-
-async function fetchBootstrapSourcesWithRetry(params: {
-  cwd: string;
-  invokeFn: InvokeFn;
-  roleId: StudioRoleId;
-  urls: string[];
-}) {
-  const minSuccessCount = resolveBootstrapMinSuccessCount(params.urls.length);
-  let bestResults: RoleKnowledgeSource[] = [];
-  let successfulSources: RoleKnowledgeSource[] = [];
-  let attemptsUsed = 0;
-
-  while (attemptsUsed < ROLE_KB_MAX_ATTEMPTS) {
-    attemptsUsed += 1;
-    const currentResults = await Promise.all(
-      params.urls.map((url) => fetchRoleKnowledgeSource({
-        cwd: params.cwd,
-        invokeFn: params.invokeFn,
-        url,
-      })),
-    );
-    bestResults = mergeBootstrapSourceResults(bestResults, currentResults);
-    successfulSources = bestResults.filter((row) => row.status === "ok");
-    if (successfulSources.length >= minSuccessCount) {
-      break;
-    }
-    if (params.roleId !== "research_analyst") {
-      break;
-    }
-  }
-
-  return {
-    sourceResults: bestResults,
-    successfulSources,
-    attemptsUsed,
-    minSuccessCount,
-  };
-}
-
 export async function bootstrapRoleKnowledgeProfile(input: RoleKnowledgeBootstrapInput): Promise<RoleKnowledgeBootstrapResult> {
   const roleTemplate = resolveRoleTemplate(input.roleId);
   const urls = buildRoleKnowledgeBootstrapCandidates({
@@ -417,7 +180,10 @@ export async function bootstrapRoleKnowledgeProfile(input: RoleKnowledgeBootstra
     cwd: input.cwd,
     invokeFn: input.invokeFn,
     roleId: input.roleId,
+    userPrompt: input.userPrompt,
     urls,
+    minSuccessRatio: ROLE_KB_MIN_SUCCESS_RATIO,
+    maxAttempts: ROLE_KB_MAX_ATTEMPTS,
   });
   const evidencePoints = successfulSources
     .map((row) => truncateText(row.summary || row.content, 180))

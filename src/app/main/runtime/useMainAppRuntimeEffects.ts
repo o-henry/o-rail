@@ -75,7 +75,12 @@ export function useMainAppRuntimeEffects(params: any) {
       return;
     }
     params.pendingWebTurnAutoOpenKeyRef.current = key;
-    void params.openUrlFn(params.webProviderHomeUrl(params.pendingWebTurn.provider))
+    const homeUrl = params.webProviderHomeUrl(params.pendingWebTurn.provider);
+    if (!homeUrl) {
+      params.setStatus(`${params.webProviderLabel(params.pendingWebTurn.provider)} 외부 런타임이 브라우저 없이 직접 실행됩니다.`);
+      return;
+    }
+    void params.openUrlFn(homeUrl)
       .then(() => {
         params.setStatus(`${params.webProviderLabel(params.pendingWebTurn.provider)} 기본 브라우저 자동 열림`);
       })

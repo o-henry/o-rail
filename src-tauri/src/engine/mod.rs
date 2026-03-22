@@ -10,6 +10,7 @@ use std::{
         atomic::{AtomicBool, AtomicU64, Ordering},
         Arc,
     },
+    time::Instant,
 };
 use tauri::path::BaseDirectory;
 use tauri::webview::WebviewBuilder;
@@ -21,6 +22,7 @@ use tokio::{
     task::JoinHandle,
     time::{timeout, Duration},
 };
+use url::Url;
 
 use crate::task_prompt_packs;
 
@@ -143,6 +145,206 @@ fn build_runtime_path(extra_bin_dirs: &[PathBuf]) -> Option<OsString> {
     }
 
     env::join_paths(dirs).ok()
+}
+
+fn external_browser_provider_status() -> Value {
+    let configured = |key: &str| {
+        env::var(key)
+            .ok()
+            .map(|value| !value.trim().is_empty())
+            .unwrap_or(false)
+    };
+    json!({
+        "steel": {
+            "configured": configured("RAIL_STEEL_CDP_URL"),
+            "capabilities": ["interactive_browser", "stateful_session", "extract_document"],
+        },
+        "browser_use": {
+            "configured": false,
+            "capabilities": ["interactive_browser"],
+        },
+        "scrapy_playwright": {
+            "configured": false,
+            "capabilities": ["batch_crawl"],
+        },
+        "lightpanda_experimental": {
+            "configured": configured("RAIL_LIGHTPANDA_CDP_URL"),
+            "capabilities": ["interactive_browser", "stateful_session"],
+        }
+    })
+}
+
+fn is_external_web_provider(provider: &str) -> bool {
+    matches!(provider, "steel" | "lightpanda_experimental")
+}
+
+async fn external_browser_provider_health_map(app: &AppHandle) -> Value {
+    let mut map = serde_json::Map::new();
+    for provider in [
+        "steel",
+        "lightpanda_experimental",
+        "browser_use",
+        "scrapy_playwright",
+    ] {
+        let value = match crate::crawl_providers::dashboard_crawl_provider_health(
+            app.clone(),
+            None,
+            provider.to_string(),
+        )
+        .await
+        {
+            Ok(health) => serde_json::to_value(health).unwrap_or_else(|_| {
+                json!({
+                    "provider": provider,
+                    "ready": false,
+                    "message": "failed to serialize provider health",
+                })
+            }),
+            Err(error) => json!({
+                "provider": provider,
+                "available": false,
+                "ready": false,
+                "configured": false,
+                "installed": false,
+                "installable": false,
+                "message": error,
+            }),
+        };
+        map.insert(provider.to_string(), value);
+    }
+    Value::Object(map)
+}
+
+fn merge_provider_health_maps(base: Value, extra: Value) -> Value {
+    match (base, extra) {
+        (Value::Object(mut base_map), Value::Object(extra_map)) => {
+            for (key, value) in extra_map {
+                base_map.insert(key, value);
+            }
+            Value::Object(base_map)
+        }
+        (Value::Object(base_map), other) => {
+            let mut merged = base_map;
+            merged.insert("external".to_string(), other);
+            Value::Object(merged)
+        }
+        (other, Value::Object(extra_map)) => {
+            let mut merged = serde_json::Map::new();
+            merged.insert("worker".to_string(), other);
+            for (key, value) in extra_map {
+                merged.insert(key, value);
+            }
+            Value::Object(merged)
+        }
+        (other, extra_other) => json!({
+            "worker": other,
+            "external": extra_other,
+        }),
+    }
+}
+
+fn extract_first_http_url(prompt: &str) -> Option<String> {
+    for token in prompt.split_whitespace() {
+        let trimmed = token
+            .trim_matches(|ch: char| matches!(ch, '"' | '\'' | '(' | ')' | '[' | ']' | '{' | '}' | '<' | '>'))
+            .trim_end_matches(|ch: char| matches!(ch, '.' | ',' | ';' | ':' | '!' | '?'));
+        if trimmed.is_empty() {
+            continue;
+        }
+        if let Ok(parsed) = Url::parse(trimmed) {
+            if parsed.scheme() == "http" || parsed.scheme() == "https" {
+                return Some(parsed.to_string());
+            }
+        }
+    }
+    None
+}
+
+fn resolve_external_web_provider_cwd(
+    app: &AppHandle,
+    cwd: Option<String>,
+) -> Result<String, String> {
+    if let Some(existing) = cwd
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        return Ok(existing.to_string());
+    }
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| format!("failed to resolve app data dir for external web provider: {error}"))?;
+    let external_dir = app_data_dir.join("external-web-provider");
+    fs::create_dir_all(&external_dir)
+        .map_err(|error| format!("failed to create external web provider workspace: {error}"))?;
+    Ok(external_dir.to_string_lossy().to_string())
+}
+
+fn build_external_web_provider_text(
+    fetch: &crate::crawl_providers::DashboardCrawlProviderFetchResult,
+) -> String {
+    format!(
+        "[source]\n{}\n\n[summary]\n{}\n\n[content]\n{}",
+        fetch.url, fetch.summary, fetch.content
+    )
+}
+
+async fn run_external_web_provider(
+    app: &AppHandle,
+    provider: &str,
+    prompt: &str,
+    cwd: Option<String>,
+) -> Result<WebProviderRunResult, String> {
+    let url = extract_first_http_url(prompt).ok_or_else(|| {
+        format!(
+            "{provider} web provider requires an explicit http(s) URL in the prompt"
+        )
+    })?;
+    let resolved_cwd = resolve_external_web_provider_cwd(app, cwd)?;
+    let started = Instant::now();
+    let fetch = crate::crawl_providers::dashboard_crawl_provider_fetch_url(
+        app.clone(),
+        resolved_cwd,
+        provider.to_string(),
+        url,
+        None,
+    )
+    .await?;
+    let elapsed_ms = u64::try_from(started.elapsed().as_millis()).ok();
+    let text = build_external_web_provider_text(&fetch);
+    let raw = serde_json::to_value(&fetch)
+        .map_err(|error| format!("failed to serialize external provider fetch: {error}"))?;
+    Ok(WebProviderRunResult {
+        ok: true,
+        text: Some(text),
+        raw: Some(raw),
+        meta: Some(WebProviderRunMeta {
+            provider: provider.to_string(),
+            url: Some(fetch.url.clone()),
+            started_at: None,
+            finished_at: Some(fetch.fetched_at.clone()),
+            elapsed_ms,
+            extraction_strategy: Some("external_crawl_provider".to_string()),
+        }),
+        error: None,
+        error_code: None,
+    })
+}
+
+fn merge_bridge_metadata(existing: Option<Value>) -> Option<Value> {
+    let mut bridge = existing.unwrap_or_else(|| json!({}));
+    if let Some(object) = bridge.as_object_mut() {
+        object.insert(
+            "externalProviders".to_string(),
+            external_browser_provider_status(),
+        );
+        return Some(Value::Object(object.clone()));
+    }
+    Some(json!({
+        "raw": bridge,
+        "externalProviders": external_browser_provider_status(),
+    }))
 }
 
 #[derive(Default)]
@@ -1612,6 +1814,7 @@ pub async fn web_provider_health(
     app: AppHandle,
     state: State<'_, EngineManager>,
 ) -> Result<WebWorkerHealth, String> {
+    let external_providers = external_browser_provider_health_map(&app).await;
     if let Ok(runtime) = current_web_worker(&state).await {
         let raw = match runtime.request("health", json!({})).await {
             Ok(raw) => raw,
@@ -1646,6 +1849,8 @@ pub async fn web_provider_health(
         if parsed.profile_root.is_none() {
             parsed.profile_root = Some(runtime.profile_root.to_string_lossy().to_string());
         }
+        parsed.providers = merge_provider_health_maps(parsed.providers, external_providers.clone());
+        parsed.bridge = merge_bridge_metadata(parsed.bridge);
         return Ok(parsed);
     }
 
@@ -1653,11 +1858,11 @@ pub async fn web_provider_health(
     Ok(WebWorkerHealth {
         running: false,
         last_error: None,
-        providers: json!({}),
+        providers: external_providers,
         log_path: Some(log_path.to_string_lossy().to_string()),
         profile_root: Some(profile_root.to_string_lossy().to_string()),
         active_provider: None,
-        bridge: None,
+        bridge: merge_bridge_metadata(None),
     })
 }
 
@@ -1669,13 +1874,18 @@ pub async fn web_provider_run(
     prompt: String,
     timeout_ms: Option<u64>,
     mode: Option<String>,
+    cwd: Option<String>,
 ) -> Result<WebProviderRunResult, String> {
+    let provider_key = provider.trim().to_lowercase();
+    if is_external_web_provider(&provider_key) {
+        return run_external_web_provider(&app, &provider_key, &prompt, cwd).await;
+    }
     let raw = request_web_worker_with_recovery(
         &app,
         &state,
         "provider/run",
         json!({
-            "provider": provider,
+            "provider": provider_key,
             "prompt": prompt,
             "timeoutMs": timeout_ms.unwrap_or(90_000),
             "mode": mode.unwrap_or_else(|| "auto".to_string())
@@ -1692,11 +1902,31 @@ pub async fn web_provider_open_session(
     state: State<'_, EngineManager>,
     provider: String,
 ) -> Result<Value, String> {
+    let provider_key = provider.trim().to_lowercase();
+    if is_external_web_provider(&provider_key) {
+        let health = crate::crawl_providers::dashboard_crawl_provider_health(
+            app.clone(),
+            None,
+            provider_key.clone(),
+        )
+        .await?;
+        let ready = health.ready;
+        let session_state = if ready { "active" } else { "unavailable" };
+        return Ok(json!({
+            "ok": ready,
+            "provider": provider_key,
+            "sessionState": session_state,
+            "message": health.message,
+            "health": health,
+            "error": if ready { Value::Null } else { Value::String("external runtime is not ready".to_string()) },
+            "errorCode": if ready { Value::Null } else { Value::String("PROVIDER_NOT_READY".to_string()) },
+        }));
+    }
     request_web_worker_with_recovery(
         &app,
         &state,
         "provider/openSession",
-        json!({ "provider": provider }),
+        json!({ "provider": provider_key }),
     )
     .await
 }
@@ -1707,11 +1937,15 @@ pub async fn web_provider_reset_session(
     state: State<'_, EngineManager>,
     provider: String,
 ) -> Result<(), String> {
+    let provider_key = provider.trim().to_lowercase();
+    if is_external_web_provider(&provider_key) {
+        return Ok(());
+    }
     let _ = request_web_worker_with_recovery(
         &app,
         &state,
         "provider/resetSession",
-        json!({ "provider": provider }),
+        json!({ "provider": provider_key }),
     )
     .await?;
     Ok(())
@@ -1723,11 +1957,15 @@ pub async fn web_provider_cancel(
     state: State<'_, EngineManager>,
     provider: String,
 ) -> Result<(), String> {
+    let provider_key = provider.trim().to_lowercase();
+    if is_external_web_provider(&provider_key) {
+        return Ok(());
+    }
     let _ = request_web_worker_with_recovery(
         &app,
         &state,
         "provider/cancel",
-        json!({ "provider": provider }),
+        json!({ "provider": provider_key }),
     )
     .await?;
     Ok(())
@@ -2353,4 +2591,24 @@ pub async fn ollama_generate(model: String, prompt: String) -> Result<Value, Str
         .json::<Value>()
         .await
         .map_err(|e| format!("invalid ollama response json: {e}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::extract_first_http_url;
+
+    #[test]
+    fn extracts_first_http_url_from_prompt_text() {
+        let prompt = "Please inspect https://x.com/OpenAI/status/12345 and summarize it.";
+        assert_eq!(
+            extract_first_http_url(prompt).as_deref(),
+            Some("https://x.com/OpenAI/status/12345")
+        );
+    }
+
+    #[test]
+    fn ignores_non_http_urls() {
+        let prompt = "Open ftp://example.com first and then maybe nothing else.";
+        assert_eq!(extract_first_http_url(prompt), None);
+    }
 }

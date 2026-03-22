@@ -32,7 +32,9 @@
         "resources": [
             "../scripts/web_worker/index.mjs",
             "../scripts/via_runtime/server.py",
-            "../scripts/via_runtime/requirements.lock"
+            "../scripts/via_runtime/requirements.lock",
+            "../scripts/crawl_providers/crawl4ai_fetch.py",
+            "../scripts/crawl_providers/cdp_extract.mjs"
         ],
         "icon": [
             "icons/32x32.png",

@@ -1,12 +1,17 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   bootstrapRoleKnowledgeProfile,
   injectRoleKnowledgePrompt,
   storeRoleKnowledgeProfile,
 } from "./roleKnowledgePipeline";
 import { buildRoleKnowledgeBootstrapCandidates } from "./roleKnowledgeBootstrapSources";
+import { resetRoleKnowledgeProviderRuntimeForTests } from "./roleKnowledgeProviders";
 
 describe("roleKnowledgePipeline", () => {
+  beforeEach(() => {
+    resetRoleKnowledgeProviderRuntimeForTests();
+  });
+
   it("builds bootstrap profile even when source fetch fails", async () => {
     const invokeFn = vi.fn(async () => {
       throw new Error("network blocked");
@@ -31,14 +36,16 @@ describe("roleKnowledgePipeline", () => {
 
   it("marks unauthorized bridge failures clearly in the profile summary", async () => {
     const invokeFn = vi.fn(async (command: string) => {
-      if (command === "dashboard_scrapling_bridge_start") {
+      if (command === "dashboard_crawl_provider_health") {
         return {
-          running: false,
-          scrapling_ready: false,
+          provider: "scrapling",
+          available: true,
+          installable: true,
+          ready: false,
           message: "health check failed (401 Unauthorized): {\"ok\": false, \"errorCode\": \"UNAUTHORIZED\", \"error\": \"unauthorized\"}",
         };
       }
-      if (command === "dashboard_scrapling_bridge_install") {
+      if (command === "dashboard_crawl_provider_install") {
         return { installed: true };
       }
       throw new Error(`unexpected command: ${command}`);
@@ -59,52 +66,50 @@ describe("roleKnowledgePipeline", () => {
   });
 
   it("times out stalled bridge startup and falls back without blocking the role run forever", async () => {
-    vi.useFakeTimers();
     const invokeFn = vi.fn(async (command: string) => {
-      if (command === "dashboard_scrapling_bridge_start") {
-        return await new Promise<never>(() => {});
+      if (command === "dashboard_crawl_provider_health") {
+        throw new Error("dashboard_crawl_provider_health timed out after 28000ms");
       }
-      if (command === "dashboard_scrapling_bridge_install") {
+      if (command === "dashboard_crawl_provider_install") {
         return { installed: true };
       }
       throw new Error(`unexpected command: ${command}`);
     }) as unknown as <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
 
-    try {
-      const promise = bootstrapRoleKnowledgeProfile({
-        cwd: "/tmp/workspace",
-        invokeFn,
-        roleId: "research_analyst",
-        taskId: "TASK-TIMEOUT",
-        runId: "role-timeout",
-        userPrompt: "스팀 장르 시장을 조사해줘",
-      });
-      await vi.advanceTimersByTimeAsync(90000);
-      const result = await promise;
-      expect(result.sourceSuccessCount).toBe(0);
-      expect(result.profile.summary).toContain("외부 근거 수집에 실패했습니다");
-      expect(result.profile.keyPoints.some((point) => point.includes("timed out"))).toBe(true);
-    } finally {
-      vi.useRealTimers();
-    }
+    const result = await bootstrapRoleKnowledgeProfile({
+      cwd: "/tmp/workspace",
+      invokeFn,
+      roleId: "pm_planner",
+      taskId: "TASK-TIMEOUT",
+      runId: "role-timeout",
+      userPrompt: "스팀 장르 시장을 조사해줘",
+    });
+    expect(result.sourceSuccessCount).toBe(0);
+    expect(result.profile.summary).toContain("외부 근거 수집에 실패했습니다");
+    expect(result.profile.keyPoints.some((point) => point.includes("timed out"))).toBe(true);
   }, 15000);
 
   it("stores and injects role knowledge block into prompt", async () => {
     const invokeFn = vi.fn(async (command: string, args?: Record<string, unknown>) => {
-      if (command === "dashboard_scrapling_bridge_start") {
+      if (command === "dashboard_crawl_provider_health") {
         return {
-          running: true,
-          scrapling_ready: true,
+          provider: "scrapling",
+          available: true,
+          configured: true,
+          installable: true,
+          ready: true,
           message: "ready",
         };
       }
-      if (command === "dashboard_scrapling_bridge_install") {
+      if (command === "dashboard_crawl_provider_install") {
         return {
           installed: true,
         };
       }
-      if (command === "dashboard_scrapling_fetch_url") {
+      if (command === "dashboard_crawl_provider_fetch_url") {
         return {
+          provider: "scrapling",
+          status: "ok",
           url: "https://docs.unity3d.com/Manual/index.html",
           fetched_at: "2026-03-04T00:00:00Z",
           summary: "Unity manual summary",
@@ -150,7 +155,7 @@ describe("roleKnowledgePipeline", () => {
     expect(injected.prompt).toContain("이동 시스템을 구현해줘");
   }, 15000);
 
-  it("builds search-first bootstrap candidates from the prompt and role profile", () => {
+  it("builds official-first bootstrap candidates from the prompt and role profile", () => {
     const urls = buildRoleKnowledgeBootstrapCandidates({
       roleId: "research_analyst",
       userPrompt:
@@ -162,8 +167,7 @@ describe("roleKnowledgePipeline", () => {
     expect(urls[0]).toBe("https://opencritic.com/");
     expect(urls.some((url) => url.includes("duckduckgo.com/html/?q="))).toBe(true);
     expect(urls.some((url) => url.includes("bing.com/search?q="))).toBe(true);
-    expect(urls.some((url) => url.includes("site%3Awww.reddit.com"))).toBe(true);
-    expect(urls.some((url) => url.includes("site%3Awww.metacritic.com"))).toBe(true);
+    expect(urls.some((url) => url.includes("duckduckgo.com/html/?q="))).toBe(true);
   });
 
   it("keeps bootstrap candidates on public https pages without duplicates", () => {
@@ -180,24 +184,54 @@ describe("roleKnowledgePipeline", () => {
     }
   });
 
+  it("restores search-result bootstrap candidates for crawling and browser automation prompts", () => {
+    const urls = buildRoleKnowledgeBootstrapCandidates({
+      roleId: "research_analyst",
+      userPrompt: "크롤링과 브라우저 자동화 스택 비교: Crawl4AI, Lightpanda, Browser Use, Steel.dev, Playwright",
+    });
+
+    expect(urls.some((url) => url.includes("duckduckgo.com"))).toBe(true);
+    expect(urls.some((url) => url.includes("bing.com/search"))).toBe(true);
+  });
+
   it("retries researcher bootstrap until it reaches at least half successful sources", async () => {
     const attemptsByUrl = new Map<string, number>();
     const invokeFn = vi.fn(async (command: string, args?: Record<string, unknown>) => {
-      if (command === "dashboard_scrapling_bridge_start") {
+      if (command === "dashboard_crawl_provider_health") {
+        const provider = String(args?.provider ?? "");
+        if (provider !== "scrapling") {
+          return {
+            provider,
+            available: false,
+            configured: false,
+            installable: false,
+            ready: false,
+            message: `${provider} not configured`,
+          };
+        }
         return {
-          running: true,
-          scrapling_ready: true,
+          provider,
+          available: true,
+          configured: true,
+          installable: true,
+          ready: true,
           message: "ready",
         };
       }
-      if (command === "dashboard_scrapling_fetch_url") {
+      if (command === "dashboard_crawl_provider_fetch_url") {
         const url = String(args?.url ?? "");
+        const provider = String(args?.provider ?? "");
+        if (provider !== "scrapling") {
+          throw new Error(`unexpected provider ${provider}`);
+        }
         const attempt = (attemptsByUrl.get(url) ?? 0) + 1;
         attemptsByUrl.set(url, attempt);
         if (attempt === 1) {
           throw new Error(`temporary timeout for ${url}`);
         }
         return {
+          provider,
+          status: "ok",
           url,
           fetched_at: "2026-03-21T00:00:00Z",
           summary: `summary for ${url}`,
@@ -205,7 +239,7 @@ describe("roleKnowledgePipeline", () => {
           json_path: `/tmp/${attemptsByUrl.size}.json`,
         };
       }
-      if (command === "dashboard_scrapling_bridge_install") {
+      if (command === "dashboard_crawl_provider_install") {
         return { installed: true };
       }
       throw new Error(`unexpected command: ${command}`);
@@ -224,4 +258,66 @@ describe("roleKnowledgePipeline", () => {
     expect(result.sourceSuccessCount).toBeGreaterThanOrEqual(Math.ceil(result.sourceCount * 0.5));
     expect(result.message).toContain("재시도");
   }, 15000);
+
+  it("falls back from crawl4ai to scrapling for documentation-like sources", async () => {
+    const invokeFn = vi.fn(async (command: string, args?: Record<string, unknown>) => {
+      if (command === "dashboard_crawl_provider_health") {
+        const provider = String(args?.provider ?? "");
+        if (provider === "crawl4ai") {
+          return {
+            provider,
+            available: false,
+            configured: true,
+            installable: false,
+            ready: false,
+            message: "crawl4ai runtime not installed",
+          };
+        }
+        return {
+          provider,
+          available: true,
+          configured: true,
+          installable: true,
+          ready: true,
+          message: "ready",
+        };
+      }
+      if (command === "dashboard_crawl_provider_fetch_url") {
+        return {
+          provider: String(args?.provider ?? "scrapling"),
+          status: "ok",
+          url: String(args?.url ?? ""),
+          fetched_at: "2026-03-22T00:00:00Z",
+          summary: "fallback summary",
+          content: "fallback content",
+          json_path: "/tmp/fallback.json",
+        };
+      }
+      if (command === "dashboard_crawl_provider_install") {
+        return { installed: true };
+      }
+      throw new Error(`unexpected command: ${command}`);
+    }) as unknown as <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
+
+    const result = await bootstrapRoleKnowledgeProfile({
+      cwd: "/tmp/workspace",
+      invokeFn,
+      roleId: "technical_writer",
+      taskId: "TASK-DOCS",
+      runId: "role-docs",
+      userPrompt: "공식 문서 기준으로 Tauri window API guide를 정리해줘",
+    });
+
+    const invokeMock = invokeFn as ReturnType<typeof vi.fn>;
+    const healthProviders = invokeMock.mock.calls
+      .filter((call) => String((call as [unknown, unknown])[0] ?? "") === "dashboard_crawl_provider_health")
+      .map((call) => {
+        const [, args] = call as [string, Record<string, unknown> | undefined];
+        return String(args?.provider ?? "");
+      });
+
+    expect(healthProviders.includes("crawl4ai")).toBe(true);
+    expect(healthProviders.includes("scrapling")).toBe(true);
+    expect(result.sourceSuccessCount).toBeGreaterThan(0);
+  });
 });

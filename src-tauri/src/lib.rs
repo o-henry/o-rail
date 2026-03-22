@@ -1,3 +1,4 @@
+mod crawl_providers;
 pub mod dashboard_crawler;
 mod engine;
 mod knowledge;
@@ -63,6 +64,9 @@ pub fn run() {
             dashboard_crawler::dashboard_scrapling_bridge_install,
             dashboard_crawler::dashboard_scrapling_bridge_stop,
             dashboard_crawler::dashboard_scrapling_fetch_url,
+            crawl_providers::dashboard_crawl_provider_health,
+            crawl_providers::dashboard_crawl_provider_install,
+            crawl_providers::dashboard_crawl_provider_fetch_url,
             research_storage::research_storage_ingest_steam_cache,
             research_storage::research_storage_overview,
             research_storage::research_storage_query_reviews,

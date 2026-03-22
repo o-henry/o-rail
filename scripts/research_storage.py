@@ -1058,6 +1058,18 @@ def summarize_job_strategy(targets: list[dict[str, Any]]) -> str:
     return "mixed"
 
 
+def resolve_runtime_providers(strategy: str, interaction_mode: str) -> list[str]:
+    normalized_strategy = str(strategy or "").strip().lower()
+    normalized_mode = str(interaction_mode or "").strip().lower()
+    if normalized_strategy == "rss":
+        return ["rss"]
+    if normalized_strategy == "pinchtab" or normalized_mode == "interactive":
+        return ["steel", "playwright_local", "browser_use"]
+    if normalized_strategy == "scrapling":
+        return ["crawl4ai", "scrapling", "steel"]
+    return ["scrapling", "crawl4ai", "steel"]
+
+
 def build_dynamic_collection_job(
     *,
     urls: list[str],
@@ -1107,6 +1119,10 @@ def build_dynamic_collection_job(
                 "requiresBrowser": bool(strategy["requiresBrowser"]),
                 "reasons": list(strategy["reasons"]),
                 "interactionSteps": list(strategy["interactionSteps"]),
+                "runtimeProviders": resolve_runtime_providers(
+                    str(strategy["strategy"]),
+                    str(strategy["interactionMode"]),
+                ),
             }
         )
     collector_strategy = summarize_job_strategy(targets)
@@ -1140,6 +1156,14 @@ def build_dynamic_collection_job(
             "max_items": max(1, min(120, int(max_items))),
             "planner": planner_context or {},
             "preferred_execution_order": preferred_execution_order,
+            "collector_runtime_providers": dedupe_text_items(
+                [
+                    provider
+                    for target in targets
+                    for provider in list(target.get("runtimeProviders") or [])
+                ],
+                limit=8,
+            ),
             "targets": [
                 {
                     "url": str(target["url"]),
@@ -1148,6 +1172,7 @@ def build_dynamic_collection_job(
                     "interactionMode": str(target["interactionMode"]),
                     "requiresBrowser": bool(target["requiresBrowser"]),
                     "interactionSteps": list(target["interactionSteps"]),
+                    "runtimeProviders": list(target.get("runtimeProviders") or []),
                 }
                 for target in targets
             ],

@@ -224,8 +224,17 @@ export function createEngineBridgeHandlers(params: any) {
     if (!params.pendingWebTurn) {
       return;
     }
+    const homeUrl = params.webProviderHomeUrl(params.pendingWebTurn.provider);
+    if (!homeUrl) {
+      params.setStatus(
+        translate("bridge.status.sessionWindowOpened", {
+          provider: params.webProviderLabel(params.pendingWebTurn.provider),
+        }),
+      );
+      return;
+    }
     try {
-      await params.openUrlFn(params.webProviderHomeUrl(params.pendingWebTurn.provider));
+      await params.openUrlFn(homeUrl);
       params.setStatus(translate("bridge.status.providerOpened", { provider: params.webProviderLabel(params.pendingWebTurn.provider) }));
     } catch (error) {
       params.setError(String(error));

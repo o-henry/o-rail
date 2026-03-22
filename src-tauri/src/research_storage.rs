@@ -417,6 +417,39 @@ pub async fn research_storage_execute_job(
         .get("sourceOptions")
         .cloned()
         .unwrap_or_else(|| serde_json::json!({}));
+    let mut source_options = source_options;
+    if let Some(options) = source_options.as_object_mut() {
+        let runtime_providers = job
+            .get("targets")
+            .and_then(Value::as_array)
+            .map(|targets| {
+                targets
+                    .iter()
+                    .flat_map(|target| {
+                        target
+                            .get("runtimeProviders")
+                            .and_then(Value::as_array)
+                            .into_iter()
+                            .flatten()
+                            .filter_map(Value::as_str)
+                            .map(|value| Value::String(value.to_string()))
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+        if !runtime_providers.is_empty() {
+            options.insert(
+                "collector_runtime_providers".to_string(),
+                Value::Array(runtime_providers),
+            );
+        }
+        if let Some(preferred_execution_order) = job.get("preferredExecutionOrder").cloned() {
+            options.insert(
+                "preferred_execution_order".to_string(),
+                preferred_execution_order,
+            );
+        }
+    }
 
     let via_result = crate::via_bridge::via_run_flow(
         app,

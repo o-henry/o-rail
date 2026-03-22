@@ -228,12 +228,12 @@ export function resolveRoleKnowledgeProviderOrder(params: {
   userPrompt?: string;
 }): RoleKnowledgeProviderId[] {
   if (prefersDocumentationExtraction(params)) {
-    return ["crawl4ai", "scrapling", "steel", "lightpanda_experimental", "browser_use"];
+    return ["crawl4ai", "scrapling", "steel", "lightpanda_experimental"];
   }
   if (isInteractiveCommunityUrl(params.url)) {
-    return ["scrapling", "steel", "lightpanda_experimental", "browser_use", "crawl4ai"];
+    return ["scrapling", "steel", "lightpanda_experimental", "crawl4ai"];
   }
-  return ["scrapling", "crawl4ai", "steel", "lightpanda_experimental", "browser_use"];
+  return ["scrapling", "crawl4ai", "steel", "lightpanda_experimental"];
 }
 
 async function readProviderHealth(params: {

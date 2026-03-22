@@ -1,4 +1,4 @@
-import type { AnchorHTMLAttributes, ReactNode } from "react";
+import { memo, type AnchorHTMLAttributes, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -15,7 +15,7 @@ function renderLink(props: AnchorHTMLAttributes<HTMLAnchorElement>): ReactNode {
   );
 }
 
-export function TasksThreadMessageContent(props: TasksThreadMessageContentProps) {
+export const TasksThreadMessageContent = memo(function TasksThreadMessageContent(props: TasksThreadMessageContentProps) {
   return (
     <div className="tasks-thread-message-markdown">
       <ReactMarkdown
@@ -38,4 +38,4 @@ export function TasksThreadMessageContent(props: TasksThreadMessageContentProps)
       </ReactMarkdown>
     </div>
   );
-}
+});

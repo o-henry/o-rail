@@ -10,6 +10,7 @@ export type TaskExecutionMode = "single" | "discussion";
 export type TaskExecutionPlan = {
   mode: TaskExecutionMode;
   intent: TaskPromptIntent;
+  creativeMode: boolean;
   candidateRoleIds: TaskAgentPresetId[];
   participantRoleIds: TaskAgentPresetId[];
   requestedRoleIds: TaskAgentPresetId[];
@@ -53,6 +54,7 @@ export function createTaskExecutionPlan(params: {
   enabledRoleIds: Iterable<string>;
   requestedRoleIds: Iterable<string>;
   prompt: string;
+  creativeMode?: boolean;
 }): TaskExecutionPlan {
   const enabledRoleIds = uniqueRoleIds(params.enabledRoleIds);
   const requestedRoleIds = uniqueRoleIds(params.requestedRoleIds);
@@ -62,6 +64,7 @@ export function createTaskExecutionPlan(params: {
     requestedRoleIds,
     prompt: params.prompt,
     maxParticipants: MAX_DISCUSSION_PARTICIPANTS,
+    creativeMode: params.creativeMode,
   });
   const primaryRoleId = orchestration.primaryRoleId;
   const participantRoleIds = [
@@ -74,6 +77,7 @@ export function createTaskExecutionPlan(params: {
   return {
     mode,
     intent: orchestration.intent,
+    creativeMode: Boolean(params.creativeMode),
     candidateRoleIds: orchestration.candidateRoleIds,
     participantRoleIds,
     requestedRoleIds,

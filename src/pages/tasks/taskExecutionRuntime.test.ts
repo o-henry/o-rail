@@ -169,6 +169,7 @@ describe("taskExecutionRuntime", () => {
       plan: {
         mode: "single",
         intent: "review",
+        creativeMode: false,
         candidateRoleIds: ["unity_architect"],
         participantRoleIds: ["unity_architect"],
         requestedRoleIds: ["unity_architect"],
@@ -193,6 +194,7 @@ describe("taskExecutionRuntime", () => {
         roleId: "system_programmer",
         taskId: "task_1",
         prompt: "아키텍처 경계를 점검해줘",
+        creativeMode: false,
         sourceTab: "tasks-thread",
       },
     });
@@ -288,6 +290,7 @@ describe("taskExecutionRuntime", () => {
       plan: {
         mode: "single",
         intent: "research",
+        creativeMode: false,
         candidateRoleIds: ["researcher"],
         participantRoleIds: ["researcher"],
         requestedRoleIds: ["researcher"],
@@ -317,6 +320,7 @@ describe("taskExecutionRuntime", () => {
         roleId: "research_analyst",
         taskId: "task_1",
         prompt: "자료 조사해줘",
+        creativeMode: false,
         sourceTab: "tasks-thread",
       },
     });
@@ -330,6 +334,7 @@ describe("taskExecutionRuntime", () => {
       plan: {
         mode: "single",
         intent: "review",
+        creativeMode: false,
         candidateRoleIds: ["researcher", "unity_architect"],
         participantRoleIds: ["researcher", "unity_architect"],
         requestedRoleIds: ["researcher", "unity_architect"],

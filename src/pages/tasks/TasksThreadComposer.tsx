@@ -1,7 +1,7 @@
 import { useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent, type RefObject } from "react";
 import type { CoordinationMode } from "../../features/orchestration/agentic/coordinationTypes";
 import { TURN_REASONING_LEVEL_OPTIONS } from "../../features/workflow/reasoningLevels";
-import { RUNTIME_MODEL_OPTIONS } from "../../features/workflow/runtimeModelOptions";
+import { findRuntimeModelOption, RUNTIME_MODEL_OPTIONS } from "../../features/workflow/runtimeModelOptions";
 import { useI18n } from "../../i18n";
 import type { TaskAgentMentionMatch, TaskAgentMentionOption } from "./taskAgentMentions";
 import { getTaskAgentLabel, stripCoordinationModeTags } from "./taskAgentPresets";
@@ -20,7 +20,15 @@ type RuntimeModelOption = {
   executor?: string;
 };
 
-const HIDDEN_TASKS_MODEL_VALUES = new Set(["WEB / STEEL", "WEB / LIGHTPANDA"]);
+const HIDDEN_TASKS_MODEL_VALUES = new Set([
+  "GPT-Web",
+  "Gemini",
+  "Grok",
+  "Perplexity",
+  "Claude",
+  "WEB / STEEL",
+  "WEB / LIGHTPANDA",
+]);
 
 type TasksThreadComposerProps = {
   composerRef: RefObject<HTMLTextAreaElement | null>;
@@ -33,6 +41,7 @@ type TasksThreadComposerProps = {
   autoSelectedComposerRoleIds?: ThreadRoleId[];
   composerProviderOverride?: string | null;
   autoSelectedProviderModel?: string | null;
+  creativeModeEnabled: boolean;
   composerCoordinationModeOverride: CoordinationMode | null;
   composerDraft: string;
   selectedModelOption: RuntimeModelOption;
@@ -57,6 +66,7 @@ type TasksThreadComposerProps = {
   onSetReasoning: (value: string) => void;
   onToggleReasonMenu: () => void;
   onClearComposerProviderOverride: () => void;
+  onToggleCreativeMode: () => void;
   onSubmit: () => void;
   onStop: () => void;
 };
@@ -91,6 +101,14 @@ function coordinationModeLabel(mode: CoordinationMode): string {
   return "QUICK";
 }
 
+function composerProviderLabel(value: string): string {
+  const normalized = String(value ?? "").trim();
+  if (!normalized) {
+    return "";
+  }
+  return findRuntimeModelOption(normalized).label;
+}
+
 export function buildSelectedTasksComposerBadges(params: {
   roleIds: ThreadRoleId[];
   autoRoleIds?: ThreadRoleId[];
@@ -120,7 +138,7 @@ export function buildSelectedTasksComposerBadges(params: {
     badges.push({
       key: `provider:${providerValue}`,
       kind: "provider",
-      label: providerValue,
+      label: composerProviderLabel(providerValue),
       value: providerValue,
     });
   }
@@ -129,7 +147,7 @@ export function buildSelectedTasksComposerBadges(params: {
     badges.push({
       key: `auto-provider:${autoProviderValue}`,
       kind: "auto-provider",
-      label: autoProviderValue,
+      label: composerProviderLabel(autoProviderValue),
       value: autoProviderValue,
     });
   }
@@ -195,12 +213,13 @@ export function TasksThreadComposer(props: TasksThreadComposerProps) {
           role="listbox"
         >
           {props.mentionMatch.options.map((option, index) => {
-            const startsModeSection = option.kind === "mode" && props.mentionMatch?.options[index - 1]?.kind !== "mode";
+            const previousKind = props.mentionMatch?.options[index - 1]?.kind;
+            const startsSection = index > 0 && previousKind !== option.kind;
             return (
             <button
               aria-label={`${option.mention} ${option.label} ${option.description}`.trim()}
               aria-selected={index === props.mentionIndex}
-              className={`tasks-thread-mention-option${index === props.mentionIndex ? " is-active" : ""}${startsModeSection ? " is-mode-section-start" : ""}`}
+              className={`tasks-thread-mention-option${index === props.mentionIndex ? " is-active" : ""}${startsSection ? " is-section-start" : ""}`}
               data-e2e={`tasks-mention-option-${option.mention.replace(/[^a-z0-9_-]+/gi, "").toLowerCase()}`}
               key={option.mention}
               ref={(node) => {
@@ -242,8 +261,16 @@ export function TasksThreadComposer(props: TasksThreadComposerProps) {
         </div>
       ) : null}
 
-      {selectedBadges.length > 0 ? (
-        <div aria-label="Selected agents" className="tasks-thread-selected-mentions" data-e2e="tasks-selected-badges">
+      <div aria-label="Selected agents" className="tasks-thread-selected-mentions" data-e2e="tasks-selected-badges">
+          <button
+            aria-pressed={props.creativeModeEnabled}
+            className={`tasks-thread-selected-mention-chip tasks-thread-creative-mode-toggle${props.creativeModeEnabled ? " is-active" : ""}`}
+            data-e2e="tasks-creative-mode-toggle"
+            onClick={props.onToggleCreativeMode}
+            type="button"
+          >
+            {props.creativeModeEnabled ? "창의성 모드 ON" : "창의성 모드 OFF"}
+          </button>
           {selectedBadges.map((badge) => (
             <span
               className={`tasks-thread-selected-mention-chip${badge.kind === "auto-agent" || badge.kind === "auto-provider" ? " is-auto" : ""}${badge.kind === "provider" || badge.kind === "auto-provider" ? " is-provider" : ""}`}
@@ -273,7 +300,6 @@ export function TasksThreadComposer(props: TasksThreadComposerProps) {
             </span>
           ))}
         </div>
-      ) : null}
 
       <div className="tasks-thread-composer-input-wrap">
         <textarea

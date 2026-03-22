@@ -1724,6 +1724,7 @@
 .tasks-thread-selected-mentions {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 6px;
   margin-bottom: 5px;
 }
@@ -1834,6 +1835,18 @@
   line-height: 1;
 }
 
+.tasks-thread-creative-mode-toggle {
+  border: 0;
+  cursor: pointer;
+  background: color-mix(in srgb, #edf3fb 84%, #ffffff);
+  color: #315f8e;
+}
+
+.tasks-thread-creative-mode-toggle.is-active {
+  background: color-mix(in srgb, #d8ebff 82%, #ffffff);
+  color: #13416d;
+}
+
 .tasks-thread-selected-mention-chip.is-auto {
   background: color-mix(in srgb, #ffd28f 54%, #ffffff);
   color: #6c4512;
@@ -1909,7 +1922,7 @@
   text-align: left;
 }
 
-.tasks-thread-mention-option.is-mode-section-start {
+.tasks-thread-mention-option.is-section-start {
   margin-top: 6px;
   padding-top: 10px;
   border-top: 1px solid #d8dde6;

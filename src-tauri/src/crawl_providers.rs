@@ -27,9 +27,15 @@ const ENV_LIGHTPANDA_CDP_URL: &str = "RAIL_LIGHTPANDA_CDP_URL";
 const ENV_NODE_BIN: &str = "RAIL_NODE_BIN";
 
 type RunningProviderMap = Mutex<std::collections::HashMap<String, Vec<u32>>>;
+type DevCdpProviderMap = Mutex<std::collections::HashMap<String, u32>>;
 
 fn running_provider_registry() -> &'static RunningProviderMap {
     static REGISTRY: OnceLock<RunningProviderMap> = OnceLock::new();
+    REGISTRY.get_or_init(|| Mutex::new(std::collections::HashMap::new()))
+}
+
+fn dev_cdp_provider_registry() -> &'static DevCdpProviderMap {
+    static REGISTRY: OnceLock<DevCdpProviderMap> = OnceLock::new();
     REGISTRY.get_or_init(|| Mutex::new(std::collections::HashMap::new()))
 }
 
@@ -320,6 +326,88 @@ fn resolve_cdp_url(env_key: &str) -> Result<Option<String>, String> {
         return Err(format!("{env_key} must use localhost/loopback for security"));
     }
     Ok(Some(parsed.to_string()))
+}
+
+fn dev_cdp_port(provider: &str) -> Option<u16> {
+    match provider {
+        "steel" => Some(9222),
+        "lightpanda_experimental" => Some(9333),
+        _ => None,
+    }
+}
+
+fn resolve_dev_cdp_browser_executable() -> Result<PathBuf, String> {
+    if let Ok(raw) = env::var("RAIL_CDP_BROWSER_BIN") {
+        let candidate = PathBuf::from(raw.trim());
+        if is_executable(&candidate) {
+            return Ok(candidate);
+        }
+    }
+    let candidates = [
+        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+        "/Applications/Chromium.app/Contents/MacOS/Chromium",
+        "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+        "/opt/homebrew/bin/chromium",
+        "/opt/homebrew/bin/chrome",
+        "/usr/local/bin/chromium",
+        "/usr/local/bin/chrome",
+        "/usr/bin/google-chrome-stable",
+        "/usr/bin/google-chrome",
+        "/usr/bin/chromium",
+        "/usr/bin/chromium-browser",
+    ];
+    for candidate in candidates {
+        let path = PathBuf::from(candidate);
+        if is_executable(&path) {
+            return Ok(path);
+        }
+    }
+    Err("failed to resolve a local Chromium browser for automatic CDP startup; set RAIL_CDP_BROWSER_BIN".to_string())
+}
+
+async fn ensure_dev_cdp_browser(provider: &str) -> Result<Option<(String, bool)>, String> {
+    let Some(port) = dev_cdp_port(provider) else {
+        return Ok(None);
+    };
+    let cdp_url = format!("http://127.0.0.1:{port}");
+    if probe_cdp_endpoint(provider, &cdp_url).await.is_ok() {
+        return Ok(Some((cdp_url, false)));
+    }
+
+    let executable = resolve_dev_cdp_browser_executable()?;
+    let profile_dir = std::env::temp_dir().join(format!("rail-cdp-{}", sanitize_file_component(provider)));
+    fs::create_dir_all(&profile_dir)
+        .map_err(|error| format!("failed to create dev CDP profile directory: {error}"))?;
+
+    let child = StdCommand::new(&executable)
+        .arg(format!("--remote-debugging-port={port}"))
+        .arg(format!("--user-data-dir={}", profile_dir.to_string_lossy()))
+        .arg("--no-first-run")
+        .arg("--no-default-browser-check")
+        .arg("--headless=new")
+        .arg("about:blank")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .map_err(|error| format!("failed to auto-start local CDP browser for {provider}: {error}"))?;
+    let pid = child.id();
+    let mut registry = dev_cdp_provider_registry().lock().await;
+    registry.insert(provider.to_string(), pid);
+
+    for _ in 0..20 {
+        tokio::time::sleep(Duration::from_millis(250)).await;
+        if probe_cdp_endpoint(provider, &cdp_url).await.is_ok() {
+            return Ok(Some((cdp_url, true)));
+        }
+    }
+    Err(format!("auto-started local CDP browser for {provider} did not become ready"))
+}
+
+async fn resolve_runtime_cdp_url(provider: &str, env_key: &str) -> Result<Option<(String, bool)>, String> {
+    if let Some(value) = resolve_cdp_url(env_key)? {
+        return Ok(Some((value, false)));
+    }
+    ensure_dev_cdp_browser(provider).await
 }
 
 fn cdp_probe_url(raw_cdp_url: &str) -> Result<String, String> {
@@ -733,11 +821,28 @@ async fn fetch_with_browser_use(
 }
 
 async fn cdp_provider_health(provider: &str, env_key: &str) -> Result<DashboardCrawlProviderHealth, String> {
-    let Some(cdp_url) = resolve_cdp_url(env_key)? else {
-        return Ok(unsupported_provider_health(
-            provider,
-            &format!("{provider} CDP endpoint is not configured"),
-        ));
+    let (cdp_url, auto_started) = match resolve_runtime_cdp_url(provider, env_key).await {
+        Ok(Some(value)) => value,
+        Ok(None) => {
+            return Ok(unsupported_provider_health(
+                provider,
+                &format!("{provider} CDP endpoint is not configured"),
+            ));
+        }
+        Err(error) => {
+            return Ok(DashboardCrawlProviderHealth {
+                provider: provider.to_string(),
+                available: false,
+                ready: false,
+                configured: false,
+                installed: false,
+                installable: false,
+                message: error,
+                capabilities: provider_capabilities(provider),
+                base_url: None,
+                details: json!({}),
+            })
+        }
     };
     match probe_cdp_endpoint(provider, &cdp_url).await {
         Ok(details) => Ok(DashboardCrawlProviderHealth {
@@ -747,10 +852,21 @@ async fn cdp_provider_health(provider: &str, env_key: &str) -> Result<DashboardC
             configured: true,
             installed: false,
             installable: false,
-            message: "ready".to_string(),
+            message: if auto_started {
+                "ready (auto-started local CDP browser)".to_string()
+            } else {
+                "ready".to_string()
+            },
             capabilities: provider_capabilities(provider),
             base_url: Some(cdp_url),
-            details,
+            details: if auto_started {
+                json!({
+                    "autoStarted": true,
+                    "probe": details,
+                })
+            } else {
+                details
+            },
         }),
         Err(error) => Ok(DashboardCrawlProviderHealth {
             provider: provider.to_string(),
@@ -774,7 +890,7 @@ async fn fetch_with_cdp_provider(
     env_key: &str,
     url: &str,
 ) -> Result<DashboardCrawlProviderFetchResult, String> {
-    let cdp_url = resolve_cdp_url(env_key)?
+    let (cdp_url, _) = resolve_runtime_cdp_url(provider, env_key).await?
         .ok_or_else(|| format!("{provider} CDP endpoint is not configured"))?;
     let node = resolve_executable("node", ENV_NODE_BIN)?;
     let script_path = resolve_resource_script_path(app, "scripts/crawl_providers/cdp_extract.mjs")?;
@@ -941,6 +1057,26 @@ pub async fn dashboard_crawl_provider_fetch_url(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::env;
+
+    #[test]
+    fn maps_dev_cdp_ports_per_provider() {
+        assert_eq!(dev_cdp_port("steel"), Some(9222));
+        assert_eq!(dev_cdp_port("lightpanda_experimental"), Some(9333));
+        assert_eq!(dev_cdp_port("scrapling"), None);
+    }
+
+    #[test]
+    fn builds_http_probe_url_from_cdp_urls() {
+        assert_eq!(
+            cdp_probe_url("http://127.0.0.1:9222").unwrap(),
+            "http://127.0.0.1:9222/json/version"
+        );
+        assert_eq!(
+            cdp_probe_url("ws://127.0.0.1:9333/devtools/browser/test").unwrap(),
+            "http://127.0.0.1:9333/json/version"
+        );
+    }
 
     #[test]
     fn register_and_cancel_provider_pid_lifecycle() {
@@ -951,6 +1087,34 @@ mod tests {
             assert!(cancelled);
             let registry = running_provider_registry().lock().await;
             assert!(registry.get("steel").is_none());
+        });
+    }
+
+    #[test]
+    fn auto_starts_local_cdp_browser_for_steel_when_env_is_missing() {
+        let browser = match resolve_dev_cdp_browser_executable() {
+            Ok(path) => path,
+            Err(_) => return,
+        };
+        assert!(is_executable(&browser));
+
+        env::remove_var(ENV_STEEL_CDP_URL);
+
+        tauri::async_runtime::block_on(async {
+            let result = ensure_dev_cdp_browser("steel").await.unwrap();
+            let (cdp_url, auto_started) = result.expect("expected local cdp browser");
+            assert!(auto_started);
+            assert_eq!(cdp_url, "http://127.0.0.1:9222");
+            let probe = probe_cdp_endpoint("steel", &cdp_url).await;
+            assert!(probe.is_ok(), "expected probe to succeed, got {probe:?}");
+
+            let pid = {
+                let mut registry = dev_cdp_provider_registry().lock().await;
+                registry.remove("steel")
+            };
+            if let Some(pid) = pid {
+                let _ = terminate_pid(pid);
+            }
         });
     }
 }

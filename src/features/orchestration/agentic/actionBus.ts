@@ -43,11 +43,12 @@ export type AgenticAction =
     }
   | {
       type: "run_role";
-      payload: {
+    payload: {
         roleId: string;
         taskId: string;
         prompt?: string;
         runId?: string;
+        creativeMode?: boolean;
         sourceTab?: "agents" | "workflow" | "workbench" | "tasks" | "tasks-thread";
         handoffToRole?: string;
         handoffRequest?: string;
@@ -64,6 +65,7 @@ export type AgenticAction =
         requestedRoleIds?: string[];
         rolePrompts?: Record<string, string>;
         intent?: string;
+        creativeMode?: boolean;
         primaryRoleId: string;
         synthesisRoleId: string;
         criticRoleId?: string;

@@ -99,6 +99,14 @@ function resolveRolePollTimeoutMs(params: {
   return POLL_TIMEOUT_MS;
 }
 
+function resolveWebProviderTimeoutMs(provider: string | null | undefined, baseTimeoutMs: number): number {
+  const normalized = String(provider ?? "").trim().toLowerCase();
+  if (["gpt", "gemini", "grok", "perplexity", "claude"].includes(normalized)) {
+    return Math.max(baseTimeoutMs, 300000);
+  }
+  return baseTimeoutMs;
+}
+
 const INCOMPLETE_TURN_STATUSES = new Set([
   "inprogress",
   "running",
@@ -711,6 +719,7 @@ export async function runTaskRoleWithCodex(input: RunTaskRoleWithCodexInput): Pr
   let codexTurnId: string | undefined;
 
   if (webProvider) {
+    const webTimeoutMs = resolveWebProviderTimeoutMs(webProvider, pollTimeoutMs);
     input.onRuntimeSession?.({
       provider: webProvider,
       codexThreadId: null,
@@ -719,7 +728,7 @@ export async function runTaskRoleWithCodex(input: RunTaskRoleWithCodexInput): Pr
     const webResult = await input.invokeFn<WebProviderRunResult>("web_provider_run", {
       provider: webProvider,
       prompt: promptText,
-      timeoutMs: pollTimeoutMs,
+      timeoutMs: webTimeoutMs,
       mode: "bridgeAssisted",
       cwd: context.projectPath,
     });

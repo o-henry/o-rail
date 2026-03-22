@@ -90,12 +90,14 @@ function renderRoleSummary(result: CollaborationRoleRunResult): string {
 function buildBriefPrompt(params: {
   prompt: string;
   intent?: string;
+  creativeMode?: boolean;
   participantPrompt: string;
   contextSummary: string;
   participantRoleIds: string[];
   cappedParticipantCount: boolean;
 }): string {
   const isIdeation = String(params.intent ?? "").trim().toLowerCase() === "ideation";
+  const creativeMode = Boolean(params.creativeMode) && isIdeation;
   return [
     "# 작업 모드",
     "내부 멀티에이전트 1차 브리프",
@@ -111,6 +113,13 @@ function buildBriefPrompt(params: {
     "",
     "# 협업 규칙",
     `- 참여 에이전트 수: ${params.participantRoleIds.length}${params.cappedParticipantCount ? " (상한 적용)" : ""}`,
+    ...(creativeMode
+      ? [
+          "- Creative Mode: 최근 평균 답변 표현이나 내부 브리프 문체를 반복하지 말고, 서로 다른 방향의 후보를 충분히 벌린다.",
+          "- 먼저 최소 12개 이상의 거친 후보를 내부적으로 발산한 뒤, 그중 기억에 남는 후보만 남긴다.",
+          "- 대표작 두 개 조합처럼 들리거나 장르 태그 두 개만 섞은 후보, 설명만 화려하고 루프가 빈약한 후보는 스스로 탈락시킨다.",
+        ]
+      : []),
     isIdeation
       ? "- 최종 사용자 답변 형식은 아니어도 되지만, 실제 아이디어 후보/시장 검증/탈락 사유처럼 최종 산출에 바로 쓸 수 있는 재료를 남긴다."
       : "- 최종 답변을 쓰지 말고, 자기 전문영역 기준 핵심 사실/리스크/권장 접근만 짧게 정리한다.",
@@ -126,7 +135,9 @@ function buildCritiquePrompt(params: {
   prompt: string;
   contextSummary: string;
   roleSummaries: CollaborationRoleRunResult[];
+  creativeMode?: boolean;
 }): string {
+  const creativeMode = Boolean(params.creativeMode);
   return [
     "# 작업 모드",
     "내부 멀티에이전트 충돌/누락 검토",
@@ -141,6 +152,12 @@ function buildCritiquePrompt(params: {
     params.roleSummaries.map(renderRoleSummary).join("\n\n"),
     "",
     "# 출력 규칙",
+    ...(creativeMode
+      ? [
+          "- 평균적 장르 조합, 최근 대화 표현 반복, 대표작 2개를 바로 떠올리게 하는 후보를 우선 탈락시킨다.",
+          "- 안전한 후보를 더 다듬는 것보다 무난한 후보를 과감히 버리는 데 집중한다.",
+        ]
+      : []),
     "- 서로 충돌하는 주장, 빠진 확인 포인트, 구현/테스트 리스크만 6개 이하 bullet로 적는다.",
     "- 최종 답변 문체 금지.",
     "- 이미 같은 내용은 반복하지 않는다.",
@@ -150,12 +167,14 @@ function buildCritiquePrompt(params: {
 function buildFinalPrompt(params: {
   prompt: string;
   intent?: string;
+  creativeMode?: boolean;
   contextSummary: string;
   roleSummaries: CollaborationRoleRunResult[];
   criticSummary?: string;
   failedRoleIds?: string[];
 }): string {
   const isIdeation = String(params.intent ?? "").trim().toLowerCase() === "ideation";
+  const creativeMode = Boolean(params.creativeMode) && isIdeation;
   return [
     "# 작업 모드",
     "최종 합성 답변",
@@ -177,6 +196,12 @@ function buildFinalPrompt(params: {
     "",
     "# 출력 규칙",
     "- 한국어로 최종 답변을 작성한다.",
+    ...(creativeMode
+      ? [
+          "- Creative Mode가 켜져 있다. 무난한 평균 답보다 기억에 남는 후보를 우선한다.",
+          "- 최종안에는 왜 상투적이지 않은지와 어떤 평균적 대안을 탈락시켰는지가 드러나야 한다.",
+        ]
+      : []),
     isIdeation
       ? "- 지금 바로 사용자에게 전달할 최종 아이디어 답변만 작성한다."
       : "- 필요한 경우 수정 후보 파일, 확인해야 할 리스크, 다음 행동을 짧게 정리한다.",
@@ -263,6 +288,7 @@ export async function runTaskCollaborationWithCodex(params: {
   requestedRoleIds?: string[];
   participantPrompts?: Record<string, string>;
   intent?: string;
+  creativeMode?: boolean;
   synthesisRoleId: string;
   criticRoleId?: string;
   cappedParticipantCount: boolean;
@@ -390,6 +416,7 @@ export async function runTaskCollaborationWithCodex(params: {
           prompt: buildBriefPrompt({
             prompt: params.prompt,
             intent: params.intent,
+            creativeMode: params.creativeMode,
             participantPrompt,
             contextSummary: params.contextSummary,
             participantRoleIds,
@@ -445,6 +472,7 @@ export async function runTaskCollaborationWithCodex(params: {
           prompt: params.prompt,
           contextSummary: params.contextSummary,
           roleSummaries: participantResults,
+          creativeMode: params.creativeMode,
         }),
         promptMode: "critique",
         intent: params.intent,
@@ -489,6 +517,7 @@ export async function runTaskCollaborationWithCodex(params: {
     prompt: buildFinalPrompt({
       prompt: params.prompt,
       intent: params.intent,
+      creativeMode: params.creativeMode,
       contextSummary: params.contextSummary,
       roleSummaries: participantResults,
       criticSummary: criticResult?.summary,

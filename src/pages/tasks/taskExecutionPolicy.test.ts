@@ -136,4 +136,16 @@ describe("taskExecutionPolicy", () => {
     expect(plan.mode).toBe("discussion");
     expect(plan.useAdaptiveOrchestrator).toBe(true);
   });
+
+  it("keeps creative mode on the execution plan and widens orchestrator-first ideation participation", () => {
+    const plan = createTaskExecutionPlan({
+      enabledRoleIds: ["game_designer", "researcher", "unity_architect", "qa_playtester"],
+      requestedRoleIds: [],
+      prompt: "아류작이 아닌 게임 아이디어 10개를 제안해줘",
+      creativeMode: true,
+    });
+
+    expect(plan.creativeMode).toBe(true);
+    expect(plan.rolePrompts.game_designer).toContain("Creative Mode");
+  });
 });

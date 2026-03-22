@@ -282,12 +282,14 @@ function buildIntentLead(roleId: TaskAgentPresetId, intent: TaskPromptIntent, is
 function buildRoleAssignmentPrompt(params: {
   roleId: TaskAgentPresetId;
   intent: TaskPromptIntent;
+  creativeMode?: boolean;
   userPrompt: string;
   primaryRoleId: TaskAgentPresetId;
   participantRoleIds: TaskAgentPresetId[];
   requestedRoleIds: TaskAgentPresetId[];
 }): string {
   const isPrimary = params.roleId === params.primaryRoleId;
+  const creativeMode = Boolean(params.creativeMode);
   return [
     "# ORCHESTRATION",
     `작업 유형: ${params.intent}`,
@@ -298,6 +300,13 @@ function buildRoleAssignmentPrompt(params: {
     "",
     "# ROLE-SPECIFIC GOALS",
     ...buildIntentLead(params.roleId, params.intent, isPrimary),
+    ...(creativeMode && params.intent === "ideation"
+      ? [
+          "- Creative Mode가 켜져 있다. 최근 평균 답변, 안전한 장르 조합, 이전 브리프 표현을 반복하지 말고 더 멀리 발산한다.",
+          "- 먼저 서로 다른 방향의 후보를 충분히 벌린 뒤에만 수렴한다. 가장 무난한 후보를 바로 고르지 않는다.",
+          "- 대표작 두 개를 섞은 듯한 아이디어, 장르 태그 두 개만 합친 아이디어, 설명만 화려하고 루프가 빈약한 아이디어는 스스로 폐기한다.",
+        ]
+      : []),
     "- 사용자 금지 조건과 선호 조건을 임의로 무시하지 않는다.",
     "- 다른 역할이 맡을 내용을 전부 대신하려 하지 말고, 자기 역할에 맞는 정보만 압축한다.",
     "",
@@ -306,8 +315,13 @@ function buildRoleAssignmentPrompt(params: {
   ].join("\n");
 }
 
-function buildOrchestrationSummary(intent: TaskPromptIntent, participantRoleIds: TaskAgentPresetId[], primaryRoleId: TaskAgentPresetId): string {
-  return `${intent} 요청으로 해석했고 ${getTaskAgentLabel(primaryRoleId)} 중심으로 ${participantRoleIds.map((roleId) => getTaskAgentLabel(roleId)).join(", ")} 를 배치했습니다.`;
+function buildOrchestrationSummary(
+  intent: TaskPromptIntent,
+  participantRoleIds: TaskAgentPresetId[],
+  primaryRoleId: TaskAgentPresetId,
+  creativeMode = false,
+): string {
+  return `${intent} 요청으로 해석했고 ${getTaskAgentLabel(primaryRoleId)} 중심으로 ${participantRoleIds.map((roleId) => getTaskAgentLabel(roleId)).join(", ")} 를 배치했습니다.${creativeMode && intent === "ideation" ? " Creative Mode로 발산 -> 탈락 -> 수렴 흐름을 우선합니다." : ""}`;
 }
 
 export function orchestrateTaskPrompt(params: {
@@ -315,6 +329,7 @@ export function orchestrateTaskPrompt(params: {
   requestedRoleIds: Iterable<string>;
   prompt: string;
   maxParticipants: number;
+  creativeMode?: boolean;
 }): TaskPromptOrchestration & { cappedParticipantCount: boolean } {
   const requestedRoleIds = uniqueRoleIds(params.requestedRoleIds);
   const enabledRoleIds = uniqueRoleIds(params.enabledRoleIds);
@@ -345,6 +360,7 @@ export function orchestrateTaskPrompt(params: {
       buildRoleAssignmentPrompt({
         roleId,
         intent: fallbackIntent,
+        creativeMode: params.creativeMode,
         userPrompt: params.prompt,
         primaryRoleId: picked.primaryRoleId,
         participantRoleIds: picked.participantRoleIds,
@@ -359,7 +375,7 @@ export function orchestrateTaskPrompt(params: {
     primaryRoleId: picked.primaryRoleId,
     synthesisRoleId: picked.primaryRoleId,
     rolePrompts,
-    orchestrationSummary: buildOrchestrationSummary(fallbackIntent, picked.participantRoleIds, picked.primaryRoleId),
+    orchestrationSummary: buildOrchestrationSummary(fallbackIntent, picked.participantRoleIds, picked.primaryRoleId, Boolean(params.creativeMode)),
     useAdaptiveOrchestrator,
     cappedParticipantCount: picked.cappedParticipantCount,
   };

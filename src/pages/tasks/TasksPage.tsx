@@ -19,7 +19,7 @@ import {
 } from "./taskAgentMentions";
 import { buildThreadFileTree } from "./threadFileTree";
 import { buildLiveAgentCards } from "./liveAgentState";
-import { deriveAutomaticResearchProviderBadge, type ExternalResearchProviderModel, useTasksThreadState } from "./useTasksThreadState";
+import { deriveAutomaticResearchProviderBadge, type ComposerProviderModel, useTasksThreadState } from "./useTasksThreadState";
 import { TasksThreadNavPane } from "./TasksThreadNavPane";
 import { TasksThreadHeaderBar } from "./TasksThreadHeaderBar";
 import { TasksThreadConversation } from "./TasksThreadConversation";
@@ -302,7 +302,7 @@ export default function TasksPage(props: TasksPageProps) {
       const nextValue = stripTaskAgentMentionMatch(state.composerDraft, activeMatch);
       const nextCursor = activeMatch.rangeStart;
       if (option.modelValue) {
-        state.setComposerProviderOverride(option.modelValue as ExternalResearchProviderModel);
+        state.setComposerProviderOverride(option.modelValue as ComposerProviderModel);
       }
       state.setComposerDraft(nextValue);
       setComposerCursor(nextCursor);
@@ -454,6 +454,7 @@ export default function TasksPage(props: TasksPageProps) {
           autoSelectedProviderModel={autoSelectedProviderModel}
           canUseStopButton={state.canInterruptCurrentThread}
           canInterruptCurrentThread={state.canInterruptCurrentThread}
+          creativeModeEnabled={state.composerCreativeMode}
           composerCoordinationModeOverride={state.composerCoordinationModeOverride}
           composerDraft={state.composerDraft}
           composerProviderOverride={state.composerProviderOverride}
@@ -493,6 +494,7 @@ export default function TasksPage(props: TasksPageProps) {
           }}
           onStop={() => void state.stopComposerRun()}
           onSubmit={() => void state.submitComposer()}
+          onToggleCreativeMode={() => state.setComposerCreativeMode((current) => !current)}
           onToggleModelMenu={() => setIsModelMenuOpen((prev) => !prev)}
           onToggleReasonMenu={() => setIsReasonMenuOpen((prev) => !prev)}
         />

@@ -10,14 +10,14 @@ describe("roleKnowledgeProviders", () => {
     resetRoleKnowledgeProviderRuntimeForTests();
   });
 
-  it("includes lightpanda and browser_use in bootstrap fallback order", () => {
+  it("includes lightpanda and excludes browser_use from bootstrap fallback order", () => {
     expect(
       resolveRoleKnowledgeProviderOrder({
         url: "https://docs.unity3d.com/Manual/index.html",
         roleId: "technical_writer",
         userPrompt: "공식 문서 기준으로 정리해줘",
       }),
-    ).toEqual(["crawl4ai", "scrapling", "steel", "lightpanda_experimental", "browser_use"]);
+    ).toEqual(["crawl4ai", "scrapling", "steel", "lightpanda_experimental"]);
 
     expect(
       resolveRoleKnowledgeProviderOrder({
@@ -25,7 +25,7 @@ describe("roleKnowledgeProviders", () => {
         roleId: "research_analyst",
         userPrompt: "커뮤니티 반응을 조사해줘",
       }),
-    ).toEqual(["scrapling", "steel", "lightpanda_experimental", "browser_use", "crawl4ai"]);
+    ).toEqual(["scrapling", "steel", "lightpanda_experimental", "crawl4ai"]);
   });
 
   it("accepts a later provider when earlier providers fail during parallel bootstrap", async () => {
@@ -74,7 +74,7 @@ describe("roleKnowledgeProviders", () => {
       .map((call) => String((call as [string, Record<string, unknown> | undefined])[1]?.provider ?? ""));
 
     expect(fetchProviders).toEqual(
-      expect.arrayContaining(["scrapling", "steel", "lightpanda_experimental", "browser_use", "crawl4ai"]),
+      expect.arrayContaining(["scrapling", "steel", "lightpanda_experimental", "crawl4ai"]),
     );
   });
 

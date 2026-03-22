@@ -28,7 +28,9 @@ function preferOrchestratorFirstPlan(params: {
     ? params.plan.participantRoleIds
     : [
       params.plan.primaryRoleId,
-      ...params.plan.candidateRoleIds.filter((roleId) => roleId !== params.plan.primaryRoleId).slice(0, 1),
+      ...params.plan.candidateRoleIds
+        .filter((roleId) => roleId !== params.plan.primaryRoleId)
+        .slice(0, params.plan.creativeMode ? 2 : 1),
     ];
   if (participantRoleIds.length <= 1) {
     return params.plan;
@@ -50,11 +52,13 @@ export function deriveExecutionPlan(params: {
   requestedRoleIds: string[];
   prompt: string;
   selectedMode?: CoordinationMode | null;
+  creativeMode?: boolean;
 }): TaskExecutionPlan {
   const basePlan = createTaskExecutionPlan({
     enabledRoleIds: params.enabledRoleIds,
     requestedRoleIds: params.requestedRoleIds,
     prompt: params.prompt,
+    creativeMode: params.creativeMode,
   });
   if (params.selectedMode !== "quick") {
     return preferOrchestratorFirstPlan({
@@ -80,6 +84,7 @@ export function buildExecutionPlanFromCoordination(detail: ThreadDetail, coordin
     requestedRoleIds,
     prompt: coordination.prompt,
     selectedMode: coordination.mode,
+    creativeMode: false,
   });
 }
 
@@ -101,6 +106,7 @@ export function dispatchTaskExecutionPlan(params: {
         roleId: studioRoleId,
         taskId: params.detail.task.taskId,
         prompt: params.plan.rolePrompts[roleId] ?? rolePrompt(params.detail, roleId, params.prompt),
+        creativeMode: params.plan.creativeMode,
         sourceTab: "tasks-thread",
       },
     });
@@ -129,6 +135,7 @@ export function dispatchTaskExecutionPlan(params: {
         requestedRoleIds: params.plan.requestedRoleIds.map((roleId) => getTaskAgentStudioRoleId(roleId)).filter(Boolean) as string[],
         rolePrompts,
         intent: params.plan.intent,
+        creativeMode: params.plan.creativeMode,
         primaryRoleId: String(getTaskAgentStudioRoleId(params.plan.primaryRoleId) ?? "").trim(),
         synthesisRoleId: String(getTaskAgentStudioRoleId(params.plan.synthesisRoleId) ?? "").trim(),
         criticRoleId: String(getTaskAgentStudioRoleId(params.plan.criticRoleId ?? "") ?? "").trim() || undefined,

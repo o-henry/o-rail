@@ -543,7 +543,9 @@ function TasksThreadConversationImpl(props: TasksThreadConversationProps) {
           const parsed = resolveTimelineMessage(message, props.visibleAgentLabels);
           const messageId = String(message.id ?? "").trim();
           const renderedBody = normalizeTasksTimelineCopy(parsed.body);
-          const progressivelyReveal = messageId === latestProgressiveMessageId && shouldProgressivelyRevealMessage(message, parsed.body);
+          const progressivelyReveal = !shouldRenderMessageMarkdown(message)
+            && messageId === latestProgressiveMessageId
+            && shouldProgressivelyRevealMessage(message, parsed.body);
           const progressiveStep = resolveProgressiveRevealStep(renderedBody.length);
           return (
             <Fragment key={message.id}>

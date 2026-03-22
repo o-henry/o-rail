@@ -240,6 +240,41 @@ describe("runTaskCollaborationWithCodex", () => {
     }));
   });
 
+  it("adds creative divergence and rejection instructions when creative mode is enabled", async () => {
+    const executeRoleRun = vi.fn(async (params: {
+      roleId: string;
+      prompt: string;
+      promptMode: "orchestrate" | "brief" | "critique" | "final";
+      internal: boolean;
+    }) => ({
+      roleId: params.roleId,
+      runId: `${params.roleId}-${params.promptMode}`,
+      summary: params.prompt,
+      artifactPaths: [`/${params.roleId}/${params.promptMode}.md`],
+    }));
+
+    await runTaskCollaborationWithCodex({
+      prompt: "아류작이 아닌 게임 아이디어 10개를 제안해줘",
+      contextSummary: "최근 대화 요약",
+      participantRoleIds: ["game_designer", "researcher"],
+      synthesisRoleId: "game_designer",
+      criticRoleId: "researcher",
+      cappedParticipantCount: false,
+      creativeMode: true,
+      intent: "ideation",
+      executeRoleRun,
+    });
+
+    expect(executeRoleRun).toHaveBeenCalledWith(expect.objectContaining({
+      promptMode: "brief",
+      prompt: expect.stringContaining("Creative Mode"),
+    }));
+    expect(executeRoleRun).toHaveBeenCalledWith(expect.objectContaining({
+      promptMode: "final",
+      prompt: expect.stringContaining("무난한 평균 답보다 기억에 남는 후보"),
+    }));
+  });
+
   it("runs a GPT-5.4 xhigh orchestration step before briefs when adaptive orchestration is enabled", async () => {
     const executeRoleRun = vi.fn(async (params: {
       roleId: string;

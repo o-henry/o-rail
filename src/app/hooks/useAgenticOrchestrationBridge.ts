@@ -770,6 +770,7 @@ export function useAgenticOrchestrationBridge(params: {
     requestedRoleIds?: string[];
     rolePrompts?: Record<string, string>;
     intent?: string;
+    creativeMode?: boolean;
     primaryRoleId: string;
     synthesisRoleId: string;
     criticRoleId?: string;
@@ -811,6 +812,7 @@ export function useAgenticOrchestrationBridge(params: {
         requestedRoleIds: params.requestedRoleIds,
         participantPrompts: params.rolePrompts,
         intent: params.intent,
+        creativeMode: params.creativeMode,
         synthesisRoleId: params.synthesisRoleId,
         criticRoleId: params.criticRoleId,
         cappedParticipantCount: Boolean(params.cappedParticipantCount),
@@ -1142,6 +1144,7 @@ export function useAgenticOrchestrationBridge(params: {
           requestedRoleIds: action.payload.requestedRoleIds,
           rolePrompts: action.payload.rolePrompts,
           intent: action.payload.intent,
+          creativeMode: action.payload.creativeMode,
           primaryRoleId: action.payload.primaryRoleId,
           synthesisRoleId: action.payload.synthesisRoleId,
           criticRoleId: action.payload.criticRoleId,

@@ -177,6 +177,11 @@ function formatRuntimeProviderBadgeLabel(raw: string): string {
   if (!normalized) {
     return "";
   }
+  if (normalized === "gpt") return "AI · GPT";
+  if (normalized === "gemini") return "AI · GEMINI";
+  if (normalized === "grok") return "AI · GROK";
+  if (normalized === "perplexity") return "AI · PERPLEXITY";
+  if (normalized === "claude") return "AI · CLAUDE";
   if (normalized === "steel") return "@STEEL";
   if (normalized === "lightpanda_experimental") return "@LIGHTPANDA";
   if (normalized === "scrapling") return "SCRAPLING";
@@ -209,7 +214,17 @@ function nextId(prefix: string): string {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}_${Date.now().toString(36)}`;
 }
 
+export const COMPOSER_PROVIDER_MODEL_VALUES = [
+  "GPT-Web",
+  "Gemini",
+  "Grok",
+  "Perplexity",
+  "Claude",
+  "WEB / STEEL",
+  "WEB / LIGHTPANDA",
+] as const;
 export const AUTO_EXTERNAL_PROVIDER_MODEL_VALUES = ["WEB / STEEL", "WEB / LIGHTPANDA"] as const;
+export type ComposerProviderModel = (typeof COMPOSER_PROVIDER_MODEL_VALUES)[number];
 export type ExternalResearchProviderModel = (typeof AUTO_EXTERNAL_PROVIDER_MODEL_VALUES)[number];
 type ExternalProviderReadiness = {
   steel: boolean;
@@ -241,7 +256,7 @@ export async function resolveAutomaticResearchModel(params: {
   preferredProviderModel?: string | null;
 }): Promise<string> {
   const preferredProviderModel = String(params.preferredProviderModel ?? "").trim();
-  if (preferredProviderModel && AUTO_EXTERNAL_PROVIDER_MODEL_VALUES.includes(preferredProviderModel as ExternalResearchProviderModel)) {
+  if (preferredProviderModel && COMPOSER_PROVIDER_MODEL_VALUES.includes(preferredProviderModel as ComposerProviderModel)) {
     return preferredProviderModel;
   }
   if (!params.hasTauriRuntime || !params.cwd) {
@@ -565,7 +580,8 @@ export function useTasksThreadState(params: Params) {
   const [loading, setLoading] = useState(false);
   const [composerDraft, setComposerDraft] = useState("");
   const [model, setModel] = useState("GPT-5.4");
-  const [composerProviderOverride, setComposerProviderOverride] = useState<ExternalResearchProviderModel | null>(null);
+  const [composerProviderOverride, setComposerProviderOverride] = useState<ComposerProviderModel | null>(null);
+  const [composerCreativeMode, setComposerCreativeMode] = useState(false);
   const [reasoning, setReasoning] = useState("중간");
   const [accessMode] = useState("Local");
   const [detailTab, setDetailTab] = useState<ThreadDetailTab>("files");
@@ -1631,6 +1647,7 @@ export function useTasksThreadState(params: Params) {
           requestedRoleIds: taggedRoles,
           prompt,
           selectedMode: modeTagOverride ?? undefined,
+          creativeMode: composerCreativeMode,
         });
         const coordination = createCoordinationState({
           threadId: detail.thread.threadId,
@@ -1726,6 +1743,7 @@ export function useTasksThreadState(params: Params) {
         requestedRoleIds: taggedRoles,
         prompt,
         selectedMode: modeTagOverride ?? undefined,
+        creativeMode: composerCreativeMode,
       });
       const coordination = createCoordinationState({
         threadId: detail.thread.threadId,
@@ -1802,7 +1820,7 @@ export function useTasksThreadState(params: Params) {
     } finally {
       setComposerSubmitPending(false);
     }
-  }, [accessMode, activeThread, applyBrowserStore, buildPromptWithAttachments, clearAttachedFiles, composerCoordinationModeOverride, composerDraft, composerProviderOverride, hydrateThreadDetail, model, params, projectPath, reasoning, selectedComposerRoleIds, syncSpawnedThreadSelection, updateThreadCoordination]);
+  }, [accessMode, activeThread, applyBrowserStore, buildPromptWithAttachments, clearAttachedFiles, composerCoordinationModeOverride, composerCreativeMode, composerDraft, composerProviderOverride, hydrateThreadDetail, model, params, projectPath, reasoning, selectedComposerRoleIds, syncSpawnedThreadSelection, updateThreadCoordination]);
 
   const stopComposerRun = useCallback(async () => {
     if (!activeThread || stoppingComposerRun || !canInterruptCurrentThread) {
@@ -2216,6 +2234,7 @@ export function useTasksThreadState(params: Params) {
               plan: {
                 mode: "single",
                 intent: "planning",
+                creativeMode: false,
                 candidateRoleIds: [targetRole],
                 participantRoleIds: [targetRole],
                 requestedRoleIds: [targetRole],
@@ -2543,10 +2562,12 @@ export function useTasksThreadState(params: Params) {
     activeThreadId,
     composerCoordinationModeOverride,
     composerCoordinationPreview,
+    composerCreativeMode,
     composerProviderOverride,
     projectPath,
     composerDraft,
     setComposerDraft,
+    setComposerCreativeMode,
     setComposerProviderOverride,
     model,
     setModel,

@@ -23,6 +23,13 @@ describe("getTaskAgentMentionMatch", () => {
     expect(match?.options.some((option) => option.mention === "@steel")).toBe(true);
   });
 
+  it("surfaces AI web providers in mention search", () => {
+    const match = getTaskAgentMentionMatch("please ask @g", "please ask @g".length);
+    expect(match?.options.some((option) => option.mention === "@gpt")).toBe(true);
+    expect(match?.options.some((option) => option.mention === "@gemini")).toBe(true);
+    expect(match?.options.some((option) => option.mention === "@grok")).toBe(true);
+  });
+
   it("surfaces orchestration mode tags with descriptions", () => {
     const match = getTaskAgentMentionMatch("please use @te", "please use @te".length);
     const option = match?.options.find((entry) => entry.mention === "@team");

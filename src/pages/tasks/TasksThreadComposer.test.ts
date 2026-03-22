@@ -93,6 +93,7 @@ describe("TasksThreadComposer", () => {
         autoSelectedProviderModel: null,
         canInterruptCurrentThread: false,
         canUseStopButton: false,
+        creativeModeEnabled: false,
         composerProviderOverride: null,
         composerCoordinationModeOverride: null,
         composerDraft: "",
@@ -108,6 +109,7 @@ describe("TasksThreadComposer", () => {
         onComposerKeyDown: () => undefined,
         onClearComposerProviderOverride: () => undefined,
         onOpenAttachmentPicker: () => undefined,
+        onToggleCreativeMode: () => undefined,
         onRemoveAttachedFile: () => undefined,
         onRemoveComposerRole: () => undefined,
         onSelectMention: () => undefined,
@@ -139,6 +141,7 @@ describe("TasksThreadComposer", () => {
         autoSelectedProviderModel: null,
         canInterruptCurrentThread: false,
         canUseStopButton: false,
+        creativeModeEnabled: false,
         composerProviderOverride: null,
         composerCoordinationModeOverride: null,
         composerDraft: "",
@@ -154,6 +157,7 @@ describe("TasksThreadComposer", () => {
         onComposerKeyDown: () => undefined,
         onClearComposerProviderOverride: () => undefined,
         onOpenAttachmentPicker: () => undefined,
+        onToggleCreativeMode: () => undefined,
         onRemoveAttachedFile: () => undefined,
         onRemoveComposerRole: () => undefined,
         onSelectMention: () => undefined,
@@ -173,6 +177,11 @@ describe("TasksThreadComposer", () => {
       }),
     );
 
+    expect(html).not.toContain("AI · GPT");
+    expect(html).not.toContain("AI · Gemini");
+    expect(html).not.toContain("AI · Grok");
+    expect(html).not.toContain("AI · Perplexity");
+    expect(html).not.toContain("AI · Claude");
     expect(html).not.toContain("WEB / STEEL");
     expect(html).not.toContain("WEB / LIGHTPANDA");
   });
@@ -185,6 +194,7 @@ describe("TasksThreadComposer", () => {
         autoSelectedProviderModel: "WEB / STEEL",
         canInterruptCurrentThread: false,
         canUseStopButton: false,
+        creativeModeEnabled: true,
         composerProviderOverride: null,
         composerCoordinationModeOverride: null,
         composerDraft: "인디게임 아이디어 추천해줘",
@@ -200,6 +210,7 @@ describe("TasksThreadComposer", () => {
         onComposerKeyDown: () => undefined,
         onClearComposerProviderOverride: () => undefined,
         onOpenAttachmentPicker: () => undefined,
+        onToggleCreativeMode: () => undefined,
         onRemoveAttachedFile: () => undefined,
         onRemoveComposerRole: () => undefined,
         onSelectMention: () => undefined,
@@ -220,6 +231,7 @@ describe("TasksThreadComposer", () => {
     );
 
     expect(html).toContain("tasks-thread-selected-mention-chip is-auto");
+    expect(html).toContain("창의성 모드 ON");
     expect(html).toContain("AUTO: GAME DESIGNER");
     expect(html).toContain("AUTO: RESEARCHER");
     expect(html).toContain("AUTO: WEB / STEEL");
@@ -233,6 +245,7 @@ describe("TasksThreadComposer", () => {
         autoSelectedProviderModel: null,
         canInterruptCurrentThread: true,
         canUseStopButton: true,
+        creativeModeEnabled: false,
         composerProviderOverride: null,
         composerCoordinationModeOverride: null,
         composerDraft: "인디게임 아이디어 정리해줘",
@@ -248,6 +261,7 @@ describe("TasksThreadComposer", () => {
         onComposerKeyDown: () => undefined,
         onClearComposerProviderOverride: () => undefined,
         onOpenAttachmentPicker: () => undefined,
+        onToggleCreativeMode: () => undefined,
         onRemoveAttachedFile: () => undefined,
         onRemoveComposerRole: () => undefined,
         onSelectMention: () => undefined,

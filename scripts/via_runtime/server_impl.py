@@ -25,6 +25,7 @@ import secrets
 import socket
 import sqlite3
 import subprocess
+import sys
 import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -1083,6 +1084,112 @@ def collect_scrapling_targets(
     return AdapterResult(adapter=adapter, items=items[:MAX_TOTAL_ITEMS], warnings=warnings)
 
 
+def collect_scrapy_playwright_targets(
+    source_type: str,
+    adapter: str,
+    targets: list[dict[str, str]],
+    *,
+    snippets_per_target: int = 2,
+) -> AdapterResult:
+    warnings: list[str] = []
+    items: list[dict[str, Any]] = []
+    script_path = Path(__file__).resolve().with_name("scrapy_playwright_batch.py")
+    if not script_path.is_file():
+        return AdapterResult(
+            adapter=adapter,
+            items=[],
+            warnings=[f"{adapter}: scrapy-playwright helper script missing"],
+        )
+
+    serialized_targets = [
+        {
+            "url": str(target.get("url") or "").strip(),
+            "name": str(target.get("name") or parse_host(str(target.get("url") or "")) or "unknown"),
+            "country": str(target.get("country") or "GLOBAL"),
+        }
+        for target in targets
+        if str(target.get("url") or "").strip()
+    ]
+    if not serialized_targets:
+        return AdapterResult(adapter=adapter, items=[], warnings=warnings)
+
+    try:
+        output = subprocess.run(
+            [
+                sys.executable,
+                str(script_path),
+                "--targets-json",
+                json.dumps(serialized_targets, ensure_ascii=False),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=90,
+            check=False,
+        )
+    except Exception as exc:
+        return AdapterResult(
+            adapter=adapter,
+            items=[],
+            warnings=[f"{adapter}: {trim_text(exc, 180)}"],
+        )
+
+    if output.stderr.strip():
+        warnings.append(f"{adapter}: {trim_text(output.stderr, 220)}")
+    if output.returncode != 0:
+        return AdapterResult(
+            adapter=adapter,
+            items=[],
+            warnings=warnings or [f"{adapter}: scrapy-playwright collector exited with code {output.returncode}"],
+        )
+
+    try:
+        payload = json.loads(output.stdout or "{}")
+    except Exception as exc:
+        return AdapterResult(
+            adapter=adapter,
+            items=[],
+            warnings=[f"{adapter}: failed to parse scrapy-playwright output ({trim_text(exc, 180)})"],
+        )
+
+    warnings.extend([f"{adapter}: {trim_text(row, 220)}" for row in list(payload.get("warnings") or [])[:24]])
+    for row in list(payload.get("items") or []):
+        if len(items) >= MAX_TOTAL_ITEMS:
+            break
+        if not isinstance(row, dict):
+            continue
+        target_url = str(row.get("url") or "").strip()
+        source_name = str(row.get("sourceName") or parse_host(target_url) or "unknown")
+        country = str(row.get("country") or "GLOBAL")
+        title = trim_text(str(row.get("title") or ""), 130)
+        snippets = parse_pinchtab_snippets(str(row.get("content") or ""), limit=max(1, snippets_per_target))
+        if not snippets:
+            snippets = [trim_text(str(row.get("summary") or row.get("content") or title), 220)]
+        for snippet in [value for value in snippets if value]:
+            next_rank = len(items) + 1
+            items.append(
+                make_item(
+                    source_type=source_type,
+                    source_name=source_name,
+                    country=country,
+                    adapter=adapter,
+                    title=title or trim_text(snippet, 130),
+                    url=target_url,
+                    summary=snippet,
+                    published_at=None,
+                    extra={
+                        "scrapy_playwright": True,
+                        "headline": True,
+                        "hot_rank": next_rank,
+                        "hot_topic_hint": has_hot_topic_keyword(title, snippet, source_name, target_url),
+                    },
+                )
+            )
+            if len(items) >= MAX_TOTAL_ITEMS:
+                break
+
+    return AdapterResult(adapter=adapter, items=items[:MAX_TOTAL_ITEMS], warnings=warnings)
+
+
 def http_get_text(url: str, timeout: int = REQUEST_TIMEOUT_SECONDS) -> tuple[str, int, str]:
     request = Request(
         url,
@@ -2019,6 +2126,10 @@ def _normalize_dynamic_source_options(raw: dict[str, Any] | None) -> dict[str, A
                     "interaction_mode": str(row.get("interactionMode") or row.get("interaction_mode") or "passive").strip().lower(),
                     "requires_browser": bool(row.get("requiresBrowser") or row.get("requires_browser")),
                     "interaction_steps": row.get("interactionSteps") if isinstance(row.get("interactionSteps"), list) else [],
+                    "runtime_providers": _parse_option_list(
+                        row.get("runtimeProviders") or row.get("runtime_providers"),
+                        max_items=8,
+                    ),
                     "position": index,
                 }
             )
@@ -2029,11 +2140,11 @@ def _normalize_dynamic_source_options(raw: dict[str, Any] | None) -> dict[str, A
     planner = payload.get("planner") if isinstance(payload.get("planner"), dict) else {}
     preferred_execution_order = [
         str(value or "").strip().lower()
-        for value in _parse_option_list(payload.get("preferred_execution_order"), max_items=4)
-        if str(value or "").strip().lower() in {"rss", "scrapling", "pinchtab", "urls"}
+        for value in _parse_option_list(payload.get("preferred_execution_order"), max_items=8)
+        if str(value or "").strip().lower() in {"rss", "scrapling", "scrapy_playwright", "pinchtab", "urls"}
     ]
     if not preferred_execution_order:
-        preferred_execution_order = ["rss", "scrapling", "pinchtab", "urls"]
+        preferred_execution_order = ["rss", "scrapling", "scrapy_playwright", "pinchtab", "urls"]
 
     return {
         "keywords": keywords,
@@ -2249,27 +2360,48 @@ def execute_dynamic_source_query(source_type: str, source_options: dict[str, Any
     warnings: list[str] = []
     items: list[dict[str, Any]] = []
     if targets:
+        def supports_runtime(target: dict[str, Any], *provider_names: str) -> bool:
+            strategy = str(target.get("collector_strategy") or "").strip().lower()
+            runtime_providers = [str(value or "").strip().lower() for value in list(target.get("runtime_providers") or [])]
+            normalized_names = {str(name or "").strip().lower() for name in provider_names if str(name or "").strip()}
+            return strategy in normalized_names or any(provider in normalized_names for provider in runtime_providers)
+
         normalized_targets = [
             {
                 "country": "GLOBAL",
                 "name": str(row.get("host") or parse_host(str(row.get("url") or "")) or "custom-url"),
                 "url": str(row.get("url") or ""),
                 "collector_strategy": str(row.get("collector_strategy") or ""),
+                "runtime_providers": list(row.get("runtime_providers") or []),
             }
             for row in targets
         ]
         safe_targets, safety_warnings = _filter_safe_dynamic_targets(normalized_targets, f"{source_type}.dynamic")
         warnings.extend(safety_warnings)
-        rss_targets = [row for row in safe_targets if str(row.get("collector_strategy") or "") == "rss"]
-        scrapling_targets = [row for row in safe_targets if str(row.get("collector_strategy") or "") == "scrapling"]
-        pinchtab_targets = [row for row in safe_targets if str(row.get("collector_strategy") or "") == "pinchtab"]
+        rss_targets = [row for row in safe_targets if supports_runtime(row, "rss")]
+        scrapling_targets = [row for row in safe_targets if supports_runtime(row, "scrapling", "crawl4ai")]
+        scrapy_playwright_targets = [row for row in safe_targets if supports_runtime(row, "scrapy_playwright")]
+        pinchtab_targets = [row for row in safe_targets if supports_runtime(row, "pinchtab", "steel", "playwright_local", "browser_use")]
         fallback_targets = [
-            row for row in safe_targets if str(row.get("collector_strategy") or "") not in {"rss", "scrapling", "pinchtab"}
+            row
+            for row in safe_targets
+            if not supports_runtime(
+                row,
+                "rss",
+                "scrapling",
+                "crawl4ai",
+                "scrapy_playwright",
+                "pinchtab",
+                "steel",
+                "playwright_local",
+                "browser_use",
+            )
         ]
 
         target_groups: dict[str, list[dict[str, Any]]] = {
             "rss": rss_targets,
             "scrapling": scrapling_targets,
+            "scrapy_playwright": scrapy_playwright_targets,
             "pinchtab": pinchtab_targets,
             "urls": fallback_targets,
         }
@@ -2283,6 +2415,13 @@ def execute_dynamic_source_query(source_type: str, source_options: dict[str, Any
                 strategy_result = collect_scrapling_targets(
                     source_type,
                     f"{source_type}.dynamic.scrapling",
+                    strategy_targets,
+                    snippets_per_target=3,
+                )
+            elif strategy == "scrapy_playwright":
+                strategy_result = collect_scrapy_playwright_targets(
+                    source_type,
+                    f"{source_type}.dynamic.scrapy_playwright",
                     strategy_targets,
                     snippets_per_target=3,
                 )
@@ -2306,7 +2445,8 @@ def execute_dynamic_source_query(source_type: str, source_options: dict[str, Any
             items, domain_warnings = _filter_items_by_allowed_domains(items, allowed_domains, f"{source_type}.dynamic.scope")
             warnings.extend(domain_warnings)
         if items:
-            return AdapterResult(adapter=f"{source_type}.dynamic", items=items[:MAX_TOTAL_ITEMS], warnings=warnings)
+            deduped_items = _dedupe_adapter_items(items, limit=MAX_TOTAL_ITEMS)
+            return AdapterResult(adapter=f"{source_type}.dynamic", items=deduped_items[:MAX_TOTAL_ITEMS], warnings=warnings)
     elif urls:
         custom_url_targets = [
             {

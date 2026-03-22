@@ -1,3 +1,6 @@
 # RAIL embedded VIA runtime intentionally keeps dependencies minimal.
 # Keep this file for deterministic bootstrap hash/stamp management.
 scrapling
+playwright
+scrapy
+scrapy-playwright

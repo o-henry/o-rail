@@ -63,6 +63,19 @@ PINCHTAB_HOST_HINTS = (
     "weibo.com",
     "zhihu.com",
 )
+SCRAPY_PLAYWRIGHT_HOST_HINTS = (
+    "x.com",
+    "twitter.com",
+    "threads.net",
+    "reddit.com",
+    "steamcommunity.com",
+    "itch.io",
+    "dcinside.com",
+    "5ch.net",
+    "weibo.com",
+    "zhihu.com",
+    "resetera.com",
+)
 RSS_PATH_HINTS = ("/rss", "/feed", ".xml")
 
 PROMPT_DOMAIN_HINTS: dict[str, tuple[str, ...]] = {
@@ -1016,10 +1029,14 @@ def resolve_target_strategy(url: str, source_type: str) -> dict[str, Any]:
     if any(path.endswith(suffix) or suffix in path for suffix in RSS_PATH_HINTS):
         strategy = "rss"
         reasons.append("rss_or_feed_path")
+    elif any(hint in host for hint in SCRAPY_PLAYWRIGHT_HOST_HINTS) or source_type == "sns":
+        strategy = "scrapy_playwright"
+        interaction_mode = "interactive"
+        reasons.append("js_heavy_or_community_host")
     elif any(hint in host for hint in PINCHTAB_HOST_HINTS):
         strategy = "pinchtab"
         interaction_mode = "interactive"
-        reasons.append("interaction_heavy_host")
+        reasons.append("interactive_browser_fallback_host")
     elif source_type == "critic":
         strategy = "scrapling"
         reasons.append("article_like_review_source")
@@ -1030,7 +1047,9 @@ def resolve_target_strategy(url: str, source_type: str) -> dict[str, Any]:
         reasons.append("default_text_extraction")
 
     interaction_steps = ["open_url", "extract_primary_content"]
-    if strategy == "pinchtab":
+    if strategy == "scrapy_playwright":
+        interaction_steps = ["open_url", "wait_for_dom_ready", "scroll_primary_view", "extract_primary_content"]
+    elif strategy == "pinchtab":
         interaction_steps = ["open_url", "wait_for_content", "expand_more_if_present", "paginate_if_present", "extract_primary_content"]
     if strategy == "rss":
         interaction_steps = ["fetch_feed", "parse_items"]
@@ -1039,7 +1058,7 @@ def resolve_target_strategy(url: str, source_type: str) -> dict[str, Any]:
         "host": host,
         "strategy": strategy,
         "interactionMode": interaction_mode,
-        "requiresBrowser": strategy == "pinchtab",
+        "requiresBrowser": strategy in {"pinchtab", "scrapy_playwright"},
         "reasons": reasons,
         "interactionSteps": interaction_steps,
     }
@@ -1051,7 +1070,7 @@ def summarize_job_strategy(targets: list[dict[str, Any]]) -> str:
     strategies = {str(row.get("collectorStrategy") or "") for row in targets}
     if len(strategies) == 1:
         return next(iter(strategies))
-    if "pinchtab" in strategies:
+    if "scrapy_playwright" in strategies or "pinchtab" in strategies:
         return "mixed_browser"
     if "rss" in strategies and len(strategies) == 2:
         return "mixed_feed"
@@ -1063,8 +1082,10 @@ def resolve_runtime_providers(strategy: str, interaction_mode: str) -> list[str]
     normalized_mode = str(interaction_mode or "").strip().lower()
     if normalized_strategy == "rss":
         return ["rss"]
+    if normalized_strategy == "scrapy_playwright":
+        return ["scrapy_playwright", "scrapling", "steel", "playwright_local", "browser_use"]
     if normalized_strategy == "pinchtab" or normalized_mode == "interactive":
-        return ["steel", "playwright_local", "browser_use"]
+        return ["steel", "playwright_local", "browser_use", "scrapy_playwright", "scrapling"]
     if normalized_strategy == "scrapling":
         return ["crawl4ai", "scrapling", "steel"]
     return ["scrapling", "crawl4ai", "steel"]
@@ -1127,9 +1148,9 @@ def build_dynamic_collection_job(
         )
     collector_strategy = summarize_job_strategy(targets)
     query_plan = list((planner_context or {}).get("queryPlan") or [])
-    preferred_execution_order = ["rss", "scrapling", "pinchtab"]
-    if any(str(target.get("collectorStrategy") or "") == "pinchtab" for target in targets):
-        preferred_execution_order = ["scrapling", "pinchtab", "rss"]
+    preferred_execution_order = ["rss", "scrapling", "scrapy_playwright", "pinchtab", "urls"]
+    if any(str(target.get("collectorStrategy") or "") in {"scrapy_playwright", "pinchtab"} for target in targets):
+        preferred_execution_order = ["scrapling", "scrapy_playwright", "pinchtab", "rss", "urls"]
     return {
         "specVersion": 1,
         "jobId": job_id,
@@ -1416,7 +1437,7 @@ def build_collection_job_handoff(workspace: Path, *, job_id: str, agent_role: st
         "prompt": prompt,
         "job": job,
         "sourceOptions": job.get("sourceOptions") or {},
-        "preferredExecutionOrder": list(job.get("preferredExecutionOrder") or ["rss", "scrapling", "pinchtab"]),
+        "preferredExecutionOrder": list(job.get("preferredExecutionOrder") or ["rss", "scrapling", "scrapy_playwright", "pinchtab", "urls"]),
     }
     db_path = workspace / DB_PATH
     with connect_db(db_path) as conn:

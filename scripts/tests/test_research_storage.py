@@ -221,6 +221,11 @@ class ResearchStorageTests(unittest.TestCase):
             self.assertEqual(job["resolvedSourceType"], "community")
             self.assertEqual(len(job["targets"]), 3)
             self.assertIn(job["collectorStrategy"], {"mixed", "mixed_browser", "mixed_feed"})
+            target_strategies = {row["collectorStrategy"] for row in job["targets"]}
+            self.assertIn("scrapy_playwright", target_strategies)
+            self.assertIn("rss", target_strategies)
+            self.assertIn("scrapling", target_strategies)
+            self.assertIn("scrapy_playwright", job["preferredExecutionOrder"])
 
             listed = list_collection_jobs(workspace)
             self.assertEqual(len(listed["items"]), 1)
@@ -409,7 +414,30 @@ class ResearchStorageTests(unittest.TestCase):
             self.assertIn("steamdb.info", job["domains"])
             self.assertTrue(any("steam genre" in keyword.lower() for keyword in job["keywords"]))
             self.assertTrue(any("genre level" in instruction.lower() for instruction in planner["instructions"]))
-            self.assertEqual(job["preferredExecutionOrder"][:3], ["rss", "scrapling", "pinchtab"])
+            self.assertEqual(job["preferredExecutionOrder"][:3], ["rss", "scrapling", "scrapy_playwright"])
+
+    def test_plan_agent_collection_job_prefers_scrapy_playwright_for_community_threads(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace = Path(temp_dir)
+            planned = plan_agent_collection_job(
+                workspace,
+                prompt="https://x.com/indiedevhub 와 https://reddit.com/r/gamedev 반응을 중심으로 1인 인디게임 장르 여론을 조사해줘",
+                label="",
+                requested_source_type="auto",
+                max_items=30,
+            )
+
+            job = planned["job"]
+            strategies = {row["collectorStrategy"] for row in job["targets"]}
+            runtime_providers = {
+                provider
+                for row in job["targets"]
+                for provider in row.get("runtimeProviders", [])
+            }
+            self.assertEqual(job["resolvedSourceType"], "community")
+            self.assertIn("scrapy_playwright", strategies)
+            self.assertIn("scrapy_playwright", runtime_providers)
+            self.assertTrue(job["preferredExecutionOrder"].index("scrapy_playwright") < job["preferredExecutionOrder"].index("rss"))
 
     def test_plan_agent_collection_job_strips_inline_focus_instructions(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

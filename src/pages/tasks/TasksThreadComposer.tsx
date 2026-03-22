@@ -1,4 +1,4 @@
-import type { KeyboardEvent as ReactKeyboardEvent, RefObject } from "react";
+import { useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent, type RefObject } from "react";
 import type { CoordinationMode } from "../../features/orchestration/agentic/coordinationTypes";
 import { TURN_REASONING_LEVEL_OPTIONS } from "../../features/workflow/reasoningLevels";
 import { RUNTIME_MODEL_OPTIONS } from "../../features/workflow/runtimeModelOptions";
@@ -146,6 +146,8 @@ export function buildSelectedTasksComposerBadges(params: {
 
 export function TasksThreadComposer(props: TasksThreadComposerProps) {
   const { t } = useI18n();
+  const mentionMenuRef = useRef<HTMLDivElement | null>(null);
+  const mentionOptionRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const canSubmit = canSubmitTasksComposer(props.composerDraft);
   const composerDisabled = false;
   const composerPlaceholder = t("tasks.composer.placeholder");
@@ -158,6 +160,30 @@ export function TasksThreadComposer(props: TasksThreadComposerProps) {
     modeOverride: props.composerCoordinationModeOverride,
   });
 
+  useEffect(() => {
+    if (!props.mentionMatch) {
+      mentionOptionRefs.current = [];
+      return;
+    }
+    const activeOption = mentionOptionRefs.current[props.mentionIndex];
+    const mentionMenu = mentionMenuRef.current;
+    if (!activeOption || !mentionMenu) {
+      return;
+    }
+    const menuPadding = 6;
+    const optionTop = activeOption.offsetTop - menuPadding;
+    const optionBottom = activeOption.offsetTop + activeOption.offsetHeight + menuPadding;
+    const visibleTop = mentionMenu.scrollTop;
+    const visibleBottom = mentionMenu.scrollTop + mentionMenu.clientHeight;
+    if (optionTop < visibleTop) {
+      mentionMenu.scrollTop = Math.max(0, optionTop);
+      return;
+    }
+    if (optionBottom > visibleBottom) {
+      mentionMenu.scrollTop = Math.max(0, optionBottom - mentionMenu.clientHeight);
+    }
+  }, [props.mentionIndex, props.mentionMatch]);
+
   return (
     <div className="tasks-thread-composer-shell question-input agents-composer">
       {props.mentionMatch ? (
@@ -165,6 +191,7 @@ export function TasksThreadComposer(props: TasksThreadComposerProps) {
           aria-label={t("tasks.aria.agentMentions")}
           className="tasks-thread-mention-menu"
           data-e2e="tasks-mention-menu"
+          ref={mentionMenuRef}
           role="listbox"
         >
           {props.mentionMatch.options.map((option, index) => {
@@ -176,6 +203,9 @@ export function TasksThreadComposer(props: TasksThreadComposerProps) {
               className={`tasks-thread-mention-option${index === props.mentionIndex ? " is-active" : ""}${startsModeSection ? " is-mode-section-start" : ""}`}
               data-e2e={`tasks-mention-option-${option.mention.replace(/[^a-z0-9_-]+/gi, "").toLowerCase()}`}
               key={option.mention}
+              ref={(node) => {
+                mentionOptionRefs.current[index] = node;
+              }}
               onMouseDown={(event) => {
                 event.preventDefault();
                 props.onSelectMention(option);

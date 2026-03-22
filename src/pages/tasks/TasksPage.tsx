@@ -203,12 +203,12 @@ export default function TasksPage(props: TasksPageProps) {
     if (currentMentionMatch) {
       if (event.key === "ArrowDown") {
         event.preventDefault();
-        setMentionIndex((current) => (current + 1) % currentMentionMatch.options.length);
+        setMentionIndex((current) => Math.min(current + 1, currentMentionMatch.options.length - 1));
         return;
       }
       if (event.key === "ArrowUp") {
         event.preventDefault();
-        setMentionIndex((current) => (current - 1 + currentMentionMatch.options.length) % currentMentionMatch.options.length);
+        setMentionIndex((current) => Math.max(current - 1, 0));
         return;
       }
       if (event.key === "Enter" || event.key === "Tab") {

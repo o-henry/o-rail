@@ -21,7 +21,7 @@ import {
 import { deriveAutoSelectedComposerRoleIds } from "./taskComposerAutoSelection";
 import { buildThreadFileTree } from "./threadFileTree";
 import { buildLiveAgentCards } from "./liveAgentState";
-import { useTasksThreadState } from "./useTasksThreadState";
+import { deriveAutomaticResearchProviderBadge, type ExternalResearchProviderModel, useTasksThreadState } from "./useTasksThreadState";
 import { TasksThreadNavPane } from "./TasksThreadNavPane";
 import { TasksThreadHeaderBar } from "./TasksThreadHeaderBar";
 import { TasksThreadConversation } from "./TasksThreadConversation";
@@ -247,6 +247,7 @@ export default function TasksPage(props: TasksPageProps) {
     () => (isMentionMenuHidden ? null : getTaskAgentMentionMatch(state.composerDraft, composerCursor)),
     [composerCursor, isMentionMenuHidden, state.composerDraft],
   );
+  const recentRuntimeSessions = useMemo(() => state.searchRuntimeSessions(""), [state.searchRuntimeSessions]);
   const autoSelectedComposerRoleIds = useMemo(
     () => deriveAutoSelectedComposerRoleIds({
       draft: state.composerDraft,
@@ -259,6 +260,22 @@ export default function TasksPage(props: TasksPageProps) {
       state.composerCoordinationModeOverride,
       state.composerDraft,
       state.selectedComposerRoleIds,
+    ],
+  );
+  const autoSelectedProviderModel = useMemo(
+    () => deriveAutomaticResearchProviderBadge({
+      currentModel: state.model,
+      prompt: state.composerDraft,
+      taggedRoles: state.selectedComposerRoleIds,
+      preferredProviderModel: state.composerProviderOverride,
+      readiness: state.externalProviderReadiness,
+    }),
+    [
+      state.model,
+      state.composerDraft,
+      state.selectedComposerRoleIds,
+      state.composerProviderOverride,
+      state.externalProviderReadiness,
     ],
   );
 
@@ -289,7 +306,7 @@ export default function TasksPage(props: TasksPageProps) {
       const nextValue = stripTaskAgentMentionMatch(state.composerDraft, activeMatch);
       const nextCursor = activeMatch.rangeStart;
       if (option.modelValue) {
-        state.setModel(option.modelValue);
+        state.setComposerProviderOverride(option.modelValue as ExternalResearchProviderModel);
       }
       state.setComposerDraft(nextValue);
       setComposerCursor(nextCursor);
@@ -324,8 +341,6 @@ export default function TasksPage(props: TasksPageProps) {
     }
     node.scrollTop = node.scrollHeight;
   }, [state.activeThread?.messages.length, liveAgents.length, state.pendingApprovals.length, state.selectedFileDiff]);
-
-  const recentRuntimeSessions = useMemo(() => state.searchRuntimeSessions(""), [state]);
 
   return (
     <section
@@ -426,23 +441,25 @@ export default function TasksPage(props: TasksPageProps) {
             orchestration={state.activeThreadCoordination}
             recentRuntimeSessions={recentRuntimeSessions}
             visibleAgentLabels={visibleAgentLabels}
-            onApprovePlan={() => void state.approveActiveCoordinationPlan()}
-            onCancelOrchestration={() => state.cancelActiveCoordination()}
-            onOpenRuntimeSession={(threadId) => void state.selectThread(threadId)}
-            onRequestFollowup={() => state.requestCoordinationFollowup()}
-            onResolveApproval={(approval, decision) => void state.resolveApproval(approval, decision)}
-            onResumeOrchestration={() => void state.resumeActiveCoordination()}
-            onVerifyReview={() => state.verifyActiveCoordinationReview()}
+            onApprovePlan={state.approveActiveCoordinationPlan}
+            onCancelOrchestration={state.cancelActiveCoordination}
+            onOpenRuntimeSession={state.selectThread}
+            onRequestFollowup={state.requestCoordinationFollowup}
+            onResolveApproval={state.resolveApproval}
+            onResumeOrchestration={state.resumeActiveCoordination}
+            onVerifyReview={state.verifyActiveCoordinationReview}
           />
         )}
 
         <TasksThreadComposer
           attachedFiles={state.attachedFiles}
           autoSelectedComposerRoleIds={autoSelectedComposerRoleIds}
+          autoSelectedProviderModel={autoSelectedProviderModel}
           canUseStopButton={state.canInterruptCurrentThread}
           canInterruptCurrentThread={state.canInterruptCurrentThread}
           composerCoordinationModeOverride={state.composerCoordinationModeOverride}
           composerDraft={state.composerDraft}
+          composerProviderOverride={state.composerProviderOverride}
           composerRef={composerRef}
           isModelMenuOpen={isModelMenuOpen}
           isReasonMenuOpen={isReasonMenuOpen}
@@ -464,6 +481,7 @@ export default function TasksPage(props: TasksPageProps) {
           }}
           onComposerKeyDown={onComposerKeyDown}
           onClearCoordinationModeOverride={() => state.setComposerCoordinationModeOverride(null)}
+          onClearComposerProviderOverride={() => state.setComposerProviderOverride(null)}
           onOpenAttachmentPicker={() => void state.openAttachmentPicker()}
           onRemoveAttachedFile={state.removeAttachedFile}
           onRemoveComposerRole={state.removeComposerRole}

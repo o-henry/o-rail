@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import type { AgenticCoordinationState, SessionIndexEntry } from "../../features/orchestration/agentic/coordinationTypes";
 import { useI18n } from "../../i18n";
 import { TasksThreadOrchestrationCard } from "./TasksThreadOrchestrationCard";
@@ -181,7 +181,7 @@ function animatedDots(frame: number) {
   return [".", "..", "..."][frame % 3] ?? "...";
 }
 
-export function TasksThreadConversation(props: TasksThreadConversationProps) {
+function TasksThreadConversationImpl(props: TasksThreadConversationProps) {
   const { t } = useI18n();
   const [pulseFrame, setPulseFrame] = useState(0);
   const [liveNowMs, setLiveNowMs] = useState(() => Date.now());
@@ -383,3 +383,6 @@ export function TasksThreadConversation(props: TasksThreadConversationProps) {
     </div>
   );
 }
+
+export const TasksThreadConversation = memo(TasksThreadConversationImpl);
+TasksThreadConversation.displayName = "TasksThreadConversation";

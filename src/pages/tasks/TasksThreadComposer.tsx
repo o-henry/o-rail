@@ -31,6 +31,8 @@ type TasksThreadComposerProps = {
   attachedFiles: AttachedFile[];
   selectedComposerRoleIds: ThreadRoleId[];
   autoSelectedComposerRoleIds?: ThreadRoleId[];
+  composerProviderOverride?: string | null;
+  autoSelectedProviderModel?: string | null;
   composerCoordinationModeOverride: CoordinationMode | null;
   composerDraft: string;
   selectedModelOption: RuntimeModelOption;
@@ -54,6 +56,7 @@ type TasksThreadComposerProps = {
   onToggleModelMenu: () => void;
   onSetReasoning: (value: string) => void;
   onToggleReasonMenu: () => void;
+  onClearComposerProviderOverride: () => void;
   onSubmit: () => void;
   onStop: () => void;
 };
@@ -71,10 +74,11 @@ export function shouldShowTasksComposerStopButton(params: {
 
 type SelectedTasksComposerBadge = {
   key: string;
-  kind: "agent" | "auto-agent" | "mode";
+  kind: "agent" | "auto-agent" | "mode" | "provider" | "auto-provider";
   label: string;
   roleId?: ThreadRoleId;
   mode?: CoordinationMode;
+  value?: string;
 };
 
 function coordinationModeLabel(mode: CoordinationMode): string {
@@ -90,6 +94,8 @@ function coordinationModeLabel(mode: CoordinationMode): string {
 export function buildSelectedTasksComposerBadges(params: {
   roleIds: ThreadRoleId[];
   autoRoleIds?: ThreadRoleId[];
+  providerValue?: string | null;
+  autoProviderValue?: string | null;
   modeOverride: CoordinationMode | null;
 }): SelectedTasksComposerBadge[] {
   const badges: SelectedTasksComposerBadge[] = params.roleIds.map((roleId) => ({
@@ -107,6 +113,24 @@ export function buildSelectedTasksComposerBadges(params: {
       kind: "auto-agent",
       label: getTaskAgentLabel(roleId),
       roleId,
+    });
+  }
+  const providerValue = String(params.providerValue ?? "").trim();
+  if (providerValue) {
+    badges.push({
+      key: `provider:${providerValue}`,
+      kind: "provider",
+      label: providerValue,
+      value: providerValue,
+    });
+  }
+  const autoProviderValue = String(params.autoProviderValue ?? "").trim();
+  if (autoProviderValue && autoProviderValue !== providerValue) {
+    badges.push({
+      key: `auto-provider:${autoProviderValue}`,
+      kind: "auto-provider",
+      label: autoProviderValue,
+      value: autoProviderValue,
     });
   }
   if (params.modeOverride) {
@@ -129,6 +153,8 @@ export function TasksThreadComposer(props: TasksThreadComposerProps) {
   const selectedBadges = buildSelectedTasksComposerBadges({
     roleIds: props.selectedComposerRoleIds,
     autoRoleIds: props.autoSelectedComposerRoleIds ?? [],
+    providerValue: props.composerProviderOverride,
+    autoProviderValue: props.autoSelectedProviderModel,
     modeOverride: props.composerCoordinationModeOverride,
   });
 
@@ -190,17 +216,21 @@ export function TasksThreadComposer(props: TasksThreadComposerProps) {
         <div aria-label="Selected agents" className="tasks-thread-selected-mentions" data-e2e="tasks-selected-badges">
           {selectedBadges.map((badge) => (
             <span
-              className={`tasks-thread-selected-mention-chip${badge.kind === "auto-agent" ? " is-auto" : ""}`}
+              className={`tasks-thread-selected-mention-chip${badge.kind === "auto-agent" || badge.kind === "auto-provider" ? " is-auto" : ""}${badge.kind === "provider" || badge.kind === "auto-provider" ? " is-provider" : ""}`}
               key={badge.key}
-              title={badge.kind === "auto-agent" ? "Orchestrator selected this agent automatically." : undefined}
+              title={badge.kind === "auto-agent" || badge.kind === "auto-provider" ? "Orchestrator selected this automatically." : undefined}
             >
-              <span>{badge.kind === "auto-agent" ? `AUTO: ${badge.label}` : badge.label}</span>
-              {badge.kind === "auto-agent" ? null : (
+              <span>{badge.kind === "auto-agent" || badge.kind === "auto-provider" ? `AUTO: ${badge.label}` : badge.label}</span>
+              {badge.kind === "auto-agent" || badge.kind === "auto-provider" ? null : (
                 <button
                   aria-label={`Remove ${badge.label}`}
                   onClick={() => {
                     if (badge.kind === "agent" && badge.roleId) {
                       props.onRemoveComposerRole(badge.roleId);
+                      return;
+                    }
+                    if (badge.kind === "provider") {
+                      props.onClearComposerProviderOverride();
                       return;
                     }
                     props.onClearCoordinationModeOverride();

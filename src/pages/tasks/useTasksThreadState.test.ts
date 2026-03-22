@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  deriveAutomaticResearchProviderBadge,
   resolveAutomaticResearchModel,
   isTasksCodexExecutionBlocked,
   rememberTasksProjectPath,
@@ -101,6 +102,19 @@ describe("shouldAutoUseExternalResearchProvider", () => {
 });
 
 describe("resolveAutomaticResearchModel", () => {
+  it("honors an explicit provider override without mutating the base model", async () => {
+    const invokeFn = (async () => ({ ready: false })) as <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
+    await expect(resolveAutomaticResearchModel({
+      invokeFn,
+      cwd: "/repo",
+      currentModel: "GPT-5.4",
+      prompt: "최근 인디게임 시장 반응을 조사해줘",
+      taggedRoles: ["researcher"],
+      hasTauriRuntime: true,
+      preferredProviderModel: "WEB / LIGHTPANDA",
+    })).resolves.toBe("WEB / LIGHTPANDA");
+  });
+
   it("prefers WEB / STEEL when researcher-style requests have a ready steel runtime", async () => {
     const invokeFn = (async (_command: string, args?: Record<string, unknown>) => {
       const provider = String(args?.provider ?? "");
@@ -138,5 +152,26 @@ describe("resolveAutomaticResearchModel", () => {
       taggedRoles: ["researcher"],
       hasTauriRuntime: true,
     })).resolves.toBe("WEB / LIGHTPANDA");
+  });
+});
+
+describe("deriveAutomaticResearchProviderBadge", () => {
+  it("shows the explicit provider badge when the user picked one", () => {
+    expect(deriveAutomaticResearchProviderBadge({
+      currentModel: "GPT-5.4",
+      prompt: "게임 반응을 조사해줘",
+      taggedRoles: ["researcher"],
+      preferredProviderModel: "WEB / STEEL",
+      readiness: { steel: false, lightpanda: false },
+    })).toBe("WEB / STEEL");
+  });
+
+  it("falls back to the first ready automatic provider for research prompts", () => {
+    expect(deriveAutomaticResearchProviderBadge({
+      currentModel: "GPT-5.4",
+      prompt: "게임 반응을 조사해줘",
+      taggedRoles: ["researcher"],
+      readiness: { steel: true, lightpanda: true },
+    })).toBe("WEB / STEEL");
   });
 });

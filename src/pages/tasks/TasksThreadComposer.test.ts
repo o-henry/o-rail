@@ -30,6 +30,7 @@ describe("buildSelectedTasksComposerBadges", () => {
     expect(buildSelectedTasksComposerBadges({
       roleIds: ["researcher"],
       autoRoleIds: ["game_designer"],
+      autoProviderValue: "WEB / STEEL",
       modeOverride: "fanout",
     })).toEqual([
       {
@@ -43,6 +44,12 @@ describe("buildSelectedTasksComposerBadges", () => {
         kind: "auto-agent",
         label: "GAME DESIGNER",
         roleId: "game_designer",
+      },
+      {
+        key: "auto-provider:WEB / STEEL",
+        kind: "auto-provider",
+        label: "WEB / STEEL",
+        value: "WEB / STEEL",
       },
       {
         key: "mode:fanout",
@@ -83,8 +90,10 @@ describe("TasksThreadComposer", () => {
       createElement(TasksThreadComposer, {
         attachedFiles: [],
         autoSelectedComposerRoleIds: [],
+        autoSelectedProviderModel: null,
         canInterruptCurrentThread: false,
         canUseStopButton: false,
+        composerProviderOverride: null,
         composerCoordinationModeOverride: null,
         composerDraft: "",
         composerRef: createRef<HTMLTextAreaElement>(),
@@ -97,6 +106,7 @@ describe("TasksThreadComposer", () => {
         onComposerCursorChange: () => undefined,
         onComposerDraftChange: () => undefined,
         onComposerKeyDown: () => undefined,
+        onClearComposerProviderOverride: () => undefined,
         onOpenAttachmentPicker: () => undefined,
         onRemoveAttachedFile: () => undefined,
         onRemoveComposerRole: () => undefined,
@@ -126,8 +136,10 @@ describe("TasksThreadComposer", () => {
       createElement(TasksThreadComposer, {
         attachedFiles: [],
         autoSelectedComposerRoleIds: [],
+        autoSelectedProviderModel: null,
         canInterruptCurrentThread: false,
         canUseStopButton: false,
+        composerProviderOverride: null,
         composerCoordinationModeOverride: null,
         composerDraft: "",
         composerRef: createRef<HTMLTextAreaElement>(),
@@ -140,6 +152,7 @@ describe("TasksThreadComposer", () => {
         onComposerCursorChange: () => undefined,
         onComposerDraftChange: () => undefined,
         onComposerKeyDown: () => undefined,
+        onClearComposerProviderOverride: () => undefined,
         onOpenAttachmentPicker: () => undefined,
         onRemoveAttachedFile: () => undefined,
         onRemoveComposerRole: () => undefined,
@@ -169,8 +182,10 @@ describe("TasksThreadComposer", () => {
       createElement(TasksThreadComposer, {
         attachedFiles: [],
         autoSelectedComposerRoleIds: ["researcher", "game_designer"],
+        autoSelectedProviderModel: "WEB / STEEL",
         canInterruptCurrentThread: false,
         canUseStopButton: false,
+        composerProviderOverride: null,
         composerCoordinationModeOverride: null,
         composerDraft: "인디게임 아이디어 추천해줘",
         composerRef: createRef<HTMLTextAreaElement>(),
@@ -183,6 +198,7 @@ describe("TasksThreadComposer", () => {
         onComposerCursorChange: () => undefined,
         onComposerDraftChange: () => undefined,
         onComposerKeyDown: () => undefined,
+        onClearComposerProviderOverride: () => undefined,
         onOpenAttachmentPicker: () => undefined,
         onRemoveAttachedFile: () => undefined,
         onRemoveComposerRole: () => undefined,
@@ -206,5 +222,6 @@ describe("TasksThreadComposer", () => {
     expect(html).toContain("tasks-thread-selected-mention-chip is-auto");
     expect(html).toContain("AUTO: GAME DESIGNER");
     expect(html).toContain("AUTO: RESEARCHER");
+    expect(html).toContain("AUTO: WEB / STEEL");
   });
 });

@@ -160,6 +160,11 @@ function nextId(prefix: string): string {
 }
 
 export const AUTO_EXTERNAL_PROVIDER_MODEL_VALUES = ["WEB / STEEL", "WEB / LIGHTPANDA"] as const;
+export type ExternalResearchProviderModel = (typeof AUTO_EXTERNAL_PROVIDER_MODEL_VALUES)[number];
+type ExternalProviderReadiness = {
+  steel: boolean;
+  lightpanda: boolean;
+};
 
 export function shouldAutoUseExternalResearchProvider(params: {
   currentModel: string;
@@ -183,7 +188,12 @@ export async function resolveAutomaticResearchModel(params: {
   prompt: string;
   taggedRoles: ThreadRoleId[];
   hasTauriRuntime: boolean;
+  preferredProviderModel?: string | null;
 }): Promise<string> {
+  const preferredProviderModel = String(params.preferredProviderModel ?? "").trim();
+  if (preferredProviderModel && AUTO_EXTERNAL_PROVIDER_MODEL_VALUES.includes(preferredProviderModel as ExternalResearchProviderModel)) {
+    return preferredProviderModel;
+  }
   if (!params.hasTauriRuntime || !params.cwd) {
     return params.currentModel;
   }
@@ -213,6 +223,29 @@ export async function resolveAutomaticResearchModel(params: {
     // Ignore provider probe failures and keep the current model.
   }
   return params.currentModel;
+}
+
+export function deriveAutomaticResearchProviderBadge(params: {
+  currentModel: string;
+  prompt: string;
+  taggedRoles: ThreadRoleId[];
+  preferredProviderModel?: string | null;
+  readiness: ExternalProviderReadiness;
+}): ExternalResearchProviderModel | null {
+  const preferredProviderModel = String(params.preferredProviderModel ?? "").trim();
+  if (preferredProviderModel && AUTO_EXTERNAL_PROVIDER_MODEL_VALUES.includes(preferredProviderModel as ExternalResearchProviderModel)) {
+    return preferredProviderModel as ExternalResearchProviderModel;
+  }
+  if (!shouldAutoUseExternalResearchProvider(params)) {
+    return null;
+  }
+  if (params.readiness.steel) {
+    return "WEB / STEEL";
+  }
+  if (params.readiness.lightpanda) {
+    return "WEB / LIGHTPANDA";
+  }
+  return null;
 }
 
 export function isTasksCodexExecutionBlocked(_params: {
@@ -301,6 +334,7 @@ export function useTasksThreadState(params: Params) {
   const [loading, setLoading] = useState(false);
   const [composerDraft, setComposerDraft] = useState("");
   const [model, setModel] = useState("GPT-5.4");
+  const [composerProviderOverride, setComposerProviderOverride] = useState<ExternalResearchProviderModel | null>(null);
   const [reasoning, setReasoning] = useState("중간");
   const [accessMode] = useState("Local");
   const [detailTab, setDetailTab] = useState<ThreadDetailTab>("files");
@@ -322,6 +356,7 @@ export function useTasksThreadState(params: Params) {
   const [composerCoordinationModeOverride, setComposerCoordinationModeOverride] = useState<CoordinationMode | null>(null);
   const [orchestrationByThread, setOrchestrationByThread] = useState<TasksOrchestrationCache>(() => readTasksOrchestrationCache());
   const [persistedRuntimeSessions, setPersistedRuntimeSessions] = useState<SessionIndexEntry[]>([]);
+  const [externalProviderReadiness, setExternalProviderReadiness] = useState<ExternalProviderReadiness>({ steel: false, lightpanda: false });
   const browserStoreRef = useRef<BrowserStore>(loadBrowserStore());
   const orchestrationRef = useRef(orchestrationByThread);
   const orchestrationLedgerRef = useRef<Record<string, RuntimeLedgerEvent[]>>({});
@@ -728,6 +763,43 @@ export function useTasksThreadState(params: Params) {
     window.addEventListener("rail:thread-updated", handler as EventListener);
     return () => window.removeEventListener("rail:thread-updated", handler as EventListener);
   }, [reloadThreads]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!params.hasTauriRuntime || !params.cwd) {
+      setExternalProviderReadiness({ steel: false, lightpanda: false });
+      return;
+    }
+    const probe = async () => {
+      try {
+        const [steelHealth, lightpandaHealth] = await Promise.all([
+          params.invokeFn<{ ready?: boolean }>("dashboard_crawl_provider_health", {
+            cwd: params.cwd,
+            provider: "steel",
+          }).catch(() => ({ ready: false })),
+          params.invokeFn<{ ready?: boolean }>("dashboard_crawl_provider_health", {
+            cwd: params.cwd,
+            provider: "lightpanda_experimental",
+          }).catch(() => ({ ready: false })),
+        ]);
+        if (cancelled) {
+          return;
+        }
+        setExternalProviderReadiness({
+          steel: Boolean(steelHealth?.ready),
+          lightpanda: Boolean(lightpandaHealth?.ready),
+        });
+      } catch {
+        if (!cancelled) {
+          setExternalProviderReadiness({ steel: false, lightpanda: false });
+        }
+      }
+    };
+    void probe();
+    return () => {
+      cancelled = true;
+    };
+  }, [params.cwd, params.hasTauriRuntime, params.invokeFn]);
 
   useEffect(() => {
     const handler = (event: Event) => {
@@ -1148,10 +1220,8 @@ export function useTasksThreadState(params: Params) {
         prompt,
         taggedRoles,
         hasTauriRuntime: params.hasTauriRuntime,
+        preferredProviderModel: composerProviderOverride,
       });
-      if (resolvedModel !== model) {
-        setModel(resolvedModel);
-      }
       if (!params.hasTauriRuntime || !params.cwd) {
         const store = cloneStore(browserStoreRef.current);
         const existingDetail = activeThread ? store.details[activeThread.thread.threadId] : undefined;
@@ -1233,6 +1303,7 @@ export function useTasksThreadState(params: Params) {
         rememberSelectedAgent(detail.thread.threadId, `${detail.thread.threadId}:${executionPlan.participantRoleIds[0]}`);
         rememberSelectedFile(detail.thread.threadId, detail.changedFiles[0] ?? defaultSelectedFile(detail));
         setComposerDraft("");
+        setComposerProviderOverride(null);
         setSelectedComposerRoleIds([]);
         setComposerCoordinationModeOverride(null);
         clearAttachedFiles();
@@ -1338,6 +1409,7 @@ export function useTasksThreadState(params: Params) {
       });
       params.setStatus(`Thread updated: ${truncateTitle(spawned.thread.title)}`);
       setComposerDraft("");
+      setComposerProviderOverride(null);
       setSelectedComposerRoleIds([]);
       setComposerCoordinationModeOverride(null);
       clearAttachedFiles();
@@ -1352,7 +1424,7 @@ export function useTasksThreadState(params: Params) {
     } finally {
       setComposerSubmitPending(false);
     }
-  }, [accessMode, activeThread, applyBrowserStore, buildPromptWithAttachments, clearAttachedFiles, composerCoordinationModeOverride, composerDraft, hydrateThreadDetail, model, params, projectPath, reasoning, selectedComposerRoleIds, syncSpawnedThreadSelection, updateThreadCoordination]);
+  }, [accessMode, activeThread, applyBrowserStore, buildPromptWithAttachments, clearAttachedFiles, composerCoordinationModeOverride, composerDraft, composerProviderOverride, hydrateThreadDetail, model, params, projectPath, reasoning, selectedComposerRoleIds, syncSpawnedThreadSelection, updateThreadCoordination]);
 
   const stopComposerRun = useCallback(async () => {
     if (!activeThread || stoppingComposerRun || !canInterruptCurrentThread) {
@@ -2073,9 +2145,11 @@ export function useTasksThreadState(params: Params) {
     activeThreadId,
     composerCoordinationModeOverride,
     composerCoordinationPreview,
+    composerProviderOverride,
     projectPath,
     composerDraft,
     setComposerDraft,
+    setComposerProviderOverride,
     model,
     setModel,
     reasoning,
@@ -2110,6 +2184,7 @@ export function useTasksThreadState(params: Params) {
     resumeActiveCoordination,
     selectProject,
     searchRuntimeSessions,
+    externalProviderReadiness,
     selectThread,
     submitComposer,
     stopComposerRun,

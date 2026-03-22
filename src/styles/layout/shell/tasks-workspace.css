@@ -1756,6 +1756,16 @@
   color: #6c4512;
 }
 
+.tasks-thread-selected-mention-chip.is-provider {
+  background: color-mix(in srgb, #d9ecff 72%, #ffffff);
+  color: #24527a;
+}
+
+.tasks-thread-selected-mention-chip.is-provider.is-auto {
+  background: color-mix(in srgb, #ffd9a6 68%, #ffffff);
+  color: #8a4b00;
+}
+
 .tasks-thread-selected-mention-chip button {
   border: 0;
   background: transparent;

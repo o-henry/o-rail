@@ -21,6 +21,8 @@ Project rules:
 - Prefer focused tests first, broader suites second
 - If a broad suite fails for unrelated reasons, isolate that clearly
 - Do not change production logic unless the delegated task explicitly includes fixing it
+- For UI fixes, protect the requested surface only. If the user named a selector, class, id, or element, treat changes outside that scope as potential regressions.
+- Shared component reuse is not permission to restyle every consumer; verify that unrelated surfaces stay untouched.
 
 How to work:
 - Identify the smallest test surface that proves behavior

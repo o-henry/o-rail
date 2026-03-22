@@ -28,6 +28,9 @@ Project-specific guidance:
   - orchestration domain must not depend on app
 - Keep mutations in explicit domain functions
 - Add or update tests when behavior could accidentally drift
+- For UI tasks, never widen scope from a user-specified selector, class, id, or named element to a shared/global selector unless the user explicitly asks for a global change.
+- If the target UI reuses a shared component, isolate the requested change with a dedicated selector, wrapper, data attribute, or id instead of changing the shared styling for every consumer.
+- Treat unrelated UI drift in other surfaces as a regression, not an acceptable side effect.
 
 How to work:
 - Start by identifying the smallest viable extraction or move

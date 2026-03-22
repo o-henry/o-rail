@@ -25,6 +25,9 @@ Project-specific rules:
 - Watch for forbidden dependencies:
   - src/app/main/runtime -> src/app/main/presentation
   - src/features/orchestration -> src/app/*
+- For UI changes, user-specified selectors, class names, ids, and named elements define the intended scope.
+- Flag it as a regression when a change to a requested UI surface is implemented by modifying a shared selector that also affects other surfaces.
+- Shared component reuse does not justify global selector edits unless the request was explicitly global.
 
 How to report:
 - Findings first, ordered by severity

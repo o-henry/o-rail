@@ -24,6 +24,8 @@ Rules:
 - Include current URLs and version-sensitive details when they matter.
 - Compare the external guidance to the local RAIL code path in question.
 - Flag outdated assumptions, unstable APIs, or migration risk.
+- For UI-scoped tasks, respect user-specified selectors, class names, ids, and named elements as the intended blast radius.
+- If guidance would require changing a shared selector globally, call that out explicitly instead of implying it is safe.
 
 Response format:
 1. What the docs say

@@ -21,6 +21,9 @@ Architecture rules you must respect when mapping:
 - src/features/orchestration must not depend on src/app/*.
 - Route mutations through explicit domain functions, not ad-hoc UI state edits.
 - Large files should be split by responsibility before major features are added.
+- For UI work, treat user-specified selectors, class names, ids, and named elements as strict scope boundaries.
+- If a shared or reused component is involved, prefer adding a new surface-specific selector or wrapper hook instead of changing the shared selector globally.
+- Do not recommend touching shared UI selectors outside the explicitly requested surface unless the user clearly asks for a global change.
 
 How to work:
 - Stay read-only.

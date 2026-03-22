@@ -59,6 +59,22 @@ export function shouldHydrateKnowledgeWorkspaceData(params: {
     && String(params.cwd) !== String(params.hydratedWorkspaceCwd ?? "");
 }
 
+export function shouldRefreshKnowledgeEntriesFromEvent(params: {
+  cwd: string;
+  eventCwd?: string | null;
+  isActive: boolean;
+}): boolean {
+  if (!params.isActive) {
+    return false;
+  }
+  const cwd = normalizeWorkspacePath(params.cwd);
+  const eventCwd = normalizeWorkspacePath(String(params.eventCwd ?? ""));
+  if (!cwd) {
+    return false;
+  }
+  return !eventCwd || eventCwd === cwd;
+}
+
 async function deleteIfExists(
   action: DeleteFileFn,
   target: string,
@@ -205,6 +221,27 @@ export function useKnowledgeBaseState({ cwd, isActive, posts }: UseKnowledgeBase
     }
     setEntries(mergePostEntries(readKnowledgeEntries()));
   }, [isActive, mergePostEntries]);
+
+  useEffect(() => {
+    if (!isActive) {
+      return;
+    }
+    const refresh = (event?: Event) => {
+      const detail = (event as CustomEvent<{ cwd?: string }> | undefined)?.detail;
+      if (!shouldRefreshKnowledgeEntriesFromEvent({
+        cwd,
+        eventCwd: detail?.cwd,
+        isActive,
+      })) {
+        return;
+      }
+      setEntries(mergePostEntries(readKnowledgeEntries()));
+    };
+    window.addEventListener("rail:knowledge-index-updated", refresh as EventListener);
+    return () => {
+      window.removeEventListener("rail:knowledge-index-updated", refresh as EventListener);
+    };
+  }, [cwd, isActive, mergePostEntries]);
 
   const filtered = useMemo(() => sortKnowledgeEntries(entries), [entries]);
   const grouped = useMemo<KnowledgeGroup[]>(() => groupKnowledgeEntries(filtered), [filtered]);

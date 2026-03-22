@@ -13,6 +13,52 @@ type Params = {
   workflowHandoffPanel: { createAutoHandoff: (input: any) => void };
 };
 
+export function buildKnowledgeEntriesFromRoleRunCompletion(params: {
+  cwd: string;
+  payload: {
+    roleId?: string;
+    runId?: string;
+    taskId?: string;
+    prompt?: string;
+    handoffRequest?: string;
+    artifactPaths?: unknown[];
+    internal?: boolean;
+  };
+}) {
+  const roleId = toStudioRoleId(String(params.payload.roleId ?? ""));
+  const normalizedTaskId = String(params.payload.taskId ?? "").trim() || "TASK-001";
+  const knowledgeRoleId: StudioRoleId = roleId ?? "technical_writer";
+  const roleLabel = roleId
+    ? STUDIO_ROLE_TEMPLATES.find((row) => row.id === roleId)?.label ?? params.payload.roleId
+    : params.payload.roleId;
+  const taskAgentMetadata = resolveTaskAgentMetadata(String(params.payload.roleId ?? ""), Boolean(params.payload.internal));
+  const promptSummary = String(params.payload.prompt ?? params.payload.handoffRequest ?? "").trim();
+  const dedupedArtifactPaths = [
+    ...new Set((params.payload.artifactPaths ?? []).map((row: unknown) => String(row ?? "").trim()).filter(Boolean)),
+  ];
+  return dedupedArtifactPaths.map((artifactPath, index) => {
+    const fileName = artifactPath.split(/[\\/]/).filter(Boolean).pop() ?? artifactPath;
+    return {
+      id: `${params.payload.runId}:${index}:${fileName}`,
+      runId: String(params.payload.runId ?? "").trim(),
+      taskId: normalizedTaskId,
+      roleId: knowledgeRoleId,
+      workspacePath: params.cwd,
+      taskAgentId: taskAgentMetadata.taskAgentId,
+      taskAgentLabel: taskAgentMetadata.taskAgentLabel,
+      studioRoleLabel: taskAgentMetadata.studioRoleLabel,
+      orchestratorAgentId: taskAgentMetadata.orchestratorAgentId,
+      orchestratorAgentLabel: taskAgentMetadata.orchestratorAgentLabel,
+      sourceKind: "artifact" as const,
+      title: `${roleLabel} · ${normalizedTaskId} · ${fileName}`,
+      summary: promptSummary || `${roleLabel} 역할 실행 산출물`,
+      createdAt: new Date().toISOString(),
+      markdownPath: /\.(md|markdown)$/i.test(artifactPath) ? artifactPath : undefined,
+      jsonPath: /\.json$/i.test(artifactPath) ? artifactPath : undefined,
+    };
+  });
+}
+
 export function useRoleRunCompletionBridge(params: Params) {
   const { cwd, invokeFn, missionControl, setWorkflowRoleRuntimeStateByRole, workflowHandoffPanel } = params;
 
@@ -30,42 +76,22 @@ export function useRoleRunCompletionBridge(params: Params) {
         },
       }));
     }
-    const normalizedTaskId = String(payload.taskId ?? "").trim() || "TASK-001";
-    const knowledgeRoleId: StudioRoleId = roleId ?? "technical_writer";
-    const roleLabel = roleId
-      ? STUDIO_ROLE_TEMPLATES.find((row) => row.id === roleId)?.label ?? payload.roleId
-      : payload.roleId;
-    const taskAgentMetadata = resolveTaskAgentMetadata(payload.roleId, Boolean(payload.internal));
-    const promptSummary = String(payload.prompt ?? payload.handoffRequest ?? "").trim();
-    const dedupedArtifactPaths = [
-      ...new Set(payload.artifactPaths.map((row: unknown) => String(row ?? "").trim()).filter(Boolean)),
-    ] as string[];
-    for (const [index, artifactPath] of dedupedArtifactPaths.entries()) {
-      const fileName = artifactPath.split(/[\\/]/).filter(Boolean).pop() ?? artifactPath;
-      upsertKnowledgeEntry({
-        id: `${payload.runId}:${index}:${fileName}`,
-        runId: payload.runId,
-        taskId: normalizedTaskId,
-        roleId: knowledgeRoleId,
-        workspacePath: cwd,
-        taskAgentId: taskAgentMetadata.taskAgentId,
-        taskAgentLabel: taskAgentMetadata.taskAgentLabel,
-        studioRoleLabel: taskAgentMetadata.studioRoleLabel,
-        orchestratorAgentId: taskAgentMetadata.orchestratorAgentId,
-        orchestratorAgentLabel: taskAgentMetadata.orchestratorAgentLabel,
-        sourceKind: "artifact",
-        title: `${roleLabel} · ${normalizedTaskId} · ${fileName}`,
-        summary: promptSummary || `${roleLabel} 역할 실행 산출물`,
-        createdAt: new Date().toISOString(),
-        markdownPath: /\.(md|markdown)$/i.test(artifactPath) ? artifactPath : undefined,
-        jsonPath: /\.json$/i.test(artifactPath) ? artifactPath : undefined,
-      });
+    for (const entry of buildKnowledgeEntriesFromRoleRunCompletion({ cwd, payload })) {
+      upsertKnowledgeEntry(entry);
     }
     void persistKnowledgeIndexToWorkspace({
       cwd,
       invokeFn,
       rows: readKnowledgeEntries(),
     });
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("rail:knowledge-index-updated", {
+        detail: {
+          cwd,
+          runId: payload.runId,
+        },
+      }));
+    }
     const targetRole = toStudioRoleId(payload.handoffToRole ?? "");
     const requestText =
       String(payload.handoffRequest ?? payload.prompt ?? "").trim() ||

@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { buildKnowledgeGroupDeleteRequest, shouldHydrateKnowledgeWorkspaceData } from "./useKnowledgeBaseState";
+import {
+  buildKnowledgeGroupDeleteRequest,
+  shouldHydrateKnowledgeWorkspaceData,
+  shouldRefreshKnowledgeEntriesFromEvent,
+} from "./useKnowledgeBaseState";
 import type { KnowledgeEntry } from "../../features/studio/knowledgeTypes";
 import { isRuntimeNoiseKnowledgeEntry } from "./knowledgeEntryMapping";
 
@@ -37,6 +41,29 @@ describe("buildKnowledgeGroupDeleteRequest", () => {
     expect(shouldHydrateKnowledgeWorkspaceData({
       cwd: "/tmp/workspace",
       hydratedWorkspaceCwd: "",
+      isActive: false,
+    })).toBe(false);
+  });
+
+  it("refreshes knowledge entries only for active matching workspaces", () => {
+    expect(shouldRefreshKnowledgeEntriesFromEvent({
+      cwd: "/tmp/workspace",
+      eventCwd: "/tmp/workspace",
+      isActive: true,
+    })).toBe(true);
+    expect(shouldRefreshKnowledgeEntriesFromEvent({
+      cwd: "/tmp/workspace",
+      eventCwd: "",
+      isActive: true,
+    })).toBe(true);
+    expect(shouldRefreshKnowledgeEntriesFromEvent({
+      cwd: "/tmp/workspace",
+      eventCwd: "/tmp/other",
+      isActive: true,
+    })).toBe(false);
+    expect(shouldRefreshKnowledgeEntriesFromEvent({
+      cwd: "/tmp/workspace",
+      eventCwd: "/tmp/workspace",
       isActive: false,
     })).toBe(false);
   });

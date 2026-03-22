@@ -1,0 +1,59 @@
+- main [ref=e3]:
+  - complementary [ref=e5]:
+    - navigation [ref=e6]:
+      - button "태스크" [ref=e7] [cursor=pointer]:
+        - img [ref=e9]
+      - button "터미널" [ref=e10] [cursor=pointer]:
+        - img [ref=e12]
+      - button "워크플로우" [ref=e13] [cursor=pointer]:
+        - img [ref=e15]
+      - button "데이터베이스" [ref=e16] [cursor=pointer]:
+        - img [ref=e18]
+      - button "시각화" [ref=e19] [cursor=pointer]:
+        - img [ref=e21]
+      - button "개선" [ref=e22] [cursor=pointer]:
+        - img [ref=e24]
+      - button "설정" [ref=e25] [cursor=pointer]:
+        - img [ref=e27]
+  - generic [ref=e30]:
+    - complementary [ref=e31]:
+      - generic [ref=e32]:
+        - generic [ref=e33]:
+          - button "새 스레드" [ref=e34] [cursor=pointer]
+          - button "프로젝트 열기" [ref=e35] [cursor=pointer]
+          - generic [ref=e36]:
+            - strong [ref=e37]: 프로젝트
+            - generic [ref=e38]: "-"
+        - generic [ref=e39]:
+          - strong [ref=e40]: 프로젝트 트리
+          - generic [ref=e41]: 0개
+    - generic [ref=e43]:
+      - generic [ref=e44]:
+        - generic:
+          - generic:
+            - paragraph
+        - generic [ref=e45]:
+          - button "세부 패널 숨기기" [ref=e46] [cursor=pointer]:
+            - img [ref=e47]
+          - button "변경 내용" [disabled] [ref=e48]:
+            - img [ref=e49]
+          - button "확대 보기" [disabled] [ref=e50]:
+            - img [ref=e51]
+      - generic [ref=e53]:
+        - strong [ref=e54]: 요청부터 시작하세요
+        - paragraph [ref=e55]: "@designer, @architect, @implementer, @playtest, @techart, @tools, @release, @docs로 유니티 에이전트를 지정할 수 있습니다."
+      - generic [ref=e56]:
+        - textbox "Tasks composer" [ref=e58]:
+          - /placeholder: Unity 작업 내용을 입력하거나 @로 에이전트를 선택하세요
+        - generic [ref=e59]:
+          - generic [ref=e60]:
+            - button "Attach code files" [ref=e61] [cursor=pointer]:
+              - img [ref=e62]
+            - button "Tasks 모델 메뉴" [ref=e64] [cursor=pointer]:
+              - generic [ref=e65]: GPT-5.4
+              - img [ref=e66]
+            - button "Tasks 추론 레벨" [ref=e68] [cursor=pointer]:
+              - generic [ref=e69]: MEDIUM
+              - img [ref=e70]
+          - button "보내기" [disabled] [ref=e72]:
+            - img [ref=e73]

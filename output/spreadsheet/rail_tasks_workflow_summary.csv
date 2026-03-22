@@ -1,0 +1,7 @@
+﻿Dimension,Assessment,Notes
+Tasks core business logic,Strongly implemented,"Planning, discussion mode, orchestrator pass, web-backed task routing, and researcher collection are real code paths with tests."
+Workflow / web provider runtime,Mixed,Standard web AI worker path is real; steel/lightpanda are partial; browser_use is not wired.
+Open-source integration depth,Mixed by project,Scrapling and Crawl4AI are substantive; scrapy-playwright is real but scoped; Browser Use is still scaffolded.
+Alignment with user’s requested direction,Partial to good,"Orchestrator-first direction is materially improved, but regex heuristics still exist as fallback/seeding and some runtime capabilities are not surfaced in UX."
+Biggest current gap,Backend > UX mismatch,Some runtime capabilities exist in code but are not directly selectable in tasks UI.
+Analysis basis,Current repo + git history + tests,This audit does not directly read Codex archive transcripts; it infers from committed code and tests.

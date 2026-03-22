@@ -1,0 +1,8 @@
+﻿Commit,Title,Primary areas,What it materially changed,Current confidence
+7cf10e0,Route tasks through web backends and enrich orchestration context,"tasks, orchestration, web-backed task runtime",Tasks can use web-backed models; orchestrator gets richer agent profile context; candidate role set broadened.,High
+deba78a,Polish task orchestration and task UI behavior,tasks runtime/policy/UI,Execution policy/runtime refinements and task UI behavior polish.,High
+426d6e4,Add Unity refactor specialist task agent,tasks agents,Adds dedicated refactor agent across TS presets and Tauri prompt pack resources.,High
+1145efe,Add scrapy-playwright research collection path,"research_storage, via runtime",Adds scrapy-playwright batch route to dynamic research collection jobs.,High
+806ce9e,Introduce external crawl-backed web providers,"workflow runtime, role knowledge, crawl providers",Adds provider registry and external crawl-backed runtime branches for crawl4ai/steel/lightpanda.,High
+988615d,Refine knowledge grouping and scoped database UI,knowledge UI,Knowledge grouping and UI scoping polish; mostly UX-side.,High
+29715b4,Refresh knowledge base after role run completion,tasks -> knowledge bridge,Role run completion now refreshes and updates knowledge artifacts more cleanly.,High

@@ -565,9 +565,17 @@ export function useAgenticOrchestrationBridge(params: {
     if (!params.taskId || !params.roleIds.length) {
       return;
     }
+    let preferredModel = "";
+    let preferredReasoning = "";
     let contextSummary = "";
     if (sourceTab === "tasks-thread") {
       try {
+        const threadDetail = await invokeFn<{ thread?: { model?: string | null; reasoning?: string | null } }>("thread_load", {
+          cwd,
+          threadId: params.taskId,
+        });
+        preferredModel = String(threadDetail.thread?.model ?? "").trim();
+        preferredReasoning = String(threadDetail.thread?.reasoning ?? "").trim();
         contextSummary = await buildTaskThreadContextSummary({
           invokeFn,
           cwd,
@@ -592,6 +600,8 @@ export function useAgenticOrchestrationBridge(params: {
         criticRoleId: params.criticRoleId,
         cappedParticipantCount: Boolean(params.cappedParticipantCount),
         useAdaptiveOrchestrator: Boolean(params.useAdaptiveOrchestrator),
+        preferredModel,
+        preferredReasoning,
         executeRoleRun: async (runParams) => {
           const result = await executeTaskRoleRun({
             roleId: runParams.roleId,

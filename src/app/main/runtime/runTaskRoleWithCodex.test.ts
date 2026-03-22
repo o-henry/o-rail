@@ -61,7 +61,7 @@ describe("runTaskRoleWithCodex", () => {
       "/tmp/rail-storage/.rail/tasks/thread-1/codex_runs/role-run-1/response.json",
     ]);
     expect(invokeFn).toHaveBeenCalledWith("thread_start", expect.objectContaining({
-      model: "gpt-5.4-mini",
+      model: "gpt-5.4",
       cwd: "/tmp/mockking",
       sandboxMode: "workspace-write",
     }));
@@ -117,6 +117,77 @@ describe("runTaskRoleWithCodex", () => {
     });
 
     expect(result.artifactPaths[1]).toBe("/tmp/rail-storage/.rail/tasks/thread-2/codex_runs/role-run-2/discussion_critique.md");
+  });
+
+  it("routes task role execution through web providers when the thread model is web-backed", async () => {
+    const invokeFn = (vi.fn(async (command: string, args?: Record<string, unknown>) => {
+      switch (command) {
+        case "task_agent_pack_read":
+          return {
+            id: "researcher",
+            label: "RESEARCHER",
+            studioRoleId: "research_analyst",
+            model: "gpt-5.4",
+            modelReasoningEffort: "medium",
+            sandboxMode: "workspace-write",
+            outputArtifactName: "research_findings.md",
+            promptDocFile: "researcher.md",
+            developerInstructions: "자료 조사와 웹 리서치를 수행하라.",
+          };
+        case "thread_load":
+          return {
+            thread: { model: "GPT-Web", reasoning: "중간" },
+            task: { workspacePath: "/tmp/mockking" },
+          };
+        case "research_storage_plan_agent_job":
+          return { job: { jobId: "collect-web", planner: { instructions: [] } } };
+        case "research_storage_execute_job":
+          return { job: { jobId: "collect-web" } };
+        case "research_storage_collection_metrics":
+          return {
+            totals: { items: 0, sources: 0, verified: 0, warnings: 0, conflicted: 0, avgScore: 0 },
+            bySourceType: [],
+            byVerificationStatus: [],
+            timeline: [],
+            topSources: [],
+          };
+        case "research_storage_list_collection_items":
+          return { items: [] };
+        case "research_storage_collection_genre_rankings":
+          return { popular: [], quality: [] };
+        case "web_provider_run":
+          return {
+            ok: true,
+            text: "웹 GPT가 조사 결과를 요약했습니다.",
+            raw: { provider: "gpt", response: "웹 GPT가 조사 결과를 요약했습니다." },
+            meta: { provider: "gpt" },
+          };
+        case "workspace_write_text":
+          return `${String(args?.cwd)}/${String(args?.name)}`;
+        default:
+          throw new Error(`unexpected command: ${command}`);
+      }
+    }) as unknown) as <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
+
+    const result = await runTaskRoleWithCodex({
+      invokeFn,
+      storageCwd: "/tmp/rail-storage",
+      taskId: "thread-web",
+      studioRoleId: "research_analyst",
+      prompt: "웹에서 반응을 조사해줘",
+      sourceTab: "tasks-thread",
+      runId: "role-run-web",
+    });
+
+    expect(result.summary).toContain("웹 GPT");
+    expect(result.codexThreadId).toBeUndefined();
+    expect(invokeFn).toHaveBeenCalledWith("web_provider_run", expect.objectContaining({
+      provider: "gpt",
+      mode: "bridgeAssisted",
+      cwd: "/tmp/mockking",
+    }));
+    expect(invokeFn).not.toHaveBeenCalledWith("thread_start", expect.anything());
+    expect(result.artifactPaths).toContain("/tmp/rail-storage/.rail/tasks/thread-web/codex_runs/role-run-web/research_findings.md");
   });
 
   it("prefers final agentMessage text when Codex returns structured items", async () => {

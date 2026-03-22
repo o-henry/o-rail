@@ -137,6 +137,14 @@ export type ThreadStageDefinition = {
 };
 
 export type ThreadAgentPreset = (typeof UNITY_TASK_AGENT_PRESETS)[number];
+export type TaskAgentOrchestrationProfile = {
+  roleId: TaskAgentPresetId;
+  label: string;
+  summary: string;
+  strengths: string[];
+  limits: string[];
+  useWhen: string[];
+};
 
 export const UNITY_THREAD_STAGE_DEFINITIONS: ThreadStageDefinition[] = [
   { id: "brief", label: "요청 정리", ownerPresetIds: ["researcher", "game_designer"] },
@@ -194,6 +202,64 @@ export const UNITY_TASK_TEAM_PRESETS: Record<"solo" | "duo" | "full-squad", Task
 
 export const UNITY_DEFAULT_THREAD_PRESET_IDS = UNITY_TASK_TEAM_PRESETS["full-squad"];
 
+const TASK_AGENT_ORCHESTRATION_PROFILE_EXTRAS: Record<TaskAgentPresetId, Omit<TaskAgentOrchestrationProfile, "roleId" | "label" | "summary">> = {
+  game_designer: {
+    strengths: ["코어 루프와 플레이 훅을 빠르게 발상", "요구사항을 플레이어 경험 기준으로 재구성"],
+    limits: ["세부 구현 난이도 추정은 약할 수 있음", "시장 근거 없이 아이디어를 밀어붙일 수 있음"],
+    useWhen: ["게임 아이디어 발상", "기능 우선순위와 플레이 목표 정리"],
+  },
+  level_designer: {
+    strengths: ["레벨 흐름, 전투 템포, 동선 구성", "플레이 감정선과 페이싱 조정"],
+    limits: ["코드 구조나 시스템 경계 판단은 주력이 아님", "시장 조사 역할에는 부적합"],
+    useWhen: ["스테이지 구조 설계", "게임 흐름과 전개 개선"],
+  },
+  researcher: {
+    strengths: ["자료 조사, 레퍼런스 수집, 근거 정리", "클리셰/시장 신호/유사 사례 파악"],
+    limits: ["최종 제품 방향을 혼자 결정하는 역할은 아님", "구현 세부사항 설계는 약함"],
+    useWhen: ["웹 조사", "시장/유사작/문서 근거 수집"],
+  },
+  unity_architect: {
+    strengths: ["시스템 경계, 구조 리스크, 통합 포인트 검토", "현실성/범위/성능 관점 점검"],
+    limits: ["새 아이디어 발산의 주역으로 쓰면 과보수적일 수 있음", "세부 구현 작업 자체는 느릴 수 있음"],
+    useWhen: ["구조 검토", "기술 리스크 평가", "통합 설계"],
+  },
+  unity_refactor_specialist: {
+    strengths: ["큰 파일 분해, 책임 분리, 단계적 추출 계획", "동작 보존 중심 리팩토링"],
+    limits: ["새 기능 발상보다 구조 정리에 초점", "제품 방향성 결정엔 약함"],
+    useWhen: ["리팩토링", "구조 개선", "기존 코드 정리"],
+  },
+  unity_implementer: {
+    strengths: ["Unity/C# 실제 구현과 디버깅", "요청된 변경을 직접 끝내는 실행력"],
+    limits: ["큰 구조 설계는 보조가 필요할 수 있음", "시장/기획 조사에는 부적합"],
+    useWhen: ["코드 구현", "버그 수정", "UI/게임플레이 작업"],
+  },
+  technical_artist: {
+    strengths: ["에셋/프리팹/셰이더/VFX 통합 관점 검토", "시각 품질과 연결 안정성 균형"],
+    limits: ["제품 기획이나 문서 조사에는 약함", "백엔드/시스템 구조 판단은 주력이 아님"],
+    useWhen: ["아트 파이프라인 검토", "비주얼 통합 리스크 점검"],
+  },
+  unity_editor_tools: {
+    strengths: ["에디터 자동화, 검증 도구, 생산성 개선 설계", "반복 작업을 도구화"],
+    limits: ["최종 사용자 기능 기획과는 거리가 있음", "시장 조사 역할에는 부적합"],
+    useWhen: ["툴링", "자동화", "검증 보조 도구 설계"],
+  },
+  qa_playtester: {
+    strengths: ["재현 절차, 회귀 체크, 테스트 시나리오", "리텐션/사용성 리스크 조기 포착"],
+    limits: ["구현 자체를 대신하지 않음", "기획 발산 역할은 제한적"],
+    useWhen: ["검증 계획", "회귀 체크", "플레이테스트 관점 리뷰"],
+  },
+  release_steward: {
+    strengths: ["빌드/CI/릴리즈 막힘 요소 파악", "마감 직전 통합 상태 점검"],
+    limits: ["초기 아이데이션엔 과한 역할", "세부 기능 구현 역할은 아님"],
+    useWhen: ["릴리즈 준비", "빌드 안정화", "최종 통합 체크"],
+  },
+  handoff_writer: {
+    strengths: ["인계 문서, 요약, 다음 단계 정리", "복잡한 진행 상황을 명확히 문서화"],
+    limits: ["기술 의사결정의 주역은 아님", "구현/조사 역할엔 부적합"],
+    useWhen: ["최종 요약", "인계 문서", "다음 단계 정리"],
+  },
+};
+
 export function resolveTaskAgentPresetId(input: string | null | undefined): TaskAgentPresetId | null {
   const normalized = String(input ?? "").trim().toLowerCase();
   return ALIAS_TO_PRESET_ID.get(normalized) ?? null;
@@ -223,6 +289,28 @@ export function getTaskAgentPresetIdByStudioRoleId(input: string | null | undefi
 
 export function getTaskAgentSummary(input: string | TaskAgentPresetId | null | undefined): string {
   return getTaskAgentPreset(input)?.defaultSummary ?? "다음 작업 단계를 준비하고 있습니다.";
+}
+
+export function getTaskAgentOrchestrationProfile(input: string | TaskAgentPresetId | null | undefined): TaskAgentOrchestrationProfile | null {
+  const preset = getTaskAgentPreset(input);
+  if (!preset) {
+    return null;
+  }
+  const extras = TASK_AGENT_ORCHESTRATION_PROFILE_EXTRAS[preset.id];
+  return {
+    roleId: preset.id,
+    label: preset.label,
+    summary: preset.defaultSummary,
+    strengths: [...extras.strengths],
+    limits: [...extras.limits],
+    useWhen: [...extras.useWhen],
+  };
+}
+
+export function getTaskAgentOrchestrationProfiles(ids: Iterable<string>): TaskAgentOrchestrationProfile[] {
+  return orderedTaskAgentPresetIds(ids)
+    .map((id) => getTaskAgentOrchestrationProfile(id))
+    .filter((value): value is TaskAgentOrchestrationProfile => Boolean(value));
 }
 
 export function buildTaskAgentPrompt(input: string | TaskAgentPresetId | null | undefined, prompt: string): string {

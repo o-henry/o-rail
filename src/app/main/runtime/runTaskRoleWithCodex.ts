@@ -1,4 +1,5 @@
-import { toTurnModelEngineId } from "../../../features/workflow/domain";
+import { getWebProviderFromExecutor, toTurnModelDisplayName, toTurnModelEngineId } from "../../../features/workflow/domain";
+import { findRuntimeModelOption } from "../../../features/workflow/runtimeModelOptions";
 import { extractFinalAnswer } from "../../../features/workflow/labels";
 import { toTurnReasoningEffort } from "../../../features/workflow/reasoningLevels";
 import { extractCompletedStatus, extractDeltaText, extractUsageStats } from "../../mainAppUtils";
@@ -6,6 +7,7 @@ import { extractStringByPaths } from "../../../shared/lib/valueUtils";
 import { prepareResearcherCollectionContext } from "./researcherCollection";
 import { ensureResearcherCollectionArtifacts } from "./researcherCollectionArtifacts";
 import { buildTaskRoleLearningPromptContext } from "../../adaptation/taskRoleLearning";
+import type { WebProviderRunResult } from "../types";
 
 type InvokeFn = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
 
@@ -64,6 +66,15 @@ export type TaskRoleCodexRunResult = {
   codexThreadId?: string;
   codexTurnId?: string;
 };
+
+function resolvePreferredRuntimeModel(params: {
+  inputModel?: string;
+  threadModel?: string;
+  packModel?: string;
+}): string {
+  const resolved = String(params.inputModel || params.threadModel || params.packModel || "GPT-5.4").trim();
+  return toTurnModelDisplayName(resolved || "GPT-5.4");
+}
 
 const INCOMPLETE_TURN_STATUSES = new Set([
   "inprogress",
@@ -587,9 +598,16 @@ export async function runTaskRoleWithCodex(input: RunTaskRoleWithCodexInput): Pr
     storageCwd: input.storageCwd,
   });
   const sandboxMode = normalizeSandboxMode(pack.sandboxMode);
-  const modelEngine = toTurnModelEngineId(input.model || pack.model || context.threadModel || "GPT-5.4");
+  const selectedModel = resolvePreferredRuntimeModel({
+    inputModel: input.model,
+    threadModel: context.threadModel,
+    packModel: pack.model,
+  });
+  const runtimeModelOption = findRuntimeModelOption(selectedModel);
+  const webProvider = getWebProviderFromExecutor(runtimeModelOption.executor);
+  const modelEngine = toTurnModelEngineId(selectedModel);
   const reasoningEffort = toTurnReasoningEffort(
-    input.reasoning || pack.modelReasoningEffort || context.threadReasoning || "중간",
+    input.reasoning || context.threadReasoning || pack.modelReasoningEffort || "중간",
   );
   const learningPromptContext = buildTaskRoleLearningPromptContext({
     cwd: input.storageCwd,
@@ -608,46 +626,71 @@ export async function runTaskRoleWithCodex(input: RunTaskRoleWithCodexInput): Pr
     layeredPromptContext,
   );
 
-  const threadStart = await startCodexThreadWithRecovery({
-    invokeFn: input.invokeFn,
-    model: modelEngine,
-    cwd: context.projectPath,
-    sandboxMode,
-  });
-  const turnStart = await startCodexTurnWithRecovery({
-    invokeFn: input.invokeFn,
-    threadId: threadStart.threadId,
-    text: promptText,
-    reasoningEffort,
-    sandboxMode,
-  });
-  let rawResponse: unknown = turnStart.rawResponse;
-  let turnError: unknown = turnStart.turnError;
+  let rawResponse: unknown = null;
+  let turnError: unknown = null;
+  let completedStatus = "done";
+  let summary = "";
+  let codexThreadId: string | undefined;
+  let codexTurnId: string | undefined;
 
-  let completedStatus = turnError ? "error" : (resolveTurnStatus(rawResponse) ?? "done");
-  if (!turnError && INCOMPLETE_TURN_STATUSES.has(completedStatus)) {
-    const completion = await waitForCodexTurnCompletion({
+  if (webProvider) {
+    const webResult = await input.invokeFn<WebProviderRunResult>("web_provider_run", {
+      provider: webProvider,
+      prompt: promptText,
+      timeoutMs: pack.studioRoleId === "research_analyst" ? RESEARCH_POLL_TIMEOUT_MS : POLL_TIMEOUT_MS,
+      mode: "bridgeAssisted",
+      cwd: context.projectPath,
+    });
+    rawResponse = webResult.raw ?? webResult;
+    if (!webResult.ok || !String(webResult.text ?? "").trim()) {
+      throw new Error(webResult.error || `${webProvider} web provider returned no usable response`);
+    }
+    summary = String(webResult.text ?? "").trim();
+    completedStatus = "completed";
+  } else {
+    const threadStart = await startCodexThreadWithRecovery({
+      invokeFn: input.invokeFn,
+      model: modelEngine,
+      cwd: context.projectPath,
+      sandboxMode,
+    });
+    codexThreadId = threadStart.threadId;
+    const turnStart = await startCodexTurnWithRecovery({
       invokeFn: input.invokeFn,
       threadId: threadStart.threadId,
-      initialResponse: rawResponse,
-      pollTimeoutMs: pack.studioRoleId === "research_analyst" ? RESEARCH_POLL_TIMEOUT_MS : POLL_TIMEOUT_MS,
+      text: promptText,
+      reasoningEffort,
+      sandboxMode,
     });
-    rawResponse = completion.raw;
-    completedStatus = completion.completedStatus;
-  }
-  if (FAILED_TURN_STATUSES.has(completedStatus)) {
-    if (turnError instanceof Error) {
-      throw turnError;
-    }
-    throw new Error(`Codex turn failed (${completedStatus})`);
-  }
+    rawResponse = turnStart.rawResponse;
+    turnError = turnStart.turnError;
 
-  const summary = (!turnError ? resolveTurnText(rawResponse) : "").trim();
-  if (!summary) {
-    if (turnError instanceof Error) {
-      throw turnError;
+    completedStatus = turnError ? "error" : (resolveTurnStatus(rawResponse) ?? "done");
+    if (!turnError && INCOMPLETE_TURN_STATUSES.has(completedStatus)) {
+      const completion = await waitForCodexTurnCompletion({
+        invokeFn: input.invokeFn,
+        threadId: threadStart.threadId,
+        initialResponse: rawResponse,
+        pollTimeoutMs: pack.studioRoleId === "research_analyst" ? RESEARCH_POLL_TIMEOUT_MS : POLL_TIMEOUT_MS,
+      });
+      rawResponse = completion.raw;
+      completedStatus = completion.completedStatus;
     }
-    throw new Error("Codex turn finished without a readable response");
+    if (FAILED_TURN_STATUSES.has(completedStatus)) {
+      if (turnError instanceof Error) {
+        throw turnError;
+      }
+      throw new Error(`Codex turn failed (${completedStatus})`);
+    }
+
+    summary = (!turnError ? resolveTurnText(rawResponse) : "").trim();
+    if (!summary) {
+      if (turnError instanceof Error) {
+        throw turnError;
+      }
+      throw new Error("Codex turn finished without a readable response");
+    }
+    codexTurnId = extractStringByPaths(rawResponse, ["turnId", "turn_id", "id", "turn.id", "response.id"]) ?? undefined;
   }
 
   const promptArtifactPath = await input.invokeFn<string>("workspace_write_text", {
@@ -668,12 +711,14 @@ export async function runTaskRoleWithCodex(input: RunTaskRoleWithCodexInput): Pr
         taskId: input.taskId,
         studioRoleId: input.studioRoleId,
         projectPath: context.projectPath,
-        model: modelEngine,
+        model: selectedModel,
+        executor: runtimeModelOption.executor,
+        webProvider: webProvider ?? null,
+        modelEngine: webProvider ? null : modelEngine,
         reasoningEffort,
         sandboxMode,
-        codexThreadId: threadStart.threadId,
-        codexTurnId:
-          extractStringByPaths(rawResponse, ["turnId", "turn_id", "id", "turn.id", "response.id"]) ?? null,
+        codexThreadId: codexThreadId ?? null,
+        codexTurnId: codexTurnId ?? null,
         completedStatus,
         turnError: turnError instanceof Error ? turnError.message : turnError ?? null,
         raw: rawResponse,
@@ -697,9 +742,8 @@ export async function runTaskRoleWithCodex(input: RunTaskRoleWithCodexInput): Pr
   return {
     summary,
     artifactPaths: [...ensuredResearcherArtifactPaths, promptArtifactPath, responseArtifactPath, responseJsonPath],
-    usage: extractUsageStats(rawResponse),
-    codexThreadId: threadStart.threadId,
-    codexTurnId:
-      extractStringByPaths(rawResponse, ["turnId", "turn_id", "id", "turn.id", "response.id"]) ?? undefined,
+    usage: webProvider ? undefined : extractUsageStats(rawResponse),
+    codexThreadId,
+    codexTurnId,
   };
 }

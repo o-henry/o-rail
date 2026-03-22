@@ -1,3 +1,5 @@
+import { getWebProviderFromExecutor } from "../../../features/workflow/domain";
+import { findRuntimeModelOption } from "../../../features/workflow/runtimeModelOptions";
 import {
   buildAdaptiveOrchestrationPrompt,
   parseAdaptiveOrchestrationPlan,
@@ -45,6 +47,32 @@ const CRITIQUE_MODEL = "GPT-5.4-Mini";
 const CRITIQUE_REASONING = "중간";
 const FINAL_MODEL = "GPT-5.4";
 const FINAL_REASONING = "높음";
+
+function shouldPreferThreadRuntimeModel(model?: string): boolean {
+  const normalized = String(model ?? "").trim();
+  if (!normalized) {
+    return false;
+  }
+  return Boolean(getWebProviderFromExecutor(findRuntimeModelOption(normalized).executor));
+}
+
+function resolveStageRuntime(params: {
+  preferredModel?: string;
+  preferredReasoning?: string;
+  fallbackModel: string;
+  fallbackReasoning: string;
+}): { model?: string; reasoning?: string } {
+  if (shouldPreferThreadRuntimeModel(params.preferredModel)) {
+    return {
+      model: String(params.preferredModel ?? "").trim() || undefined,
+      reasoning: String(params.preferredReasoning ?? "").trim() || undefined,
+    };
+  }
+  return {
+    model: params.fallbackModel,
+    reasoning: params.fallbackReasoning,
+  };
+}
 
 function clip(value: string, maxChars: number): string {
   const normalized = String(value ?? "").trim();
@@ -217,6 +245,8 @@ export async function runTaskCollaborationWithCodex(params: {
   criticRoleId?: string;
   cappedParticipantCount: boolean;
   useAdaptiveOrchestrator?: boolean;
+  preferredModel?: string;
+  preferredReasoning?: string;
   executeRoleRun: ExecuteRoleRun;
   onProgress?: (progress: CollaborationProgress) => void;
 }): Promise<TaskCollaborationResult> {
@@ -236,6 +266,12 @@ export async function runTaskCollaborationWithCodex(params: {
         message: `${synthesisRoleId} 메인 오케스트레이션`,
       });
       try {
+        const orchestrationRuntime = resolveStageRuntime({
+          preferredModel: params.preferredModel,
+          preferredReasoning: params.preferredReasoning,
+          fallbackModel: ORCHESTRATOR_MODEL,
+          fallbackReasoning: ORCHESTRATOR_REASONING,
+        });
         const orchestrationResult = await executeRoleRunWithRetry({
           executeRoleRun: params.executeRoleRun,
           roleId: synthesisRoleId,
@@ -252,8 +288,8 @@ export async function runTaskCollaborationWithCodex(params: {
           }),
           promptMode: "orchestrate",
           internal: true,
-          model: ORCHESTRATOR_MODEL,
-          reasoning: ORCHESTRATOR_REASONING,
+          model: orchestrationRuntime.model,
+          reasoning: orchestrationRuntime.reasoning,
           outputArtifactName: "orchestration_plan.json",
           includeRoleKnowledge: false,
           maxAttempts: ORCHESTRATOR_MAX_ATTEMPTS,
@@ -297,6 +333,12 @@ export async function runTaskCollaborationWithCodex(params: {
 
   for (const roleId of participantRoleIds) {
     const participantPrompt = String(participantPrompts[roleId] ?? params.prompt).trim();
+    const briefRuntime = resolveStageRuntime({
+      preferredModel: params.preferredModel,
+      preferredReasoning: params.preferredReasoning,
+      fallbackModel: BRIEF_MODEL,
+      fallbackReasoning: BRIEF_REASONING,
+    });
     params.onProgress?.({
       roleId,
       stage: "codex",
@@ -316,8 +358,8 @@ export async function runTaskCollaborationWithCodex(params: {
         }),
         promptMode: "brief",
         internal: true,
-        model: BRIEF_MODEL,
-        reasoning: BRIEF_REASONING,
+        model: briefRuntime.model,
+        reasoning: briefRuntime.reasoning,
         outputArtifactName: "discussion_brief.md",
         includeRoleKnowledge: false,
         maxAttempts: BRIEF_MAX_ATTEMPTS,
@@ -344,6 +386,12 @@ export async function runTaskCollaborationWithCodex(params: {
 
   let criticResult: CollaborationRoleRunResult | undefined;
   if (criticRoleId && criticRoleId !== synthesisRoleId && participantResults.length > 1) {
+    const critiqueRuntime = resolveStageRuntime({
+      preferredModel: params.preferredModel,
+      preferredReasoning: params.preferredReasoning,
+      fallbackModel: CRITIQUE_MODEL,
+      fallbackReasoning: CRITIQUE_REASONING,
+    });
     params.onProgress?.({
       roleId: criticRoleId,
       stage: "critic",
@@ -360,8 +408,8 @@ export async function runTaskCollaborationWithCodex(params: {
         }),
         promptMode: "critique",
         internal: true,
-        model: CRITIQUE_MODEL,
-        reasoning: CRITIQUE_REASONING,
+        model: critiqueRuntime.model,
+        reasoning: critiqueRuntime.reasoning,
         outputArtifactName: "discussion_critique.md",
         includeRoleKnowledge: false,
         maxAttempts: CRITIQUE_MAX_ATTEMPTS,
@@ -385,6 +433,12 @@ export async function runTaskCollaborationWithCodex(params: {
     stage: "save",
     message: `${synthesisRoleId} 최종 합성`,
   });
+  const finalRuntime = resolveStageRuntime({
+    preferredModel: params.preferredModel,
+    preferredReasoning: params.preferredReasoning,
+    fallbackModel: FINAL_MODEL,
+    fallbackReasoning: FINAL_REASONING,
+  });
   if (participantResults.length === 0) {
     throw new Error("모든 내부 브리프가 실패해 최종 합성을 진행할 수 없습니다.");
   }
@@ -400,8 +454,8 @@ export async function runTaskCollaborationWithCodex(params: {
     }),
     promptMode: "final",
     internal: false,
-    model: FINAL_MODEL,
-    reasoning: FINAL_REASONING,
+    model: finalRuntime.model,
+    reasoning: finalRuntime.reasoning,
     outputArtifactName: "final_response.md",
     includeRoleKnowledge: true,
     maxAttempts: FINAL_MAX_ATTEMPTS,

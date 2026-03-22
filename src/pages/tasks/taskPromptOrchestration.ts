@@ -76,24 +76,15 @@ function clauseCount(prompt: string): number {
 }
 
 function buildCandidateRoleIds(params: {
-  intent: TaskPromptIntent;
   enabledRoleIds: TaskAgentPresetId[];
   requestedRoleIds: TaskAgentPresetId[];
   primaryRoleId: TaskAgentPresetId;
 }): TaskAgentPresetId[] {
-  if (params.requestedRoleIds.length === 0) {
-    return uniqueRoleIds([
-      params.primaryRoleId,
-      ...params.enabledRoleIds,
-      ...INTENT_ROLE_PRIORITY[params.intent],
-    ]);
-  }
   return uniqueRoleIds([
     params.primaryRoleId,
     ...params.requestedRoleIds,
-    ...INTENT_ROLE_PRIORITY[params.intent],
     ...params.enabledRoleIds,
-  ]).slice(0, 5);
+  ]);
 }
 
 function shouldUseAdaptiveOrchestrator(params: {
@@ -288,7 +279,6 @@ export function orchestrateTaskPrompt(params: {
     maxParticipants: params.maxParticipants,
   });
   const candidateRoleIds = buildCandidateRoleIds({
-    intent,
     enabledRoleIds: uniqueRoleIds(params.enabledRoleIds),
     requestedRoleIds,
     primaryRoleId: picked.primaryRoleId,

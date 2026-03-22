@@ -1,3 +1,5 @@
+import { getTaskAgentOrchestrationProfiles } from "../../../pages/tasks/taskAgentPresets";
+
 type AdaptiveTaskOrchestrationPlan = {
   participantRoleIds: string[];
   primaryRoleId: string;
@@ -65,9 +67,14 @@ export function buildAdaptiveOrchestrationPrompt(params: {
   heuristicPrimaryRoleId: string;
   heuristicParticipantRoleIds: string[];
 }): string {
-  const roleBlocks = params.candidateRoleIds.map((roleId) => [
-    `- role_id: ${roleId}`,
-    `  baseline_assignment: ${clip(params.candidateRolePrompts[roleId] ?? "", 700) || "없음"}`,
+  const roleBlocks = getTaskAgentOrchestrationProfiles(params.candidateRoleIds).map((profile) => [
+    `- role_id: ${profile.roleId}`,
+    `  label: ${profile.label}`,
+    `  summary: ${clip(profile.summary, 220)}`,
+    `  strengths: ${profile.strengths.join(" / ")}`,
+    `  limits: ${profile.limits.join(" / ")}`,
+    `  use_when: ${profile.useWhen.join(" / ")}`,
+    `  baseline_assignment: ${clip(params.candidateRolePrompts[profile.roleId] ?? "", 700) || "없음"}`,
   ].join("\n"));
   return [
     "# 작업 모드",
@@ -88,14 +95,16 @@ export function buildAdaptiveOrchestrationPrompt(params: {
     "# 사용자 멘션 힌트",
     params.requestedRoleIds.length > 0 ? params.requestedRoleIds.join(", ") : "없음",
     "",
-    "# 후보 서브워커",
+    "# 사용 가능한 전체 서브워커 목록",
     roleBlocks.join("\n"),
     "",
-    "# 현재 규칙 기반 초안",
+    "# 규칙 기반 fallback 초안",
     `- primary_role_id: ${params.heuristicPrimaryRoleId}`,
     `- participant_role_ids: ${params.heuristicParticipantRoleIds.join(", ") || "없음"}`,
     "",
     "# 오케스트레이션 규칙",
+    "- 먼저 전체 서브워커 목록과 각 역할의 강점/한계/사용 상황을 보고 독립적으로 배치 결정을 내린다.",
+    "- 아래 규칙 기반 초안은 오케스트레이션 판단이 애매하거나 실패할 때만 fallback 참고용으로 쓴다.",
     `- 참여 역할은 1명 이상 ${params.maxParticipants}명 이하로 고른다.`,
     "- 멘션은 힌트일 뿐이며, 사용자 의도에 더 맞는 역할 조합이 있으면 재배치한다.",
     "- 역할 수는 최소화하되 답의 질이 떨어지지 않게 한다.",

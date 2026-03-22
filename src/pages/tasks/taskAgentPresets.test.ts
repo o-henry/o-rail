@@ -3,6 +3,7 @@ import {
   UNITY_TASK_TEAM_PRESETS,
   buildTaskAgentPrompt,
   getDefaultRunPresetIds,
+  getTaskAgentOrchestrationProfile,
   getTaskAgentWorkflowStageLabels,
   getDefaultTaskAgentPresetIds,
   parseCoordinationModeTag,
@@ -73,5 +74,14 @@ describe("taskAgentPresets", () => {
     expect(levelDesignerPrompt).toContain("안전안/대담안/혼합안");
     expect(technicalArtistPrompt).toContain("최대 2안");
     expect(researcherPrompt).not.toContain("안전안/대담안/혼합안");
+  });
+
+  it("exposes orchestration profiles with strengths, limits, and use cases", () => {
+    const profile = getTaskAgentOrchestrationProfile("unity_refactor_specialist");
+
+    expect(profile?.label).toBe("UNITY REFACTOR SPECIALIST");
+    expect(profile?.strengths.length).toBeGreaterThan(0);
+    expect(profile?.limits.length).toBeGreaterThan(0);
+    expect(profile?.useWhen.length).toBeGreaterThan(0);
   });
 });

@@ -300,6 +300,10 @@ describe("runTaskCollaborationWithCodex", () => {
       internal: true,
       model: "GPT-5.4",
       reasoning: "매우 높음",
+      prompt: expect.stringContaining("strengths:"),
+    }));
+    expect(executeRoleRun).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      prompt: expect.stringContaining("use_when:"),
     }));
     expect(executeRoleRun).toHaveBeenNthCalledWith(2, expect.objectContaining({
       roleId: "game_designer",
@@ -315,6 +319,58 @@ describe("runTaskCollaborationWithCodex", () => {
       roleId: "unity_architect",
       promptMode: "brief",
       prompt: expect.stringContaining("architect-plan"),
+    }));
+  });
+
+  it("keeps the selected web-backed task model for collaboration stages", async () => {
+    const executeRoleRun = vi.fn(async (params: {
+      roleId: string;
+      prompt: string;
+      promptMode: "orchestrate" | "brief" | "critique" | "final";
+      internal: boolean;
+      model?: string;
+      reasoning?: string;
+    }) => ({
+      roleId: params.roleId,
+      runId: `${params.roleId}-${params.promptMode}`,
+      summary: `${params.roleId}-${params.promptMode}-summary`,
+      artifactPaths: [`/${params.roleId}/${params.promptMode}.md`],
+    }));
+
+    await runTaskCollaborationWithCodex({
+      prompt: "웹 AI로 각 역할 브리프를 돌려서 최종 답변을 합쳐줘",
+      contextSummary: "",
+      participantRoleIds: ["game_designer", "researcher"],
+      candidateRoleIds: ["game_designer", "researcher", "unity_architect"],
+      requestedRoleIds: [],
+      participantPrompts: {
+        game_designer: "designer-base",
+        researcher: "research-base",
+      },
+      intent: "planning",
+      synthesisRoleId: "game_designer",
+      criticRoleId: "researcher",
+      cappedParticipantCount: false,
+      useAdaptiveOrchestrator: true,
+      preferredModel: "GPT-Web",
+      preferredReasoning: "중간",
+      executeRoleRun,
+    });
+
+    expect(executeRoleRun).toHaveBeenCalledWith(expect.objectContaining({
+      promptMode: "orchestrate",
+      model: "GPT-Web",
+      reasoning: "중간",
+    }));
+    expect(executeRoleRun).toHaveBeenCalledWith(expect.objectContaining({
+      promptMode: "brief",
+      model: "GPT-Web",
+      reasoning: "중간",
+    }));
+    expect(executeRoleRun).toHaveBeenCalledWith(expect.objectContaining({
+      promptMode: "final",
+      model: "GPT-Web",
+      reasoning: "중간",
     }));
   });
 });

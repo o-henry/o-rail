@@ -55,7 +55,22 @@ describe("taskPromptOrchestration", () => {
 
     expect(orchestration.intent).toBe("ideation");
     expect(orchestration.primaryRoleId).toBe("game_designer");
-    expect(orchestration.participantRoleIds).toEqual(["game_designer", "unity_architect"]);
+    expect(orchestration.participantRoleIds).toEqual(["game_designer", "researcher"]);
     expect(orchestration.useAdaptiveOrchestrator).toBe(true);
+  });
+
+  it("widens creative ideation runs toward divergence roles before architecture review", () => {
+    const orchestration = orchestrateTaskPrompt({
+      enabledRoleIds: ["game_designer", "researcher", "level_designer", "unity_architect"],
+      requestedRoleIds: [],
+      prompt: "아류작이 아닌 장르 불문 게임 아이디어 10개를 제안해줘",
+      maxParticipants: 3,
+      creativeMode: true,
+    });
+
+    expect(orchestration.intent).toBe("ideation");
+    expect(orchestration.participantRoleIds).toEqual(["game_designer", "researcher", "level_designer"]);
+    expect(orchestration.useAdaptiveOrchestrator).toBe(true);
+    expect(orchestration.rolePrompts.level_designer).toContain("감정선");
   });
 });

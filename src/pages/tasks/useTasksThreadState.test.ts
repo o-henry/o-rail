@@ -4,6 +4,7 @@ import {
   isTasksThreadInterruptible,
   resolveAutomaticResearchModel,
   isTasksCodexExecutionBlocked,
+  normalizeResolvedTaskRoleIds,
   reduceLiveRoleEventBatch,
   reduceRuntimeTargetsByRole,
   rememberTasksProjectPath,
@@ -179,6 +180,23 @@ describe("reduceLiveRoleEventBatch", () => {
     expect(reduced.nextNotes).toEqual({});
     expect(reduced.nextEvents).toEqual([]);
     expect(reduced.shouldRefresh).toBe(true);
+  });
+});
+
+describe("normalizeResolvedTaskRoleIds", () => {
+  it("maps studio role ids back onto task preset ids for orchestration sync", () => {
+    expect(normalizeResolvedTaskRoleIds(["pm_planner", "research_analyst", "system_programmer"])).toEqual([
+      "game_designer",
+      "researcher",
+      "unity_architect",
+    ]);
+  });
+
+  it("preserves task preset ids when they are already normalized", () => {
+    expect(normalizeResolvedTaskRoleIds(["game_designer", "researcher"])).toEqual([
+      "game_designer",
+      "researcher",
+    ]);
   });
 });
 

@@ -189,25 +189,30 @@ export function resolveLatestRunParticipationBadgeRoleIds(params: {
   messages: ThreadMessage[];
   liveAgents: LiveAgentCard[];
 }): ThreadRoleId[] {
-  const orchestrationRoleIds = resolveThreadParticipationBadgeRoleIds(params.orchestration);
-  if (orchestrationRoleIds.length > 0) {
-    return orchestrationRoleIds;
+  const latestUserId = latestUserMessageId(params.messages);
+  const latestUserIndex = latestUserId
+    ? params.messages.findIndex((message) => String(message.id ?? "").trim() === latestUserId)
+    : -1;
+  const latestRunMessages = latestUserIndex >= 0 ? params.messages.slice(latestUserIndex + 1) : [];
+  const emittedRoleIds = orderedTaskAgentPresetIds(
+    latestRunMessages
+      .filter((message) => String(message.eventKind ?? "").trim() !== "agent_created")
+      .map((message) => message.sourceRoleId)
+      .filter((roleId): roleId is ThreadRoleId => Boolean(roleId)),
+  );
+  if (emittedRoleIds.length > 0) {
+    return emittedRoleIds;
   }
   const liveRoleIds = orderedTaskAgentPresetIds(params.liveAgents.map((agent) => agent.roleId));
   if (liveRoleIds.length > 0) {
     return liveRoleIds;
   }
-  const latestUserId = latestUserMessageId(params.messages);
-  if (!latestUserId) {
-    return [];
-  }
-  const latestUserIndex = params.messages.findIndex((message) => String(message.id ?? "").trim() === latestUserId);
-  if (latestUserIndex < 0) {
-    return [];
+  const orchestrationRoleIds = resolveThreadParticipationBadgeRoleIds(params.orchestration);
+  if (orchestrationRoleIds.length > 0) {
+    return orchestrationRoleIds;
   }
   return orderedTaskAgentPresetIds(
-    params.messages
-      .slice(latestUserIndex + 1)
+    latestRunMessages
       .map((message) => message.sourceRoleId)
       .filter((roleId): roleId is ThreadRoleId => Boolean(roleId)),
   );
@@ -490,6 +495,14 @@ function TasksThreadConversationImpl(props: TasksThreadConversationProps) {
     ),
     [props.messages, props.orchestration],
   );
+  const interruptedTimelineEntries = useMemo(
+    () => timelineEntries.filter((entry) => entry.kind === "single" && String(entry.message.eventKind ?? "").trim() === "run_interrupted"),
+    [timelineEntries],
+  );
+  const primaryTimelineEntries = useMemo(
+    () => timelineEntries.filter((entry) => !(entry.kind === "single" && String(entry.message.eventKind ?? "").trim() === "run_interrupted")),
+    [timelineEntries],
+  );
   const latestProgressiveMessageId = useMemo(() => {
     for (let index = props.messages.length - 1; index >= 0; index -= 1) {
       const message = props.messages[index];
@@ -525,7 +538,7 @@ function TasksThreadConversationImpl(props: TasksThreadConversationProps) {
         onVerifyReview={props.onVerifyReview}
       />
       <section className="tasks-thread-timeline">
-        {timelineEntries.map((entry) => {
+        {primaryTimelineEntries.map((entry) => {
           if (entry.kind === "group") {
             const groupText = entry.messages
               .map((message) => {
@@ -688,6 +701,30 @@ function TasksThreadConversationImpl(props: TasksThreadConversationProps) {
             );
           })()
         ))}
+        {interruptedTimelineEntries.map((entry) => {
+          if (entry.kind !== "single") {
+            return null;
+          }
+          const parsed = resolveTimelineMessage(entry.message, props.visibleAgentLabels);
+          const renderedBody = normalizeTasksTimelineCopy(parsed.body);
+          return (
+            <StaticTimelineMessageRow
+              artifactPath={parsed.artifactPath}
+              body={renderedBody}
+              conversationRef={props.conversationRef}
+              createdAt={parsed.createdAt}
+              key={entry.message.id}
+              label={parsed.label}
+              messageRole={entry.message.role}
+              progressiveStep={resolveProgressiveRevealStep(renderedBody.length)}
+              progressivelyReveal={false}
+              renderMarkdown={false}
+              showFail={false}
+              showFinish={false}
+              showSuccess={false}
+            />
+          );
+        })}
       </section>
 
       {props.approvals.length > 0 ? (

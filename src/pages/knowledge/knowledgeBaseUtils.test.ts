@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { KnowledgeEntry } from "../../features/studio/knowledgeTypes";
 import { toReadableJsonInfo } from "./knowledgeEntryMapping";
 import {
+  buildKnowledgeEntryStats,
   groupKnowledgeEntries,
   shouldDeleteKnowledgeRunRecord,
   sortKnowledgeEntries,
@@ -99,5 +100,38 @@ describe("knowledgeBaseUtils", () => {
     expect(grouped).toHaveLength(1);
     expect(grouped[0]?.promptLabel).toBe("1인 인디게임 창의적 아이디어 3개만 추려줘");
     expect(grouped[0]?.roleGroups.map((group) => group.label)).toEqual(["GAME DESIGNER", "RESEARCHER"]);
+  });
+
+  it("separates document, run, and role counts", () => {
+    expect(buildKnowledgeEntryStats([
+      makeEntry({
+        id: "entry-a",
+        runId: "run-a",
+        taskAgentId: "game_designer",
+        roleId: "pm_planner",
+        sourceKind: "artifact",
+      }),
+      makeEntry({
+        id: "entry-b",
+        runId: "run-a",
+        taskAgentId: "game_designer",
+        roleId: "pm_planner",
+        sourceKind: "web",
+      }),
+      makeEntry({
+        id: "entry-c",
+        runId: "run-b",
+        taskAgentId: "researcher",
+        roleId: "research_analyst",
+        sourceKind: "ai",
+      }),
+    ])).toEqual({
+      total: 3,
+      runs: 2,
+      roles: 2,
+      artifact: 1,
+      web: 1,
+      ai: 1,
+    });
   });
 });

@@ -25,6 +25,7 @@ import type { AgenticAction } from "../../features/orchestration/agentic/actionB
 import {
   getTaskAgentLabel,
   getTaskAgentPresetIdByStudioRoleId,
+  resolveTaskAgentPresetId,
   getTaskAgentStudioRoleId,
   getTaskAgentSummary,
   parseCoordinationModeTag,
@@ -171,6 +172,25 @@ type InternalRunBadge = {
   label: string;
   kind: "internal" | "provider";
 };
+
+function buildCreativeModeBadge(enabled: boolean): InternalRunBadge {
+  return {
+    key: "internal:creative-mode",
+    label: enabled ? "창의성 모드: ON" : "창의성 모드: OFF",
+    kind: "internal",
+  };
+}
+
+export function normalizeResolvedTaskRoleIds(roleIds: string[]): ThreadRoleId[] {
+  return [...new Set(
+    roleIds
+      .map((roleId) => {
+        const normalized = String(roleId ?? "").trim();
+        return getTaskAgentPresetIdByStudioRoleId(normalized) ?? resolveTaskAgentPresetId(normalized);
+      })
+      .filter((roleId): roleId is ThreadRoleId => Boolean(roleId)),
+  )];
+}
 
 function formatRuntimeProviderBadgeLabel(raw: string): string {
   const normalized = String(raw ?? "").trim().toLowerCase();
@@ -1178,7 +1198,7 @@ export function useTasksThreadState(params: Params) {
       if (!threadId) {
         return;
       }
-      const assignedRoleIds = [...new Set((detail?.participantRoleIds ?? []).map((roleId) => String(roleId ?? "").trim()).filter(Boolean))] as ThreadRoleId[];
+      const assignedRoleIds = normalizeResolvedTaskRoleIds(detail?.participantRoleIds ?? []);
       updateThreadCoordination(threadId, (current) => {
         if (!current) {
           return current;
@@ -1602,7 +1622,7 @@ export function useTasksThreadState(params: Params) {
       return;
     }
     setComposerSubmitPending(true);
-    setLatestRunInternalBadges([]);
+    setLatestRunInternalBadges([buildCreativeModeBadge(composerCreativeMode)]);
     const selectedProjectPath = String(projectPath || params.cwd || "/workspace").trim();
     try {
       const promptWithAttachments = await buildPromptWithAttachments(prompt);

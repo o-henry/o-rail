@@ -34,6 +34,7 @@ export default function KnowledgeBasePage({
       >
         <KnowledgeBaseListPanel
           collapsedByGroup={state.collapsedByGroup}
+          entryStats={state.entryStats}
           filteredCount={state.filtered.length}
           grouped={state.grouped}
           onDeleteGroup={state.onDeleteGroup}

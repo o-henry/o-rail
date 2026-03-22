@@ -269,7 +269,7 @@ export function TasksThreadComposer(props: TasksThreadComposerProps) {
             onClick={props.onToggleCreativeMode}
             type="button"
           >
-            {props.creativeModeEnabled ? "창의성 모드 ON" : "창의성 모드 OFF"}
+            {props.creativeModeEnabled ? "창의성 모드: ON" : "창의성 모드: OFF"}
           </button>
           {selectedBadges.map((badge) => (
             <span

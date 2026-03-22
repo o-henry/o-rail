@@ -99,12 +99,22 @@ export function groupKnowledgeEntries(entries: KnowledgeEntry[]): KnowledgeGroup
 
 export function buildKnowledgeEntryStats(entries: KnowledgeEntry[]): {
   total: number;
+  runs: number;
+  roles: number;
   artifact: number;
   web: number;
   ai: number;
 } {
+  const runIds = new Set(entries.map((row) => String(row.runId ?? "").trim()).filter(Boolean));
+  const roleKeys = new Set(
+    entries
+      .map((row) => String(row.taskAgentId ?? row.roleId ?? "").trim())
+      .filter(Boolean),
+  );
   return {
     total: entries.length,
+    runs: runIds.size,
+    roles: roleKeys.size,
     artifact: entries.filter((row) => row.sourceKind === "artifact").length,
     web: entries.filter((row) => row.sourceKind === "web").length,
     ai: entries.filter((row) => row.sourceKind === "ai").length,

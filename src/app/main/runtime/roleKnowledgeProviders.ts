@@ -146,6 +146,8 @@ const INTERACTIVE_HOST_HINTS = [
 const DOCUMENT_PROMPT_HINTS = /(공식|문서|docs|documentation|manual|guide|reference|readme|release note|api)\b/i;
 const ROLE_KB_FETCH_TIMEOUT_MS = 28_000;
 const DEFAULT_ROLE_KB_TOPIC = "devEcosystem";
+const PROVIDER_FETCH_BATCH_SIZE = 2;
+const BOOTSTRAP_URL_CONCURRENCY = 2;
 
 function cleanLine(value: unknown): string {
   return String(value ?? "").replace(/\s+/g, " ").trim();
@@ -178,6 +180,32 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: str
       globalThis.clearTimeout(timer);
     }
   }
+}
+
+async function mapWithConcurrency<T, R>(
+  values: T[],
+  concurrency: number,
+  worker: (value: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  if (values.length === 0) {
+    return [];
+  }
+  const output = new Array<R>(values.length);
+  let cursor = 0;
+  const workerCount = Math.max(1, Math.min(concurrency, values.length));
+  await Promise.all(
+    Array.from({ length: workerCount }, async () => {
+      while (true) {
+        const index = cursor;
+        cursor += 1;
+        if (index >= values.length) {
+          return;
+        }
+        output[index] = await worker(values[index]!, index);
+      }
+    }),
+  );
+  return output;
 }
 
 function getProviderDefinition(provider: RoleKnowledgeProviderId): RoleKnowledgeProviderDefinition {
@@ -436,23 +464,28 @@ export async function fetchRoleKnowledgeSourceWithProviders(
     invokeFn: params.invokeFn,
     providerOrder: desiredProviderOrder,
   });
-  const providerResults = await Promise.all(
-    providerOrder.map((provider) =>
-      fetchRoleKnowledgeSourceWithProvider({
-        ...params,
-        provider,
-      }),
-    ),
-  );
-
-  for (const provider of providerOrder) {
-    const matched = providerResults.find(
-      (row) => row.status === "ok" && cleanLine(row.provider) === provider,
+  const providerResults: RoleKnowledgeSource[] = [];
+  for (let index = 0; index < providerOrder.length; index += PROVIDER_FETCH_BATCH_SIZE) {
+    const batch = providerOrder.slice(index, index + PROVIDER_FETCH_BATCH_SIZE);
+    const batchResults = await Promise.all(
+      batch.map((provider) =>
+        fetchRoleKnowledgeSourceWithProvider({
+          ...params,
+          provider,
+        }),
+      ),
     );
-    if (matched) {
-      return matched;
+    providerResults.push(...batchResults);
+    for (const provider of batch) {
+      const matched = batchResults.find(
+        (row) => row.status === "ok" && cleanLine(row.provider) === provider,
+      );
+      if (matched) {
+        return matched;
+      }
     }
   }
+
   const failures = providerResults
     .filter((row) => row.status !== "ok")
     .map((row) => `${cleanLine(row.provider) || "unknown"}: ${truncateText(row.error, 180)}`)
@@ -507,8 +540,10 @@ export async function fetchBootstrapSourcesWithRetry(
 
   while (attemptsUsed < params.maxAttempts) {
     attemptsUsed += 1;
-    const currentResults = await Promise.all(
-      params.urls.map((url) =>
+    const currentResults = await mapWithConcurrency(
+      params.urls,
+      BOOTSTRAP_URL_CONCURRENCY,
+      (url) =>
         fetchRoleKnowledgeSourceWithProviders({
           cwd: params.cwd,
           invokeFn: params.invokeFn,
@@ -516,7 +551,6 @@ export async function fetchBootstrapSourcesWithRetry(
           roleId: params.roleId,
           userPrompt: params.userPrompt,
         }),
-      ),
     );
     bestResults = mergeBootstrapSourceResults(bestResults, currentResults);
     successfulSources = bestResults.filter((row) => row.status === "ok");

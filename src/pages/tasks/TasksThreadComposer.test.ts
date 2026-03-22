@@ -231,7 +231,7 @@ describe("TasksThreadComposer", () => {
     );
 
     expect(html).toContain("tasks-thread-selected-mention-chip is-auto");
-    expect(html).toContain("창의성 모드 ON");
+    expect(html).toContain("창의성 모드: ON");
     expect(html).toContain("AUTO: GAME DESIGNER");
     expect(html).toContain("AUTO: RESEARCHER");
     expect(html).toContain("AUTO: WEB / STEEL");

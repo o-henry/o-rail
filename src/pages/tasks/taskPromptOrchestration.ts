@@ -27,7 +27,7 @@ export type TaskPromptOrchestration = {
 const INTENT_ROLE_PRIORITY: Record<TaskPromptIntent, TaskAgentPresetId[]> = {
   implementation: ["unity_implementer", "unity_refactor_specialist", "unity_architect", "qa_playtester"],
   research: ["researcher", "game_designer", "unity_architect"],
-  ideation: ["game_designer", "unity_architect", "researcher"],
+  ideation: ["game_designer", "researcher", "level_designer", "unity_architect"],
   review: ["unity_architect", "unity_refactor_specialist", "qa_playtester", "unity_implementer"],
   validation: ["qa_playtester", "unity_implementer", "unity_architect"],
   documentation: ["handoff_writer", "unity_architect", "game_designer"],
@@ -106,8 +106,12 @@ function shouldUseAdaptiveOrchestrator(params: {
   prompt: string;
   requestedRoleIds: TaskAgentPresetId[];
   participantRoleIds: TaskAgentPresetId[];
+  creativeMode?: boolean;
 }): boolean {
   const normalizedPrompt = String(params.prompt ?? "").trim();
+  if (params.intent === "ideation" && params.creativeMode) {
+    return true;
+  }
   if (params.requestedRoleIds.length === 0) {
     return true;
   }
@@ -126,7 +130,13 @@ function shouldUseAdaptiveOrchestrator(params: {
   return false;
 }
 
-function desiredParticipantCount(intent: TaskPromptIntent, prompt: string, requestedRoleCount: number): number {
+function desiredParticipantCount(params: {
+  intent: TaskPromptIntent;
+  prompt: string;
+  requestedRoleCount: number;
+  creativeMode?: boolean;
+}): number {
+  const { intent, prompt, requestedRoleCount, creativeMode } = params;
   if (requestedRoleCount > 1) {
     return 3;
   }
@@ -146,6 +156,9 @@ function desiredParticipantCount(intent: TaskPromptIntent, prompt: string, reque
     return 2;
   }
   if (intent === "ideation") {
+    if (creativeMode) {
+      return 3;
+    }
     return /\b(같이|서로|토론|fanout|team|논의|선정|비교|추천)\b/i.test(prompt) ? 3 : 2;
   }
   if (intent === "research") {
@@ -193,6 +206,7 @@ function pickParticipantRoles(params: {
   enabledRoleIds: TaskAgentPresetId[];
   requestedRoleIds: TaskAgentPresetId[];
   maxParticipants: number;
+  creativeMode?: boolean;
 }): { primaryRoleId: TaskAgentPresetId; participantRoleIds: TaskAgentPresetId[]; cappedParticipantCount: boolean } {
   const requestedRoleIds = uniqueRoleIds(params.requestedRoleIds);
   const enabledRoleIds = uniqueRoleIds(params.enabledRoleIds);
@@ -203,7 +217,12 @@ function pickParticipantRoles(params: {
     availableRoleIds,
     requestedRoleIds.length,
   );
-  const desiredCount = Math.min(params.maxParticipants, desiredParticipantCount(params.intent, params.prompt, requestedRoleIds.length));
+  const desiredCount = Math.min(params.maxParticipants, desiredParticipantCount({
+    intent: params.intent,
+    prompt: params.prompt,
+    requestedRoleCount: requestedRoleIds.length,
+    creativeMode: params.creativeMode,
+  }));
   const ordered: TaskAgentPresetId[] = [primaryRoleId];
   for (const roleId of requestedRoleIds) {
     if (!ordered.includes(roleId)) {
@@ -248,6 +267,12 @@ function buildIntentLead(roleId: TaskAgentPresetId, intent: TaskPromptIntent, is
     return [
       "- 사용자의 요청을 직접 해결하는 주 역할이다. 실제 아이디어 후보와 30초 hook를 만들어야 한다.",
       "- 다른 역할의 근거와 리스크를 받아 최종 후보를 수렴한다.",
+    ];
+  }
+  if (intent === "ideation" && roleId === "level_designer") {
+    return [
+      "- 장르 이름보다 플레이 순간의 감정선, 동선, 템포, 실패 비용이 어떻게 새롭게 느껴지는지를 제안한다.",
+      "- 이해는 빠르지만 감각은 낯선 후보를 우선하고, 한 문장 hook만 화려한 후보는 줄인다.",
     ];
   }
   if (intent === "research" && roleId === "game_designer") {
@@ -340,6 +365,7 @@ export function orchestrateTaskPrompt(params: {
     enabledRoleIds,
     requestedRoleIds,
     maxParticipants: params.maxParticipants,
+    creativeMode: params.creativeMode,
   });
   const candidateRoleIds = buildCandidateRoleIds({
     enabledRoleIds,
@@ -348,11 +374,12 @@ export function orchestrateTaskPrompt(params: {
   });
   const useAdaptiveOrchestrator = requestedRoleIds.length === 0
     ? true
-    : shouldUseAdaptiveOrchestrator({
+      : shouldUseAdaptiveOrchestrator({
         intent: fallbackIntent,
         prompt: params.prompt,
         requestedRoleIds,
         participantRoleIds: picked.participantRoleIds,
+        creativeMode: params.creativeMode,
       });
   const rolePrompts = Object.fromEntries(
     candidateRoleIds.map((roleId) => [

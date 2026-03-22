@@ -8,6 +8,11 @@ import type { KnowledgeGroup } from "./knowledgeBaseUtils";
 
 type KnowledgeBaseListPanelProps = {
   collapsedByGroup: Record<string, boolean>;
+  entryStats: {
+    total: number;
+    runs: number;
+    roles: number;
+  };
   filteredCount: number;
   grouped: KnowledgeGroup[];
   onDeleteGroup: (runIds: string[], taskId: string, promptLabel: string) => void;
@@ -30,7 +35,11 @@ export function KnowledgeBaseListPanel(props: KnowledgeBaseListPanelProps) {
     <section aria-label="데이터베이스 산출물 목록" className="knowledge-list panel-card knowledge-island" data-e2e="knowledge-list-panel">
       <header className="knowledge-list-head">
         <strong>산출물 탐색</strong>
-        <span>{`표시 ${props.filteredCount}개`}</span>
+        <div className="knowledge-list-stats">
+          <span className="knowledge-list-stat">{`문서 ${props.entryStats.total}`}</span>
+          <span className="knowledge-list-stat">{`실행 ${props.entryStats.runs}`}</span>
+          <span className="knowledge-list-stat">{`역할 ${props.entryStats.roles}`}</span>
+        </div>
       </header>
       {props.filteredCount === 0 ? (
         <p className="knowledge-empty">표시할 문서가 없습니다.</p>

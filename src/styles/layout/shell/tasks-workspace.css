@@ -2534,21 +2534,9 @@
 }
 
 .tasks-thread-confirm-modal {
-  width: fit-content;
-  min-width: 0;
-  max-width: min(320px, calc(100vw - 32px));
-  padding: 12px 14px;
+  width: min(360px, calc(100vw - 32px));
   display: grid;
-  gap: 10px;
-}
-
-.tasks-thread-confirm-modal h2,
-.tasks-thread-confirm-modal p {
-  margin: 0;
-}
-
-.tasks-thread-confirm-modal p {
-  max-width: 30ch;
+  gap: 12px;
 }
 
 @media (max-width: 1400px) {

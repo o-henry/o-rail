@@ -253,6 +253,58 @@ describe("resolveLatestRunParticipationBadgeRoleIds", () => {
       ],
     })).toEqual(["game_designer", "unity_architect"]);
   });
+
+  it("prefers roles that emitted real progress over created-only placeholder roles", () => {
+    expect(resolveLatestRunParticipationBadgeRoleIds({
+      orchestration: {
+        threadId: "thread-1",
+        prompt: "아이디어 추천",
+        requestedRoleIds: ["game_designer", "unity_architect"],
+        assignedRoleIds: ["game_designer", "unity_architect"],
+        recommendedMode: "team",
+        mode: "team",
+        intent: "multi_step",
+        status: "running",
+        nextAction: "running",
+        blockedReason: null,
+        plan: null,
+        delegateTasks: [],
+        delegateResults: [],
+        teamSession: null,
+        resumePointer: null,
+        guidance: [],
+        updatedAt: "2026-03-20T00:01:00Z",
+      },
+      liveAgents: [],
+      messages: [
+        {
+          id: "user-1",
+          threadId: "thread-1",
+          role: "user",
+          content: "아이디어 줘",
+          createdAt: "2026-03-22T00:00:00Z",
+        },
+        {
+          id: "assistant-1",
+          threadId: "thread-1",
+          role: "assistant",
+          content: "Created UNITY ARCHITECT ...",
+          sourceRoleId: "unity_architect",
+          eventKind: "agent_created",
+          createdAt: "2026-03-22T00:00:01Z",
+        },
+        {
+          id: "assistant-2",
+          threadId: "thread-1",
+          role: "assistant",
+          content: "GAME DESIGNER: 아이디어를 정리하고 있습니다.",
+          sourceRoleId: "game_designer",
+          eventKind: "agent_status",
+          createdAt: "2026-03-22T00:00:02Z",
+        },
+      ],
+    })).toEqual(["game_designer"]);
+  });
 });
 
 describe("resolveLatestRunParticipationBadges", () => {
@@ -281,11 +333,13 @@ describe("resolveLatestRunParticipationBadges", () => {
       messages: [],
       internalBadges: [
         { key: "internal:orchestrator", label: "ORCHESTRATOR", kind: "internal" },
+        { key: "internal:creative-mode", label: "창의성 모드: ON", kind: "internal" },
         { key: "provider:@STEEL", label: "@STEEL", kind: "provider" },
       ],
     })).toEqual([
       { key: "agent:researcher", label: "RESEARCHER", kind: "agent" },
       { key: "internal:orchestrator", label: "ORCHESTRATOR", kind: "internal" },
+      { key: "internal:creative-mode", label: "창의성 모드: ON", kind: "internal" },
       { key: "provider:@STEEL", label: "@STEEL", kind: "provider" },
     ]);
   });

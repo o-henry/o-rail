@@ -148,6 +148,26 @@
   color: var(--text-muted);
 }
 
+.knowledge-list-stats {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.knowledge-list-stat {
+  display: inline-flex;
+  align-items: center;
+  min-height: 18px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: #ebedf0;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
 .knowledge-row {
   width: 100%;
   border: 0;

@@ -231,7 +231,7 @@ fn stable_file_id(path: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::scan_workspace_artifacts;
+    use super::{scan_workspace_artifacts, ARTIFACT_CACHE_PATH};
     use std::{fs, path::PathBuf};
 
     fn make_temp_workspace(name: &str) -> PathBuf {

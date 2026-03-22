@@ -31,4 +31,17 @@ describe("taskPromptOrchestration", () => {
 
     expect(orchestration.useAdaptiveOrchestrator).toBe(true);
   });
+
+  it("turns on adaptive orchestration for untagged multi-role prompts", () => {
+    const orchestration = orchestrateTaskPrompt({
+      enabledRoleIds: ["researcher", "game_designer", "unity_architect", "qa_playtester"],
+      requestedRoleIds: [],
+      prompt: "최근 인디게임 트렌드와 참고 사례를 조사하고 정리해줘",
+      maxParticipants: 3,
+    });
+
+    expect(orchestration.participantRoleIds).toEqual(["researcher", "game_designer"]);
+    expect(orchestration.candidateRoleIds).toEqual(["game_designer", "researcher", "unity_architect", "qa_playtester"]);
+    expect(orchestration.useAdaptiveOrchestrator).toBe(true);
+  });
 });

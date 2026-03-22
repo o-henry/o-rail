@@ -13,6 +13,38 @@ import { deriveThreadWorkflow } from "./threadWorkflow";
 
 type InvokeFn = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
 
+function preferOrchestratorFirstPlan(params: {
+  plan: TaskExecutionPlan;
+  requestedRoleIds: string[];
+  selectedMode?: CoordinationMode | null;
+}): TaskExecutionPlan {
+  if (params.selectedMode === "quick") {
+    return params.plan;
+  }
+  if (params.requestedRoleIds.length > 0) {
+    return params.plan;
+  }
+  const participantRoleIds = params.plan.participantRoleIds.length > 1
+    ? params.plan.participantRoleIds
+    : [
+      params.plan.primaryRoleId,
+      ...params.plan.candidateRoleIds.filter((roleId) => roleId !== params.plan.primaryRoleId).slice(0, 1),
+    ];
+  if (participantRoleIds.length <= 1) {
+    return params.plan;
+  }
+  return {
+    ...params.plan,
+    mode: "discussion",
+    participantRoleIds,
+    criticRoleId: params.plan.criticRoleId && participantRoleIds.includes(params.plan.criticRoleId)
+      ? params.plan.criticRoleId
+      : participantRoleIds.find((roleId) => roleId !== params.plan.primaryRoleId),
+    maxRounds: 2,
+    useAdaptiveOrchestrator: true,
+  };
+}
+
 export function deriveExecutionPlan(params: {
   enabledRoleIds: string[];
   requestedRoleIds: string[];
@@ -25,7 +57,11 @@ export function deriveExecutionPlan(params: {
     prompt: params.prompt,
   });
   if (params.selectedMode !== "quick") {
-    return basePlan;
+    return preferOrchestratorFirstPlan({
+      plan: basePlan,
+      requestedRoleIds: params.requestedRoleIds,
+      selectedMode: params.selectedMode,
+    });
   }
   return {
     ...basePlan,

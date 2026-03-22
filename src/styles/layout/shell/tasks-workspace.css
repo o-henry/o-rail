@@ -615,6 +615,7 @@
 .tasks-thread-header-actions {
   display: inline-flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 8px;
   margin-left: auto;
 }
@@ -629,7 +630,7 @@
   padding: 0;
   border: 0;
   border-radius: 2px;
-  background: color-mix(in srgb, var(--surface-soft) 72%, var(--surface-elevated));
+  background: #ffffff;
   display: inline-grid;
   place-items: center;
 }
@@ -778,6 +779,23 @@
   margin: 0;
 }
 
+.tasks-thread-readiness-card pre {
+  margin: 0;
+  max-width: 100%;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 0;
+  background: #f6f8fa;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  overflow-x: hidden;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 11px;
+  line-height: 1.55;
+  color: #24292f;
+}
+
 .tasks-thread-title-button,
 .tasks-thread-title-input {
   font: inherit;
@@ -905,6 +923,10 @@
 .tasks-thread-agent-detail-panel {
   padding: 12px;
   overflow: hidden;
+}
+
+.tasks-thread-files-panel {
+  border-radius: 4px;
 }
 
 .tasks-thread-running-strip {
@@ -1734,6 +1756,19 @@
   border-right: 1px solid #d8dde6;
   border-bottom: 0;
   background: #ffffff;
+  max-height: min(70vh, 440px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.tasks-thread-mention-menu::-webkit-scrollbar {
+  display: none;
+}
+
+.tasks-thread-mention-menu::-webkit-scrollbar {
+  display: none;
 }
 
 .tasks-thread-mention-option {
@@ -1776,6 +1811,16 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+@media (max-height: 900px) {
+  .tasks-thread-mention-menu {
+    max-height: min(68vh, 420px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
 }
 
 .tasks-thread-mention-option small {
@@ -2085,6 +2130,11 @@
 .tasks-thread-files-panel.is-empty {
   min-height: 0;
   grid-template-rows: auto;
+  border-radius: 4px;
+}
+
+.tasks-thread-files-panel.is-empty.is-expanded {
+  border-radius: 4px;
 }
 
 .tasks-thread-files-panel.is-expanded .tasks-thread-file-tree {
@@ -2321,8 +2371,13 @@
   background: transparent;
 }
 
+.tasks-thread-workflow-panel > .tasks-thread-detail-text-panel.is-inline {
+  display: none;
+}
+
 .tasks-thread-agent-detail-panel > .tasks-thread-detail-text-panel.is-inline {
   margin-top: 6px;
+  display: none;
 }
 
 .tasks-thread-detail-text-panel.is-inline.is-empty {
@@ -2385,18 +2440,27 @@
 }
 
 .tasks-thread-section-head-with-tools {
+  width: 100%;
   align-items: center;
+  justify-content: space-between;
+  flex-wrap: nowrap;
 }
 
 .tasks-thread-section-tools {
+  margin-left: auto;
+  flex: 0 0 auto;
   justify-content: flex-end;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 
-.tasks-thread-section-count {
-  font-size: 14px;
+.tasks-thread-section-tools .tasks-thread-section-count {
+  display: none;
+  font-size: 18px;
+  font-weight: 700;
   line-height: 1;
   color: var(--text-main);
+  text-transform: none;
+  letter-spacing: 0;
 }
 
 .tasks-thread-inline-select,
@@ -2476,6 +2540,7 @@
 
 .tasks-thread-section-toggle {
   margin-left: auto;
+  flex: 0 0 auto;
 }
 
 

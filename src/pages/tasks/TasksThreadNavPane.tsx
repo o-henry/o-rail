@@ -252,8 +252,10 @@ export function TasksThreadNavPane(props: TasksThreadNavPaneProps) {
                 <strong>{t("tasks.workflow.readiness")}</strong>
                 <span>{props.activeThread.workflow.readinessSummary}</span>
               </div>
-              <p>{props.selectedStage?.summary || props.activeThread.workflow.nextAction}</p>
-              <small>{props.activeThread.workflow.nextAction}</small>
+              <pre>{props.selectedStage?.summary || props.activeThread.workflow.nextAction}</pre>
+              {props.selectedStage?.summary !== props.activeThread.workflow.nextAction ? (
+                <pre>{props.activeThread.workflow.nextAction}</pre>
+              ) : null}
             </div>
 
             <section className={`tasks-thread-files-panel${(props.activeThread.files.length ?? 0) === 0 ? " is-empty" : ""}${props.isFilesExpanded ? " is-expanded" : ""}`}>

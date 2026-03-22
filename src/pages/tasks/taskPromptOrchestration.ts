@@ -25,13 +25,13 @@ export type TaskPromptOrchestration = {
 };
 
 const INTENT_ROLE_PRIORITY: Record<TaskPromptIntent, TaskAgentPresetId[]> = {
-  implementation: ["unity_implementer", "unity_architect", "qa_playtester"],
+  implementation: ["unity_implementer", "unity_refactor_specialist", "unity_architect", "qa_playtester"],
   research: ["researcher", "game_designer", "unity_architect"],
   ideation: ["game_designer", "unity_architect", "researcher"],
-  review: ["unity_architect", "qa_playtester", "unity_implementer"],
+  review: ["unity_architect", "unity_refactor_specialist", "qa_playtester", "unity_implementer"],
   validation: ["qa_playtester", "unity_implementer", "unity_architect"],
   documentation: ["handoff_writer", "unity_architect", "game_designer"],
-  planning: ["game_designer", "unity_architect", "researcher"],
+  planning: ["game_designer", "unity_architect", "unity_refactor_specialist", "researcher"],
 };
 
 function includesPattern(prompt: string, patterns: RegExp[]): boolean {
@@ -43,7 +43,7 @@ export function inferTaskPromptIntent(prompt: string): TaskPromptIntent {
   if (!normalized) {
     return "planning";
   }
-  if (includesPattern(normalized, [/\b(code|fix|bug|debug|patch|implement|build|compile|c#)\b/i, /(버그|수정|구현|디버그|패치|컴파일|코드)/i])) {
+  if (includesPattern(normalized, [/\b(code|fix|bug|debug|patch|implement|build|compile|c#|refactor|restructure|extract|split)\b/i, /(버그|수정|구현|디버그|패치|컴파일|코드|리팩토링|구조 개선|책임 분리|파일 분리|모듈 분리)/i])) {
     return "implementation";
   }
   if (includesPattern(normalized, [/\b(test|qa|verify|validation|regression)\b/i, /(재현|검증|테스트|회귀)/i])) {
@@ -81,6 +81,13 @@ function buildCandidateRoleIds(params: {
   requestedRoleIds: TaskAgentPresetId[];
   primaryRoleId: TaskAgentPresetId;
 }): TaskAgentPresetId[] {
+  if (params.requestedRoleIds.length === 0) {
+    return uniqueRoleIds([
+      params.primaryRoleId,
+      ...params.enabledRoleIds,
+      ...INTENT_ROLE_PRIORITY[params.intent],
+    ]);
+  }
   return uniqueRoleIds([
     params.primaryRoleId,
     ...params.requestedRoleIds,
@@ -96,6 +103,9 @@ function shouldUseAdaptiveOrchestrator(params: {
   participantRoleIds: TaskAgentPresetId[];
 }): boolean {
   const normalizedPrompt = String(params.prompt ?? "").trim();
+  if (params.requestedRoleIds.length === 0) {
+    return true;
+  }
   if (params.requestedRoleIds.length >= 2) {
     return true;
   }
@@ -115,6 +125,12 @@ function desiredParticipantCount(intent: TaskPromptIntent, prompt: string, reque
   if (requestedRoleCount > 1) {
     return 3;
   }
+  if (
+    intent === "implementation"
+    && includesPattern(String(prompt ?? ""), [/\b(refactor|restructure|extract|split|decouple)\b/i, /(리팩토링|구조 개선|책임 분리|파일 분리|모듈 분리|결합도)/i])
+  ) {
+    return 3;
+  }
   if (intent === "implementation" || intent === "documentation") {
     return 1;
   }
@@ -125,12 +141,22 @@ function desiredParticipantCount(intent: TaskPromptIntent, prompt: string, reque
     return /\b(같이|서로|토론|fanout|team|논의|선정|비교|추천)\b/i.test(prompt) ? 3 : 2;
   }
   if (intent === "research") {
-    return /\b(추천|선정|적용|해석|요약|정리)\b/i.test(prompt) ? 2 : 1;
+    return requestedRoleCount === 0 ? 2 : 1;
+  }
+  if (intent === "planning") {
+    return requestedRoleCount === 0 ? 2 : 1;
   }
   return 1;
 }
 
-function selectPrimaryRole(intent: TaskPromptIntent, availableRoleIds: TaskAgentPresetId[]): TaskAgentPresetId {
+function selectPrimaryRole(intent: TaskPromptIntent, prompt: string, availableRoleIds: TaskAgentPresetId[]): TaskAgentPresetId {
+  if (
+    intent === "implementation"
+    && availableRoleIds.includes("unity_refactor_specialist")
+    && includesPattern(String(prompt ?? ""), [/\b(refactor|restructure|extract|split|decouple)\b/i, /(리팩토링|구조 개선|책임 분리|파일 분리|모듈 분리|결합도)/i])
+  ) {
+    return "unity_refactor_specialist";
+  }
   return INTENT_ROLE_PRIORITY[intent].find((roleId) => availableRoleIds.includes(roleId)) ?? availableRoleIds[0] ?? "game_designer";
 }
 
@@ -144,7 +170,7 @@ function pickParticipantRoles(params: {
   const requestedRoleIds = uniqueRoleIds(params.requestedRoleIds);
   const enabledRoleIds = uniqueRoleIds(params.enabledRoleIds);
   const availableRoleIds = uniqueRoleIds([...requestedRoleIds, ...enabledRoleIds]);
-  const primaryRoleId = selectPrimaryRole(params.intent, availableRoleIds);
+  const primaryRoleId = selectPrimaryRole(params.intent, params.prompt, availableRoleIds);
   const desiredCount = Math.min(params.maxParticipants, desiredParticipantCount(params.intent, params.prompt, requestedRoleIds.length));
   const ordered: TaskAgentPresetId[] = [primaryRoleId];
   for (const roleId of requestedRoleIds) {
@@ -195,6 +221,12 @@ function buildIntentLead(roleId: TaskAgentPresetId, intent: TaskPromptIntent, is
   if (intent === "implementation" && roleId === "unity_architect") {
     return [
       "- 구현을 대신하지 말고, 수정 범위, 구조 리스크, 안전한 경계만 짧게 제시한다.",
+    ];
+  }
+  if ((intent === "implementation" || intent === "review") && roleId === "unity_refactor_specialist") {
+    return [
+      "- 새 기능 제안보다 리팩토링 범위, 책임 분리, 파일 분해 순서, 동작 보존 기준을 우선한다.",
+      "- 한 번에 뒤엎지 말고 단계적 추출과 회귀 방지 체크포인트를 제시한다.",
     ];
   }
   if (intent === "validation" && roleId === "qa_playtester") {

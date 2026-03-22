@@ -5,8 +5,5 @@ type VisualizeLoadingStateParams = {
 };
 
 export function shouldShowVisualizeLoadingOverlay(params: VisualizeLoadingStateParams): boolean {
-  if (params.detailLoading) {
-    return true;
-  }
-  return params.refreshing && !params.hasVisibleContent;
+  return !params.hasVisibleContent && (params.refreshing || params.detailLoading);
 }

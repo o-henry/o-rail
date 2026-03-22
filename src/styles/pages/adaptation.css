@@ -120,7 +120,8 @@
   font-size: 12px;
   min-width: 980px;
   table-layout: fixed;
-  border: 1px solid color-mix(in srgb, var(--border-subtle) 88%, #b8c0ca);
+  background: color-mix(in srgb, var(--surface-soft) 78%, #ffffff);
+  border: 1px solid #d7dee7;
 }
 
 .adaptation-table th,
@@ -128,8 +129,8 @@
   padding: 9px 10px;
   text-align: left;
   vertical-align: middle;
-  border-bottom: 1px solid color-mix(in srgb, var(--border-subtle) 88%, #b8c0ca);
-  border-right: 1px solid color-mix(in srgb, var(--border-subtle) 88%, #b8c0ca);
+  border-bottom: 1px solid #d7dee7;
+  border-right: 1px solid #d7dee7;
   word-break: keep-all;
   overflow-wrap: normal;
 }
@@ -141,7 +142,7 @@
 
 .adaptation-table thead tr,
 .adaptation-table tbody tr {
-  border-bottom: 1px solid color-mix(in srgb, var(--border-subtle) 88%, #b8c0ca);
+  border-bottom: 1px solid #d7dee7;
 }
 
 .adaptation-table th {
@@ -157,11 +158,10 @@
 }
 
 .adaptation-summary-cell {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  display: block;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   overflow: hidden;
-  line-clamp: 2;
 }
 
 .adaptation-memo-cell {
@@ -179,6 +179,7 @@
 .adaptation-table td:nth-child(2) {
   width: 72px;
   white-space: nowrap;
+  text-align: center;
 }
 
 .adaptation-table th:nth-child(3),
@@ -196,6 +197,7 @@
 .adaptation-table td:nth-child(6) {
   width: 54px;
   white-space: nowrap;
+  text-align: center;
 }
 
 .adaptation-table-time-cell {
@@ -205,7 +207,8 @@
 }
 
 .adaptation-table-action-cell {
-  text-align: center;
+  display: grid;
+  place-items: center;
 }
 
 .adaptation-table tbody tr:last-child td {

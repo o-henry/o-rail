@@ -34,6 +34,22 @@ describe("taskExecutionPolicy", () => {
     expect(plan.maxRounds).toBe(2);
   });
 
+  it("routes refactor-heavy prompts to the refactor specialist when available", () => {
+    const plan = createTaskExecutionPlan({
+      enabledRoleIds: ["unity_refactor_specialist", "unity_architect", "unity_implementer", "qa_playtester"],
+      requestedRoleIds: [],
+      prompt: "PlayerController와 InventoryManager를 리팩토링해서 책임 분리와 파일 분해 계획까지 잡아줘",
+    });
+
+    expect(plan.mode).toBe("discussion");
+    expect(plan.primaryRoleId).toBe("unity_refactor_specialist");
+    expect(plan.participantRoleIds).toEqual([
+      "unity_refactor_specialist",
+      "unity_implementer",
+      "unity_architect",
+    ]);
+  });
+
   it("caps discussion participants to three roles", () => {
     const plan = createTaskExecutionPlan({
       enabledRoleIds: [
@@ -68,6 +84,19 @@ describe("taskExecutionPolicy", () => {
     expect(plan.mode).toBe("discussion");
     expect(plan.primaryRoleId).toBe("researcher");
     expect(plan.participantRoleIds).toEqual(["researcher", "unity_architect"]);
+  });
+
+  it("uses adaptive orchestration for untagged research requests", () => {
+    const plan = createTaskExecutionPlan({
+      enabledRoleIds: ["researcher", "game_designer", "unity_architect", "unity_implementer"],
+      requestedRoleIds: [],
+      prompt: "최근 3년간 인디게임 시장 변화와 참고할만한 성공 사례를 조사하고 정리해줘",
+    });
+
+    expect(plan.mode).toBe("discussion");
+    expect(plan.primaryRoleId).toBe("researcher");
+    expect(plan.participantRoleIds).toEqual(["researcher", "game_designer"]);
+    expect(plan.useAdaptiveOrchestrator).toBe(true);
   });
 
   it("honors an explicit researcher tag even when the initial enabled roles omit it", () => {

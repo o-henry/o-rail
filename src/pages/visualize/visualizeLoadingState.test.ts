@@ -22,7 +22,15 @@ describe("shouldShowVisualizeLoadingOverlay", () => {
     expect(shouldShowVisualizeLoadingOverlay({
       refreshing: false,
       detailLoading: true,
-      hasVisibleContent: true,
+      hasVisibleContent: false,
     })).toBe(true);
+  });
+
+  it("keeps the existing UI visible while report details refresh over existing content", () => {
+    expect(shouldShowVisualizeLoadingOverlay({
+      refreshing: false,
+      detailLoading: true,
+      hasVisibleContent: true,
+    })).toBe(false);
   });
 });

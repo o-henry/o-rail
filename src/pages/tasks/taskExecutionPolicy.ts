@@ -29,6 +29,7 @@ const MAX_DISCUSSION_ROUNDS = 2;
 
 const CRITIC_ROLE_PRIORITY: TaskAgentPresetId[] = [
   "unity_architect",
+  "unity_refactor_specialist",
   "researcher",
   "qa_playtester",
   "release_steward",

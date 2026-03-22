@@ -100,6 +100,18 @@ function buildCoordination(overrides: Partial<AgenticCoordinationState> = {}): A
 }
 
 describe("taskExecutionRuntime", () => {
+  it("prefers orchestrator-first execution for untagged prompts outside quick mode", () => {
+    const plan = deriveExecutionPlan({
+      enabledRoleIds: ["game_designer", "researcher", "unity_architect", "unity_implementer"],
+      requestedRoleIds: [],
+      prompt: "1인 인디게임 시장을 조사하고 지금 만들만한 방향을 추천해줘",
+    });
+
+    expect(plan.mode).toBe("discussion");
+    expect(plan.useAdaptiveOrchestrator).toBe(true);
+    expect(plan.participantRoleIds).toEqual(["researcher", "game_designer"]);
+  });
+
   it("forces quick mode to a single participant", () => {
     const plan = deriveExecutionPlan({
       enabledRoleIds: ["researcher", "unity_architect"],

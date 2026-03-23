@@ -354,7 +354,10 @@ async function resolveUsableProviderOrder(params: {
   cwd: string;
   invokeFn: InvokeFn;
   providerOrder: RoleKnowledgeProviderId[];
-}): Promise<RoleKnowledgeProviderId[]> {
+}): Promise<{
+  providerOrder: RoleKnowledgeProviderId[];
+  diagnosticErrors: string[];
+}> {
   const healthResults = await Promise.all(
     params.providerOrder.map(async (provider) => {
       try {
@@ -379,7 +382,24 @@ async function resolveUsableProviderOrder(params: {
     }))
     .map((entry) => entry.provider);
 
-  return filtered.length > 0 ? filtered : params.providerOrder;
+  const diagnosticErrors = healthResults
+    .filter((entry) => !shouldAttemptProviderFetch({
+      provider: entry.provider,
+      health: entry.health,
+    }))
+    .map((entry) => {
+      const message = cleanLine(entry.health?.message);
+      if (!message) {
+        return "";
+      }
+      return `${entry.provider}: ${message}`;
+    })
+    .filter(Boolean);
+
+  return {
+    providerOrder: filtered.length > 0 ? filtered : params.providerOrder,
+    diagnosticErrors,
+  };
 }
 
 function normalizeFetchResult(
@@ -459,11 +479,12 @@ export async function fetchRoleKnowledgeSourceWithProviders(
     roleId: params.roleId,
     userPrompt: params.userPrompt,
   });
-  const providerOrder = await resolveUsableProviderOrder({
+  const providerCandidates = await resolveUsableProviderOrder({
     cwd: params.cwd,
     invokeFn: params.invokeFn,
     providerOrder: desiredProviderOrder,
   });
+  const providerOrder = providerCandidates.providerOrder;
   const providerResults: RoleKnowledgeSource[] = [];
   for (let index = 0; index < providerOrder.length; index += PROVIDER_FETCH_BATCH_SIZE) {
     const batch = providerOrder.slice(index, index + PROVIDER_FETCH_BATCH_SIZE);
@@ -490,12 +511,15 @@ export async function fetchRoleKnowledgeSourceWithProviders(
     .filter((row) => row.status !== "ok")
     .map((row) => `${cleanLine(row.provider) || "unknown"}: ${truncateText(row.error, 180)}`)
     .filter(Boolean);
+  const diagnosticFailures = providerCandidates.diagnosticErrors.filter(
+    (row) => !failures.includes(row),
+  );
 
   return {
     url: params.url,
     provider: providerOrder[0],
     status: "error",
-    error: failures.join(" | ") || "no provider succeeded",
+    error: [...failures, ...diagnosticFailures].join(" | ") || "no provider succeeded",
   };
 }
 

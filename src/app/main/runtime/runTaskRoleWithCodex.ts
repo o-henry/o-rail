@@ -11,6 +11,14 @@ import type { WebProviderRunResult } from "../types";
 
 type InvokeFn = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
 type ExternalFallbackProvider = "steel" | "lightpanda_experimental";
+type WebRunDocument = {
+  model?: string;
+  requestedProvider: string;
+  effectiveProvider: string;
+  text: string;
+  raw: unknown;
+  meta?: WebProviderRunResult["meta"];
+};
 
 type TaskAgentPromptPack = {
   id: string;
@@ -244,6 +252,23 @@ function extractMarkdownSection(input: string, headings: string[]): string {
   return String(match?.[1] ?? "").trim();
 }
 
+function extractAfterMarkdownHeading(input: string, headings: string[]): string {
+  const normalized = String(input ?? "").trim();
+  if (!normalized) {
+    return "";
+  }
+  const pattern = headings
+    .map((heading) => heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    .join("|");
+  const match = normalized.match(
+    new RegExp(`^\\s*#{1,6}\\s*(?:${pattern})\\s*$`, "im"),
+  );
+  if (!match || match.index == null) {
+    return "";
+  }
+  return normalized.slice(match.index + match[0].length).trim();
+}
+
 function extractWebPromptRequest(input: string): string {
   const normalized = String(input ?? "").trim();
   if (!normalized) {
@@ -257,9 +282,16 @@ function extractWebPromptRequest(input: string): string {
   if (markdownRequest) {
     return extractWebPromptRequest(markdownRequest);
   }
+  const tailAfterRequestHeading = extractAfterMarkdownHeading(normalized, ["USER REQUEST", "사용자 요청"]);
+  if (tailAfterRequestHeading) {
+    const nestedRequest = extractWebPromptRequest(tailAfterRequestHeading);
+    if (nestedRequest && nestedRequest !== tailAfterRequestHeading) {
+      return nestedRequest;
+    }
+  }
   const withoutRoleKb = normalized.split("[ROLE_KB_INJECT]")[0]?.trim() || normalized;
   const strippedSections = withoutRoleKb.replace(
-    /^\s*#{1,6}\s*(?:작업 모드|ROLE|WORKSPACE|DEVELOPER INSTRUCTIONS|협업 규칙|역할별 배정|압축된 스레드 컨텍스트|OUTPUT RULES|ROLE-SPECIFIC GOALS)\s*$[\s\S]*?(?=^\s*#{1,6}\s+\S|$)/gim,
+    /^\s*#{1,6}\s*(?:작업 모드|ROLE|WORKSPACE|DEVELOPER INSTRUCTIONS|협업 규칙|역할별 배정|압축된 스레드 컨텍스트|OUTPUT RULES|ROLE-SPECIFIC GOALS|참여 에이전트 브리프|역할별 1차 브리프|충돌\/누락 검토|실패한 참여 에이전트)\s*$[\s\S]*?(?=^\s*#{1,6}\s+\S|$)/gim,
     " ",
   ).trim();
   return strippedSections.replace(/\n{3,}/g, "\n\n").trim();
@@ -280,18 +312,76 @@ function extractWebPromptGuidelines(input: string): string[] {
   return [...new Set(lines)].slice(0, 4);
 }
 
+function isIdeationWebPrompt(params: {
+  promptText: string;
+  request: string;
+  intent?: string;
+}): boolean {
+  if (String(params.intent ?? "").trim().toLowerCase() === "ideation") {
+    return true;
+  }
+  const combined = `${params.request}\n${params.promptText}`.toLowerCase();
+  return /아이디어|창의|ideation|novel|creative|retention|리텐션|아류작|hook/.test(combined);
+}
+
+function buildWebProviderIntentInstructions(params: {
+  intent?: string;
+  promptMode?: "direct" | "orchestrate" | "brief" | "critique" | "final";
+  request: string;
+  promptText: string;
+}): string[] {
+  if (isIdeationWebPrompt(params)) {
+    return [
+      "이 요청은 창의적 아이데이션 품질을 끌어올리기 위한 외부 AI 관점 수집이다.",
+      "상투적인 장르 조합, 대표작 두 개를 섞은 듯한 후보, 말만 화려하고 루프가 빈약한 후보는 스스로 제외한다.",
+      "기억에 남는 한 줄 훅, 핵심 반복 루프, 리텐션 포인트, 왜 아류작 냄새가 약한지까지 함께 제시한다.",
+      "후보들은 서로 다른 방향으로 충분히 벌리고, 가장 무난한 평균 답을 우선하지 않는다.",
+    ];
+  }
+  if (params.promptMode === "critique") {
+    return [
+      "이 요청은 외부 시각에서 허점과 누락을 찾기 위한 검토 단계다.",
+      "좋아 보이는 말보다 충돌, 빠진 검증 포인트, 구현 리스크를 우선 적는다.",
+    ];
+  }
+  if (params.promptMode === "final") {
+    return [
+      "이 요청은 최종 사용자에게 바로 보여줄 수 있는 답 초안을 얻기 위한 외부 관점 수집이다.",
+      "서론보다 바로 쓸 수 있는 결론과 근거를 우선한다.",
+    ];
+  }
+  return [
+    "이 요청은 내부 작업에 참고할 외부 AI 관점 수집이다.",
+    "겉보기 요약보다 실제로 건질 수 있는 판단 근거, 대안, 리스크를 우선한다.",
+  ];
+}
+
 function buildWebProviderPrompt(params: {
   pack: TaskAgentPromptPack;
   promptText: string;
+  intent?: string;
+  promptMode?: "direct" | "orchestrate" | "brief" | "critique" | "final";
 }): string {
   const request = extractWebPromptRequest(params.promptText);
   const guidelines = extractWebPromptGuidelines(params.promptText);
+  const intentInstructions = buildWebProviderIntentInstructions({
+    intent: params.intent,
+    promptMode: params.promptMode,
+    request,
+    promptText: params.promptText,
+  });
   const lines = [
     `역할: ${params.pack.label}`,
     "",
     `사용자 요청:`,
     request || "사용자 요청을 찾지 못했습니다. 아래 문맥을 바탕으로 가장 그럴듯한 실제 요청을 복원해 답변하세요.",
   ];
+  if (intentInstructions.length > 0) {
+    lines.push("", "요청 해석:");
+    for (const line of intentInstructions) {
+      lines.push(`- ${line}`);
+    }
+  }
   if (guidelines.length > 0) {
     lines.push("", "추가 지침:");
     for (const line of guidelines) {
@@ -311,6 +401,32 @@ function buildWebProviderPrompt(params: {
 function shouldUseExternalWebFallback(provider: string): boolean {
   const normalized = String(provider ?? "").trim().toLowerCase();
   return ["gemini", "gpt", "grok", "perplexity", "claude"].includes(normalized);
+}
+
+function extractFirstHttpUrl(input: string): string {
+  const match = String(input ?? "").match(/https?:\/\/[^\s<>()]+/i);
+  return String(match?.[0] ?? "").trim();
+}
+
+function shouldFallbackFromWebProviderResponse(result: WebProviderRunResult): boolean {
+  const combined = `${String(result.error ?? "")}\n${String(result.text ?? "")}`.trim().toLowerCase();
+  if (!combined) {
+    return false;
+  }
+  return (
+    combined.includes("rate limit") ||
+    combined.includes("message limit") ||
+    combined.includes("usage limit") ||
+    combined.includes("quota") ||
+    combined.includes("too many requests") ||
+    combined.includes("try again later") ||
+    combined.includes("come back later") ||
+    combined.includes("free plan limit") ||
+    combined.includes("무료 사용량") ||
+    combined.includes("메시지 한도") ||
+    combined.includes("사용량 한도") ||
+    combined.includes("한도에 도달")
+  );
 }
 
 async function resolveReadyExternalWebFallbackProviders(params: {
@@ -354,14 +470,18 @@ async function runWebProviderWithFallback(params: {
     cwd: params.cwd,
   });
   const directText = String(directResult.text ?? "").trim();
-  if (directResult.ok && directText) {
+  if (directResult.ok && directText && !shouldFallbackFromWebProviderResponse(directResult)) {
     return {
       requestedProvider: params.provider,
       effectiveProvider: params.provider,
       result: directResult,
     };
   }
-  if (!shouldUseExternalWebFallback(params.provider) || params.fallbackProviders.length === 0) {
+  if (
+    !shouldUseExternalWebFallback(params.provider)
+    || params.fallbackProviders.length === 0
+    || !extractFirstHttpUrl(params.prompt)
+  ) {
     throw new Error(directResult.error || `${params.provider} web provider returned no usable response`);
   }
   const fallbackErrors = [
@@ -386,6 +506,73 @@ async function runWebProviderWithFallback(params: {
     fallbackErrors.push(`${fallbackProvider}: ${String(fallbackResult.error || "no usable response")}`);
   }
   throw new Error(fallbackErrors.join(" | "));
+}
+
+function normalizeArtifactToken(value: string): string {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+function buildWebRunDocument(params: {
+  model?: string;
+  requestedProvider: string;
+  effectiveProvider: string;
+  result: WebProviderRunResult;
+}): WebRunDocument {
+  const text = String(params.result.text ?? "").trim();
+  return {
+    model: params.model,
+    requestedProvider: params.requestedProvider,
+    effectiveProvider: params.effectiveProvider,
+    text,
+    raw: params.result.raw ?? params.result,
+    meta: params.result.meta,
+  };
+}
+
+async function writeWebRunArtifacts(params: {
+  invokeFn: InvokeFn;
+  artifactDir: string;
+  documents: WebRunDocument[];
+}): Promise<string[]> {
+  const artifactPaths: string[] = [];
+  for (const document of params.documents) {
+    const requestedProvider = normalizeArtifactToken(document.requestedProvider) || "web";
+    const effectiveProvider = normalizeArtifactToken(document.effectiveProvider) || requestedProvider;
+    const fileName =
+      requestedProvider === effectiveProvider
+        ? `web_${requestedProvider}_response.md`
+        : `web_${requestedProvider}_via_${effectiveProvider}_response.md`;
+    const heading =
+      document.requestedProvider === document.effectiveProvider
+        ? document.requestedProvider.toUpperCase()
+        : `${document.requestedProvider.toUpperCase()} -> ${document.effectiveProvider.toUpperCase()}`;
+    const lines = [
+      `# ${heading}`,
+      "",
+      `- requested_provider: ${document.requestedProvider}`,
+      `- effective_provider: ${document.effectiveProvider}`,
+      document.model ? `- model: ${document.model}` : "",
+      document.meta?.url ? `- url: ${document.meta.url}` : "",
+      document.meta?.startedAt ? `- started_at: ${document.meta.startedAt}` : "",
+      document.meta?.finishedAt ? `- finished_at: ${document.meta.finishedAt}` : "",
+      Number.isFinite(Number(document.meta?.elapsedMs)) ? `- elapsed_ms: ${Number(document.meta?.elapsedMs)}` : "",
+      document.meta?.extractionStrategy ? `- extraction_strategy: ${document.meta.extractionStrategy}` : "",
+      "",
+      "## response",
+      "",
+      document.text,
+    ].filter(Boolean);
+    artifactPaths.push(await params.invokeFn<string>("workspace_write_text", {
+      cwd: params.artifactDir,
+      name: fileName,
+      content: `${lines.join("\n")}\n`,
+    }));
+  }
+  return artifactPaths;
 }
 
 function resolvePromptModeDeveloperInstructions(params: {
@@ -477,6 +664,15 @@ function resolveTurnText(raw: unknown): string {
       }
     }
   }
+  const structuredText = collectReadableTurnCandidates(raw)
+    .map((entry) => entry.text)
+    .find(Boolean);
+  if (structuredText) {
+    return structuredText;
+  }
+  if (isInputOnlyTurnPayload(raw)) {
+    return "";
+  }
   return (
     extractFinalAnswer(raw) ||
     (extractStringByPaths(raw, [
@@ -501,6 +697,172 @@ function resolveTurnText(raw: unknown): string {
       "response.text",
     ]) ?? extractDeltaText(raw))
   ).trim();
+}
+
+function isInputOnlyTurnPayload(raw: unknown): boolean {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return false;
+  }
+  const record = raw as Record<string, unknown>;
+  const topLevelText = String(record.text ?? "").trim();
+  if (!topLevelText) {
+    return false;
+  }
+  const inputText = extractStringByPaths(record, [
+    "input.0.text",
+    "input.0.content.0.text",
+    "request.input.0.text",
+  ]);
+  if (!inputText || inputText.trim() !== topLevelText) {
+    return false;
+  }
+  const responseRoots = [
+    record.output,
+    record.outputs,
+    record.response,
+    record.result,
+    record.turn,
+    record.completion,
+    record.items,
+  ];
+  return responseRoots.every((value) => {
+    if (Array.isArray(value)) {
+      return value.length === 0;
+    }
+    return value == null;
+  });
+}
+
+type TurnTextCandidate = {
+  text: string;
+  score: number;
+};
+
+function collectReadableTurnCandidates(input: unknown, depth = 0, path: string[] = []): TurnTextCandidate[] {
+  if (depth > 10 || input == null) {
+    return [];
+  }
+  if (typeof input === "string") {
+    const text = input.trim();
+    if (!text) {
+      return [];
+    }
+    const leafKey = String(path[path.length - 1] ?? "").trim().toLowerCase();
+    const normalizedPath = path.map((segment) => String(segment ?? "").trim().toLowerCase());
+    const blockedKeys = new Set([
+      "input",
+      "prompt",
+      "request",
+      "developerinstructions",
+      "instructions",
+      "sandboxpolicy",
+      "reasoning",
+      "usage",
+      "metadata",
+      "status",
+      "state",
+      "id",
+      "threadid",
+      "turnid",
+      "cwd",
+      "model",
+      "role",
+      "author",
+    ]);
+    if (normalizedPath.some((segment) => blockedKeys.has(segment))) {
+      return [];
+    }
+    const preferredLeafKeys = new Set([
+      "text",
+      "output_text",
+      "outputtext",
+      "summary",
+      "finaldraft",
+      "content",
+      "message",
+      "value",
+    ]);
+    let score = text.length;
+    if (preferredLeafKeys.has(leafKey)) {
+      score += 120;
+    }
+    if (text.includes("\n")) {
+      score += 80;
+    }
+    return [{ text, score }];
+  }
+  if (Array.isArray(input)) {
+    return input.flatMap((item, index) => collectReadableTurnCandidates(item, depth + 1, [...path, String(index)]));
+  }
+  if (typeof input !== "object") {
+    return [];
+  }
+
+  const record = input as Record<string, unknown>;
+  if (depth === 0 && isInputOnlyTurnPayload(record)) {
+    return [];
+  }
+  const type = String(record.type ?? record.kind ?? "").trim().toLowerCase();
+  const role = String(record.role ?? record.author ?? record.sender ?? "").trim().toLowerCase();
+  const phase = String(record.phase ?? "").trim().toLowerCase();
+  const isMetaLike =
+    type === "status" ||
+    type === "event" ||
+    type === "metadata" ||
+    type === "usage" ||
+    type === "reasoning" ||
+    type === "system";
+  if (isMetaLike) {
+    return [];
+  }
+  const isAssistantLike =
+    role === "assistant" ||
+    role === "model" ||
+    type === "agentmessage" ||
+    type === "message" ||
+    type === "output_text" ||
+    phase === "final_answer";
+
+  const prioritizedKeys = isAssistantLike
+    ? ["text", "output_text", "outputText", "summary", "content", "message"]
+    : ["output", "outputs", "content", "response", "result", "turn", "completion", "data", "items", "message"];
+  const visited = new Set<string>();
+  const candidates: TurnTextCandidate[] = [];
+
+  for (const key of prioritizedKeys) {
+    if (!(key in record) || visited.has(key)) {
+      continue;
+    }
+    visited.add(key);
+    const nested = collectReadableTurnCandidates(record[key], depth + 1, [...path, key]).map((entry) => ({
+      text: entry.text,
+      score: entry.score + (isAssistantLike ? 180 : 0),
+    }));
+    candidates.push(...nested);
+  }
+
+  if (!isAssistantLike) {
+    const secondaryKeys = ["text", "output_text", "outputText", "summary"];
+    for (const key of secondaryKeys) {
+      if (!(key in record) || visited.has(key)) {
+        continue;
+      }
+      visited.add(key);
+      candidates.push(...collectReadableTurnCandidates(record[key], depth + 1, [...path, key]));
+    }
+  }
+
+  if (candidates.length > 0) {
+    return [...new Map(
+      candidates
+        .sort((left, right) => right.score - left.score)
+        .map((entry) => [entry.text, entry]),
+    ).values()];
+  }
+
+  return Object.entries(record).flatMap(([key, value]) =>
+    collectReadableTurnCandidates(value, depth + 1, [...path, key]),
+  );
 }
 
 function collectNestedText(input: unknown, depth = 0): string[] {
@@ -897,6 +1259,8 @@ export async function runTaskRoleWithCodex(input: RunTaskRoleWithCodexInput): Pr
   const webPromptText = buildWebProviderPrompt({
     pack,
     promptText,
+    intent: input.intent,
+    promptMode: input.promptMode,
   });
   const readyExternalFallbackProviders = webProviders.some(({ provider }) => shouldUseExternalWebFallback(provider))
     ? await resolveReadyExternalWebFallbackProviders({
@@ -916,6 +1280,7 @@ export async function runTaskRoleWithCodex(input: RunTaskRoleWithCodexInput): Pr
   let summary = "";
   let codexThreadId: string | undefined;
   let codexTurnId: string | undefined;
+  let webRunDocuments: WebRunDocument[] = [];
 
   if (webProviders.length > 1) {
     const providerNames = webProviders.map((entry) => entry.provider);
@@ -951,17 +1316,16 @@ export async function runTaskRoleWithCodex(input: RunTaskRoleWithCodexInput): Pr
       if (entry.status !== "fulfilled") {
         return [];
       }
-      const text = String(entry.value.result.text ?? "").trim();
-      if (!entry.value.result.ok || !text) {
+      const document = buildWebRunDocument({
+        model: entry.value.model,
+        requestedProvider: entry.value.provider,
+        effectiveProvider: entry.value.effectiveProvider,
+        result: entry.value.result,
+      });
+      if (!entry.value.result.ok || !document.text) {
         return [];
       }
-      return [{
-        model: entry.value.model,
-        provider: entry.value.provider,
-        effectiveProvider: entry.value.effectiveProvider,
-        text,
-        raw: entry.value.result.raw ?? entry.value.result,
-      }];
+      return [document];
     });
     if (successfulResults.length === 0) {
       const errors = providerResults.map((entry, index) => {
@@ -973,16 +1337,19 @@ export async function runTaskRoleWithCodex(input: RunTaskRoleWithCodexInput): Pr
       });
       throw new Error(errors.join(" | "));
     }
-    rawResponse = successfulResults.map(({ model, provider, raw, text }) => ({
+    webRunDocuments = successfulResults;
+    rawResponse = successfulResults.map(({ model, requestedProvider, effectiveProvider, raw, text, meta }) => ({
       model,
-      provider,
+      requestedProvider,
+      effectiveProvider,
       text,
       raw,
+      meta: meta ?? null,
     }));
     summary = successfulResults
-      .map(({ provider, effectiveProvider, text }) => {
-        const requestedLabel = String(provider ?? "").trim().toUpperCase();
-        const effectiveLabel = String(effectiveProvider ?? provider ?? "").trim().toUpperCase();
+      .map(({ requestedProvider, effectiveProvider, text }) => {
+        const requestedLabel = String(requestedProvider ?? "").trim().toUpperCase();
+        const effectiveLabel = String(effectiveProvider ?? requestedProvider ?? "").trim().toUpperCase();
         const heading = requestedLabel === effectiveLabel ? requestedLabel : `${requestedLabel} -> ${effectiveLabel}`;
         return `## ${heading}\n${text}`;
       })
@@ -1005,11 +1372,24 @@ export async function runTaskRoleWithCodex(input: RunTaskRoleWithCodexInput): Pr
       fallbackProviders: readyExternalFallbackProviders,
     });
     const webResult = webRun.result;
-    rawResponse = webResult.raw ?? webResult;
+    const webRunDocument = buildWebRunDocument({
+      model: primarySelectedModel,
+      requestedProvider: webRun.requestedProvider,
+      effectiveProvider: webRun.effectiveProvider,
+      result: webResult,
+    });
+    webRunDocuments = [webRunDocument];
+    rawResponse = {
+      requestedProvider: webRun.requestedProvider,
+      effectiveProvider: webRun.effectiveProvider,
+      text: webRunDocument.text,
+      raw: webRunDocument.raw,
+      meta: webRunDocument.meta ?? null,
+    };
     if (!webResult.ok || !String(webResult.text ?? "").trim()) {
       throw new Error(webResult.error || `${webProvider} web provider returned no usable response`);
     }
-    summary = String(webResult.text ?? "").trim();
+    summary = webRunDocument.text;
     completedStatus = "completed";
   } else {
     const threadStart = await startCodexThreadWithRecovery({
@@ -1058,6 +1438,15 @@ export async function runTaskRoleWithCodex(input: RunTaskRoleWithCodexInput): Pr
       if (turnError instanceof Error) {
         throw turnError;
       }
+      try {
+        await input.invokeFn<string>("workspace_write_text", {
+          cwd: artifactDir,
+          name: "response.unreadable.json",
+          content: `${JSON.stringify(rawResponse, null, 2)}\n`,
+        });
+      } catch {
+        // best-effort debug artifact only
+      }
       throw new Error("Codex turn finished without a readable response");
     }
     codexTurnId = extractStringByPaths(rawResponse, ["turnId", "turn_id", "id", "turn.id", "response.id"]) ?? undefined;
@@ -1079,6 +1468,13 @@ export async function runTaskRoleWithCodex(input: RunTaskRoleWithCodexInput): Pr
     name: String(input.outputArtifactName || pack.outputArtifactName || `${pack.id}.md`).trim(),
     content: `${summary}\n`,
   });
+  const webRunArtifactPaths = webRunDocuments.length > 0
+    ? await writeWebRunArtifacts({
+      invokeFn: input.invokeFn,
+      artifactDir,
+      documents: webRunDocuments,
+    })
+    : [];
   const responseJsonPath = await input.invokeFn<string>("workspace_write_text", {
     cwd: artifactDir,
     name: "response.json",
@@ -1099,6 +1495,7 @@ export async function runTaskRoleWithCodex(input: RunTaskRoleWithCodexInput): Pr
         codexTurnId: codexTurnId ?? null,
         completedStatus,
         turnError: turnError instanceof Error ? turnError.message : turnError ?? null,
+        fullText: summary,
         raw: rawResponse,
       },
       null,
@@ -1119,7 +1516,7 @@ export async function runTaskRoleWithCodex(input: RunTaskRoleWithCodexInput): Pr
 
   return {
     summary,
-    artifactPaths: [...ensuredResearcherArtifactPaths, promptArtifactPath, responseArtifactPath, responseJsonPath],
+    artifactPaths: [...ensuredResearcherArtifactPaths, promptArtifactPath, responseArtifactPath, ...webRunArtifactPaths, responseJsonPath],
     usage: webProvider ? undefined : extractUsageStats(rawResponse),
     codexThreadId,
     codexTurnId,

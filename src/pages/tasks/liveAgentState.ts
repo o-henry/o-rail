@@ -26,6 +26,8 @@ export type LiveAgentEvent = {
   at: string;
 };
 
+const LIVE_STAGE_ORDER = ["crawler", "rag", "codex", "critic", "save", "approval"] as const;
+
 function latestArtifactPath(paths: string[] | null | undefined): string {
   const normalized = [...(paths ?? [])]
     .map((value) => String(value ?? "").trim())
@@ -229,4 +231,70 @@ export function inferNextLiveAction(params: {
     return "승인 결과를 반영한 뒤 다음 실행을 이어갑니다.";
   }
   return "다음 단계를 계속 진행합니다.";
+}
+
+export function describeLiveCurrentWork(params: {
+  stage: string | null | undefined;
+  eventType?: string | null | undefined;
+  failureReason?: string | null;
+  recentSourceCount?: number | null;
+}): string {
+  const stage = String(params.stage ?? "").trim().toLowerCase();
+  const eventType = String(params.eventType ?? "").trim().toLowerCase();
+  const failureReason = String(params.failureReason ?? "").trim();
+
+  if (failureReason) {
+    if (failureReason.includes("ROLE_KB_BOOTSTRAP 실패") && (params.recentSourceCount ?? null) === 0) {
+      return "외부 근거 수집이 비어 있어, 현재는 내부 문맥만으로 초안을 만들거나 대체 경로를 준비하고 있습니다.";
+    }
+    return "직전 시도에서 문제가 생겨 원인을 정리하고 다시 시도할 준비를 하고 있습니다.";
+  }
+
+  if (stage === "crawler") {
+    if (eventType === "stage_done") {
+      return "외부 소스 후보를 정리했고, 다음으로 실제로 쓸 근거만 추려서 읽기 단계로 넘깁니다.";
+    }
+    return params.recentSourceCount != null
+      ? `외부 자료 후보를 읽고 선별하는 중입니다. 지금까지 ${params.recentSourceCount}개 소스를 확보했거나 확인했습니다.`
+      : "외부 자료 후보를 찾고, 읽을 가치가 있는 링크와 문서를 선별하는 중입니다.";
+  }
+  if (stage === "rag") {
+    return eventType === "stage_done"
+      ? "수집한 문서를 역할별 입력 자료로 정리했고, 이제 실제 응답 생성 단계로 넘깁니다."
+      : "수집한 문서에서 핵심 주장, 근거, 리스크를 추려 역할별 입력 컨텍스트로 정리하는 중입니다.";
+  }
+  if (stage === "codex") {
+    if (eventType === "stage_done" || eventType === "run_done") {
+      return "응답 초안 생성을 마쳤고, 결과를 검토하거나 다음 합성 단계로 넘기고 있습니다.";
+    }
+    return "역할 프롬프트를 바탕으로 실제 응답을 생성하고, 나오는 텍스트를 수집하면서 다음 단계에 넘길 초안을 만드는 중입니다.";
+  }
+  if (stage === "critic") {
+    return eventType === "stage_done"
+      ? "충돌과 누락 검토를 마쳤고, 반영된 최종안으로 넘어가고 있습니다."
+      : "여러 역할의 초안을 대조해 충돌, 누락, 과장, 구현 리스크를 검토하는 중입니다.";
+  }
+  if (stage === "save") {
+    return eventType === "stage_done"
+      ? "산출물 저장을 마쳤고, 스레드와 문서 인덱스를 갱신하고 있습니다."
+      : "완성된 답변과 산출물을 스레드, 문서, 인덱스에 기록하는 중입니다.";
+  }
+  if (stage === "approval") {
+    return eventType === "stage_done"
+      ? "승인 처리가 끝났고, 후속 단계 반영을 마무리하고 있습니다."
+      : "사용자 승인이나 후속 결정 결과를 기다리면서 반영 준비를 하고 있습니다.";
+  }
+  return "현재 단계에 맞는 작업을 계속 진행하면서 다음 단계로 넘길 준비를 하고 있습니다.";
+}
+
+export function resolveLiveStageProgress(stage: string | null | undefined): { current: number; total: number } | null {
+  const normalized = String(stage ?? "").trim().toLowerCase();
+  const index = LIVE_STAGE_ORDER.indexOf(normalized as (typeof LIVE_STAGE_ORDER)[number]);
+  if (index < 0) {
+    return null;
+  }
+  return {
+    current: index + 1,
+    total: LIVE_STAGE_ORDER.length,
+  };
 }

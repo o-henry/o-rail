@@ -23,6 +23,11 @@ import {
   sortKnowledgeEntries,
   type KnowledgeGroup,
 } from "./knowledgeBaseUtils";
+import {
+  buildKnowledgeSearchDocument,
+  filterKnowledgeEntriesByQuery,
+  normalizeKnowledgeSearchQuery,
+} from "./knowledgeSearch";
 import { writeStoredSelectedRunId } from "../visualize/visualizeSelection";
 
 type UseKnowledgeBaseStateParams = {
@@ -102,6 +107,26 @@ function normalizeWorkspacePath(value: string): string {
   return String(value ?? "").trim().replace(/[\\/]+$/, "");
 }
 
+function normalizeComparablePath(value: string | null | undefined): string {
+  return String(value ?? "").trim().replace(/\\/g, "/").replace(/\/+/g, "/");
+}
+
+export function matchesKnowledgeArtifactPath(entry: KnowledgeEntry, artifactPath: string): boolean {
+  const target = normalizeComparablePath(artifactPath);
+  if (!target) {
+    return false;
+  }
+  return [entry.markdownPath, entry.jsonPath, entry.sourceFile]
+    .map((value) => normalizeComparablePath(value))
+    .filter(Boolean)
+    .some((candidate) => candidate === target || candidate.endsWith(`/${target}`) || target.endsWith(`/${candidate}`));
+}
+
+export function resolveKnowledgeEntryIdForArtifactPath(entries: KnowledgeEntry[], artifactPath: string): string {
+  const matched = entries.find((entry) => matchesKnowledgeArtifactPath(entry, artifactPath));
+  return String(matched?.id ?? "").trim();
+}
+
 function resolveEntryWorkspaceCwd(entry: KnowledgeEntry | null, fallbackCwd: string): string {
   const preferred = normalizeWorkspacePath(String(entry?.workspacePath ?? ""));
   if (preferred) {
@@ -157,9 +182,12 @@ export function useKnowledgeBaseState({ cwd, isActive, posts }: UseKnowledgeBase
   const [collapsedByGroup, setCollapsedByGroup] = useState<Record<string, boolean>>({});
   const [markdownContent, setMarkdownContent] = useState("");
   const [jsonContent, setJsonContent] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchIndex, setSearchIndex] = useState<Record<string, string>>({});
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState("");
   const [pendingGroupDelete, setPendingGroupDelete] = useState<PendingKnowledgeGroupDelete | null>(null);
+  const normalizedSearchQuery = useMemo(() => normalizeKnowledgeSearchQuery(searchQuery), [searchQuery]);
 
   const postEntries = useMemo(
     () => posts.map((post) => toKnowledgeEntry(post)).filter((row): row is KnowledgeEntry => row !== null),
@@ -245,7 +273,46 @@ export function useKnowledgeBaseState({ cwd, isActive, posts }: UseKnowledgeBase
     };
   }, [cwd, isActive, mergePostEntries]);
 
-  const filtered = useMemo(() => sortKnowledgeEntries(entries), [entries]);
+  useEffect(() => {
+    let cancelled = false;
+    if (!isActive || !normalizedSearchQuery) {
+      setSearchIndex({});
+      return () => {
+        cancelled = true;
+      };
+    }
+    void (async () => {
+      const nextIndex: Record<string, string> = {};
+      await Promise.all(entries.map(async (entry) => {
+        const readCwd = resolveEntryWorkspaceCwd(entry, cwd);
+        const markdownPath = String(entry.markdownPath ?? "").trim();
+        const jsonPath = String(entry.jsonPath ?? "").trim();
+        const [markdownText, jsonText] = await Promise.all([
+          markdownPath
+            ? invoke<string>("workspace_read_text", { cwd: readCwd, path: markdownPath }).catch(() => "")
+            : Promise.resolve(""),
+          jsonPath
+            ? invoke<string>("workspace_read_text", { cwd: readCwd, path: jsonPath }).catch(() => "")
+            : Promise.resolve(""),
+        ]);
+        if (cancelled) {
+          return;
+        }
+        nextIndex[entry.id] = buildKnowledgeSearchDocument(entry, String(markdownText ?? ""), String(jsonText ?? ""));
+      }));
+      if (!cancelled) {
+        setSearchIndex(nextIndex);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [cwd, entries, isActive, normalizedSearchQuery]);
+
+  const filtered = useMemo(
+    () => sortKnowledgeEntries(filterKnowledgeEntriesByQuery(entries, normalizedSearchQuery, searchIndex)),
+    [entries, normalizedSearchQuery, searchIndex],
+  );
   const grouped = useMemo<KnowledgeGroup[]>(() => groupKnowledgeEntries(filtered), [filtered]);
   const selected = filtered.find((row) => row.id === selectedId) ?? filtered[0] ?? null;
   const entryStats = useMemo(() => buildKnowledgeEntryStats(entries), [entries]);
@@ -283,6 +350,22 @@ export function useKnowledgeBaseState({ cwd, isActive, posts }: UseKnowledgeBase
     window.addEventListener("rail:open-knowledge-entry", handler as EventListener);
     return () => window.removeEventListener("rail:open-knowledge-entry", handler as EventListener);
   }, []);
+
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<{ artifactPath?: string }>).detail;
+      const artifactPath = String(detail?.artifactPath ?? "").trim();
+      if (!artifactPath) {
+        return;
+      }
+      const matchedId = resolveKnowledgeEntryIdForArtifactPath(entries, artifactPath);
+      if (matchedId) {
+        setSelectedId(matchedId);
+      }
+    };
+    window.addEventListener("rail:open-knowledge-artifact", handler as EventListener);
+    return () => window.removeEventListener("rail:open-knowledge-artifact", handler as EventListener);
+  }, [entries]);
 
   useEffect(() => {
     if (grouped.length === 0) {
@@ -546,6 +629,7 @@ export function useKnowledgeBaseState({ cwd, isActive, posts }: UseKnowledgeBase
     loading,
     markdownContent,
     pendingGroupDelete,
+    searchQuery,
     onCancelDeleteGroup,
     onConfirmDeleteGroup,
     onDeleteGroup,
@@ -554,6 +638,7 @@ export function useKnowledgeBaseState({ cwd, isActive, posts }: UseKnowledgeBase
     onToggleGroup,
     selected,
     selectedId,
+    setSearchQuery,
     setSelectedId,
   };
 }

@@ -43,6 +43,22 @@ export function MainAppWorkspaceContent(props: any) {
     }, 0);
   }, [props.onSelectWorkspaceTab]);
 
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<{ artifactPath?: string }>).detail;
+      const artifactPath = String(detail?.artifactPath ?? "").trim();
+      if (!artifactPath) {
+        return;
+      }
+      props.onSelectWorkspaceTab("knowledge");
+      window.setTimeout(() => {
+        window.dispatchEvent(new CustomEvent("rail:open-knowledge-artifact", { detail: { artifactPath } }));
+      }, 0);
+    };
+    window.addEventListener("rail:request-open-knowledge-artifact", handler as EventListener);
+    return () => window.removeEventListener("rail:request-open-knowledge-artifact", handler as EventListener);
+  }, [props.onSelectWorkspaceTab]);
+
   const handleOpenVisualizeEntry = useCallback((entry: { runId?: string }) => {
     const runId = String(entry?.runId ?? "").trim();
     if (!runId) {

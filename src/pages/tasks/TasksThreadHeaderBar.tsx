@@ -22,14 +22,16 @@ export function TasksThreadHeaderBar(props: TasksThreadHeaderBarProps) {
   const { t } = useI18n();
 
   return (
-    <header className="tasks-thread-header">
+    <header aria-label="Tasks 스레드 헤더" className="tasks-thread-header">
       <div className="tasks-thread-header-leading">
         <div className="tasks-thread-header-copy">
           {props.headerTitle ? (
             props.isEditingThreadTitle ? (
               <input
+                aria-label="스레드 제목 편집"
                 autoFocus
                 className="tasks-thread-title-input"
+                data-e2e="tasks-thread-title-input"
                 onBlur={props.onCommitTitle}
                 onChange={(event) => props.onChangeTitleDraft(event.target.value)}
                 onKeyDown={(event) => {
@@ -48,6 +50,7 @@ export function TasksThreadHeaderBar(props: TasksThreadHeaderBarProps) {
               <button
                 aria-label={t("tasks.aria.renameThread")}
                 className="tasks-thread-title-button"
+                data-e2e="tasks-thread-title-button"
                 onClick={props.onStartEditingTitle}
                 type="button"
               >
@@ -55,13 +58,14 @@ export function TasksThreadHeaderBar(props: TasksThreadHeaderBarProps) {
               </button>
             )
           ) : null}
-          <p>{props.displayPath}</p>
+          <p aria-label="현재 작업 경로">{props.displayPath}</p>
         </div>
       </div>
       <div className="tasks-thread-header-actions">
         <button
           aria-label={props.isThreadNavHidden ? t("tasks.detailPanel.show") : t("tasks.detailPanel.hide")}
           className="tasks-thread-header-terminal-button tasks-thread-header-nav-toggle"
+          data-e2e="tasks-thread-nav-toggle"
           onClick={props.onToggleThreadNav}
           type="button"
         >
@@ -70,6 +74,7 @@ export function TasksThreadHeaderBar(props: TasksThreadHeaderBarProps) {
         <button
           aria-label={t("tasks.diff.title")}
           className="tasks-thread-header-terminal-button tasks-thread-header-review-button"
+          data-e2e="tasks-thread-review-toggle"
           disabled={!props.hasActiveThread}
           onClick={props.onToggleReviewPane}
           type="button"
@@ -79,6 +84,7 @@ export function TasksThreadHeaderBar(props: TasksThreadHeaderBarProps) {
         <button
           aria-label={props.isMainSurfaceFullscreen ? t("tasks.fullscreen.exit") : t("tasks.fullscreen.enter")}
           className="tasks-thread-header-terminal-button"
+          data-e2e="tasks-thread-fullscreen-toggle"
           disabled={!props.hasActiveThread}
           onClick={props.onToggleMainSurfaceFullscreen}
           type="button"

@@ -461,6 +461,31 @@ fn append_message(messages: &mut Vec<ThreadMessage>, thread_id: &str, role: &str
     append_message_with_meta(messages, thread_id, role, content, None, None, None, None, None);
 }
 
+fn looks_like_internal_prompt_dump(content: &str) -> bool {
+    let normalized = content.trim().to_lowercase();
+    if normalized.is_empty() {
+        return false;
+    }
+    let markers = [
+        "formatting re-enabled",
+        "<role_profile>",
+        "</role_profile>",
+        "<operating_rules>",
+        "</operating_rules>",
+        "<response_contract>",
+        "</response_contract>",
+        "<task_request>",
+        "</task_request>",
+        "[role_kb_inject]",
+        "[/role_kb_inject]",
+    ];
+    let marker_hits = markers
+        .iter()
+        .filter(|marker| normalized.contains(**marker))
+        .count();
+    marker_hits >= 2
+}
+
 fn enabled_roles(task: &TaskRecordView) -> Vec<String> {
     task_presets::ordered_task_agent_ids(task.roles
         .iter()
@@ -1653,7 +1678,11 @@ pub fn thread_record_role_result(
         .trim()
         .eq_ignore_ascii_case("ideation");
     let suppress_internal_thread_message =
-        is_internal && is_ideation && matches!(normalized_prompt_mode.as_str(), "orchestrate" | "brief" | "critique");
+        (is_internal && matches!(normalized_prompt_mode.as_str(), "orchestrate" | "brief" | "critique"))
+            || summary
+                .as_deref()
+                .map(looks_like_internal_prompt_dump)
+                .unwrap_or(false);
 
     let Some(task_role) = task.record.roles.iter().find(|role| role.studio_role_id == studio_role_id.trim()) else {
         return Ok(true);
@@ -2276,6 +2305,45 @@ mod tests {
             .messages
             .iter()
             .any(|message| message.event_kind.as_deref() == Some("agent_result")));
+    }
+
+    #[test]
+    fn thread_record_role_result_hides_prompt_dump_like_summaries_from_thread_messages() {
+        let workspace = temp_workspace("prompt-dump-role-result");
+        let cwd = workspace.to_string_lossy().to_string();
+        let detail = thread_create(
+            cwd.clone(),
+            None,
+            "게임 아이디어 10개를 제안해줘".to_string(),
+            None,
+            Some("full-squad".to_string()),
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+
+        let recorded = thread_record_role_result(
+            cwd.clone(),
+            detail.thread.thread_id.clone(),
+            "pm_planner".to_string(),
+            "run-dump-1".to_string(),
+            "done".to_string(),
+            vec![],
+            Some("Formatting re-enabled\n<role_profile>role_name: 기획(PM)</role_profile>\n[ROLE_KB_INJECT]\nfoo\n[/ROLE_KB_INJECT]\n<task_request>bar</task_request>".to_string()),
+            Some(false),
+            Some("final".to_string()),
+            Some("ideation".to_string()),
+        )
+        .unwrap();
+        assert!(recorded);
+
+        let loaded = thread_load(cwd, detail.thread.thread_id.clone()).unwrap();
+        assert!(loaded
+            .messages
+            .iter()
+            .all(|message| message.content.to_lowercase().contains("formatting re-enabled") == false));
     }
 
     #[test]

@@ -17,7 +17,9 @@ type KnowledgeBaseListPanelProps = {
   grouped: KnowledgeGroup[];
   onDeleteGroup: (runIds: string[], taskId: string, promptLabel: string) => void;
   onSelectEntry: (entryId: string) => void;
+  onSearchQueryChange: (value: string) => void;
   onToggleGroup: (groupId: string) => void;
+  searchQuery: string;
   selectedEntry: KnowledgeEntry | null;
 };
 
@@ -41,6 +43,15 @@ export function KnowledgeBaseListPanel(props: KnowledgeBaseListPanelProps) {
           <span className="knowledge-list-stat">{`역할 ${props.entryStats.roles}`}</span>
         </div>
       </header>
+      <input
+        aria-label="데이터베이스 문서 검색"
+        className="knowledge-list-search"
+        data-e2e="knowledge-search-input"
+        onChange={(event) => props.onSearchQueryChange(event.currentTarget.value)}
+        placeholder="문서 검색"
+        type="search"
+        value={props.searchQuery}
+      />
       {props.filteredCount === 0 ? (
         <p className="knowledge-empty">표시할 문서가 없습니다.</p>
       ) : (

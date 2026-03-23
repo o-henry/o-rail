@@ -563,7 +563,7 @@ describe("runTaskCollaborationWithCodex", () => {
     }));
   });
 
-  it("keeps the selected web-backed task model for collaboration stages", async () => {
+  it("collects shared web perspective once and keeps internal collaboration stages on Codex models", async () => {
     const executeRoleRun = vi.fn(async (params: {
       roleId: string;
       prompt: string;
@@ -598,20 +598,45 @@ describe("runTaskCollaborationWithCodex", () => {
       executeRoleRun,
     });
 
-    expect(executeRoleRun).toHaveBeenCalledWith(expect.objectContaining({
-      promptMode: "orchestrate",
-      model: "GPT-Web",
-      reasoning: "중간",
-    }));
-    expect(executeRoleRun).toHaveBeenCalledWith(expect.objectContaining({
+    expect(executeRoleRun).toHaveBeenNthCalledWith(1, expect.objectContaining({
       promptMode: "brief",
       model: "GPT-Web",
       reasoning: "중간",
+      outputArtifactName: "shared_web_perspective.md",
+      prompt: expect.stringContaining("외부 웹 AI 관점 수집"),
+    }));
+    expect(executeRoleRun).toHaveBeenCalledWith(expect.objectContaining({
+      promptMode: "orchestrate",
+      model: "GPT-5.4",
+      reasoning: "매우 높음",
+    }));
+    expect(executeRoleRun).toHaveBeenCalledWith(expect.objectContaining({
+      promptMode: "brief",
+      model: "GPT-5.4-Mini",
+      reasoning: "중간",
+      prompt: expect.stringContaining("# 외부 웹 AI 관점"),
+    }));
+    expect(executeRoleRun).toHaveBeenCalledWith(expect.objectContaining({
+      promptMode: "brief",
+      prompt: expect.stringContaining("## claims"),
+    }));
+    expect(executeRoleRun).toHaveBeenCalledWith(expect.objectContaining({
+      promptMode: "brief",
+      prompt: expect.stringContaining("# 외부 웹 AI 원문"),
+    }));
+    expect(executeRoleRun).toHaveBeenCalledWith(expect.objectContaining({
+      promptMode: "brief",
+      prompt: expect.stringContaining("game_designer-brief-summary"),
     }));
     expect(executeRoleRun).toHaveBeenCalledWith(expect.objectContaining({
       promptMode: "final",
-      model: "GPT-Web",
-      reasoning: "중간",
+      model: "GPT-5.4",
+      reasoning: "높음",
+      prompt: expect.stringContaining("# 외부 웹 AI 관점"),
+    }));
+    expect(executeRoleRun).toHaveBeenCalledWith(expect.objectContaining({
+      promptMode: "final",
+      prompt: expect.stringContaining("# 외부 웹 AI 원문"),
     }));
   });
 
@@ -647,6 +672,40 @@ describe("runTaskCollaborationWithCodex", () => {
     }));
     expect(executeRoleRun).toHaveBeenLastCalledWith(expect.objectContaining({
       prompt: expect.stringContaining("사용자 요청에 숫자 요구가 있으면 그 수를 충족하도록 번호 목록으로 아이디어를 제시한다."),
+    }));
+  });
+
+  it("localizes empty-codex-response errors in orchestration progress messages", async () => {
+    const onProgress = vi.fn();
+    const executeRoleRun = vi.fn(async (params: {
+      roleId: string;
+      promptMode: "orchestrate" | "brief" | "critique" | "final";
+      internal: boolean;
+    }) => {
+      if (params.promptMode === "orchestrate") {
+        throw new Error("Codex turn finished without a readable response");
+      }
+      return {
+        roleId: params.roleId,
+        runId: `${params.roleId}-${params.promptMode}`,
+        summary: `${params.roleId}-${params.promptMode}-summary`,
+        artifactPaths: [`/${params.roleId}/${params.promptMode}.md`],
+      };
+    });
+
+    await runTaskCollaborationWithCodex({
+      prompt: "새 게임 아이디어를 fanout으로 토론해서 골라줘",
+      contextSummary: "",
+      participantRoleIds: ["pm_planner"],
+      synthesisRoleId: "pm_planner",
+      cappedParticipantCount: false,
+      useAdaptiveOrchestrator: true,
+      executeRoleRun,
+      onProgress,
+    });
+
+    expect(onProgress).toHaveBeenCalledWith(expect.objectContaining({
+      message: expect.stringContaining("코덱스 실행은 끝났지만 읽을 수 있는 응답 본문이 없었습니다."),
     }));
   });
 });

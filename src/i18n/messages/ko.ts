@@ -62,6 +62,7 @@ export const KO_MESSAGES: Dictionary = {
     "tasks.live.state.active": "진행 중",
     "tasks.live.state.delayed": "응답 대기",
     "tasks.live.state.stalled": "오래 걸리는 중",
+    "tasks.live.stalledWarning": "2분 넘게 새 신호가 없습니다. 실제 작업이 멈췄거나 이벤트가 끊겼을 수 있습니다.",
     "tasks.live.state.degraded": "제한 모드",
     "tasks.live.lastUpdate": "마지막 신호 {value}",
     "tasks.live.currentWork.degraded": "외부 근거 없이 Codex 실행 중",

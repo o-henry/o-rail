@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
   buildLiveAgentCards,
+  describeLiveCurrentWork,
   displayArtifactName,
   formatRelativeUpdateAge,
   inferNextLiveAction,
   resolveLatestFailureReason,
   resolveLiveActivityState,
   resolveRecentSourceCount,
+  resolveLiveStageProgress,
 } from "./liveAgentState";
 import type { ThreadDetail } from "./threadTypes";
 
@@ -284,5 +286,44 @@ describe("inferNextLiveAction", () => {
       recentSourceCount: 0,
       failureReason: "ROLE_KB_BOOTSTRAP 실패 (0/7)",
     })).toContain("외부 근거 없이");
+  });
+});
+
+describe("describeLiveCurrentWork", () => {
+  it("explains crawler work in plain language", () => {
+    expect(describeLiveCurrentWork({
+      stage: "crawler",
+      eventType: "stage_started",
+      recentSourceCount: 3,
+    })).toContain("3개");
+  });
+
+  it("explains codex generation in plain language", () => {
+    expect(describeLiveCurrentWork({
+      stage: "codex",
+      eventType: "stage_started",
+      failureReason: "",
+    })).toContain("응답을 생성");
+  });
+
+  it("explains degraded no-source execution clearly", () => {
+    expect(describeLiveCurrentWork({
+      stage: "codex",
+      eventType: "stage_started",
+      failureReason: "ROLE_KB_BOOTSTRAP 실패 (0/7)",
+      recentSourceCount: 0,
+    })).toContain("외부 근거 수집이 비어");
+  });
+});
+
+describe("resolveLiveStageProgress", () => {
+  it("maps known stages to a fixed progress counter", () => {
+    expect(resolveLiveStageProgress("crawler")).toEqual({ current: 1, total: 6 });
+    expect(resolveLiveStageProgress("critic")).toEqual({ current: 4, total: 6 });
+    expect(resolveLiveStageProgress("approval")).toEqual({ current: 6, total: 6 });
+  });
+
+  it("returns null for unknown stages", () => {
+    expect(resolveLiveStageProgress("unknown")).toBeNull();
   });
 });

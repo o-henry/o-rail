@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildKnowledgeGroupDeleteRequest,
+  resolveKnowledgeEntryIdForArtifactPath,
   shouldHydrateKnowledgeWorkspaceData,
   shouldRefreshKnowledgeEntriesFromEvent,
 } from "./useKnowledgeBaseState";
@@ -67,5 +68,20 @@ describe("buildKnowledgeGroupDeleteRequest", () => {
       eventCwd: "/tmp/workspace",
       isActive: false,
     })).toBe(false);
+  });
+
+  it("resolves a knowledge entry from a relative artifact path suffix", () => {
+    const entry: KnowledgeEntry = {
+      id: "entry-1",
+      runId: "run-1",
+      taskId: "task-1" as KnowledgeEntry["taskId"],
+      roleId: "technical_writer",
+      sourceKind: "artifact",
+      title: "run.json",
+      summary: "",
+      createdAt: "2026-03-23T00:00:00Z",
+      jsonPath: "/tmp/workspace/.rail/studio_runs/role-1/run.json",
+    };
+    expect(resolveKnowledgeEntryIdForArtifactPath([entry], ".rail/studio_runs/role-1/run.json")).toBe("entry-1");
   });
 });

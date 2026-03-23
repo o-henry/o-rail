@@ -72,7 +72,13 @@ describe("isFailedThreadMessage", () => {
 describe("normalizeTasksTimelineCopy", () => {
   it("normalizes timeline-only system copy without touching markdown rendering paths", () => {
     expect(normalizeTasksTimelineCopy("Created UNITY ARCHITECT")).toBe("CREATED UNITY ARCHITECT");
-    expect(normalizeTasksTimelineCopy("[Codex 실행] runtime attached")).toBe("[코덱스 실행] RUNTIME ATTACHED");
+    expect(normalizeTasksTimelineCopy("[Codex 실행] runtime attached")).toBe("[코덱스 실행] 실행 세션 연결됨");
+  });
+
+  it("collapses internal prompt dump text in timeline logs", () => {
+    expect(normalizeTasksTimelineCopy(
+      "Formatting re-enabled\n<role_profile>role_name: 기획(PM)</role_profile>\n[ROLE_KB_INJECT]\nfoo\n[/ROLE_KB_INJECT]\n<task_request>bar</task_request>",
+    )).toBe("내부 역할 프롬프트와 역할 지식을 준비했습니다.");
   });
 });
 

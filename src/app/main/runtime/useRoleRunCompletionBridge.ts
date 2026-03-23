@@ -27,6 +27,14 @@ export function buildKnowledgeEntriesFromRoleRunCompletion(params: {
     internal?: boolean;
   };
 }) {
+  const hasWebAiResponseArtifacts = [...new Set((params.payload.artifactPaths ?? []).map((row: unknown) => String(row ?? "").trim()).filter(Boolean))]
+    .some((artifactPath) => {
+      const fileName = artifactPath.split(/[\\/]/).filter(Boolean).pop() ?? artifactPath;
+      return (
+        fileName === "shared_web_perspective.md"
+        || (fileName.startsWith("web_") && fileName.endsWith("_response.md"))
+      );
+    });
   const roleId = toStudioRoleId(String(params.payload.roleId ?? ""));
   const normalizedTaskId = String(params.payload.taskId ?? "").trim() || "TASK-001";
   const knowledgeRoleId: StudioRoleId = roleId ?? "technical_writer";
@@ -42,6 +50,12 @@ export function buildKnowledgeEntriesFromRoleRunCompletion(params: {
   ];
   return dedupedArtifactPaths.map((artifactPath, index) => {
     const fileName = artifactPath.split(/[\\/]/).filter(Boolean).pop() ?? artifactPath;
+    const sourceKind =
+      fileName === "shared_web_perspective.md"
+      || (fileName.startsWith("web_") && fileName.endsWith("_response.md"))
+      || (fileName === "response.json" && hasWebAiResponseArtifacts)
+        ? "ai"
+        : "artifact";
     return {
       id: `${params.payload.runId}:${index}:${fileName}`,
       runId: String(params.payload.runId ?? "").trim(),
@@ -53,7 +67,7 @@ export function buildKnowledgeEntriesFromRoleRunCompletion(params: {
       studioRoleLabel: taskAgentMetadata.studioRoleLabel,
       orchestratorAgentId: taskAgentMetadata.orchestratorAgentId,
       orchestratorAgentLabel: taskAgentMetadata.orchestratorAgentLabel,
-      sourceKind: "artifact" as const,
+      sourceKind: sourceKind as "artifact" | "ai",
       title: `${roleLabel} · ${normalizedTaskId} · ${fileName}`,
       requestLabel: requestSummary || undefined,
       summary: requestSummary || `${roleLabel} 역할 실행 산출물`,

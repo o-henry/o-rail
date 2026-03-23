@@ -352,7 +352,10 @@ export default function TasksPage(props: TasksPageProps) {
 
   return (
     <section
+      aria-label="Tasks 작업 공간"
       className={`tasks-thread-layout workspace-tab-panel${isMainSurfaceFullscreen ? " is-main-surface-fullscreen" : ""}${isThreadNavHidden ? " is-thread-nav-hidden" : ""}${isReviewPaneOpen && state.activeThread ? " is-review-pane-open" : ""}`}
+      data-e2e="tasks-workspace"
+      role="region"
     >
       <TasksThreadNavPane
         activeThread={state.activeThread}
@@ -400,7 +403,7 @@ export default function TasksPage(props: TasksPageProps) {
         }}
       />
 
-      <section className="tasks-thread-main-surface">
+      <section aria-label="Tasks 메인 영역" className="tasks-thread-main-surface" role="region">
         <TasksThreadHeaderBar
           displayPath={displayThreadPath(state.projectPath || state.activeThread?.task.worktreePath || state.activeThread?.task.workspacePath || props.cwd)}
           hasActiveThread={Boolean(state.activeThread)}
@@ -433,8 +436,8 @@ export default function TasksPage(props: TasksPageProps) {
         />
 
         {!state.activeThread ? (
-          <div className="tasks-thread-conversation-scroll" ref={conversationRef}>
-            <section className="tasks-thread-empty-state">
+          <div aria-label="빈 대화 영역" className="tasks-thread-conversation-scroll" ref={conversationRef}>
+            <section aria-label="빈 스레드 상태" className="tasks-thread-empty-state" role="region">
               <strong>{t("tasks.empty.title")}</strong>
               <p>{t("tasks.empty.body")}</p>
             </section>
@@ -518,14 +521,16 @@ export default function TasksPage(props: TasksPageProps) {
       </section>
 
       {pendingDeleteThreadId ? (
-        <div className="modal-backdrop">
-          <section className="approval-modal tasks-thread-confirm-modal">
+        <div aria-hidden="true" className="modal-backdrop">
+          <section aria-label="스레드 삭제 확인" className="approval-modal tasks-thread-confirm-modal" data-e2e="tasks-delete-thread-modal" role="dialog">
             <h2>{t("tasks.modal.threadDelete.title")}</h2>
             <p>{t("tasks.modal.threadDelete.body")}</p>
             <div className="tasks-thread-approval-actions">
-              <button onClick={() => setPendingDeleteThreadId("")} type="button">{t("tasks.modal.cancel")}</button>
+              <button aria-label="스레드 삭제 취소" data-e2e="tasks-delete-thread-cancel" onClick={() => setPendingDeleteThreadId("")} type="button">{t("tasks.modal.cancel")}</button>
               <button
+                aria-label="스레드 삭제 확인"
                 className="tasks-thread-primary"
+                data-e2e="tasks-delete-thread-confirm"
                 onClick={() => {
                   void state.deleteThread(pendingDeleteThreadId);
                   setPendingDeleteThreadId("");
@@ -540,14 +545,16 @@ export default function TasksPage(props: TasksPageProps) {
       ) : null}
 
       {pendingDeleteProjectPath ? (
-        <div className="modal-backdrop">
-          <section className="approval-modal tasks-thread-confirm-modal">
+        <div aria-hidden="true" className="modal-backdrop">
+          <section aria-label="프로젝트 숨기기 확인" className="approval-modal tasks-thread-confirm-modal" data-e2e="tasks-hide-project-modal" role="dialog">
             <h2>{t("tasks.modal.projectHide.title")}</h2>
             <p>{t("tasks.modal.projectHide.body")}</p>
             <div className="tasks-thread-approval-actions">
-              <button onClick={() => setPendingDeleteProjectPath("")} type="button">{t("tasks.modal.cancel")}</button>
+              <button aria-label="프로젝트 숨기기 취소" data-e2e="tasks-hide-project-cancel" onClick={() => setPendingDeleteProjectPath("")} type="button">{t("tasks.modal.cancel")}</button>
               <button
+                aria-label="프로젝트 숨기기 확인"
                 className="tasks-thread-primary"
+                data-e2e="tasks-hide-project-confirm"
                 onClick={() => {
                   state.removeProject(pendingDeleteProjectPath);
                   setPendingDeleteProjectPath("");

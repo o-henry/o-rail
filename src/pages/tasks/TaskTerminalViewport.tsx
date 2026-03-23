@@ -259,13 +259,21 @@ export function TaskTerminalViewport(props: TaskTerminalViewportProps) {
   }, [props.selected]);
 
   return (
-    <div className="tasks-terminal-viewport" data-ready={isReady ? "true" : "false"} data-selected={props.selected ? "true" : "false"}>
+    <div
+      aria-label={`터미널 뷰포트 ${props.sessionId}`}
+      className="tasks-terminal-viewport"
+      data-ready={isReady ? "true" : "false"}
+      data-selected={props.selected ? "true" : "false"}
+      role="region"
+    >
       <div
+        aria-label={`터미널 입력 영역 ${props.sessionId}`}
         className="tasks-terminal-host"
         onMouseDown={() => {
           terminalRef.current?.focus();
         }}
         ref={hostRef}
+        role="textbox"
       />
     </div>
   );

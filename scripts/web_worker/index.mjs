@@ -7,7 +7,12 @@ import { randomBytes, timingSafeEqual } from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
 
-import { pickProviderResponseText, resolveProviderRunMode } from './providerExecution.mjs';
+import {
+  pickProviderResponseText,
+  resolveProviderResponseWaitDecision,
+  resolveProviderRunMode,
+  shouldReuseProviderPage,
+} from './providerExecution.mjs';
 
 const PROFILE_ROOT =
   process.env.RAIL_WEB_PROFILE_ROOT ||
@@ -96,6 +101,13 @@ const PROVIDER_AUTOMATION_CONFIG = {
       'main article',
       'main .markdown',
     ],
+    busySelectors: [
+      'button[aria-label*="Stop" i]',
+      'button[aria-label*="중지" i]',
+      'button:has-text("Stop")',
+      'button:has-text("중지")',
+      'button:has-text("취소")',
+    ],
   },
   gpt: {
     inputSelectors: [
@@ -116,6 +128,13 @@ const PROVIDER_AUTOMATION_CONFIG = {
       'main article',
       'main .markdown',
     ],
+    busySelectors: [
+      'button[data-testid*="stop" i]',
+      'button[aria-label*="Stop" i]',
+      'button[aria-label*="중지" i]',
+      'button:has-text("Stop")',
+      'button:has-text("중지")',
+    ],
   },
   grok: {
     inputSelectors: [
@@ -134,6 +153,13 @@ const PROVIDER_AUTOMATION_CONFIG = {
       '[data-testid*="message"]',
       '.markdown',
       '.prose',
+    ],
+    busySelectors: [
+      'button[aria-label*="Stop" i]',
+      'button[aria-label*="중지" i]',
+      'button:has-text("Stop")',
+      'button:has-text("중지")',
+      'button:has-text("취소")',
     ],
   },
   perplexity: {
@@ -155,6 +181,13 @@ const PROVIDER_AUTOMATION_CONFIG = {
       '.markdown',
       '.prose',
     ],
+    busySelectors: [
+      'button[aria-label*="Stop" i]',
+      'button[aria-label*="중지" i]',
+      'button:has-text("Stop")',
+      'button:has-text("중지")',
+      'button:has-text("Cancel")',
+    ],
   },
   claude: {
     inputSelectors: [
@@ -173,6 +206,13 @@ const PROVIDER_AUTOMATION_CONFIG = {
       '[data-testid*="message" i]',
       '.markdown',
       '.prose',
+    ],
+    busySelectors: [
+      'button[aria-label*="Stop" i]',
+      'button[aria-label*="중지" i]',
+      'button:has-text("Stop")',
+      'button:has-text("중지")',
+      'button:has-text("Cancel")',
     ],
   },
 };
@@ -1287,6 +1327,40 @@ async function ensureProviderLandingPage(provider, page, runToken = null) {
   if (!config) {
     throw workerError('UNSUPPORTED_PROVIDER', `지원하지 않는 provider입니다: ${provider}`);
   }
+  const automation = providerAutomationConfig(provider);
+  const currentUrl = String(page?.url?.() ?? '').trim();
+  if (currentUrl) {
+    const loginRequired = await isLikelyNotLoggedIn(provider, page).catch(() => false);
+    const promptReady = loginRequired ? false : await hasVisibleSelector(page, automation.inputSelectors).catch(() => false);
+    const responseVisible = loginRequired
+      ? false
+      : await hasVisibleSelector(page, [
+        ...automation.responseSelectors,
+        '[data-message-author-role="assistant"]',
+        '[data-message-author-role="model"]',
+        'main article',
+        'main .markdown',
+        'main .prose',
+      ]).catch(() => false);
+    const busyVisible = loginRequired
+      ? false
+      : await hasVisibleSelector(page, automation.busySelectors ?? []).catch(() => false);
+    if (shouldReuseProviderPage({
+      currentUrl,
+      activeSignals: config.activeSignals,
+      loginRequired,
+      promptReady,
+      responseVisible,
+      busyVisible,
+    })) {
+      notify('web/progress', {
+        provider,
+        stage: 'reuse_page',
+        message: '기존 provider 페이지를 재사용합니다.',
+      });
+      return;
+    }
+  }
   for (const url of config.homeUrls) {
     throwIfRunCancelled(runToken);
     try {
@@ -1470,34 +1544,66 @@ async function extractProviderResponseText(provider, page, prompt) {
 }
 
 async function waitForProviderResponse(provider, page, prompt, timeoutMs, runToken) {
-  const deadline = Date.now() + timeoutMs;
+  const automation = providerAutomationConfig(provider);
   let lastText = '';
   let lastChangeAt = Date.now();
+  let lastProgressAt = Date.now();
+  let sawBusy = false;
+  let lastBusyVisibleAt = 0;
+  let previousBusyVisible = false;
+  const idleTimeoutMs = Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : DEFAULT_TIMEOUT_MS;
 
-  while (Date.now() < deadline) {
+  while (true) {
     if (runToken.cancelled) {
       throw workerError('CANCELLED', '요청이 취소되었습니다.');
     }
 
+    const nowMs = Date.now();
     const text = await extractProviderResponseText(provider, page, prompt);
+    const busyVisible = await hasVisibleSelector(page, automation.busySelectors ?? []).catch(() => false);
+    if (busyVisible) {
+      sawBusy = true;
+      lastBusyVisibleAt = nowMs;
+    }
+    if (busyVisible !== previousBusyVisible) {
+      previousBusyVisible = busyVisible;
+      lastProgressAt = nowMs;
+    }
     if (text) {
       if (text !== lastText) {
         lastText = text;
-        lastChangeAt = Date.now();
+        lastChangeAt = nowMs;
+        lastProgressAt = nowMs;
         notify('web/progress', {
           provider,
           stage: 'response_streaming',
           message: `응답 수집 중 (${text.length} chars)`,
         });
-      } else if (Date.now() - lastChangeAt >= 1600) {
-        return text;
       }
+    }
+
+    const decision = resolveProviderResponseWaitDecision({
+      text,
+      lastText,
+      busyVisible,
+      sawBusy,
+      lastChangeAgeMs: nowMs - lastChangeAt,
+      lastBusyAgeMs: lastBusyVisibleAt > 0 ? nowMs - lastBusyVisibleAt : Number.POSITIVE_INFINITY,
+      lastProgressAgeMs: nowMs - lastProgressAt,
+      idleTimeoutMs,
+    });
+    if (decision.type === 'return_text' || decision.type === 'return_last_text') {
+      return decision.text;
+    }
+    if (decision.type === 'idle_timeout') {
+      if (decision.text) {
+        return decision.text;
+      }
+      throw workerError('TIMEOUT', `응답 진행이 멈췄습니다 (${idleTimeoutMs}ms).`);
     }
 
     await page.waitForTimeout(450);
   }
-
-  throw workerError('TIMEOUT', `응답 대기 시간이 초과되었습니다 (${timeoutMs}ms).`);
 }
 
 async function runProviderAutomation(provider, { prompt, timeoutMs, runToken: providedRunToken = null }) {
@@ -1540,6 +1646,7 @@ async function runProviderAutomation(provider, { prompt, timeoutMs, runToken: pr
       text,
       raw: {
         provider,
+        text,
       },
       meta: {
         provider,

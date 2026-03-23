@@ -78,8 +78,72 @@ describe("roleKnowledgePipeline", () => {
     });
 
     expect(result.sourceSuccessCount).toBe(0);
-    expect(result.profile.summary).toContain("인증 실패");
+    expect(result.profile.summary).toContain("scrapling 인증 실패");
     expect(result.profile.keyPoints.some((point) => point.includes("소스 수집 실패"))).toBe(true);
+  });
+
+  it("surfaces provider-specific install and configuration failures in the profile summary", async () => {
+    const invokeFn = vi.fn(async (command: string, args?: Record<string, unknown>) => {
+      if (command === "dashboard_crawl_provider_health") {
+        const provider = String(args?.provider ?? "");
+        if (provider === "crawl4ai") {
+          return {
+            provider,
+            available: false,
+            configured: true,
+            installable: true,
+            ready: false,
+            message: "crawl4ai runtime not installed",
+          };
+        }
+        if (provider === "scrapling") {
+          return {
+            provider,
+            available: false,
+            configured: true,
+            installable: true,
+            ready: false,
+            message: "health check failed (401 Unauthorized): unauthorized",
+          };
+        }
+        if (provider === "steel") {
+          return {
+            provider,
+            available: false,
+            configured: false,
+            installable: false,
+            ready: false,
+            message: "steel CDP endpoint is not configured",
+          };
+        }
+        return {
+          provider,
+          available: false,
+          configured: false,
+          installable: false,
+          ready: false,
+          message: `${provider} not configured`,
+        };
+      }
+      if (command === "dashboard_crawl_provider_install") {
+        return { installed: true };
+      }
+      throw new Error(`unexpected command: ${command}`);
+    }) as unknown as <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
+
+    const result = await bootstrapRoleKnowledgeProfile({
+      cwd: "/tmp/workspace",
+      invokeFn,
+      roleId: "technical_writer",
+      taskId: "TASK-PROVIDER-DETAILS",
+      runId: "role-provider-details",
+      userPrompt: "Unity API 문서를 조사해줘",
+    });
+
+    expect(result.sourceSuccessCount).toBe(0);
+    expect(result.profile.summary).toContain("crawl4ai 런타임 미설치");
+    expect(result.profile.summary).toContain("scrapling 인증 실패");
+    expect(result.profile.summary).toContain("steel CDP 미설정");
   });
 
   it("times out stalled bridge startup and falls back without blocking the role run forever", async () => {

@@ -261,18 +261,16 @@ fn extract_first_http_url(prompt: &str) -> Option<String> {
     None
 }
 
-fn build_search_bootstrap_url(prompt: &str) -> Option<String> {
-    let query = prompt
-        .split_whitespace()
-        .map(str::trim)
-        .filter(|token| !token.is_empty())
-        .collect::<Vec<_>>()
-        .join(" ");
-    if query.is_empty() {
-        return None;
+fn resolve_external_web_provider_target_url(
+    provider: &str,
+    prompt: &str,
+) -> Result<(String, &'static str), String> {
+    if let Some(explicit_url) = extract_first_http_url(prompt) {
+        return Ok((explicit_url, "external_crawl_provider"));
     }
-    let encoded = url::form_urlencoded::byte_serialize(query.as_bytes()).collect::<String>();
-    Some(format!("https://duckduckgo.com/html/?q={encoded}"))
+    Err(format!(
+        "{provider} external provider requires an explicit URL in the prompt; search bootstrap is disabled"
+    ))
 }
 
 fn resolve_external_web_provider_cwd(
@@ -311,16 +309,7 @@ async fn run_external_web_provider(
     prompt: &str,
     cwd: Option<String>,
 ) -> Result<WebProviderRunResult, String> {
-    let (url, extraction_strategy) = if let Some(explicit_url) = extract_first_http_url(prompt) {
-        (explicit_url, "external_crawl_provider")
-    } else {
-        let fallback_url = build_search_bootstrap_url(prompt).ok_or_else(|| {
-            format!(
-                "{provider} web provider requires either an explicit URL or a non-empty prompt"
-            )
-        })?;
-        (fallback_url, "search_bootstrap")
-    };
+    let (url, extraction_strategy) = resolve_external_web_provider_target_url(provider, prompt)?;
     let resolved_cwd = resolve_external_web_provider_cwd(app, cwd)?;
     let started = Instant::now();
     let fetch = crate::crawl_providers::dashboard_crawl_provider_fetch_url(
@@ -2627,7 +2616,7 @@ pub async fn ollama_generate(model: String, prompt: String) -> Result<Value, Str
 #[cfg(test)]
 mod tests {
     use super::{
-        build_search_bootstrap_url, extract_first_http_url, resolve_web_worker_request_timeout,
+        extract_first_http_url, resolve_external_web_provider_target_url, resolve_web_worker_request_timeout,
         WEB_WORKER_REQUEST_TIMEOUT,
     };
     use serde_json::json;
@@ -2648,11 +2637,23 @@ mod tests {
     }
 
     #[test]
-    fn builds_search_bootstrap_url_when_prompt_has_no_explicit_url() {
+    fn requires_explicit_url_for_external_web_provider_targets() {
         let prompt = "latest indie game retention ideas";
         assert_eq!(
-            build_search_bootstrap_url(prompt).as_deref(),
-            Some("https://duckduckgo.com/html/?q=latest+indie+game+retention+ideas")
+            resolve_external_web_provider_target_url("steel", prompt),
+            Err("steel external provider requires an explicit URL in the prompt; search bootstrap is disabled".to_string())
+        );
+    }
+
+    #[test]
+    fn resolves_explicit_url_for_external_web_provider_targets() {
+        let prompt = "Please open https://example.com/docs and summarize it.";
+        assert_eq!(
+            resolve_external_web_provider_target_url("steel", prompt).ok(),
+            Some((
+                "https://example.com/docs".to_string(),
+                "external_crawl_provider"
+            ))
         );
     }
 

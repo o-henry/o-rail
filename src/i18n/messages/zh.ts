@@ -62,6 +62,7 @@ export const ZH_MESSAGES: Dictionary = {
     "tasks.live.state.active": "进行中",
     "tasks.live.state.delayed": "等待响应",
     "tasks.live.state.stalled": "耗时较长",
+    "tasks.live.stalledWarning": "超过 2 分钟没有新信号。任务可能已卡住，或事件流已经中断。",
     "tasks.live.state.degraded": "降级模式",
     "tasks.live.lastUpdate": "最后信号 {value}",
     "tasks.live.currentWork.degraded": "在没有外部证据的情况下运行 Codex",

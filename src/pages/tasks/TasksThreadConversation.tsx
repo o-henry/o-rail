@@ -5,6 +5,7 @@ import { TasksThreadOrchestrationCard } from "./TasksThreadOrchestrationCard";
 import { TasksThreadMessageContent } from "./TasksThreadMessageContent";
 import { getTaskAgentLabel, orderedTaskAgentPresetIds } from "./taskAgentPresets";
 import {
+  describeLiveCurrentWork,
   formatRelativeUpdateAge,
   inferNextLiveAction,
   resolveLatestFailureReason,
@@ -87,12 +88,47 @@ function resolveTimelineMessage(message: ThreadMessage, agentLabels: string[]) {
   };
 }
 
+const INTERNAL_PROMPT_DUMP_MARKERS = [
+  "Formatting re-enabled",
+  "<role_profile>",
+  "</role_profile>",
+  "<operating_rules>",
+  "</operating_rules>",
+  "<response_contract>",
+  "</response_contract>",
+  "<task_request>",
+  "</task_request>",
+  "[ROLE_KB_INJECT]",
+  "[/ROLE_KB_INJECT]",
+];
+
+function looksLikeInternalPromptDump(content: string): boolean {
+  const normalized = String(content ?? "").trim();
+  if (!normalized) {
+    return false;
+  }
+  return INTERNAL_PROMPT_DUMP_MARKERS.some((marker) => normalized.includes(marker));
+}
+
 export function normalizeTasksTimelineCopy(content: string): string {
+  if (looksLikeInternalPromptDump(content)) {
+    return "내부 역할 프롬프트와 역할 지식을 준비했습니다.";
+  }
   return String(content ?? "")
     .replace(/\bCreated\b/g, "CREATED")
     .replace(/\[(?:Codex|코덱스) 실행\]/g, "[코덱스 실행]")
     .replace(/\bCodex\b/g, "코덱스")
-    .replace(/\bruntime attached\b/gi, "RUNTIME ATTACHED");
+    .replace(/ROLE_KB_BOOTSTRAP 실행 중/g, "외부 근거 수집 중")
+    .replace(/ROLE_KB_BOOTSTRAP 완료/g, "외부 근거 수집 완료")
+    .replace(/ROLE_KB_BOOTSTRAP 실패/g, "외부 근거 수집 실패")
+    .replace(/ROLE_KB_STORE 실행 중/g, "역할 지식 정리 중")
+    .replace(/ROLE_KB_STORE 완료/g, "역할 지식 정리 완료")
+    .replace(/ROLE_KB_STORE 실패/g, "역할 지식 정리 실패")
+    .replace(/ROLE_KB_INJECT 실행 중/g, "역할 지식 주입 중")
+    .replace(/ROLE_KB_INJECT 완료/g, "역할 지식 주입 완료")
+    .replace(/ROLE_KB_INJECT 실패/g, "역할 지식 주입 실패")
+    .replace(/\bruntime attached\b/gi, "실행 세션 연결됨")
+    .replace(/\bruntime session\b/gi, "실행 세션");
 }
 
 function compactDisplayedUrl(rawUrl: string): string {
@@ -453,8 +489,18 @@ const StaticTimelineMessageRow = memo(function StaticTimelineMessageRow(props: {
     ? props.body.slice(0, Math.min(props.body.length, visibleChars))
     : props.body;
   const isTerminalResult = props.showFinish || props.showSuccess || props.showFail;
+  const handleOpenKnowledgeArtifact = () => {
+    const artifactPath = String(props.artifactPath ?? "").trim();
+    if (!artifactPath || typeof window === "undefined") {
+      return;
+    }
+    window.dispatchEvent(new CustomEvent("rail:request-open-knowledge-artifact", { detail: { artifactPath } }));
+  };
   return (
-    <article className={`tasks-thread-message-row is-${props.messageRole}${isTerminalResult ? " is-terminal-result" : ""}`}>
+    <article
+      aria-label={`${props.messageRole} 메시지${props.label ? ` ${props.label}` : ""}`}
+      className={`tasks-thread-message-row is-${props.messageRole}${isTerminalResult ? " is-terminal-result" : ""}`}
+    >
       {props.label ? <span className="tasks-thread-message-label">{props.label}</span> : null}
       <div className={`tasks-thread-log-line${props.interruptionBadge ? " is-interruption-badge" : ""}`}>
         {props.renderMarkdown ? <TasksThreadMessageContent content={displayedBody} /> : displayedBody}
@@ -468,7 +514,14 @@ const StaticTimelineMessageRow = memo(function StaticTimelineMessageRow(props: {
       ) : null}
       {props.artifactPath ? (
         <div className="tasks-thread-message-meta">
-          <small className="tasks-thread-message-artifact">{props.artifactPath}</small>
+          <button
+            aria-label={`데이터베이스에서 산출물 열기 ${props.artifactPath}`}
+            className="tasks-thread-message-artifact tasks-thread-message-artifact-link"
+            onClick={handleOpenKnowledgeArtifact}
+            type="button"
+          >
+            {props.artifactPath}
+          </button>
           {props.createdAt ? <small className="tasks-thread-message-time">{formatArtifactStamp(props.createdAt)}</small> : null}
         </div>
       ) : null}
@@ -480,7 +533,7 @@ const GroupedTimelineLogRow = memo(function GroupedTimelineLogRow(props: {
   text: string;
 }) {
   return (
-    <article className="tasks-thread-message-row is-assistant is-log-group">
+    <article aria-label="시스템 로그 묶음" className="tasks-thread-message-row is-assistant is-log-group">
       <pre className="tasks-thread-log-pre">{props.text}</pre>
     </article>
   );
@@ -555,7 +608,7 @@ function TasksThreadConversationImpl(props: TasksThreadConversationProps) {
   }, [props.liveAgents.length, props.liveProcessEvents.length]);
 
   return (
-    <div className="tasks-thread-conversation-scroll" ref={props.conversationRef}>
+    <div aria-label="Tasks 대화 스크롤 영역" className="tasks-thread-conversation-scroll" ref={props.conversationRef}>
       <TasksThreadOrchestrationCard
         orchestration={props.orchestration}
         recentSessions={props.recentRuntimeSessions}
@@ -566,7 +619,7 @@ function TasksThreadConversationImpl(props: TasksThreadConversationProps) {
         onResume={props.onResumeOrchestration}
         onVerifyReview={props.onVerifyReview}
       />
-      <section className="tasks-thread-timeline">
+      <section aria-label="대화 타임라인" className="tasks-thread-timeline" role="log">
         {primaryTimelineEntries.map((entry) => {
           if (entry.kind === "group") {
             const groupText = entry.messages
@@ -606,7 +659,11 @@ function TasksThreadConversationImpl(props: TasksThreadConversationProps) {
                 showSuccess={isFinishedThreadMessage(message)}
               />
               {String(message.id ?? "").trim() === latestUserPromptMessageId && currentRunBadges.length > 0 ? (
-                <article className="tasks-thread-message-row is-assistant is-participant-summary" key={`${message.id}:participants`}>
+                <article
+                  aria-label="이번 실행 참여 에이전트와 provider"
+                  className="tasks-thread-message-row is-assistant is-participant-summary"
+                  key={`${message.id}:participants`}
+                >
                   <div className="tasks-thread-message-agent-list">
                     {currentRunBadges.map((badge) => (
                       <span
@@ -657,6 +714,12 @@ function TasksThreadConversationImpl(props: TasksThreadConversationProps) {
               interrupted: (entry.agent?.summary || "").includes("중단"),
               recentSourceCount,
             });
+            const currentWorkDetail = describeLiveCurrentWork({
+              stage: latestEvent?.stage,
+              eventType: latestEvent?.type,
+              failureReason,
+              recentSourceCount,
+            });
             const eventBadgeLabel = latestEvent?.type
               ? displayProcessEventBadgeLabel(latestEvent.type, t)
               : "";
@@ -664,12 +727,16 @@ function TasksThreadConversationImpl(props: TasksThreadConversationProps) {
               !(eventBadgeLabel && shouldHideBareLiveStatusMessage(currentWorkLabel))
               || Boolean(latestEvent?.stage);
             return (
-              <article className="tasks-thread-message-row is-assistant is-live-placeholder" key={`live:${entry.roleId}`}>
+              <article
+                aria-label={`${entry.label} 실시간 상태`}
+                className="tasks-thread-message-row is-assistant is-live-placeholder"
+                key={`live:${entry.roleId}`}
+              >
                 <div className="tasks-thread-live-header">
                   <span className="tasks-thread-message-label">{entry.label}</span>
                   {latestEvent?.stage ? (
-                    <span className="tasks-thread-live-stage">
-                      {displayProcessStage(String(latestEvent.stage ?? ""), t)}
+                    <span className="tasks-thread-live-stage-label">
+                      {`${t("tasks.live.metric.stage")}: ${displayProcessStage(String(latestEvent.stage ?? ""), t)}`}
                     </span>
                   ) : null}
                   <span className={`tasks-thread-live-state is-${liveState}`}>
@@ -689,9 +756,19 @@ function TasksThreadConversationImpl(props: TasksThreadConversationProps) {
                   ) : null}
                 </div>
                 {displayLogLine ? (
-                  <div className="tasks-thread-log-line">
+                  <div className="tasks-thread-live-log-line">
                     {latestEvent?.stage ? `[${displayProcessStage(String(latestEvent.stage ?? ""), t)}] ` : ""}
                     {displayCurrentWorkLabel}
+                  </div>
+                ) : null}
+                {currentWorkDetail ? (
+                  <div className="tasks-thread-live-detail is-explanation">
+                    {currentWorkDetail}
+                  </div>
+                ) : null}
+                {liveState === "stalled" ? (
+                  <div className="tasks-thread-live-detail is-warning">
+                    {t("tasks.live.stalledWarning")}
                   </div>
                 ) : null}
                 <div className="tasks-thread-live-detail">
@@ -707,7 +784,10 @@ function TasksThreadConversationImpl(props: TasksThreadConversationProps) {
                   </div>
                   <div>
                     <dt>{t("tasks.live.metric.currentWork")}</dt>
-                    <dd>{displayCurrentWorkLabel}</dd>
+                    <dd>
+                      {displayCurrentWorkLabel}
+                      {currentWorkDetail ? <span className="tasks-thread-live-metric-subcopy">{currentWorkDetail}</span> : null}
+                    </dd>
                   </div>
                   <div>
                     <dt>{t("tasks.live.metric.sourcesSeen")}</dt>
@@ -760,19 +840,24 @@ function TasksThreadConversationImpl(props: TasksThreadConversationProps) {
       </section>
 
       {props.approvals.length > 0 ? (
-        <section className="tasks-thread-approvals-stack">
+        <section aria-label="승인 대기 목록" className="tasks-thread-approvals-stack" role="region">
           {props.approvals.map((approval) => (
-            <article className="tasks-thread-approval-card" key={approval.id}>
+            <article aria-label={`${approval.kind} 승인 요청`} className="tasks-thread-approval-card" key={approval.id}>
               <div className="tasks-thread-section-head">
                 <strong>{t("tasks.approval.required")}</strong>
                 <span>{approval.kind.toUpperCase()}</span>
               </div>
               <p>{approval.summary}</p>
               <div className="tasks-thread-approval-actions">
-                <button onClick={() => props.onResolveApproval(approval, "rejected")} type="button">
+                <button aria-label={`${approval.kind} 승인 요청 거절`} onClick={() => props.onResolveApproval(approval, "rejected")} type="button">
                   {t("tasks.approval.reject")}
                 </button>
-                <button className="tasks-thread-primary" onClick={() => props.onResolveApproval(approval, "approved")} type="button">
+                <button
+                  aria-label={`${approval.kind} 승인 요청 승인`}
+                  className="tasks-thread-primary"
+                  onClick={() => props.onResolveApproval(approval, "approved")}
+                  type="button"
+                >
                   {t("tasks.approval.approve")}
                 </button>
               </div>

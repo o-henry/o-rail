@@ -85,6 +85,7 @@ function renderFileTree(
       return (
         <div className="tasks-thread-file-tree-branch" key={node.id}>
           <button
+            aria-label={`${node.name} 폴더 ${isCollapsed ? "펼치기" : "접기"}`}
             className={`tasks-thread-file-tree-node is-directory${node.changed ? " is-changed" : ""}`}
             onClick={() => onToggleDirectory(node.path)}
             style={{ paddingLeft: `${10 + depth * 14}px` }}
@@ -101,6 +102,7 @@ function renderFileTree(
     }
     return (
       <button
+        aria-label={`${node.name} 파일 선택`}
         className={`tasks-thread-file-tree-node is-file${selectedFilePath === node.path ? " is-active" : ""}${node.changed ? " is-changed" : ""}`}
         key={node.id}
         onClick={() => onSelectFilePath(node.path)}
@@ -122,8 +124,8 @@ export function TasksThreadNavPane(props: TasksThreadNavPaneProps) {
   }
 
   return (
-    <aside className="tasks-thread-nav">
-      <section className="tasks-thread-nav-island">
+    <aside aria-label="Tasks 스레드 탐색" className="tasks-thread-nav" role="navigation">
+      <section aria-label="프로젝트 및 스레드 탐색" className="tasks-thread-nav-island" role="region">
         <div className="tasks-thread-nav-actions">
           <button aria-label={t("tasks.thread.new")} className="tasks-thread-new-button" onClick={props.onNewThread} type="button">
             {t("tasks.thread.new")}
@@ -131,20 +133,30 @@ export function TasksThreadNavPane(props: TasksThreadNavPaneProps) {
           <button aria-label={t("tasks.project.open")} className="tasks-thread-new-button" onClick={props.onOpenProjectDirectory} type="button">
             {t("tasks.project.open")}
           </button>
-          <div className="tasks-thread-project-card">
+          <div aria-label="현재 프로젝트 경로" className="tasks-thread-project-card" role="group">
             <strong>{t("tasks.project.label")}</strong>
             <span title={props.projectPath || ""}>{props.projectPath || "-"}</span>
           </div>
         </div>
-        <div className="tasks-thread-nav-copy">
+        <div aria-label="프로젝트 트리 요약" className="tasks-thread-nav-copy" role="group">
           <strong>{t("tasks.projectTree.label")}</strong>
           <span>{props.loading ? t("tasks.syncing") : t("tasks.count", { count: props.projectGroups.length })}</span>
         </div>
-        <div className="tasks-thread-project-tree">
+        <div aria-label="프로젝트 트리" className="tasks-thread-project-tree" role="tree">
           {props.projectGroups.map((group) => (
-            <section className={`tasks-thread-project-node${group.isSelected ? " is-selected" : ""}`} key={group.projectPath}>
-              <div className="tasks-thread-project-node-head">
-                <button className="tasks-thread-project-node-select" onClick={() => props.onSelectProject(group.projectPath)} type="button">
+            <section
+              aria-label={`${group.label} 프로젝트`}
+              className={`tasks-thread-project-node${group.isSelected ? " is-selected" : ""}`}
+              key={group.projectPath}
+              role="group"
+            >
+              <div aria-label={`${group.label} 프로젝트 헤더`} className="tasks-thread-project-node-head" role="group">
+                <button
+                  aria-label={`${group.label} 프로젝트 선택`}
+                  className="tasks-thread-project-node-select"
+                  onClick={() => props.onSelectProject(group.projectPath)}
+                  type="button"
+                >
                   <strong>{group.label}</strong>
                   <span>{props.loading && group.isSelected ? t("tasks.syncing") : t("tasks.count", { count: group.threads.length })}</span>
                 </button>
@@ -176,14 +188,16 @@ export function TasksThreadNavPane(props: TasksThreadNavPaneProps) {
                 {group.projectPath}
               </small>
               {!props.collapsedProjects[group.projectPath] ? (
-                <div className="tasks-thread-list">
+                <div aria-label={`${group.label} 스레드 목록`} className="tasks-thread-list" role="list">
                   {group.threads.length === 0 ? (
                     <p className="tasks-thread-empty-copy">{t("tasks.empty.projectThreads")}</p>
                   ) : (
                     group.threads.map((item) => (
                       <article
+                        aria-label={displayThreadTitle(item.thread.title, t("tasks.thread.new"))}
                         className={`tasks-thread-list-row${props.activeThreadId === item.thread.threadId ? " is-active" : ""}`}
                         key={item.thread.threadId}
+                        role="listitem"
                       >
                         <button
                           aria-label={`${displayThreadTitle(item.thread.title, t("tasks.thread.new"))} 선택`}
@@ -227,15 +241,16 @@ export function TasksThreadNavPane(props: TasksThreadNavPaneProps) {
 
       {props.activeThread ? (
         <>
-          <section className="tasks-thread-stage-shell tasks-thread-stage-shell-dock">
+          <section aria-label="워크플로우 단계" className="tasks-thread-stage-shell tasks-thread-stage-shell-dock" role="region">
             <header className="tasks-thread-stage-shell-head">
               <div className="tasks-thread-stage-shell-head-text">
                 <strong>{t("tasks.workflow.title")}</strong>
                 <span>{getThreadStageLabel(props.activeThread.workflow.currentStageId)}</span>
               </div>
-              <div className="tasks-thread-stage-rail is-dock">
+              <div aria-label="워크플로우 단계 목록" className="tasks-thread-stage-rail is-dock" role="group">
                 {props.activeThread.workflow.stages.map((stage) => (
                   <button
+                    aria-label={`${getThreadStageLabel(stage.id)} 단계 선택`}
                     className={`tasks-thread-stage-chip is-${stage.status}${props.selectedStage?.id === stage.id ? " is-selected" : ""}`}
                     key={stage.id}
                     onClick={() => props.onSetSelectedStageId(stage.id)}
@@ -248,7 +263,7 @@ export function TasksThreadNavPane(props: TasksThreadNavPaneProps) {
               </div>
             </header>
 
-            <div className="tasks-thread-readiness-card">
+            <div aria-label="현재 단계 준비 상태" className="tasks-thread-readiness-card" role="group">
               <div className="tasks-thread-section-head">
                 <strong>{t("tasks.workflow.readiness")}</strong>
                 <span>{props.activeThread.workflow.readinessSummary}</span>
@@ -259,8 +274,12 @@ export function TasksThreadNavPane(props: TasksThreadNavPaneProps) {
               ) : null}
             </div>
 
-            <section className={`tasks-thread-files-panel${(props.activeThread.files.length ?? 0) === 0 ? " is-empty" : ""}${props.isFilesExpanded ? " is-expanded" : ""}`}>
-              <div className="tasks-thread-section-head tasks-thread-section-head-with-tools">
+            <section
+              aria-label="스레드 파일 패널"
+              className={`tasks-thread-files-panel${(props.activeThread.files.length ?? 0) === 0 ? " is-empty" : ""}${props.isFilesExpanded ? " is-expanded" : ""}`}
+              role="region"
+            >
+              <div aria-label="파일 패널 헤더" className="tasks-thread-section-head tasks-thread-section-head-with-tools" role="group">
                 <strong>{t("tasks.files.title")}</strong>
                 <div className="tasks-thread-section-tools">
                   <span className="tasks-thread-section-count">{props.activeThread.files.length ?? 0}</span>
@@ -276,13 +295,13 @@ export function TasksThreadNavPane(props: TasksThreadNavPaneProps) {
               </div>
               {props.activeThread.changedFiles.length ? (
                 <div className="tasks-thread-changed-files-strip">
-                  <div className="tasks-thread-section-head">
+                  <div aria-label="변경 파일 헤더" className="tasks-thread-section-head" role="group">
                     <strong>{t("tasks.files.changed")}</strong>
                     <span>{props.activeThread.changedFiles.length}</span>
                   </div>
                   <div className="tasks-thread-changed-file-tags">
                     {props.activeThread.changedFiles.map((path) => (
-                      <button key={path} onClick={() => props.onSelectFilePath(path)} type="button">
+                      <button aria-label={`${path} 변경 파일 선택`} key={path} onClick={() => props.onSelectFilePath(path)} type="button">
                         {path}
                       </button>
                     ))}
@@ -290,7 +309,7 @@ export function TasksThreadNavPane(props: TasksThreadNavPaneProps) {
                 </div>
               ) : null}
               {props.activeThread.files.length > 0 ? (
-                <div className="tasks-thread-file-tree">
+                <div aria-label="파일 트리" className="tasks-thread-file-tree" role="tree">
                   {renderFileTree(
                     props.fileTree,
                     props.selectedFilePath,
@@ -306,12 +325,12 @@ export function TasksThreadNavPane(props: TasksThreadNavPaneProps) {
             </section>
           </section>
 
-          <section className="tasks-thread-workflow-panel">
-            <div className="tasks-thread-section-head">
+          <section aria-label="선택 단계 상세" className="tasks-thread-workflow-panel" role="region">
+            <div aria-label="선택 단계 헤더" className="tasks-thread-section-head" role="group">
               <strong>{props.currentStageLabel}</strong>
               <span>{displayStageStatus(props.selectedStage?.status || "idle", t)}</span>
             </div>
-            <div className="tasks-thread-workflow-meta">
+            <div aria-label="선택 단계 메타데이터" className="tasks-thread-workflow-meta" role="group">
               <div>
                 <span>{t("tasks.workflow.status")}</span>
                 <strong>{displayStageStatus(props.selectedStage?.status || props.activeThread.thread.status || "idle", t)}</strong>
@@ -329,20 +348,20 @@ export function TasksThreadNavPane(props: TasksThreadNavPaneProps) {
                 <strong>{props.activeThread.task.worktreePath || props.activeThread.task.workspacePath || t("tasks.workflow.local")}</strong>
               </div>
             </div>
-            <section className="tasks-thread-detail-text-panel is-inline">
-              <div className="tasks-thread-section-head">
+            <section aria-label="선택 단계 요약" className="tasks-thread-detail-text-panel is-inline" role="region">
+              <div aria-label="선택 단계 요약 헤더" className="tasks-thread-section-head" role="group">
                 <strong>{t("tasks.workflow.summary")}</strong>
                 <span>{props.currentStageLabel}</span>
               </div>
               <pre>{props.selectedStage?.summary || props.activeThread.workflow.nextAction || t("tasks.workflow.noSummary")}</pre>
             </section>
             {props.selectedStage?.id === "integrate" ? (
-              <div className="tasks-thread-workflow-list">
+              <div aria-label="통합 단계 승인 목록" className="tasks-thread-workflow-list" role="list">
                 {props.activeThread.approvals.length === 0 ? (
                   <p className="tasks-thread-empty-copy">{t("tasks.approval.none")}</p>
                 ) : (
                   props.activeThread.approvals.map((approval) => (
-                    <article key={approval.id}>
+                    <article aria-label={`${approval.kind} 승인 상태`} key={approval.id} role="listitem">
                       <strong>{approval.kind.toUpperCase()}</strong>
                       <p>{approval.summary}</p>
                       <span>{approval.status.toUpperCase()}</span>
@@ -352,8 +371,8 @@ export function TasksThreadNavPane(props: TasksThreadNavPaneProps) {
               </div>
             ) : null}
             {props.selectedStage?.id === "playtest" ? (
-              <section className="tasks-thread-detail-text-panel is-inline">
-                <div className="tasks-thread-section-head">
+              <section aria-label="플레이테스트 검증 상태" className="tasks-thread-detail-text-panel is-inline" role="region">
+                <div aria-label="플레이테스트 검증 헤더" className="tasks-thread-section-head" role="group">
                   <strong>{t("tasks.workflow.validation")}</strong>
                   <span>{props.activeThread.validationState || t("tasks.workflow.pending")}</span>
                 </div>
@@ -361,8 +380,8 @@ export function TasksThreadNavPane(props: TasksThreadNavPaneProps) {
               </section>
             ) : null}
             {props.selectedStage?.id === "lock" ? (
-              <section className="tasks-thread-detail-text-panel is-inline">
-                <div className="tasks-thread-section-head">
+              <section aria-label="릴리즈 체크리스트" className="tasks-thread-detail-text-panel is-inline" role="region">
+                <div aria-label="릴리즈 체크리스트 헤더" className="tasks-thread-section-head" role="group">
                   <strong>{t("tasks.workflow.releaseChecklist")}</strong>
                   <span>{props.activeThread.workflow.readinessSummary || t("tasks.workflow.preparing")}</span>
                 </div>
@@ -371,14 +390,14 @@ export function TasksThreadNavPane(props: TasksThreadNavPaneProps) {
             ) : null}
           </section>
 
-          <section className="tasks-thread-agent-detail-panel">
+          <section aria-label="선택 에이전트 상세" className="tasks-thread-agent-detail-panel" role="region">
             {props.selectedAgentDetail ? (
               <>
-                <div className="tasks-thread-section-head">
+                <div aria-label="선택 에이전트 헤더" className="tasks-thread-section-head" role="group">
                   <strong>{props.selectedAgentDetail.agent.label}</strong>
                   <span>{displayStageStatus(props.selectedAgentDetail.agent.status, t)}</span>
                 </div>
-                <div className="tasks-thread-workflow-meta tasks-thread-agent-detail-grid">
+                <div aria-label="선택 에이전트 메타데이터" className="tasks-thread-workflow-meta tasks-thread-agent-detail-grid" role="group">
                   <div>
                     <span>{t("tasks.agent.role")}</span>
                     <strong>{getTaskAgentLabel(props.selectedAgentDetail.agent.roleId)}</strong>
@@ -396,12 +415,13 @@ export function TasksThreadNavPane(props: TasksThreadNavPaneProps) {
                     <strong>{props.selectedAgentDetail.worktreePath || props.activeThread.task.workspacePath || "-"}</strong>
                   </div>
                 </div>
-                <section className="tasks-thread-detail-text-panel is-inline">
-                  <div className="tasks-thread-section-head">
+                <section aria-label="Codex 세션 정보" className="tasks-thread-detail-text-panel is-inline" role="region">
+                  <div aria-label="Codex 세션 헤더" className="tasks-thread-section-head" role="group">
                     <strong>{t("tasks.agent.codexSession")}</strong>
                     <div className="tasks-thread-section-actions">
                       <span>{displayStageStatus(props.selectedAgentDetail.codexThreadStatus || "idle", t)}</span>
                       <button
+                        aria-label="선택된 에이전트 Codex 스레드 압축"
                         className="tasks-thread-section-action-button"
                         disabled={!props.selectedAgentDetail.codexThreadId}
                         onClick={props.onCompactSelectedAgentCodexThread}
@@ -411,7 +431,7 @@ export function TasksThreadNavPane(props: TasksThreadNavPaneProps) {
                       </button>
                     </div>
                   </div>
-                  <div className="tasks-thread-workflow-meta tasks-thread-agent-detail-grid">
+                  <div aria-label="Codex 세션 메타데이터" className="tasks-thread-workflow-meta tasks-thread-agent-detail-grid" role="group">
                     <div>
                       <span>{t("tasks.agent.thread")}</span>
                       <strong>{props.selectedAgentDetail.codexThreadId || "-"}</strong>
@@ -423,8 +443,8 @@ export function TasksThreadNavPane(props: TasksThreadNavPaneProps) {
                   </div>
                 </section>
                 <p className="tasks-thread-agent-summary">{props.selectedAgentDetail.agent.summary || t("tasks.agent.noSummary")}</p>
-                <section className={`tasks-thread-detail-text-panel is-inline${props.selectedAgentDetail.lastPrompt ? "" : " is-empty"}`}>
-                  <div className="tasks-thread-section-head">
+                <section aria-label="마지막 에이전트 요청" className={`tasks-thread-detail-text-panel is-inline${props.selectedAgentDetail.lastPrompt ? "" : " is-empty"}`} role="region">
+                  <div aria-label="마지막 에이전트 요청 헤더" className="tasks-thread-section-head" role="group">
                     <strong>{t("tasks.agent.lastRequest")}</strong>
                     <span>{props.selectedAgentDetail.lastPromptAt || "-"}</span>
                   </div>

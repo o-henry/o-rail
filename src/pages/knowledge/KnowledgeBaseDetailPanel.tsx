@@ -4,6 +4,7 @@ import {
   toFileName,
   toUpperSnakeToken,
 } from "./knowledgeEntryMapping";
+import { buildKnowledgeHighlightParts } from "./knowledgeSearch";
 
 type KnowledgeBaseDetailPanelProps = {
   detailError: string;
@@ -15,8 +16,17 @@ type KnowledgeBaseDetailPanelProps = {
   onInjectContextSources: (entries: KnowledgeEntry[]) => void;
   onOpenInVisualize?: (entry: KnowledgeEntry) => void;
   onRevealPath: (path: string) => Promise<void>;
+  searchQuery: string;
   selected: KnowledgeEntry | null;
 };
+
+function renderHighlightedText(text: string, query: string) {
+  return buildKnowledgeHighlightParts(text, query).map((part, index) => (
+    part.matched
+      ? <mark className="knowledge-search-highlight" key={`${index}:${part.text}`}>{part.text}</mark>
+      : <span key={`${index}:${part.text}`}>{part.text}</span>
+  ));
+}
 
 export function KnowledgeBaseDetailPanel(props: KnowledgeBaseDetailPanelProps) {
   const { selected } = props;
@@ -120,7 +130,7 @@ export function KnowledgeBaseDetailPanel(props: KnowledgeBaseDetailPanelProps) {
               <header className="knowledge-doc-head">
                 <strong>문서 (Markdown)</strong>
               </header>
-              <pre className="knowledge-doc-markdown">{props.markdownContent}</pre>
+              <pre className="knowledge-doc-markdown">{renderHighlightedText(props.markdownContent, props.searchQuery)}</pre>
             </section>
           ) : null}
           {props.jsonContent ? (
@@ -138,7 +148,7 @@ export function KnowledgeBaseDetailPanel(props: KnowledgeBaseDetailPanelProps) {
                   ))}
                 </ul>
               ) : null}
-              <pre className="knowledge-doc-pre">{props.jsonReadable.pretty}</pre>
+              <pre className="knowledge-doc-pre">{renderHighlightedText(props.jsonReadable.pretty, props.searchQuery)}</pre>
             </section>
           ) : null}
         </>

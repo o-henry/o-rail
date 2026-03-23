@@ -274,6 +274,7 @@ describe("runTaskRoleWithCodex", () => {
 
   it("routes task role execution through web providers when the thread model is web-backed", async () => {
     const onRuntimeSession = vi.fn();
+    const writtenContents = new Map<string, string>();
     const invokeFn = (vi.fn(async (command: string, args?: Record<string, unknown>) => {
       switch (command) {
         case "task_agent_pack_read":
@@ -317,6 +318,7 @@ describe("runTaskRoleWithCodex", () => {
             meta: { provider: "gpt" },
           };
         case "workspace_write_text":
+          writtenContents.set(String(args?.name), String(args?.content ?? ""));
           return `${String(args?.cwd)}/${String(args?.name)}`;
         default:
           throw new Error(`unexpected command: ${command}`);
@@ -346,10 +348,14 @@ describe("runTaskRoleWithCodex", () => {
     }));
     expect(invokeFn).not.toHaveBeenCalledWith("thread_start", expect.anything());
     expect(result.artifactPaths).toContain("/tmp/rail-storage/.rail/tasks/thread-web/codex_runs/role-run-web/research_findings.md");
+    expect(result.artifactPaths).toContain("/tmp/rail-storage/.rail/tasks/thread-web/codex_runs/role-run-web/web_gpt_response.md");
+    expect(writtenContents.get("web_gpt_response.md")).toContain("웹 GPT가 조사 결과를 요약했습니다.");
+    expect(writtenContents.get("response.json")).toContain("\"fullText\": \"웹 GPT가 조사 결과를 요약했습니다.\"");
   });
 
   it("runs multiple selected web providers in parallel and combines their outputs", async () => {
     const onRuntimeSession = vi.fn();
+    const writtenNames: string[] = [];
     const invokeFn = (vi.fn(async (command: string, args?: Record<string, unknown>) => {
       switch (command) {
         case "task_agent_pack_read":
@@ -402,6 +408,7 @@ describe("runTaskRoleWithCodex", () => {
           }
           throw new Error(`unexpected provider: ${String(args?.provider)}`);
         case "workspace_write_text":
+          writtenNames.push(String(args?.name));
           return `${String(args?.cwd)}/${String(args?.name)}`;
         default:
           throw new Error(`unexpected command: ${command}`);
@@ -430,6 +437,8 @@ describe("runTaskRoleWithCodex", () => {
     expect(invokeFn).toHaveBeenCalledWith("web_provider_run", expect.objectContaining({ provider: "gemini" }));
     expect(invokeFn).toHaveBeenCalledWith("web_provider_run", expect.objectContaining({ provider: "grok" }));
     expect(invokeFn).not.toHaveBeenCalledWith("thread_start", expect.anything());
+    expect(writtenNames).toContain("web_gemini_response.md");
+    expect(writtenNames).toContain("web_grok_response.md");
   });
 
   it("sends a cleaned user-facing prompt to web providers instead of the internal orchestration brief", async () => {
@@ -493,14 +502,142 @@ describe("runTaskRoleWithCodex", () => {
       sourceTab: "tasks-thread",
       runId: "role-run-web-sanitized",
       model: "Gemini",
+      intent: "ideation",
     });
 
     expect(capturedPrompts[0]).toContain("사용자 요청:");
     expect(capturedPrompts[0]).toContain("캐주얼 모바일 아케이드 게임 아이디어 10개를 제안해줘");
+    expect(capturedPrompts[0]).toContain("요청 해석:");
+    expect(capturedPrompts[0]).toContain("창의적 아이데이션 품질을 끌어올리기 위한 외부 AI 관점 수집");
+    expect(capturedPrompts[0]).toContain("상투적인 장르 조합");
+    expect(capturedPrompts[0]).toContain("리텐션 포인트");
     expect(capturedPrompts[0]).toContain("추가 지침:");
     expect(capturedPrompts[0]).not.toContain("# 작업 모드");
     expect(capturedPrompts[0]).not.toContain("# 역할별 배정");
     expect(capturedPrompts[0]).not.toContain("압축된 스레드 컨텍스트");
+  });
+
+  it("extracts the real user request even when an internal final-synthesis brief is nested inside the role prompt", async () => {
+    const capturedPrompts: string[] = [];
+    const invokeFn = (vi.fn(async (command: string, args?: Record<string, unknown>) => {
+      switch (command) {
+        case "task_agent_pack_read":
+          return {
+            id: "game_designer",
+            label: "GAME DESIGNER",
+            studioRoleId: "game_designer",
+            model: "gpt-5.4",
+            modelReasoningEffort: "medium",
+            sandboxMode: "workspace-write",
+            outputArtifactName: "idea.md",
+            promptDocFile: "game_designer.md",
+            developerInstructions: "재미와 반복 플레이를 중심으로 아이디어를 제안하라.",
+          };
+        case "thread_load":
+          return {
+            thread: { model: "Grok", reasoning: "중간" },
+            task: { workspacePath: "/tmp/mockking" },
+          };
+        case "web_provider_run":
+          capturedPrompts.push(String(args?.prompt ?? ""));
+          return {
+            ok: true,
+            text: "아이디어를 정리했습니다.",
+            raw: { provider: "grok" },
+            meta: { provider: "grok" },
+          };
+        case "workspace_write_text":
+          return `${String(args?.cwd)}/${String(args?.name)}`;
+        default:
+          throw new Error(`unexpected command: ${command}`);
+      }
+    }) as unknown) as <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
+
+    await runTaskRoleWithCodex({
+      invokeFn,
+      storageCwd: "/tmp/rail-storage",
+      taskId: "thread-web-nested-sanitized",
+      studioRoleId: "game_designer",
+      prompt: [
+        "# 작업 모드",
+        "최종 합성 답변",
+        "",
+        "# 사용자 요청",
+        "캐주얼 모바일 아케이드 게임 아이디어 10개를 제안해줘",
+        "",
+        "# 압축된 스레드 컨텍스트",
+        "없음",
+        "",
+        "# 참여 에이전트 브리프",
+        "## pm_planner",
+        "## GEMINI",
+        "Gemini의 응답 1인 개발자를 위한 독창적 게임 아이디어 10선",
+        "",
+        "# 출력 규칙",
+        "- 한국어로 최종 답변을 작성한다.",
+      ].join("\n"),
+      sourceTab: "tasks-thread",
+      runId: "role-run-web-nested-sanitized",
+      model: "Grok",
+    });
+
+    expect(capturedPrompts[0]).toContain("캐주얼 모바일 아케이드 게임 아이디어 10개를 제안해줘");
+    expect(capturedPrompts[0]).not.toContain("# 작업 모드");
+    expect(capturedPrompts[0]).not.toContain("참여 에이전트 브리프");
+    expect(capturedPrompts[0]).not.toContain("## GEMINI");
+    expect(capturedPrompts[0]).not.toContain("Gemini의 응답");
+  });
+
+  it("infers ideation framing for web prompts even without an explicit intent field", async () => {
+    const capturedPrompts: string[] = [];
+    const invokeFn = (vi.fn(async (command: string, args?: Record<string, unknown>) => {
+      switch (command) {
+        case "task_agent_pack_read":
+          return {
+            id: "game_designer",
+            label: "GAME DESIGNER",
+            studioRoleId: "game_designer",
+            model: "gpt-5.4",
+            modelReasoningEffort: "medium",
+            sandboxMode: "workspace-write",
+            outputArtifactName: "idea.md",
+            promptDocFile: "game_designer.md",
+            developerInstructions: "재미와 반복 플레이를 중심으로 아이디어를 제안하라.",
+          };
+        case "thread_load":
+          return {
+            thread: { model: "Gemini", reasoning: "중간" },
+            task: { workspacePath: "/tmp/mockking" },
+          };
+        case "web_provider_run":
+          capturedPrompts.push(String(args?.prompt ?? ""));
+          return {
+            ok: true,
+            text: "아이디어를 정리했습니다.",
+            raw: { provider: "gemini" },
+            meta: { provider: "gemini" },
+          };
+        case "workspace_write_text":
+          return `${String(args?.cwd)}/${String(args?.name)}`;
+        default:
+          throw new Error(`unexpected command: ${command}`);
+      }
+    }) as unknown) as <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
+
+    await runTaskRoleWithCodex({
+      invokeFn,
+      storageCwd: "/tmp/rail-storage",
+      taskId: "thread-web-heuristic-ideation",
+      studioRoleId: "game_designer",
+      prompt: "리텐션이 높고 아류작 냄새가 약한 모바일 게임 아이디어를 10개 제안해줘",
+      sourceTab: "tasks-thread",
+      runId: "role-run-web-heuristic-ideation",
+      model: "Gemini",
+    });
+
+    expect(capturedPrompts[0]).toContain("창의적 아이데이션 품질을 끌어올리기 위한 외부 AI 관점 수집");
+    expect(capturedPrompts[0]).toContain("아류작 냄새가 약한지");
+    expect(capturedPrompts[0]).toContain("후보들은 서로 다른 방향으로 충분히 벌리고");
   });
 
   it("falls back from a direct web provider to STEEL when the direct provider fails", async () => {
@@ -565,7 +702,7 @@ describe("runTaskRoleWithCodex", () => {
       storageCwd: "/tmp/rail-storage",
       taskId: "thread-web-fallback",
       studioRoleId: "research_analyst",
-      prompt: "웹에서 반응을 조사해줘",
+      prompt: "https://steamcommunity.com/app/620/discussions/ 웹에서 반응을 조사해줘",
       sourceTab: "tasks-thread",
       runId: "role-run-web-fallback",
       model: "Gemini",
@@ -574,6 +711,154 @@ describe("runTaskRoleWithCodex", () => {
     expect(result.summary).toContain("STEEL fallback");
     expect(invokeFn).toHaveBeenCalledWith("web_provider_run", expect.objectContaining({ provider: "gemini" }));
     expect(invokeFn).toHaveBeenCalledWith("web_provider_run", expect.objectContaining({ provider: "steel" }));
+  });
+
+  it("falls back from a direct web provider when the direct response is only a message-limit warning", async () => {
+    const invokeFn = (vi.fn(async (command: string, args?: Record<string, unknown>) => {
+      switch (command) {
+        case "task_agent_pack_read":
+          return {
+            id: "researcher",
+            label: "RESEARCHER",
+            studioRoleId: "research_analyst",
+            model: "Grok",
+            modelReasoningEffort: "medium",
+            sandboxMode: "workspace-write",
+            outputArtifactName: "research_findings.md",
+            promptDocFile: "researcher.md",
+            developerInstructions: "자료 조사와 웹 리서치를 수행하라.",
+          };
+        case "thread_load":
+          return {
+            thread: { model: "Grok", reasoning: "중간" },
+            task: { workspacePath: "/tmp/mockking" },
+          };
+        case "research_storage_plan_agent_job":
+          return { job: { jobId: "collect-web-limit", planner: { instructions: [] } } };
+        case "research_storage_execute_job":
+          return { job: { jobId: "collect-web-limit" } };
+        case "research_storage_collection_metrics":
+          return {
+            totals: { items: 0, sources: 0, verified: 0, warnings: 0, conflicted: 0, avgScore: 0 },
+            bySourceType: [],
+            byVerificationStatus: [],
+            timeline: [],
+            topSources: [],
+          };
+        case "research_storage_list_collection_items":
+          return { items: [] };
+        case "research_storage_collection_genre_rankings":
+          return { popular: [], quality: [] };
+        case "dashboard_crawl_provider_health":
+          return { ready: args?.provider === "steel" };
+        case "web_provider_run":
+          if (args?.provider === "grok") {
+            return {
+              ok: true,
+              text: "You've hit the free plan message limit. Try again later.",
+              raw: { provider: "grok" },
+            };
+          }
+          if (args?.provider === "steel") {
+            return {
+              ok: true,
+              text: "STEEL fallback 조사 요약",
+              raw: { provider: "steel", response: "STEEL fallback 조사 요약" },
+            };
+          }
+          throw new Error(`unexpected provider: ${String(args?.provider)}`);
+        case "workspace_write_text":
+          return `${String(args?.cwd)}/${String(args?.name)}`;
+        default:
+          throw new Error(`unexpected command: ${command}`);
+      }
+    }) as unknown) as <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
+
+    const result = await runTaskRoleWithCodex({
+      invokeFn,
+      storageCwd: "/tmp/rail-storage",
+      taskId: "thread-web-limit-fallback",
+      studioRoleId: "research_analyst",
+      prompt: "https://steamcommunity.com/app/620/discussions/ 웹에서 반응을 조사해줘",
+      sourceTab: "tasks-thread",
+      runId: "role-run-web-limit-fallback",
+      model: "Grok",
+    });
+
+    expect(result.summary).toContain("STEEL fallback");
+    expect(invokeFn).toHaveBeenCalledWith("web_provider_run", expect.objectContaining({ provider: "grok" }));
+    expect(invokeFn).toHaveBeenCalledWith("web_provider_run", expect.objectContaining({ provider: "steel" }));
+  });
+
+  it("does not attempt external browser fallback for plain web-ai prompts without an explicit url", async () => {
+    const invokeFn = (vi.fn(async (command: string, args?: Record<string, unknown>) => {
+      switch (command) {
+        case "task_agent_pack_read":
+          return {
+            id: "researcher",
+            label: "RESEARCHER",
+            studioRoleId: "research_analyst",
+            model: "Grok",
+            modelReasoningEffort: "medium",
+            sandboxMode: "workspace-write",
+            outputArtifactName: "research_findings.md",
+            promptDocFile: "researcher.md",
+            developerInstructions: "자료 조사와 웹 리서치를 수행하라.",
+          };
+        case "thread_load":
+          return {
+            thread: { model: "Grok", reasoning: "중간" },
+            task: { workspacePath: "/tmp/mockking" },
+          };
+        case "research_storage_plan_agent_job":
+          return { job: { jobId: "collect-web-no-url", planner: { instructions: [] } } };
+        case "research_storage_execute_job":
+          return { job: { jobId: "collect-web-no-url" } };
+        case "research_storage_collection_metrics":
+          return {
+            totals: { items: 0, sources: 0, verified: 0, warnings: 0, conflicted: 0, avgScore: 0 },
+            bySourceType: [],
+            byVerificationStatus: [],
+            timeline: [],
+            topSources: [],
+          };
+        case "research_storage_list_collection_items":
+          return { items: [] };
+        case "research_storage_collection_genre_rankings":
+          return { popular: [], quality: [] };
+        case "dashboard_crawl_provider_health":
+          return { ready: args?.provider === "steel" };
+        case "web_provider_run":
+          if (args?.provider === "grok") {
+            return {
+              ok: true,
+              text: "You've hit the free plan message limit. Try again later.",
+              raw: { provider: "grok" },
+            };
+          }
+          throw new Error(`unexpected provider: ${String(args?.provider)}`);
+        case "workspace_write_text":
+          return `${String(args?.cwd)}/${String(args?.name)}`;
+        default:
+          throw new Error(`unexpected command: ${command}`);
+      }
+    }) as unknown) as <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
+
+    await expect(() =>
+      runTaskRoleWithCodex({
+        invokeFn,
+        storageCwd: "/tmp/rail-storage",
+        taskId: "thread-web-no-url-fallback",
+        studioRoleId: "research_analyst",
+        prompt: "웹에서 반응을 조사해줘",
+        sourceTab: "tasks-thread",
+        runId: "role-run-web-no-url-fallback",
+        model: "Grok",
+      }),
+    ).rejects.toThrow("no usable response");
+
+    expect(invokeFn).toHaveBeenCalledWith("web_provider_run", expect.objectContaining({ provider: "grok" }));
+    expect(invokeFn).not.toHaveBeenCalledWith("web_provider_run", expect.objectContaining({ provider: "steel" }));
   });
 
   it("prefers final agentMessage text when Codex returns structured items", async () => {
@@ -1814,6 +2099,107 @@ describe("runTaskRoleWithCodex", () => {
     });
 
     expect(result.summary).toContain("nested content에서도 최종 답변");
+  });
+
+  it("extracts assistant message text from nested output arrays returned by completed turns", async () => {
+    const invokeFn = (vi.fn(async (command: string, args?: Record<string, unknown>) => {
+      switch (command) {
+        case "task_agent_pack_read":
+          return {
+            id: "unity_architect",
+            label: "UNITY ARCHITECT",
+            studioRoleId: "system_programmer",
+            model: "gpt-5.4",
+            modelReasoningEffort: "medium",
+            sandboxMode: "workspace-write",
+            outputArtifactName: "architecture_review.md",
+            promptDocFile: "unity_architect.md",
+            developerInstructions: "검토하라.",
+          };
+        case "thread_load":
+          return {
+            thread: { model: "GPT-5.4", reasoning: "중간" },
+            task: { workspacePath: "/tmp/mockking" },
+          };
+        case "thread_start":
+          return { threadId: "thread-codex-nested-output" };
+        case "turn_start_blocking":
+          return {
+            id: "turn-nested-output",
+            status: "completed",
+            output: [
+              {
+                type: "message",
+                role: "assistant",
+                content: [
+                  { type: "output_text", text: "## 최종 정리\n- nested output array에서도 답변을 읽었습니다." },
+                ],
+              },
+            ],
+          };
+        case "workspace_write_text":
+          return `${String(args?.cwd)}/${String(args?.name)}`;
+        default:
+          throw new Error(`unexpected command: ${command}`);
+      }
+    }) as unknown) as <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
+
+    const result = await runTaskRoleWithCodex({
+      invokeFn,
+      storageCwd: "/tmp/rail-storage",
+      taskId: "thread-nested-output",
+      studioRoleId: "system_programmer",
+      prompt: "nested output array 응답",
+      sourceTab: "tasks-thread",
+      runId: "role-run-nested-output",
+    });
+
+    expect(result.summary).toContain("nested output array에서도 답변을 읽었습니다.");
+  });
+
+  it("does not mistake input-only completed payloads for a readable answer", async () => {
+    const invokeFn = (vi.fn(async (command: string) => {
+      switch (command) {
+        case "task_agent_pack_read":
+          return {
+            id: "unity_architect",
+            label: "UNITY ARCHITECT",
+            studioRoleId: "system_programmer",
+            model: "gpt-5.4",
+            modelReasoningEffort: "medium",
+            sandboxMode: "workspace-write",
+            outputArtifactName: "architecture_review.md",
+            promptDocFile: "unity_architect.md",
+            developerInstructions: "검토하라.",
+          };
+        case "thread_load":
+          return {
+            thread: { model: "GPT-5.4", reasoning: "중간" },
+            task: { workspacePath: "/tmp/mockking" },
+          };
+        case "thread_start":
+          return { threadId: "thread-input-only" };
+        case "turn_start_blocking":
+          return {
+            id: "turn-input-only",
+            status: "completed",
+            text: "사용자 입력 프롬프트",
+            input: [{ type: "text", text: "사용자 입력 프롬프트" }],
+          };
+        default:
+          throw new Error(`unexpected command: ${command}`);
+      }
+    }) as unknown) as <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
+
+    await expect(runTaskRoleWithCodex({
+      invokeFn,
+      storageCwd: "/tmp/rail-storage",
+      taskId: "thread-input-only",
+      studioRoleId: "system_programmer",
+      prompt: "사용자 입력 프롬프트",
+      sourceTab: "tasks-thread",
+      runId: "role-run-input-only",
+    })).rejects.toThrow("without a readable response");
   });
 
   it("fails fast when thread_start never resolves", async () => {

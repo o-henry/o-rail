@@ -138,6 +138,31 @@
   margin-bottom: 2px;
 }
 
+.knowledge-list-search {
+  width: 100%;
+  min-height: 36px;
+  height: 36px;
+  margin-bottom: 3px;
+  border: 0;
+  border-radius: 4px;
+  background: #ebedf0;
+  color: var(--text-main);
+  font-size: 12px;
+  padding: 0 10px;
+  outline: none;
+  box-shadow: none;
+}
+
+.knowledge-list-search::placeholder {
+  color: var(--text-muted);
+}
+
+.knowledge-list-search:focus,
+.knowledge-list-search:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
 .knowledge-list-head strong {
   font-size: 13px;
   color: var(--text-main);

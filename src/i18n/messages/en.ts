@@ -62,6 +62,7 @@ export const EN_MESSAGES: Dictionary = {
     "tasks.live.state.active": "Active",
     "tasks.live.state.delayed": "Waiting",
     "tasks.live.state.stalled": "Taking longer",
+    "tasks.live.stalledWarning": "No new signal for over 2 minutes. The run may be stuck or events may have stopped arriving.",
     "tasks.live.state.degraded": "Degraded",
     "tasks.live.lastUpdate": "Last signal {value}",
     "tasks.live.currentWork.degraded": "Running Codex without external evidence",

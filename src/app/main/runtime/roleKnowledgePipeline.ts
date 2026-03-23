@@ -98,8 +98,39 @@ function resolveBootstrapFailureReason(sourceResults: RoleKnowledgeSource[]): st
   const loweredErrors = sourceResults
     .map((row) => cleanLine(row.error).toLowerCase())
     .filter(Boolean);
-  if (loweredErrors.some((row) => row.includes("unauthorized"))) {
-    return "브라우저/크롤링 provider 인증 실패로 외부 근거를 수집하지 못했습니다.";
+  const providerReasons: string[] = [];
+  if (loweredErrors.some((row) => row.includes("scrapling:") && row.includes("unauthorized"))) {
+    providerReasons.push("scrapling 인증 실패");
+  }
+  if (
+    loweredErrors.some(
+      (row) =>
+        row.includes("crawl4ai:")
+        && (row.includes("runtime not installed") || row.includes("failed to import crawl4ai")),
+    )
+  ) {
+    providerReasons.push("crawl4ai 런타임 미설치");
+  }
+  if (
+    loweredErrors.some(
+      (row) =>
+        row.includes("steel:")
+        && (row.includes("not configured") || row.includes("cdp endpoint is not configured")),
+    )
+  ) {
+    providerReasons.push("steel CDP 미설정");
+  }
+  if (
+    loweredErrors.some(
+      (row) =>
+        row.includes("lightpanda_experimental:")
+        && (row.includes("not configured") || row.includes("cdp endpoint is not configured")),
+    )
+  ) {
+    providerReasons.push("lightpanda CDP 미설정");
+  }
+  if (providerReasons.length > 0) {
+    return `${providerReasons.join(", ")}로 외부 근거를 수집하지 못했습니다.`;
   }
   if (
     loweredErrors.some(

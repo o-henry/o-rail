@@ -211,22 +211,37 @@ export function TasksThreadComposer(props: TasksThreadComposerProps) {
   return (
     <>
       {(props.providerStatuses?.length ?? 0) > 0 ? (
-        <div className="tasks-thread-provider-status-strip" data-e2e="tasks-provider-status-strip">
+        <div
+          aria-label="웹 AI provider 상태"
+          id="tasks-provider-status-strip"
+          className="tasks-thread-provider-status-strip"
+          data-e2e="tasks-provider-status-strip"
+          role="region"
+        >
           {props.providerStatuses?.map((status) => (
             <div
+              aria-label={`${status.label} 상태 ${status.message}`}
               className={`tasks-thread-provider-status-card is-${status.state}`}
+              data-e2e={`tasks-provider-status-card-${status.provider}`}
               key={status.provider}
+              role="group"
               title={status.url || status.message}
             >
               <strong>{status.label}</strong>
               <span>{status.message}</span>
               <div className="tasks-thread-provider-status-actions">
-                <button onClick={() => props.onOpenProviderSession(status.provider)} type="button">
-                  {status.state === "active" ? "세션 열기" : "연결하기"}
+                <button
+                  aria-label={`${status.label} 세션 열기`}
+                  data-e2e={`tasks-provider-open-${status.provider}`}
+                  onClick={() => props.onOpenProviderSession(status.provider)}
+                  type="button"
+                >
+                  세션 열기
                 </button>
                 <button
-                  aria-label="상태 새로고침"
+                  aria-label={`${status.label} 상태 새로고침`}
                   className="tasks-thread-provider-status-refresh"
+                  data-e2e={`tasks-provider-refresh-${status.provider}`}
                   disabled={props.providerStatusPending}
                   onClick={props.onRefreshProviderStatuses}
                   title="상태 새로고침"
@@ -239,12 +254,18 @@ export function TasksThreadComposer(props: TasksThreadComposerProps) {
           ))}
         </div>
       ) : null}
-      <div className="tasks-thread-composer-shell question-input agents-composer">
+      <div
+        aria-label="Tasks 질문 작성기"
+        className="tasks-thread-composer-shell question-input agents-composer"
+        data-e2e="tasks-composer-shell"
+        role="region"
+      >
       {props.mentionMatch ? (
         <div
           aria-label={t("tasks.aria.agentMentions")}
           className="tasks-thread-mention-menu"
           data-e2e="tasks-mention-menu"
+          id="tasks-mention-menu"
           ref={mentionMenuRef}
           role="listbox"
         >
@@ -254,6 +275,7 @@ export function TasksThreadComposer(props: TasksThreadComposerProps) {
             return (
             <button
               aria-label={`${option.mention} ${option.label} ${option.description}`.trim()}
+              id={`tasks-mention-option-${option.mention.replace(/[^a-z0-9_-]+/gi, "").toLowerCase()}`}
               aria-selected={index === props.mentionIndex}
               className={`tasks-thread-mention-option${index === props.mentionIndex ? " is-active" : ""}${startsSection ? " is-section-start" : ""}`}
               data-e2e={`tasks-mention-option-${option.mention.replace(/[^a-z0-9_-]+/gi, "").toLowerCase()}`}
@@ -278,15 +300,16 @@ export function TasksThreadComposer(props: TasksThreadComposerProps) {
       ) : null}
 
       {props.attachedFiles.length > 0 ? (
-        <div aria-label="Attached files" className="agents-file-list" data-e2e="tasks-attached-files">
+        <div aria-label="첨부 파일 목록" className="agents-file-list" data-e2e="tasks-attached-files">
           {props.attachedFiles.map((file) => (
-            <span className="agents-file-chip" key={file.id}>
+            <span aria-label={`${file.name} 첨부 파일`} className="agents-file-chip" data-e2e={`tasks-attached-file-${file.id}`} key={file.id}>
               <span className={`agents-file-chip-name${file.enabled === false ? " is-disabled" : ""}`} title={file.path}>
                 {file.name}
               </span>
               <button
-                aria-label={`Remove ${file.name}`}
+                aria-label={`${file.name} 첨부 파일 제거`}
                 className="agents-file-chip-remove"
+                data-e2e={`tasks-attached-file-remove-${file.id}`}
                 onClick={() => props.onRemoveAttachedFile(file.id)}
                 type="button"
               >
@@ -297,26 +320,32 @@ export function TasksThreadComposer(props: TasksThreadComposerProps) {
         </div>
       ) : null}
 
-      <div aria-label="Selected agents" className="tasks-thread-selected-mentions" data-e2e="tasks-selected-badges">
+      <div aria-label="선택된 에이전트 및 provider" className="tasks-thread-selected-mentions" data-e2e="tasks-selected-badges">
           <button
+            aria-label={props.creativeModeEnabled ? "창의성 모드 켜짐, 끄기" : "창의성 모드 꺼짐, 켜기"}
             aria-pressed={props.creativeModeEnabled}
             className={`tasks-thread-selected-mention-chip tasks-thread-creative-mode-toggle${props.creativeModeEnabled ? " is-active" : ""}`}
             data-e2e="tasks-creative-mode-toggle"
             onClick={props.onToggleCreativeMode}
+            title={props.creativeModeEnabled ? "창의성 모드 켜짐, 끄기" : "창의성 모드 꺼짐, 켜기"}
             type="button"
           >
             {props.creativeModeEnabled ? "창의성 모드: ON" : "창의성 모드: OFF"}
           </button>
           {selectedBadges.map((badge) => (
             <span
+              aria-label={`${badge.kind === "auto-agent" || badge.kind === "auto-provider" ? "자동 선택" : "선택됨"} ${badge.label}`}
               className={`tasks-thread-selected-mention-chip${badge.kind === "auto-agent" || badge.kind === "auto-provider" ? " is-auto" : ""}${badge.kind === "provider" || badge.kind === "auto-provider" ? " is-provider" : ""}`}
+              data-e2e={`tasks-selected-badge-${badge.key.replace(/[^a-z0-9_-]+/gi, "-").toLowerCase()}`}
               key={badge.key}
+              role="group"
               title={badge.kind === "auto-agent" || badge.kind === "auto-provider" ? "Orchestrator selected this automatically." : undefined}
             >
               <span>{badge.kind === "auto-agent" || badge.kind === "auto-provider" ? `AUTO: ${badge.label}` : badge.label}</span>
               {badge.kind === "auto-agent" || badge.kind === "auto-provider" ? null : (
                 <button
-                  aria-label={`Remove ${badge.label}`}
+                  aria-label={`${badge.label} 제거`}
+                  data-e2e={`tasks-selected-badge-remove-${badge.key.replace(/[^a-z0-9_-]+/gi, "-").toLowerCase()}`}
                   onClick={() => {
                     if (badge.kind === "agent" && badge.roleId) {
                       props.onRemoveComposerRole(badge.roleId);
@@ -335,13 +364,18 @@ export function TasksThreadComposer(props: TasksThreadComposerProps) {
               )}
             </span>
           ))}
-        </div>
-      <div className="tasks-thread-composer-input-wrap">
+      </div>
+      <div aria-label="질문 입력 영역" className="tasks-thread-composer-input-wrap" role="group">
         <textarea
           ref={props.composerRef}
-          aria-label="Tasks composer"
+          aria-label="Tasks 질문 입력"
+          aria-autocomplete="list"
+          aria-controls={props.mentionMatch ? "tasks-mention-menu" : undefined}
+          aria-expanded={Boolean(props.mentionMatch)}
           className="tasks-thread-composer-input"
           data-e2e="tasks-composer-input"
+          id="tasks-composer-input"
+          name="tasks-composer-input"
           disabled={composerDisabled}
           onClick={(event) => props.onComposerCursorChange(event.currentTarget.selectionStart ?? 0)}
           onChange={(event) => props.onComposerDraftChange(event.target.value, event.target.selectionStart ?? event.target.value.length)}
@@ -353,10 +387,10 @@ export function TasksThreadComposer(props: TasksThreadComposerProps) {
         />
       </div>
 
-      <div className="question-input-footer tasks-thread-composer-toolbar">
-        <div className="agents-composer-left tasks-thread-composer-controls">
+      <div aria-label="질문 작성 도구막대" className="question-input-footer tasks-thread-composer-toolbar" role="group">
+        <div aria-label="모델 및 파일 제어" className="agents-composer-left tasks-thread-composer-controls" role="group">
           <button
-            aria-label="Attach code files"
+            aria-label="코드 파일 첨부"
             className="agents-icon-button"
             data-e2e="tasks-attach-files"
             disabled={composerDisabled}
@@ -365,9 +399,10 @@ export function TasksThreadComposer(props: TasksThreadComposerProps) {
           >
             <img alt="" aria-hidden="true" src="/plus-large-svgrepo-com.svg" />
           </button>
-          <div className={`agents-model-dropdown${props.isModelMenuOpen ? " is-open" : ""}`} ref={props.modelMenuRef}>
+          <div aria-label="모델 선택 드롭다운" className={`agents-model-dropdown${props.isModelMenuOpen ? " is-open" : ""}`} data-e2e="tasks-model-dropdown" ref={props.modelMenuRef} role="group">
             <button
               aria-label={t("tasks.aria.modelMenu")}
+              aria-controls="tasks-model-menu"
               aria-expanded={props.isModelMenuOpen}
               aria-haspopup="listbox"
               className="agents-model-button"
@@ -380,12 +415,15 @@ export function TasksThreadComposer(props: TasksThreadComposerProps) {
               <img alt="" aria-hidden="true" src="/down-arrow.svg" />
             </button>
             {props.isModelMenuOpen ? (
-              <ul aria-label={t("tasks.aria.modelMenu")} className="agents-model-menu" data-e2e="tasks-model-menu" role="listbox">
+              <ul aria-label={t("tasks.aria.modelMenu")} className="agents-model-menu" data-e2e="tasks-model-menu" id="tasks-model-menu" role="listbox">
                 {visibleModelOptions.map((option) => (
-                  <li key={option.value}>
+                  <li data-e2e={`tasks-model-option-row-${option.value.replace(/[^a-z0-9_-]+/gi, "-").toLowerCase()}`} key={option.value}>
                     <button
+                      aria-label={`${option.label} 모델 선택`}
                       aria-selected={option.value === props.selectedModelOption.value}
                       className={option.value === props.selectedModelOption.value ? "is-selected" : ""}
+                      data-e2e={`tasks-model-option-${option.value.replace(/[^a-z0-9_-]+/gi, "-").toLowerCase()}`}
+                      id={`tasks-model-option-${option.value.replace(/[^a-z0-9_-]+/gi, "-").toLowerCase()}`}
                       onClick={() => props.onSetModel(option.value)}
                       role="option"
                       type="button"
@@ -397,9 +435,10 @@ export function TasksThreadComposer(props: TasksThreadComposerProps) {
               </ul>
             ) : null}
           </div>
-          <div className={`agents-model-dropdown agents-reason-dropdown${props.isReasonMenuOpen ? " is-open" : ""}`} ref={props.reasonMenuRef}>
+          <div aria-label="추론 강도 선택 드롭다운" className={`agents-model-dropdown agents-reason-dropdown${props.isReasonMenuOpen ? " is-open" : ""}`} data-e2e="tasks-reasoning-dropdown" ref={props.reasonMenuRef} role="group">
             <button
               aria-label={t("tasks.aria.reasoningMenu")}
+              aria-controls="tasks-reasoning-menu"
               aria-expanded={props.isReasonMenuOpen}
               aria-haspopup="listbox"
               className="agents-model-button"
@@ -412,12 +451,15 @@ export function TasksThreadComposer(props: TasksThreadComposerProps) {
               <img alt="" aria-hidden="true" src="/down-arrow.svg" />
             </button>
             {props.isReasonMenuOpen ? (
-              <ul aria-label={t("tasks.aria.reasoningMenu")} className="agents-model-menu" data-e2e="tasks-reasoning-menu" role="listbox">
+              <ul aria-label={t("tasks.aria.reasoningMenu")} className="agents-model-menu" data-e2e="tasks-reasoning-menu" id="tasks-reasoning-menu" role="listbox">
                 {TURN_REASONING_LEVEL_OPTIONS.map((option) => (
-                  <li key={option}>
+                  <li data-e2e={`tasks-reasoning-option-row-${option.replace(/[^a-z0-9_-]+/gi, "-").toLowerCase()}`} key={option}>
                     <button
+                      aria-label={`${option} 추론 강도 선택`}
                       aria-selected={option === props.reasoning}
                       className={option === props.reasoning ? "is-selected" : ""}
+                      data-e2e={`tasks-reasoning-option-${option.replace(/[^a-z0-9_-]+/gi, "-").toLowerCase()}`}
+                      id={`tasks-reasoning-option-${option.replace(/[^a-z0-9_-]+/gi, "-").toLowerCase()}`}
                       onClick={() => props.onSetReasoning(option)}
                       role="option"
                       type="button"
@@ -431,7 +473,7 @@ export function TasksThreadComposer(props: TasksThreadComposerProps) {
           </div>
         </div>
 
-        <div className="agents-composer-actions">
+        <div aria-label="질문 전송 제어" className="agents-composer-actions" role="group">
           {props.showStopButton && !props.stoppingComposerRun ? (
             <button
               aria-label={props.stoppingComposerRun ? t("common.loading") : t("tasks.actions.stop")}

@@ -62,6 +62,7 @@ export const JA_MESSAGES: Dictionary = {
     "tasks.live.state.active": "進行中",
     "tasks.live.state.delayed": "応答待ち",
     "tasks.live.state.stalled": "時間がかかっています",
+    "tasks.live.stalledWarning": "2分以上新しい信号がありません。実際に停止しているか、イベント受信が途切れた可能性があります。",
     "tasks.live.state.degraded": "制限モード",
     "tasks.live.lastUpdate": "最後の信号 {value}",
     "tasks.live.currentWork.degraded": "外部根拠なしで Codex を実行中",

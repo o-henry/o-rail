@@ -111,4 +111,24 @@ describe("buildKnowledgeEntriesFromRoleRunCompletion", () => {
     expect(entries[0]?.requestLabel).toBe("1인 인디게임 창의적 아이디어 3개만 추려줘");
     expect(entries[0]?.summary).toBe("1인 인디게임 창의적 아이디어 3개만 추려줘");
   });
+
+  it("classifies shared web-ai response artifacts as ai knowledge entries", () => {
+    const entries = buildKnowledgeEntriesFromRoleRunCompletion({
+      cwd: "/tmp/workspace",
+      payload: {
+        roleId: "pm_planner",
+        runId: "role-web-123",
+        taskId: "thread-web-123",
+        prompt: "외부 웹 AI 관점을 모아줘",
+        internal: true,
+        artifactPaths: [
+          "/tmp/workspace/.rail/studio_runs/role-web-123/artifacts/shared_web_perspective.md",
+          "/tmp/workspace/.rail/studio_runs/role-web-123/artifacts/web_grok_response.md",
+          "/tmp/workspace/.rail/studio_runs/role-web-123/artifacts/response.json",
+        ],
+      },
+    });
+
+    expect(entries.map((entry) => entry.sourceKind)).toEqual(["ai", "ai", "ai"]);
+  });
 });

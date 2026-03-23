@@ -39,7 +39,9 @@ export default function KnowledgeBasePage({
           grouped={state.grouped}
           onDeleteGroup={state.onDeleteGroup}
           onSelectEntry={state.setSelectedId}
+          onSearchQueryChange={state.setSearchQuery}
           onToggleGroup={state.onToggleGroup}
+          searchQuery={state.searchQuery}
           selectedEntry={state.selected}
         />
         <KnowledgeBaseDetailPanel
@@ -52,6 +54,7 @@ export default function KnowledgeBasePage({
           onInjectContextSources={onInjectContextSources}
           onOpenInVisualize={onOpenInVisualize}
           onRevealPath={state.onRevealPath}
+          searchQuery={state.searchQuery}
           selected={state.selected}
         />
         {showLoadingOverlay ? (

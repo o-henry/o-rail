@@ -8,6 +8,7 @@ import {
 } from "../agentic/missionControl";
 import type { AgenticRunEnvelope } from "../agentic/runContract";
 import type { CompanionEventType, TaskTerminalResult } from "../types";
+import { createRandomIdSuffix } from "../../../shared/lib/randomId";
 import type { WorkSession, WorkSessionKind, WorkSessionNote, WorkSessionRecord, WorkSessionStatus } from "./types";
 
 function nowIso(): string {
@@ -15,7 +16,7 @@ function nowIso(): string {
 }
 
 function makeSessionId(prefix: WorkSessionKind): string {
-  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  return `${prefix}-${Date.now().toString(36)}-${createRandomIdSuffix(8)}`;
 }
 
 function dedupeStrings(values: string[]): string[] {

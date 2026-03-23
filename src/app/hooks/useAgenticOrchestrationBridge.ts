@@ -435,6 +435,7 @@ export function useAgenticOrchestrationBridge(params: {
     internal?: boolean;
     intent?: string;
     model?: string;
+    models?: string[];
     reasoning?: string;
     outputArtifactName?: string;
     includeRoleKnowledge?: boolean;
@@ -502,6 +503,7 @@ export function useAgenticOrchestrationBridge(params: {
           studioRoleId: params.roleId,
           prompt: promptText || undefined,
           model: params.model,
+          models: params.models,
           reasoning: params.reasoning,
           outputArtifactName: params.outputArtifactName,
           sourceTab,
@@ -521,6 +523,7 @@ export function useAgenticOrchestrationBridge(params: {
                 codexThreadId: runtime.codexThreadId ?? null,
                 codexTurnId: runtime.codexTurnId ?? null,
                 provider: runtime.provider ?? null,
+                providers: runtime.providers ?? [],
               },
             });
           },
@@ -645,6 +648,7 @@ export function useAgenticOrchestrationBridge(params: {
           studioRoleId: params.roleId,
           prompt: nextPrompt || undefined,
           model: params.model,
+          models: params.models,
           reasoning: params.reasoning,
           outputArtifactName: params.outputArtifactName,
           sourceTab,
@@ -664,6 +668,7 @@ export function useAgenticOrchestrationBridge(params: {
                 codexThreadId: runtime.codexThreadId ?? null,
                 codexTurnId: runtime.codexTurnId ?? null,
                 provider: runtime.provider ?? null,
+                providers: runtime.providers ?? [],
               },
             });
           },
@@ -776,6 +781,7 @@ export function useAgenticOrchestrationBridge(params: {
     criticRoleId?: string;
     cappedParticipantCount?: boolean;
     useAdaptiveOrchestrator?: boolean;
+    preferredModels?: string[];
   }) => {
     const sourceTab = params.sourceTab === "tasks" ? "tasks" : "tasks-thread";
     if (!params.taskId || !params.roleIds.length) {
@@ -819,6 +825,7 @@ export function useAgenticOrchestrationBridge(params: {
         useAdaptiveOrchestrator: Boolean(params.useAdaptiveOrchestrator),
         preferredModel,
         preferredReasoning,
+        preferredModels: params.preferredModels,
         executeRoleRun: async (runParams) => {
           const result = await executeTaskRoleRun({
             roleId: runParams.roleId,
@@ -829,6 +836,7 @@ export function useAgenticOrchestrationBridge(params: {
             internal: runParams.internal,
             intent: runParams.intent,
             model: runParams.model,
+            models: runParams.models,
             reasoning: runParams.reasoning,
             outputArtifactName: runParams.outputArtifactName,
             includeRoleKnowledge: runParams.includeRoleKnowledge,
@@ -903,6 +911,7 @@ export function useAgenticOrchestrationBridge(params: {
       sourceTab?: "agents" | "workflow" | "workbench" | "tasks" | "tasks-thread";
       handoffToRole?: string;
       handoffRequest?: string;
+      preferredModels?: string[];
     }) => {
       const sourceTab =
         params.sourceTab === "workflow"
@@ -923,6 +932,7 @@ export function useAgenticOrchestrationBridge(params: {
           sourceTab,
           handoffToRole: params.handoffToRole,
           handoffRequest: params.handoffRequest,
+          models: params.preferredModels,
           includeRoleKnowledge: true,
           promptMode: "direct",
         });
@@ -1150,6 +1160,7 @@ export function useAgenticOrchestrationBridge(params: {
           criticRoleId: action.payload.criticRoleId,
           cappedParticipantCount: action.payload.cappedParticipantCount,
           useAdaptiveOrchestrator: action.payload.useAdaptiveOrchestrator,
+          preferredModels: action.payload.preferredModels,
         });
         return;
       }

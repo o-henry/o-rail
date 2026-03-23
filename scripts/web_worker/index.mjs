@@ -7,6 +7,8 @@ import { randomBytes, timingSafeEqual } from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
 
+import { pickProviderResponseText, resolveProviderRunMode } from './providerExecution.mjs';
+
 const PROFILE_ROOT =
   process.env.RAIL_WEB_PROFILE_ROOT ||
   path.join(os.homedir(), '.rail', 'providers');
@@ -177,7 +179,8 @@ const PROVIDER_AUTOMATION_CONFIG = {
 
 const state = {
   providers: new Map(),
-  activeRun: null,
+  activeRuns: new Map(),
+  providerOperationQueue: new Map(),
   lastError: null,
   bridge: {
     server: null,
@@ -196,6 +199,54 @@ let parentWatchTimer = null;
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function registerActiveRun(runToken) {
+  if (!runToken?.provider) {
+    return;
+  }
+  const provider = String(runToken.provider).trim().toLowerCase();
+  if (!provider) {
+    return;
+  }
+  const current = state.activeRuns.get(provider) ?? new Set();
+  current.add(runToken);
+  state.activeRuns.set(provider, current);
+}
+
+function unregisterActiveRun(runToken) {
+  if (!runToken?.provider) {
+    return;
+  }
+  const provider = String(runToken.provider).trim().toLowerCase();
+  const current = state.activeRuns.get(provider);
+  if (!current) {
+    return;
+  }
+  current.delete(runToken);
+  if (current.size === 0) {
+    state.activeRuns.delete(provider);
+    return;
+  }
+  state.activeRuns.set(provider, current);
+}
+
+function runProviderOperationExclusive(provider, operation) {
+  const normalizedProvider = String(provider ?? '').trim().toLowerCase();
+  if (!normalizedProvider) {
+    return operation();
+  }
+  const previousTail = state.providerOperationQueue.get(normalizedProvider) ?? Promise.resolve();
+  const runPromise = previousTail
+    .catch(() => {})
+    .then(async () => operation());
+  const nextTail = runPromise.catch(() => {});
+  state.providerOperationQueue.set(normalizedProvider, nextTail);
+  return runPromise.finally(() => {
+    if (state.providerOperationQueue.get(normalizedProvider) === nextTail) {
+      state.providerOperationQueue.delete(normalizedProvider);
+    }
+  });
 }
 
 function isPidAlive(pid) {
@@ -1126,7 +1177,13 @@ async function ensureProviderContext(provider) {
   }
 
   const launchTargets = [];
-  if (isSystemProfileEnabled()) {
+  const systemProfileBusyWithOtherProvider = Array.from(state.providers.values()).some(
+    (wrapped) =>
+      wrapped.provider !== provider &&
+      !wrapped.contextClosed &&
+      wrapped.profileDir === SYSTEM_CHROME_PROFILE_DIR,
+  );
+  if (isSystemProfileEnabled() && !systemProfileBusyWithOtherProvider) {
     launchTargets.push({
       kind: 'system',
       profileDir: SYSTEM_CHROME_PROFILE_DIR,
@@ -1151,19 +1208,6 @@ async function ensureProviderContext(provider) {
     profileDir = target.profileDir;
     if (target.kind === 'local') {
       await hardenDir(profileDir);
-    } else {
-      for (const [otherProvider, wrapped] of state.providers.entries()) {
-        if (otherProvider === provider) {
-          continue;
-        }
-        try {
-          await wrapped.context.close();
-        } catch {
-          // ignore
-        }
-        wrapped.contextClosed = true;
-        state.providers.delete(otherProvider);
-      }
     }
 
     const launchOptions = {
@@ -1232,25 +1276,37 @@ async function ensureProviderContext(provider) {
   return wrapped;
 }
 
-async function ensureProviderLandingPage(provider, page) {
+function throwIfRunCancelled(runToken) {
+  if (runToken?.cancelled) {
+    throw workerError('CANCELLED', '요청이 취소되었습니다.');
+  }
+}
+
+async function ensureProviderLandingPage(provider, page, runToken = null) {
   const config = SESSION_PROVIDER_CONFIG[provider];
   if (!config) {
     throw workerError('UNSUPPORTED_PROVIDER', `지원하지 않는 provider입니다: ${provider}`);
   }
   for (const url of config.homeUrls) {
+    throwIfRunCancelled(runToken);
     try {
       await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45_000 });
+      throwIfRunCancelled(runToken);
       return;
-    } catch {
+    } catch (error) {
+      if (error?.code === 'CANCELLED') {
+        throw error;
+      }
       // try next
     }
   }
   throw workerError('NAVIGATION_FAILED', `${provider} 페이지로 이동하지 못했습니다.`);
 }
 
-async function waitForFirstVisible(page, selectors, timeoutMs) {
+async function waitForFirstVisible(page, selectors, timeoutMs, runToken = null) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
+    throwIfRunCancelled(runToken);
     for (const selector of selectors) {
       const locator = page.locator(selector).first();
       try {
@@ -1318,9 +1374,9 @@ async function isLikelyNotLoggedIn(provider, page) {
   return hasVisibleSelector(page, explicitLoginByProvider[provider] ?? []);
 }
 
-async function fillPromptAndSubmit(provider, page, prompt) {
+async function fillPromptAndSubmit(provider, page, prompt, runToken = null) {
   const automation = providerAutomationConfig(provider);
-  const input = await waitForFirstVisible(page, automation.inputSelectors, 15_000);
+  const input = await waitForFirstVisible(page, automation.inputSelectors, 15_000, runToken);
   if (!input) {
     const notLoggedIn = await isLikelyNotLoggedIn(provider, page);
     if (notLoggedIn) {
@@ -1335,16 +1391,21 @@ async function fillPromptAndSubmit(provider, page, prompt) {
     message: '입력창을 찾았습니다.',
   });
 
+  throwIfRunCancelled(runToken);
   await input.click({ timeout: 5_000 });
+  await input.focus();
   const isTextarea = await input.evaluate((el) => el.tagName.toLowerCase() === 'textarea');
   const commandKey = process.platform === 'darwin' ? 'Meta' : 'Control';
 
   if (isTextarea) {
+    throwIfRunCancelled(runToken);
     await input.fill(prompt);
   } else {
+    throwIfRunCancelled(runToken);
     await page.keyboard.press(`${commandKey}+A`);
     await page.keyboard.press('Backspace');
-    await input.type(prompt, { delay: 4 });
+    throwIfRunCancelled(runToken);
+    await page.keyboard.insertText(prompt);
   }
 
   notify('web/progress', {
@@ -1354,6 +1415,7 @@ async function fillPromptAndSubmit(provider, page, prompt) {
   });
 
   for (const selector of automation.submitSelectors) {
+    throwIfRunCancelled(runToken);
     const button = page.locator(selector).first();
     try {
       if ((await button.count()) > 0 && (await button.isVisible())) {
@@ -1366,6 +1428,7 @@ async function fillPromptAndSubmit(provider, page, prompt) {
   }
 
   try {
+    throwIfRunCancelled(runToken);
     await page.keyboard.press('Enter');
   } catch (error) {
     throw workerError('SUBMIT_FAILED', `전송 동작 실패: ${String(error)}`);
@@ -1403,18 +1466,7 @@ async function extractProviderResponseText(provider, page, prompt) {
     'main .prose',
   ]);
 
-  const promptTrimmed = prompt.trim();
-  const filtered = candidates
-    .map((item) => item.text.trim())
-    .filter((text) => text.length >= 24)
-    .filter((text) => text !== promptTrimmed)
-    .filter((text) => !promptTrimmed || !text.startsWith(promptTrimmed));
-
-  if (filtered.length === 0) {
-    return null;
-  }
-
-  return filtered[filtered.length - 1];
+  return pickProviderResponseText(candidates, prompt);
 }
 
 async function waitForProviderResponse(provider, page, prompt, timeoutMs, runToken) {
@@ -1448,13 +1500,16 @@ async function waitForProviderResponse(provider, page, prompt, timeoutMs, runTok
   throw workerError('TIMEOUT', `응답 대기 시간이 초과되었습니다 (${timeoutMs}ms).`);
 }
 
-async function runProviderAutomation(provider, { prompt, timeoutMs }) {
+async function runProviderAutomation(provider, { prompt, timeoutMs, runToken: providedRunToken = null }) {
   const startedAt = nowIso();
   const startedMs = Date.now();
-  const runToken = { cancelled: false, provider };
-  state.activeRun = runToken;
+  const runToken = providedRunToken ?? { cancelled: false, provider };
+  const ownsRunToken = !providedRunToken;
 
   try {
+    if (ownsRunToken) {
+      registerActiveRun(runToken);
+    }
     const wrapped = await ensureProviderContext(provider);
     const { page } = wrapped;
 
@@ -1463,14 +1518,14 @@ async function runProviderAutomation(provider, { prompt, timeoutMs }) {
       stage: 'navigation',
       message: `${provider.toUpperCase()} 페이지를 준비합니다.`,
     });
-    await ensureProviderLandingPage(provider, page);
+    await ensureProviderLandingPage(provider, page, runToken);
 
     notify('web/progress', {
       provider,
       stage: 'input',
       message: '프롬프트 입력을 시작합니다.',
     });
-    await fillPromptAndSubmit(provider, page, prompt);
+    await fillPromptAndSubmit(provider, page, prompt, runToken);
 
     notify('web/progress', {
       provider,
@@ -1496,15 +1551,33 @@ async function runProviderAutomation(provider, { prompt, timeoutMs }) {
       },
     };
   } finally {
-    if (state.activeRun === runToken) {
-      state.activeRun = null;
+    if (ownsRunToken) {
+      unregisterActiveRun(runToken);
     }
   }
 }
 
 async function runProviderBridgeAssisted(provider, { prompt, timeoutMs, runToken }) {
-  if (!state.bridge.server?.listening) {
-    throw workerError('BRIDGE_NOT_RUNNING', '웹 연결 서버가 실행 중이 아닙니다.');
+  const resolvedMode = resolveProviderRunMode({
+    requestedMode: 'bridgeAssisted',
+    provider,
+    bridgeListening: Boolean(state.bridge.server?.listening),
+    connectedProviders: state.bridge.connectedProviders,
+  });
+
+  if (resolvedMode.mode === 'auto') {
+    const fallbackMessage =
+      resolvedMode.fallbackReason === 'bridge_not_running'
+        ? '웹 연결 서버가 없어 자동 브라우저 제어로 전환합니다.'
+        : resolvedMode.fallbackReason === 'bridge_stale'
+          ? '웹 연결이 오래되어 자동 브라우저 제어로 전환합니다.'
+          : '웹 연결이 아직 붙지 않아 자동 브라우저 제어로 전환합니다.';
+    bridgeProgress(provider, 'bridge_fallback_auto', fallbackMessage);
+    return runProviderAutomation(provider, {
+      prompt,
+      timeoutMs,
+      runToken,
+    });
   }
   const startedAt = nowIso();
   const startedMs = Date.now();
@@ -1600,7 +1673,8 @@ async function getHealthResult() {
     providers: providerStatuses,
     logPath: LOG_PATH,
     profileRoot: PROFILE_ROOT,
-    activeProvider: state.activeRun?.provider ?? null,
+    activeProvider: Array.from(state.activeRuns.keys())[0] ?? null,
+    activeProviders: Array.from(state.activeRuns.keys()),
     bridge: bridgeStatusPayload({ exposeToken: false }),
   };
 }
@@ -1628,12 +1702,36 @@ async function resetProviderSession(provider) {
 }
 
 async function cancelProviderRun(provider) {
-  if (!state.activeRun || state.activeRun.provider !== provider) {
-    return { ok: true, cancelled: false };
+  const normalizedProvider = String(provider ?? '').trim().toLowerCase();
+  const activeRuns = state.activeRuns.get(normalizedProvider);
+  let cancelledCount = 0;
+  if (activeRuns?.size) {
+    for (const runToken of activeRuns) {
+      if (!runToken.cancelled) {
+        runToken.cancelled = true;
+        cancelledCount += 1;
+      }
+    }
   }
-
-  state.activeRun.cancelled = true;
-  return { ok: true, cancelled: true };
+  for (const task of state.bridge.tasks.values()) {
+    if (task.provider !== normalizedProvider || task.settled) {
+      continue;
+    }
+    task.status = 'failed';
+    failBridgeTask(task, 'CANCELLED', '요청이 취소되었습니다.');
+    cancelledCount += 1;
+  }
+  const wrapped = state.providers.get(normalizedProvider);
+  if (cancelledCount > 0 && wrapped) {
+    try {
+      await wrapped.context.close();
+    } catch {
+      // ignore
+    }
+    wrapped.contextClosed = true;
+    state.providers.delete(normalizedProvider);
+  }
+  return { ok: true, cancelled: cancelledCount > 0, cancelledCount };
 }
 
 async function closeAllProviderContexts() {
@@ -1708,7 +1806,7 @@ async function handleRpcRequest(message) {
     const prompt = String(params.prompt ?? '');
     const timeoutMs = Number(params.timeoutMs ?? DEFAULT_TIMEOUT_MS);
     const modeRaw = String(params.mode ?? 'auto').trim();
-    const mode = modeRaw === 'bridgeAssisted' ? 'bridgeAssisted' : 'auto';
+    const requestedMode = modeRaw === 'bridgeAssisted' ? 'bridgeAssisted' : 'auto';
 
     if (!provider) {
       respond(id, {
@@ -1739,35 +1837,37 @@ async function handleRpcRequest(message) {
 
     try {
       const safeTimeoutMs = Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : DEFAULT_TIMEOUT_MS;
+      const runToken = { cancelled: false, provider };
+      registerActiveRun(runToken);
       let result;
-      if (mode === 'bridgeAssisted') {
-        const runToken = { cancelled: false, provider };
-        state.activeRun = runToken;
-        try {
-          result = await runProviderBridgeAssisted(provider, {
+      try {
+        result = await runProviderOperationExclusive(provider, async () => {
+          throwIfRunCancelled(runToken);
+          if (requestedMode === 'bridgeAssisted') {
+            return runProviderBridgeAssisted(provider, {
+              prompt,
+              timeoutMs: safeTimeoutMs,
+              runToken,
+            });
+          }
+          return runProviderAutomation(provider, {
             prompt,
             timeoutMs: safeTimeoutMs,
             runToken,
           });
-        } finally {
-          if (state.activeRun === runToken) {
-            state.activeRun = null;
-          }
-        }
-      } else {
-        result = await runProviderAutomation(provider, {
-          prompt,
-          timeoutMs: safeTimeoutMs,
         });
+      } finally {
+        unregisterActiveRun(runToken);
       }
       respond(id, result);
     } catch (error) {
-      const code = error?.code || (mode === 'bridgeAssisted' ? 'BRIDGE_FAILED' : 'EXTRACTION_FAILED');
+      const code =
+        error?.code || (requestedMode === 'bridgeAssisted' ? 'BRIDGE_FAILED' : 'EXTRACTION_FAILED');
       const messageText = error?.message || String(error);
       state.lastError = `${code}: ${messageText}`;
       notify('web/progress', {
         provider,
-        stage: mode === 'bridgeAssisted' ? 'bridge_error' : 'error',
+        stage: requestedMode === 'bridgeAssisted' ? 'bridge_error' : 'error',
         message: state.lastError,
       });
       respond(id, {
@@ -1790,7 +1890,7 @@ async function handleRpcRequest(message) {
       return;
     }
     try {
-      const result = await openProviderSession(provider);
+      const result = await runProviderOperationExclusive(provider, async () => openProviderSession(provider));
       respond(id, result);
     } catch (error) {
       const code = error?.code || 'INTERNAL';
@@ -1808,7 +1908,7 @@ async function handleRpcRequest(message) {
     }
 
     try {
-      const result = await resetProviderSession(provider);
+      const result = await runProviderOperationExclusive(provider, async () => resetProviderSession(provider));
       respond(id, result);
     } catch (error) {
       respond(id, {

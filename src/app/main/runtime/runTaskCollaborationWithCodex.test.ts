@@ -159,6 +159,72 @@ describe("runTaskCollaborationWithCodex", () => {
     expect(executeRoleRun).not.toHaveBeenCalledWith(expect.objectContaining({ promptMode: "final" }));
   });
 
+  it("aborts the whole collaboration immediately when a participant run is interrupted by the user", async () => {
+    const executeRoleRun = vi.fn(async (params: {
+      roleId: string;
+      promptMode: "orchestrate" | "brief" | "critique" | "final";
+    }) => {
+      if (params.roleId === "researcher" && params.promptMode === "brief") {
+        throw new Error("현재 작업을 중단했습니다.");
+      }
+      return {
+        roleId: params.roleId,
+        runId: `${params.roleId}-${params.promptMode}`,
+        summary: `${params.roleId}-${params.promptMode}-summary`,
+        artifactPaths: [`/${params.roleId}/${params.promptMode}.md`],
+      };
+    });
+
+    await expect(
+      runTaskCollaborationWithCodex({
+        prompt: "스팀 장르를 조사해줘",
+        contextSummary: "관련 스레드 없음",
+        participantRoleIds: ["researcher", "unity_architect"],
+        synthesisRoleId: "researcher",
+        criticRoleId: "unity_architect",
+        cappedParticipantCount: false,
+        executeRoleRun,
+      }),
+    ).rejects.toThrow("현재 작업을 중단했습니다.");
+
+    expect(executeRoleRun).toHaveBeenCalledTimes(1);
+    expect(executeRoleRun).not.toHaveBeenCalledWith(expect.objectContaining({ promptMode: "critique" }));
+    expect(executeRoleRun).not.toHaveBeenCalledWith(expect.objectContaining({ promptMode: "final" }));
+  });
+
+  it("aborts the whole collaboration immediately when a participant run is interrupted by the user", async () => {
+    const executeRoleRun = vi.fn(async (params: {
+      roleId: string;
+      promptMode: "orchestrate" | "brief" | "critique" | "final";
+    }) => {
+      if (params.roleId === "researcher" && params.promptMode === "brief") {
+        throw new Error("현재 작업을 중단했습니다.");
+      }
+      return {
+        roleId: params.roleId,
+        runId: `${params.roleId}-${params.promptMode}`,
+        summary: `${params.roleId}-${params.promptMode}-summary`,
+        artifactPaths: [`/${params.roleId}/${params.promptMode}.md`],
+      };
+    });
+
+    await expect(
+      runTaskCollaborationWithCodex({
+        prompt: "스팀 장르를 조사해줘",
+        contextSummary: "관련 스레드 없음",
+        participantRoleIds: ["researcher", "unity_architect"],
+        synthesisRoleId: "researcher",
+        criticRoleId: "unity_architect",
+        cappedParticipantCount: false,
+        executeRoleRun,
+      }),
+    ).rejects.toThrow("현재 작업을 중단했습니다.");
+
+    expect(executeRoleRun).toHaveBeenCalledTimes(1);
+    expect(executeRoleRun).not.toHaveBeenCalledWith(expect.objectContaining({ promptMode: "critique" }));
+    expect(executeRoleRun).not.toHaveBeenCalledWith(expect.objectContaining({ promptMode: "final" }));
+  });
+
   it("retries critique and final synthesis on transient RPC errors", async () => {
     const executeRoleRun = vi.fn(async (params: {
       roleId: string;

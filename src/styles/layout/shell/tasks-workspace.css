@@ -812,13 +812,18 @@
 .tasks-thread-title-button {
   cursor: text;
   min-width: 0;
+  max-width: 100%;
+  justify-self: flex-start;
+  width: auto;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .tasks-thread-title-input {
+  justify-self: flex-start;
   width: min(100%, 440px);
+  max-width: 100%;
 }
 
 .tasks-thread-title-button:focus,
@@ -1020,6 +1025,7 @@
 .tasks-thread-log-line {
   max-width: min(820px, 96%);
   min-width: 0;
+  width: min(820px, 96%);
   padding: 0;
   background: transparent;
   color: var(--text-main);
@@ -1027,8 +1033,10 @@
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+  white-space: normal;
   overflow-wrap: anywhere;
   word-break: break-word;
+  overflow-x: hidden;
 }
 
 .tasks-thread-message-row.is-assistant .tasks-thread-log-line {
@@ -1037,6 +1045,21 @@
   width: min(820px, 96%);
   max-width: min(820px, 96%);
   min-width: 0;
+}
+
+.tasks-thread-log-line.is-interruption-badge {
+  width: fit-content;
+  max-width: min(100%, 820px);
+  min-height: 24px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: #dc2626;
+  color: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  line-height: 1.3;
+  white-space: nowrap;
 }
 
 .tasks-thread-message-markdown {
@@ -1131,6 +1154,12 @@
 
 .tasks-thread-message-row.is-live-placeholder {
   opacity: 0.8;
+  overflow-x: hidden;
+}
+
+.tasks-thread-message-row.is-live-placeholder > * {
+  min-width: 0;
+  max-width: min(100%, 840px);
 }
 
 .tasks-thread-live-header {
@@ -1138,6 +1167,8 @@
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+  min-width: 0;
+  width: min(100%, 840px);
 }
 
 .tasks-thread-live-stage {
@@ -1231,25 +1262,32 @@
 }
 
 .tasks-thread-live-detail {
+  width: min(100%, 820px);
   max-width: min(100%, 820px);
   color: var(--text-muted);
   font-size: 11px;
   line-height: 1.45;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .tasks-thread-live-metrics {
   display: grid;
   gap: 8px;
   width: min(100%, 840px);
+  max-width: min(100%, 840px);
+  min-width: 0;
   margin: 2px 0 0;
   padding: 10px 12px;
   border-radius: 10px;
   background: rgba(249, 250, 253, 1);
+  overflow-x: hidden;
 }
 
 .tasks-thread-live-metrics > div {
   display: grid;
   gap: 2px;
+  min-width: 0;
 }
 
 .tasks-thread-live-metrics dt {
@@ -1264,6 +1302,9 @@
   color: var(--text-main);
   font-size: 12px;
   line-height: 1.5;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .tasks-thread-message-row.is-process {
@@ -1275,6 +1316,8 @@
 }
 
 .tasks-thread-message-row.is-user .tasks-thread-log-line {
+  width: auto;
+  max-width: min(820px, 96%);
   background: rgb(238, 238, 238);
   padding: 0.7rem 1.2rem 0.7rem 1.2rem;
   border-radius: 12px 0 12px 12px;
@@ -1727,6 +1770,112 @@
   align-items: center;
   gap: 6px;
   margin-bottom: 5px;
+}
+
+.tasks-thread-provider-status-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px;
+  width: min(var(--tasks-reading-width), calc(100% - (var(--tasks-main-gutter) * 2)));
+  max-width: var(--tasks-reading-width);
+  justify-self: center;
+  box-sizing: border-box;
+  /* margin: 6px 0 10px; */
+}
+
+.tasks-thread-provider-status-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: min(220px, 100%);
+  max-width: min(100%, 320px);
+  padding: 9px 10px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--surface-soft) 74%, #ffffff);
+}
+
+.tasks-thread-provider-status-card strong {
+  font-size: 11px;
+  color: var(--text-main);
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.tasks-thread-provider-status-card span {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.45;
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tasks-thread-provider-status-card.is-active {
+  border-radius: 4px;
+  background: color-mix(in srgb, #dff3e7 72%, #ffffff);
+}
+
+.tasks-thread-provider-status-card.is-login_required {
+  background: color-mix(in srgb, #fff0d6 78%, #ffffff);
+}
+
+.tasks-thread-provider-status-card.is-unavailable,
+.tasks-thread-provider-status-card.is-error {
+  background: color-mix(in srgb, #fde6e6 78%, #ffffff);
+}
+
+.tasks-thread-provider-status-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  flex: 0 0 auto;
+  margin-left: auto;
+  gap: 6px;
+}
+
+.tasks-thread-provider-status-actions > button:not(.tasks-thread-provider-status-refresh) {
+  position: relative;
+  top: 1.5px;
+}
+
+.tasks-thread-provider-status-actions button,
+.tasks-thread-provider-status-refresh {
+  border: 0;
+  border-radius: 999px;
+  padding: 5px 10px;
+  background: #dde3ea;
+  color: var(--text-main);
+  font-size: 10px;
+  line-height: 1.2;
+  align-self: flex-start;
+}
+
+.tasks-thread-provider-status-refresh {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  min-height: 24px;
+  padding: 0;
+  line-height: 0;
+  position: relative;
+  top: 0;
+}
+
+.tasks-thread-provider-status-refresh img {
+  width: 12px;
+  height: 12px;
+  display: block;
+}
+
+.tasks-thread-provider-status-refresh:disabled {
+  opacity: 0.55;
+  cursor: wait;
 }
 
 .tasks-thread-coordination-preview {
@@ -2533,10 +2682,36 @@
   color: #57606a;
 }
 
-.tasks-thread-confirm-modal {
-  width: min(360px, calc(100vw - 32px));
+.approval-modal.tasks-thread-confirm-modal {
+  width: fit-content;
+  min-width: 0;
+  max-width: calc(100vw - 32px);
   display: grid;
-  gap: 12px;
+  gap: 10px;
+  justify-items: center;
+  padding: 18px 18px 16px;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+.tasks-thread-confirm-modal h2,
+.tasks-thread-confirm-modal p {
+  margin: 0;
+}
+
+.tasks-thread-confirm-modal p {
+  width: fit-content;
+  max-width: min(26ch, calc(100vw - 68px));
+}
+
+.tasks-thread-confirm-modal .tasks-thread-approval-actions {
+  width: 100%;
+  justify-content: center;
+}
+
+.tasks-thread-confirm-modal .tasks-thread-approval-actions button {
+  min-width: 96px;
+  justify-content: center;
 }
 
 @media (max-width: 1400px) {

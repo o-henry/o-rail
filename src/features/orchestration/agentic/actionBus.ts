@@ -43,11 +43,12 @@ export type AgenticAction =
     }
   | {
       type: "run_role";
-    payload: {
+      payload: {
         roleId: string;
         taskId: string;
         prompt?: string;
         runId?: string;
+        preferredModels?: string[];
         creativeMode?: boolean;
         sourceTab?: "agents" | "workflow" | "workbench" | "tasks" | "tasks-thread";
         handoffToRole?: string;
@@ -71,6 +72,7 @@ export type AgenticAction =
         criticRoleId?: string;
         cappedParticipantCount?: boolean;
         useAdaptiveOrchestrator?: boolean;
+        preferredModels?: string[];
       };
     }
   | {

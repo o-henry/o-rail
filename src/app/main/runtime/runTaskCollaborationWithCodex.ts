@@ -19,6 +19,7 @@ type ExecuteRoleRun = (params: {
   intent?: string;
   internal: boolean;
   model?: string;
+  models?: string[];
   reasoning?: string;
   outputArtifactName?: string;
   includeRoleKnowledge?: boolean;
@@ -59,10 +60,19 @@ function shouldPreferThreadRuntimeModel(model?: string): boolean {
 
 function resolveStageRuntime(params: {
   preferredModel?: string;
+  preferredModels?: string[];
   preferredReasoning?: string;
   fallbackModel: string;
   fallbackReasoning: string;
-}): { model?: string; reasoning?: string } {
+}): { model?: string; models?: string[]; reasoning?: string } {
+  const preferredModels = [...new Set((params.preferredModels ?? []).map((value) => String(value ?? "").trim()).filter(Boolean))];
+  if (preferredModels.length > 0 && preferredModels.every((value) => shouldPreferThreadRuntimeModel(value))) {
+    return {
+      model: preferredModels[0],
+      models: preferredModels,
+      reasoning: String(params.preferredReasoning ?? "").trim() || undefined,
+    };
+  }
   if (shouldPreferThreadRuntimeModel(params.preferredModel)) {
     return {
       model: String(params.preferredModel ?? "").trim() || undefined,
@@ -222,6 +232,17 @@ function normalizeErrorText(error: unknown): string {
   return String(error ?? "").trim().toLowerCase();
 }
 
+function isUserInterruptedError(error: unknown): boolean {
+  const text = normalizeErrorText(error);
+  return (
+    text.includes("cancelled") ||
+    text.includes("canceled") ||
+    text.includes("interrupted") ||
+    text.includes("중단") ||
+    text.includes("취소")
+  );
+}
+
 function isRetryableStageError(error: unknown): boolean {
   const text = normalizeErrorText(error);
   return (
@@ -247,6 +268,7 @@ async function executeRoleRunWithRetry(params: {
   intent?: string;
   internal: boolean;
   model?: string;
+  models?: string[];
   reasoning?: string;
   outputArtifactName?: string;
   includeRoleKnowledge?: boolean;
@@ -263,11 +285,15 @@ async function executeRoleRunWithRetry(params: {
         intent: params.intent,
         internal: params.internal,
         model: params.model,
+        models: params.models,
         reasoning: params.reasoning,
         outputArtifactName: params.outputArtifactName,
         includeRoleKnowledge: params.includeRoleKnowledge,
       });
     } catch (error) {
+      if (isUserInterruptedError(error)) {
+        throw error instanceof Error ? error : new Error(String(error ?? "cancelled"));
+      }
       lastError = error;
       const canRetry = attempt < params.maxAttempts && isRetryableStageError(error);
       if (canRetry) {
@@ -294,6 +320,7 @@ export async function runTaskCollaborationWithCodex(params: {
   cappedParticipantCount: boolean;
   useAdaptiveOrchestrator?: boolean;
   preferredModel?: string;
+  preferredModels?: string[];
   preferredReasoning?: string;
   executeRoleRun: ExecuteRoleRun;
   onProgress?: (progress: CollaborationProgress) => void;
@@ -323,6 +350,7 @@ export async function runTaskCollaborationWithCodex(params: {
       try {
         const orchestrationRuntime = resolveStageRuntime({
           preferredModel: params.preferredModel,
+          preferredModels: params.preferredModels,
           preferredReasoning: params.preferredReasoning,
           fallbackModel: ORCHESTRATOR_MODEL,
           fallbackReasoning: ORCHESTRATOR_REASONING,
@@ -345,6 +373,7 @@ export async function runTaskCollaborationWithCodex(params: {
           intent: params.intent,
           internal: true,
           model: orchestrationRuntime.model,
+          models: orchestrationRuntime.models,
           reasoning: orchestrationRuntime.reasoning,
           outputArtifactName: "orchestration_plan.json",
           includeRoleKnowledge: false,
@@ -379,6 +408,9 @@ export async function runTaskCollaborationWithCodex(params: {
           });
         }
       } catch (error) {
+        if (isUserInterruptedError(error)) {
+          throw error;
+        }
         params.onProgress?.({
           roleId: synthesisRoleId,
           stage: "codex",
@@ -399,6 +431,7 @@ export async function runTaskCollaborationWithCodex(params: {
     const participantPrompt = String(participantPrompts[roleId] ?? params.prompt).trim();
     const briefRuntime = resolveStageRuntime({
       preferredModel: params.preferredModel,
+      preferredModels: params.preferredModels,
       preferredReasoning: params.preferredReasoning,
       fallbackModel: BRIEF_MODEL,
       fallbackReasoning: BRIEF_REASONING,
@@ -426,6 +459,7 @@ export async function runTaskCollaborationWithCodex(params: {
         intent: params.intent,
         internal: true,
         model: briefRuntime.model,
+        models: briefRuntime.models,
         reasoning: briefRuntime.reasoning,
         outputArtifactName: "discussion_brief.md",
         includeRoleKnowledge: false,
@@ -438,6 +472,9 @@ export async function runTaskCollaborationWithCodex(params: {
       }));
       lastError = null;
     } catch (error) {
+      if (isUserInterruptedError(error)) {
+        throw error;
+      }
       lastError = error;
       params.onProgress?.({
         roleId,
@@ -455,6 +492,7 @@ export async function runTaskCollaborationWithCodex(params: {
   if (criticRoleId && criticRoleId !== synthesisRoleId && participantResults.length > 1) {
     const critiqueRuntime = resolveStageRuntime({
       preferredModel: params.preferredModel,
+      preferredModels: params.preferredModels,
       preferredReasoning: params.preferredReasoning,
       fallbackModel: CRITIQUE_MODEL,
       fallbackReasoning: CRITIQUE_REASONING,
@@ -478,6 +516,7 @@ export async function runTaskCollaborationWithCodex(params: {
         intent: params.intent,
         internal: true,
         model: critiqueRuntime.model,
+        models: critiqueRuntime.models,
         reasoning: critiqueRuntime.reasoning,
         outputArtifactName: "discussion_critique.md",
         includeRoleKnowledge: false,
@@ -489,6 +528,9 @@ export async function runTaskCollaborationWithCodex(params: {
         }),
       });
     } catch (error) {
+      if (isUserInterruptedError(error)) {
+        throw error;
+      }
       params.onProgress?.({
         roleId: criticRoleId,
         stage: "critic",
@@ -504,6 +546,7 @@ export async function runTaskCollaborationWithCodex(params: {
   });
   const finalRuntime = resolveStageRuntime({
     preferredModel: params.preferredModel,
+    preferredModels: params.preferredModels,
     preferredReasoning: params.preferredReasoning,
     fallbackModel: FINAL_MODEL,
     fallbackReasoning: FINAL_REASONING,
@@ -527,6 +570,7 @@ export async function runTaskCollaborationWithCodex(params: {
     intent: params.intent,
     internal: false,
     model: finalRuntime.model,
+    models: finalRuntime.models,
     reasoning: finalRuntime.reasoning,
     outputArtifactName: "final_response.md",
     includeRoleKnowledge: true,

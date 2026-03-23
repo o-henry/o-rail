@@ -10,6 +10,7 @@ import { buildTaskRoleLearningPromptContext } from "../../adaptation/taskRoleLea
 import type { WebProviderRunResult } from "../types";
 
 type InvokeFn = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
+type ExternalFallbackProvider = "steel" | "lightpanda_experimental";
 
 type TaskAgentPromptPack = {
   id: string;
@@ -53,6 +54,7 @@ type RunTaskRoleWithCodexInput = {
   studioRoleId: string;
   prompt?: string;
   model?: string;
+  models?: string[];
   reasoning?: string;
   outputArtifactName?: string;
   sourceTab: "tasks" | "tasks-thread";
@@ -63,6 +65,7 @@ type RunTaskRoleWithCodexInput = {
     codexThreadId?: string | null;
     codexTurnId?: string | null;
     provider?: string | null;
+    providers?: string[];
   }) => void;
 };
 
@@ -81,6 +84,23 @@ function resolvePreferredRuntimeModel(params: {
 }): string {
   const resolved = String(params.inputModel || params.threadModel || params.packModel || "GPT-5.4").trim();
   return toTurnModelDisplayName(resolved || "GPT-5.4");
+}
+
+function resolvePreferredRuntimeModels(params: {
+  inputModels?: string[];
+  inputModel?: string;
+  threadModel?: string;
+  packModel?: string;
+}): string[] {
+  const normalizedModels = [...new Set(
+    (params.inputModels ?? [])
+      .map((value) => toTurnModelDisplayName(String(value ?? "").trim()))
+      .filter(Boolean),
+  )];
+  if (normalizedModels.length > 0) {
+    return normalizedModels;
+  }
+  return [resolvePreferredRuntimeModel(params)];
 }
 
 function resolveRolePollTimeoutMs(params: {
@@ -208,6 +228,164 @@ function buildRoleTurnPrompt(
     `- 실제로 수정한 파일이 있으면 파일 경로와 변경 이유를 짧게 적는다.`,
     `- 작업을 못 했다면 못 한 이유를 숨기지 않는다.`,
   ].join("\n");
+}
+
+function extractMarkdownSection(input: string, headings: string[]): string {
+  const normalized = String(input ?? "").trim();
+  if (!normalized) {
+    return "";
+  }
+  const pattern = headings
+    .map((heading) => heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    .join("|");
+  const match = normalized.match(
+    new RegExp(`^\\s*#{1,6}\\s*(?:${pattern})\\s*$\\s*([\\s\\S]*?)(?=^\\s*#{1,6}\\s+\\S|$)`, "im"),
+  );
+  return String(match?.[1] ?? "").trim();
+}
+
+function extractWebPromptRequest(input: string): string {
+  const normalized = String(input ?? "").trim();
+  if (!normalized) {
+    return "";
+  }
+  const taggedRequest = normalized.match(/<task_request>\s*([\s\S]*?)\s*<\/task_request>/i)?.[1]?.trim();
+  if (taggedRequest) {
+    return taggedRequest;
+  }
+  const markdownRequest = extractMarkdownSection(normalized, ["USER REQUEST", "사용자 요청"]);
+  if (markdownRequest) {
+    return extractWebPromptRequest(markdownRequest);
+  }
+  const withoutRoleKb = normalized.split("[ROLE_KB_INJECT]")[0]?.trim() || normalized;
+  const strippedSections = withoutRoleKb.replace(
+    /^\s*#{1,6}\s*(?:작업 모드|ROLE|WORKSPACE|DEVELOPER INSTRUCTIONS|협업 규칙|역할별 배정|압축된 스레드 컨텍스트|OUTPUT RULES|ROLE-SPECIFIC GOALS)\s*$[\s\S]*?(?=^\s*#{1,6}\s+\S|$)/gim,
+    " ",
+  ).trim();
+  return strippedSections.replace(/\n{3,}/g, "\n\n").trim();
+}
+
+function extractWebPromptGuidelines(input: string): string[] {
+  const sections = [
+    extractMarkdownSection(input, ["ROLE-SPECIFIC GOALS"]),
+    extractMarkdownSection(input, ["협업 규칙"]),
+  ]
+    .map((value) => String(value ?? "").trim())
+    .filter(Boolean);
+  const lines = sections
+    .flatMap((section) => section.split(/\r?\n/))
+    .map((line) => line.replace(/^\s*[-*]\s*/, "").trim())
+    .filter((line) => line.length > 0)
+    .filter((line) => !/^(참여 에이전트 수|작업 경로|현재 목표|현재 단계|최근 대화|TASK_ID|GOAL|MODE|TEAM|ISOLATION)\b/i.test(line));
+  return [...new Set(lines)].slice(0, 4);
+}
+
+function buildWebProviderPrompt(params: {
+  pack: TaskAgentPromptPack;
+  promptText: string;
+}): string {
+  const request = extractWebPromptRequest(params.promptText);
+  const guidelines = extractWebPromptGuidelines(params.promptText);
+  const lines = [
+    `역할: ${params.pack.label}`,
+    "",
+    `사용자 요청:`,
+    request || "사용자 요청을 찾지 못했습니다. 아래 문맥을 바탕으로 가장 그럴듯한 실제 요청을 복원해 답변하세요.",
+  ];
+  if (guidelines.length > 0) {
+    lines.push("", "추가 지침:");
+    for (const line of guidelines) {
+      lines.push(`- ${line}`);
+    }
+  }
+  lines.push(
+    "",
+    "답변 규칙:",
+    "- 한국어로만 답변한다.",
+    "- 내부 역할 배정, 작업 모드, 스레드 메타데이터를 반복하지 않는다.",
+    "- 최종 사용자에게 바로 보여줄 수 있는 답변만 작성한다.",
+  );
+  return lines.join("\n").trim();
+}
+
+function shouldUseExternalWebFallback(provider: string): boolean {
+  const normalized = String(provider ?? "").trim().toLowerCase();
+  return ["gemini", "gpt", "grok", "perplexity", "claude"].includes(normalized);
+}
+
+async function resolveReadyExternalWebFallbackProviders(params: {
+  invokeFn: InvokeFn;
+  cwd: string;
+}): Promise<ExternalFallbackProvider[]> {
+  const providers: ExternalFallbackProvider[] = ["steel", "lightpanda_experimental"];
+  const healthChecks = await Promise.all(
+    providers.map(async (provider) => {
+      try {
+        const health = await params.invokeFn<{ ready?: boolean }>("dashboard_crawl_provider_health", {
+          cwd: params.cwd,
+          provider,
+        });
+        return Boolean(health?.ready) ? provider : null;
+      } catch {
+        return null;
+      }
+    }),
+  );
+  return healthChecks.filter(Boolean) as ExternalFallbackProvider[];
+}
+
+async function runWebProviderWithFallback(params: {
+  invokeFn: InvokeFn;
+  provider: string;
+  prompt: string;
+  timeoutMs: number;
+  cwd: string;
+  fallbackProviders: ExternalFallbackProvider[];
+}): Promise<{
+  requestedProvider: string;
+  effectiveProvider: string;
+  result: WebProviderRunResult;
+}> {
+  const directResult = await params.invokeFn<WebProviderRunResult>("web_provider_run", {
+    provider: params.provider,
+    prompt: params.prompt,
+    timeoutMs: params.timeoutMs,
+    mode: "bridgeAssisted",
+    cwd: params.cwd,
+  });
+  const directText = String(directResult.text ?? "").trim();
+  if (directResult.ok && directText) {
+    return {
+      requestedProvider: params.provider,
+      effectiveProvider: params.provider,
+      result: directResult,
+    };
+  }
+  if (!shouldUseExternalWebFallback(params.provider) || params.fallbackProviders.length === 0) {
+    throw new Error(directResult.error || `${params.provider} web provider returned no usable response`);
+  }
+  const fallbackErrors = [
+    `${params.provider}: ${String(directResult.error || "no usable response")}`,
+  ];
+  for (const fallbackProvider of params.fallbackProviders) {
+    const fallbackResult = await params.invokeFn<WebProviderRunResult>("web_provider_run", {
+      provider: fallbackProvider,
+      prompt: params.prompt,
+      timeoutMs: params.timeoutMs,
+      mode: "auto",
+      cwd: params.cwd,
+    });
+    const fallbackText = String(fallbackResult.text ?? "").trim();
+    if (fallbackResult.ok && fallbackText) {
+      return {
+        requestedProvider: params.provider,
+        effectiveProvider: fallbackProvider,
+        result: fallbackResult,
+      };
+    }
+    fallbackErrors.push(`${fallbackProvider}: ${String(fallbackResult.error || "no usable response")}`);
+  }
+  throw new Error(fallbackErrors.join(" | "));
 }
 
 function resolvePromptModeDeveloperInstructions(params: {
@@ -677,14 +855,25 @@ export async function runTaskRoleWithCodex(input: RunTaskRoleWithCodexInput): Pr
     storageCwd: input.storageCwd,
   });
   const sandboxMode = normalizeSandboxMode(pack.sandboxMode);
-  const selectedModel = resolvePreferredRuntimeModel({
+  const selectedModels = resolvePreferredRuntimeModels({
+    inputModels: input.models,
     inputModel: input.model,
     threadModel: context.threadModel,
     packModel: pack.model,
   });
-  const runtimeModelOption = findRuntimeModelOption(selectedModel);
+  const primarySelectedModel = selectedModels[0] ?? "GPT-5.4";
+  const runtimeModelOption = findRuntimeModelOption(primarySelectedModel);
   const webProvider = getWebProviderFromExecutor(runtimeModelOption.executor);
-  const modelEngine = toTurnModelEngineId(selectedModel);
+  const webProviders = [...new Set(
+    selectedModels
+      .map((model) => {
+        const option = findRuntimeModelOption(model);
+        const provider = getWebProviderFromExecutor(option.executor);
+        return provider ? { model, option, provider } : null;
+      })
+      .filter(Boolean) as Array<{ model: string; option: ReturnType<typeof findRuntimeModelOption>; provider: string }>,
+  )];
+  const modelEngine = toTurnModelEngineId(primarySelectedModel);
   const reasoningEffort = toTurnReasoningEffort(
     input.reasoning || context.threadReasoning || pack.modelReasoningEffort || "중간",
   );
@@ -705,6 +894,16 @@ export async function runTaskRoleWithCodex(input: RunTaskRoleWithCodexInput): Pr
     input.promptMode,
     layeredPromptContext,
   );
+  const webPromptText = buildWebProviderPrompt({
+    pack,
+    promptText,
+  });
+  const readyExternalFallbackProviders = webProviders.some(({ provider }) => shouldUseExternalWebFallback(provider))
+    ? await resolveReadyExternalWebFallbackProviders({
+      invokeFn: input.invokeFn,
+      cwd: context.projectPath,
+    })
+    : [];
   const pollTimeoutMs = resolveRolePollTimeoutMs({
     studioRoleId: pack.studioRoleId,
     intent: input.intent,
@@ -718,20 +917,94 @@ export async function runTaskRoleWithCodex(input: RunTaskRoleWithCodexInput): Pr
   let codexThreadId: string | undefined;
   let codexTurnId: string | undefined;
 
-  if (webProvider) {
-    const webTimeoutMs = resolveWebProviderTimeoutMs(webProvider, pollTimeoutMs);
+  if (webProviders.length > 1) {
+    const providerNames = webProviders.map((entry) => entry.provider);
+    const webTimeoutMs = providerNames.reduce(
+      (currentMax, provider) => Math.max(currentMax, resolveWebProviderTimeoutMs(provider, pollTimeoutMs)),
+      pollTimeoutMs,
+    );
     input.onRuntimeSession?.({
-      provider: webProvider,
+      provider: providerNames[0] ?? null,
+      providers: providerNames,
       codexThreadId: null,
       codexTurnId: null,
     });
-    const webResult = await input.invokeFn<WebProviderRunResult>("web_provider_run", {
-      provider: webProvider,
-      prompt: promptText,
-      timeoutMs: webTimeoutMs,
-      mode: "bridgeAssisted",
-      cwd: context.projectPath,
+    const providerResults = await Promise.allSettled(
+      webProviders.map(async ({ model, provider }) => {
+        const webRun = await runWebProviderWithFallback({
+          invokeFn: input.invokeFn,
+          provider,
+          prompt: webPromptText,
+          timeoutMs: webTimeoutMs,
+          cwd: context.projectPath,
+          fallbackProviders: readyExternalFallbackProviders,
+        });
+        return {
+          model,
+          provider: webRun.requestedProvider,
+          effectiveProvider: webRun.effectiveProvider,
+          result: webRun.result,
+        };
+      }),
+    );
+    const successfulResults = providerResults.flatMap((entry) => {
+      if (entry.status !== "fulfilled") {
+        return [];
+      }
+      const text = String(entry.value.result.text ?? "").trim();
+      if (!entry.value.result.ok || !text) {
+        return [];
+      }
+      return [{
+        model: entry.value.model,
+        provider: entry.value.provider,
+        effectiveProvider: entry.value.effectiveProvider,
+        text,
+        raw: entry.value.result.raw ?? entry.value.result,
+      }];
     });
+    if (successfulResults.length === 0) {
+      const errors = providerResults.map((entry, index) => {
+        const provider = providerNames[index] ?? `provider-${index + 1}`;
+        if (entry.status !== "fulfilled") {
+          return `${provider}: ${String(entry.reason ?? "unknown error")}`;
+        }
+        return `${provider}: ${String(entry.value.result.error || "no usable response")}`;
+      });
+      throw new Error(errors.join(" | "));
+    }
+    rawResponse = successfulResults.map(({ model, provider, raw, text }) => ({
+      model,
+      provider,
+      text,
+      raw,
+    }));
+    summary = successfulResults
+      .map(({ provider, effectiveProvider, text }) => {
+        const requestedLabel = String(provider ?? "").trim().toUpperCase();
+        const effectiveLabel = String(effectiveProvider ?? provider ?? "").trim().toUpperCase();
+        const heading = requestedLabel === effectiveLabel ? requestedLabel : `${requestedLabel} -> ${effectiveLabel}`;
+        return `## ${heading}\n${text}`;
+      })
+      .join("\n\n");
+    completedStatus = "completed";
+  } else if (webProvider) {
+    const webTimeoutMs = resolveWebProviderTimeoutMs(webProvider, pollTimeoutMs);
+    input.onRuntimeSession?.({
+      provider: webProvider,
+      providers: [webProvider],
+      codexThreadId: null,
+      codexTurnId: null,
+    });
+    const webRun = await runWebProviderWithFallback({
+      invokeFn: input.invokeFn,
+      provider: webProvider,
+      prompt: webPromptText,
+      timeoutMs: webTimeoutMs,
+      cwd: context.projectPath,
+      fallbackProviders: readyExternalFallbackProviders,
+    });
+    const webResult = webRun.result;
     rawResponse = webResult.raw ?? webResult;
     if (!webResult.ok || !String(webResult.text ?? "").trim()) {
       throw new Error(webResult.error || `${webProvider} web provider returned no usable response`);
@@ -749,8 +1022,9 @@ export async function runTaskRoleWithCodex(input: RunTaskRoleWithCodexInput): Pr
     input.onRuntimeSession?.({
       codexThreadId,
       codexTurnId: null,
-      provider: null,
-    });
+        provider: null,
+        providers: [],
+      });
     const turnStart = await startCodexTurnWithRecovery({
       invokeFn: input.invokeFn,
       threadId: threadStart.threadId,
@@ -791,6 +1065,7 @@ export async function runTaskRoleWithCodex(input: RunTaskRoleWithCodexInput): Pr
       codexThreadId: codexThreadId ?? null,
       codexTurnId: codexTurnId ?? null,
       provider: null,
+      providers: [],
     });
   }
 
@@ -812,9 +1087,11 @@ export async function runTaskRoleWithCodex(input: RunTaskRoleWithCodexInput): Pr
         taskId: input.taskId,
         studioRoleId: input.studioRoleId,
         projectPath: context.projectPath,
-        model: selectedModel,
+        model: primarySelectedModel,
+        models: selectedModels,
         executor: runtimeModelOption.executor,
         webProvider: webProvider ?? null,
+        webProviders: webProviders.map((entry) => entry.provider),
         modelEngine: webProvider ? null : modelEngine,
         reasoningEffort,
         sandboxMode,

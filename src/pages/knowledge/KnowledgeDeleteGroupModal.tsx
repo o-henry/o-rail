@@ -21,11 +21,14 @@ export function KnowledgeDeleteGroupModal({
     return null;
   }
 
+  const groupLabel = pendingGroupDelete.promptLabel || pendingGroupDelete.taskId;
+
   const content = (
     <div className="modal-backdrop">
-      <section className="approval-modal web-turn-modal knowledge-delete-group-modal">
+      <section className="approval-modal knowledge-delete-group-modal">
         <h2>그룹 삭제</h2>
-        <div>{`'${pendingGroupDelete.promptLabel || pendingGroupDelete.taskId}' 그룹을 삭제하시겠습니까?`}</div>
+        <p className="knowledge-delete-group-modal-label" title={groupLabel}>{`'${groupLabel}'`}</p>
+        <p className="knowledge-delete-group-modal-message">그룹을 삭제하시겠습니까?</p>
         <div className="button-row">
           <button onClick={onCancel} type="button">
             {t("common.cancel")}

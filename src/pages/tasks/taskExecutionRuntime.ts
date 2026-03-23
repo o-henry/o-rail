@@ -93,6 +93,7 @@ export function dispatchTaskExecutionPlan(params: {
   prompt: string;
   plan: TaskExecutionPlan;
   publishAction: (action: AgenticAction) => void;
+  preferredModels?: string[];
 }) {
   if (params.plan.mode === "single") {
     const roleId = params.plan.participantRoleIds[0];
@@ -108,6 +109,7 @@ export function dispatchTaskExecutionPlan(params: {
         prompt: params.plan.rolePrompts[roleId] ?? rolePrompt(params.detail, roleId, params.prompt),
         creativeMode: params.plan.creativeMode,
         sourceTab: "tasks-thread",
+        preferredModels: params.preferredModels,
       },
     });
     return;
@@ -141,6 +143,7 @@ export function dispatchTaskExecutionPlan(params: {
         criticRoleId: String(getTaskAgentStudioRoleId(params.plan.criticRoleId ?? "") ?? "").trim() || undefined,
         cappedParticipantCount: params.plan.cappedParticipantCount,
         useAdaptiveOrchestrator: params.plan.useAdaptiveOrchestrator,
+        preferredModels: params.preferredModels,
       },
     });
 }
@@ -259,6 +262,7 @@ export async function runRuntimeExecutionPlan(params: {
   invokeFn: InvokeFn;
   hydrateThreadDetail: (detail: ThreadDetail | null) => ThreadDetail | null;
   publishAction: (action: AgenticAction) => void;
+  preferredModels?: string[];
 }): Promise<ThreadDetail> {
   let nextDetail = params.detail;
   for (const roleId of params.plan.participantRoleIds) {
@@ -283,6 +287,7 @@ export async function runRuntimeExecutionPlan(params: {
     prompt: params.prompt,
     plan: params.plan,
     publishAction: params.publishAction,
+    preferredModels: params.preferredModels,
   });
   return spawned;
 }

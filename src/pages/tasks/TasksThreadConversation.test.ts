@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildTimelineRenderEntries,
+  compactTasksTimelineCopy,
   isFailedThreadMessage,
   isFinishedThreadMessage,
   normalizeTasksTimelineCopy,
@@ -72,6 +73,16 @@ describe("normalizeTasksTimelineCopy", () => {
   it("normalizes timeline-only system copy without touching markdown rendering paths", () => {
     expect(normalizeTasksTimelineCopy("Created UNITY ARCHITECT")).toBe("CREATED UNITY ARCHITECT");
     expect(normalizeTasksTimelineCopy("[Codex 실행] runtime attached")).toBe("[코덱스 실행] RUNTIME ATTACHED");
+  });
+});
+
+describe("compactTasksTimelineCopy", () => {
+  it("shortens very long urls in timeline copy for live cards", () => {
+    const compacted = compactTasksTimelineCopy(
+      "Error: steel fetch failed at https://duckduckgo.com/html/?q=very-long-query-string-that-should-not-stretch-the-layout-because-it-keeps-going-and-going",
+    );
+    expect(compacted).toContain("https://duckduckgo.com/html/?...");
+    expect(compacted).not.toContain("very-long-query-string-that-should-not-stretch-the-layout");
   });
 });
 

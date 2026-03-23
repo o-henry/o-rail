@@ -348,6 +348,234 @@ describe("runTaskRoleWithCodex", () => {
     expect(result.artifactPaths).toContain("/tmp/rail-storage/.rail/tasks/thread-web/codex_runs/role-run-web/research_findings.md");
   });
 
+  it("runs multiple selected web providers in parallel and combines their outputs", async () => {
+    const onRuntimeSession = vi.fn();
+    const invokeFn = (vi.fn(async (command: string, args?: Record<string, unknown>) => {
+      switch (command) {
+        case "task_agent_pack_read":
+          return {
+            id: "researcher",
+            label: "RESEARCHER",
+            studioRoleId: "research_analyst",
+            model: "gpt-5.4",
+            modelReasoningEffort: "medium",
+            sandboxMode: "workspace-write",
+            outputArtifactName: "research_findings.md",
+            promptDocFile: "researcher.md",
+            developerInstructions: "자료 조사와 웹 리서치를 수행하라.",
+          };
+        case "thread_load":
+          return {
+            thread: { model: "GPT-5.4", reasoning: "중간" },
+            task: { workspacePath: "/tmp/mockking" },
+          };
+        case "research_storage_plan_agent_job":
+          return { job: { jobId: "collect-web", planner: { instructions: [] } } };
+        case "research_storage_execute_job":
+          return { job: { jobId: "collect-web" } };
+        case "research_storage_collection_metrics":
+          return {
+            totals: { items: 0, sources: 0, verified: 0, warnings: 0, conflicted: 0, avgScore: 0 },
+            bySourceType: [],
+            byVerificationStatus: [],
+            timeline: [],
+            topSources: [],
+          };
+        case "research_storage_list_collection_items":
+          return { items: [] };
+        case "research_storage_collection_genre_rankings":
+          return { popular: [], quality: [] };
+        case "web_provider_run":
+          if (args?.provider === "gemini") {
+            return {
+              ok: true,
+              text: "Gemini 조사 요약",
+              raw: { provider: "gemini", response: "Gemini 조사 요약" },
+            };
+          }
+          if (args?.provider === "grok") {
+            return {
+              ok: true,
+              text: "Grok 조사 요약",
+              raw: { provider: "grok", response: "Grok 조사 요약" },
+            };
+          }
+          throw new Error(`unexpected provider: ${String(args?.provider)}`);
+        case "workspace_write_text":
+          return `${String(args?.cwd)}/${String(args?.name)}`;
+        default:
+          throw new Error(`unexpected command: ${command}`);
+      }
+    }) as unknown) as <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
+
+    const result = await runTaskRoleWithCodex({
+      invokeFn,
+      storageCwd: "/tmp/rail-storage",
+      taskId: "thread-web-multi",
+      studioRoleId: "research_analyst",
+      prompt: "웹에서 반응을 병렬 조사해줘",
+      sourceTab: "tasks-thread",
+      runId: "role-run-web-multi",
+      models: ["Gemini", "Grok"],
+      onRuntimeSession,
+    });
+
+    expect(result.summary).toContain("## GEMINI");
+    expect(result.summary).toContain("Gemini 조사 요약");
+    expect(result.summary).toContain("## GROK");
+    expect(result.summary).toContain("Grok 조사 요약");
+    expect(onRuntimeSession).toHaveBeenCalledWith(expect.objectContaining({
+      providers: ["gemini", "grok"],
+    }));
+    expect(invokeFn).toHaveBeenCalledWith("web_provider_run", expect.objectContaining({ provider: "gemini" }));
+    expect(invokeFn).toHaveBeenCalledWith("web_provider_run", expect.objectContaining({ provider: "grok" }));
+    expect(invokeFn).not.toHaveBeenCalledWith("thread_start", expect.anything());
+  });
+
+  it("sends a cleaned user-facing prompt to web providers instead of the internal orchestration brief", async () => {
+    const capturedPrompts: string[] = [];
+    const invokeFn = (vi.fn(async (command: string, args?: Record<string, unknown>) => {
+      switch (command) {
+        case "task_agent_pack_read":
+          return {
+            id: "game_designer",
+            label: "GAME DESIGNER",
+            studioRoleId: "game_designer",
+            model: "gpt-5.4",
+            modelReasoningEffort: "medium",
+            sandboxMode: "workspace-write",
+            outputArtifactName: "idea.md",
+            promptDocFile: "game_designer.md",
+            developerInstructions: "재미와 반복 플레이를 중심으로 아이디어를 제안하라.",
+          };
+        case "thread_load":
+          return {
+            thread: { model: "Gemini", reasoning: "중간" },
+            task: { workspacePath: "/tmp/mockking" },
+          };
+        case "web_provider_run":
+          capturedPrompts.push(String(args?.prompt ?? ""));
+          return {
+            ok: true,
+            text: "아이디어를 정리했습니다.",
+            raw: { provider: "gemini" },
+            meta: { provider: "gemini" },
+          };
+        case "workspace_write_text":
+          return `${String(args?.cwd)}/${String(args?.name)}`;
+        default:
+          throw new Error(`unexpected command: ${command}`);
+      }
+    }) as unknown) as <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
+
+    await runTaskRoleWithCodex({
+      invokeFn,
+      storageCwd: "/tmp/rail-storage",
+      taskId: "thread-web-sanitized",
+      studioRoleId: "game_designer",
+      prompt: [
+        "# 작업 모드",
+        "내부 멀티에이전트 1차 브리프",
+        "",
+        "# 사용자 요청",
+        "캐주얼 모바일 아케이드 게임 아이디어 10개를 제안해줘",
+        "",
+        "# 역할별 배정",
+        "당신의 역할: LEVEL DESIGNER",
+        "",
+        "# ROLE-SPECIFIC GOALS",
+        "- 장르 이름보다 플레이 순간의 감정선과 템포를 제안한다.",
+        "- 가장 무난한 후보를 바로 고르지 않는다.",
+        "",
+        "# 협업 규칙",
+        "- 불필요한 서론 없이 6개 이하 bullet로 답한다.",
+      ].join("\n"),
+      sourceTab: "tasks-thread",
+      runId: "role-run-web-sanitized",
+      model: "Gemini",
+    });
+
+    expect(capturedPrompts[0]).toContain("사용자 요청:");
+    expect(capturedPrompts[0]).toContain("캐주얼 모바일 아케이드 게임 아이디어 10개를 제안해줘");
+    expect(capturedPrompts[0]).toContain("추가 지침:");
+    expect(capturedPrompts[0]).not.toContain("# 작업 모드");
+    expect(capturedPrompts[0]).not.toContain("# 역할별 배정");
+    expect(capturedPrompts[0]).not.toContain("압축된 스레드 컨텍스트");
+  });
+
+  it("falls back from a direct web provider to STEEL when the direct provider fails", async () => {
+    const invokeFn = (vi.fn(async (command: string, args?: Record<string, unknown>) => {
+      switch (command) {
+        case "task_agent_pack_read":
+          return {
+            id: "researcher",
+            label: "RESEARCHER",
+            studioRoleId: "research_analyst",
+            model: "Gemini",
+            modelReasoningEffort: "medium",
+            sandboxMode: "workspace-write",
+            outputArtifactName: "research_findings.md",
+            promptDocFile: "researcher.md",
+            developerInstructions: "자료 조사와 웹 리서치를 수행하라.",
+          };
+        case "thread_load":
+          return {
+            thread: { model: "Gemini", reasoning: "중간" },
+            task: { workspacePath: "/tmp/mockking" },
+          };
+        case "research_storage_plan_agent_job":
+          return { job: { jobId: "collect-web", planner: { instructions: [] } } };
+        case "research_storage_execute_job":
+          return { job: { jobId: "collect-web" } };
+        case "research_storage_collection_metrics":
+          return {
+            totals: { items: 0, sources: 0, verified: 0, warnings: 0, conflicted: 0, avgScore: 0 },
+            bySourceType: [],
+            byVerificationStatus: [],
+            timeline: [],
+            topSources: [],
+          };
+        case "research_storage_list_collection_items":
+          return { items: [] };
+        case "research_storage_collection_genre_rankings":
+          return { popular: [], quality: [] };
+        case "dashboard_crawl_provider_health":
+          return { ready: args?.provider === "steel" };
+        case "web_provider_run":
+          if (args?.provider === "gemini") {
+            return { ok: false, error: "web worker request timed out: provider/run" };
+          }
+          if (args?.provider === "steel") {
+            return {
+              ok: true,
+              text: "STEEL fallback 조사 요약",
+              raw: { provider: "steel", response: "STEEL fallback 조사 요약" },
+            };
+          }
+          throw new Error(`unexpected provider: ${String(args?.provider)}`);
+        case "workspace_write_text":
+          return `${String(args?.cwd)}/${String(args?.name)}`;
+        default:
+          throw new Error(`unexpected command: ${command}`);
+      }
+    }) as unknown) as <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
+
+    const result = await runTaskRoleWithCodex({
+      invokeFn,
+      storageCwd: "/tmp/rail-storage",
+      taskId: "thread-web-fallback",
+      studioRoleId: "research_analyst",
+      prompt: "웹에서 반응을 조사해줘",
+      sourceTab: "tasks-thread",
+      runId: "role-run-web-fallback",
+      model: "Gemini",
+    });
+
+    expect(result.summary).toContain("STEEL fallback");
+    expect(invokeFn).toHaveBeenCalledWith("web_provider_run", expect.objectContaining({ provider: "gemini" }));
+    expect(invokeFn).toHaveBeenCalledWith("web_provider_run", expect.objectContaining({ provider: "steel" }));
+  });
+
   it("prefers final agentMessage text when Codex returns structured items", async () => {
     const invokeFn = (vi.fn(async (command: string, args?: Record<string, unknown>) => {
       switch (command) {

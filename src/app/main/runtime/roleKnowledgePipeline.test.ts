@@ -7,6 +7,23 @@ import {
 import { buildRoleKnowledgeBootstrapCandidates } from "./roleKnowledgeBootstrapSources";
 import { resetRoleKnowledgeProviderRuntimeForTests } from "./roleKnowledgeProviders";
 
+function matchesHostname(url: string, expectedHostname: string): boolean {
+  try {
+    return new URL(url).hostname === expectedHostname;
+  } catch {
+    return false;
+  }
+}
+
+function matchesHostAndPathPrefix(url: string, expectedHostname: string, expectedPathPrefix: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return parsed.hostname === expectedHostname && parsed.pathname.startsWith(expectedPathPrefix);
+  } catch {
+    return false;
+  }
+}
+
 describe("roleKnowledgePipeline", () => {
   beforeEach(() => {
     resetRoleKnowledgeProviderRuntimeForTests();
@@ -167,7 +184,7 @@ describe("roleKnowledgePipeline", () => {
     expect(urls[0]).toBe("https://opencritic.com/");
     expect(urls.some((url) => url === "https://store.steampowered.com/")).toBe(true);
     expect(urls.some((url) => url === "https://steamcommunity.com/")).toBe(true);
-    expect(urls.some((url) => url.includes("duckduckgo.com/html/?q="))).toBe(false);
+    expect(urls.some((url) => matchesHostAndPathPrefix(url, "duckduckgo.com", "/html/"))).toBe(false);
   });
 
   it("keeps bootstrap candidates on public https pages without duplicates", () => {
@@ -190,8 +207,8 @@ describe("roleKnowledgePipeline", () => {
       userPrompt: "짧고 중독성 있는 인디게임 아이디어를 조사해줘",
     });
 
-    expect(urls.some((url) => url.includes("duckduckgo.com"))).toBe(true);
-    expect(urls.some((url) => url.includes("bing.com/search"))).toBe(true);
+    expect(urls.some((url) => matchesHostname(url, "duckduckgo.com"))).toBe(true);
+    expect(urls.some((url) => matchesHostAndPathPrefix(url, "www.bing.com", "/search"))).toBe(true);
   });
 
   it("prefers steam market sources over legacy pm planning domains for game ideation", () => {
@@ -203,7 +220,7 @@ describe("roleKnowledgePipeline", () => {
     expect(urls.some((url) => url === "https://store.steampowered.com/")).toBe(true);
     expect(urls.some((url) => url === "https://steamcommunity.com/")).toBe(true);
     expect(urls.some((url) => url === "https://steamdb.info/")).toBe(true);
-    expect(urls.some((url) => url.includes("gdcvault.com"))).toBe(false);
+    expect(urls.some((url) => matchesHostname(url, "gdcvault.com") || matchesHostname(url, "www.gdcvault.com"))).toBe(false);
   });
 
   it("retries researcher bootstrap until it reaches at least half successful sources", async () => {

@@ -6,6 +6,7 @@ import { useI18n } from "../../i18n";
 import type { TaskAgentMentionMatch, TaskAgentMentionOption } from "./taskAgentMentions";
 import { getTaskAgentLabel, stripCoordinationModeTags } from "./taskAgentPresets";
 import type { ThreadRoleId } from "./threadTypes";
+import type { TasksWebProviderStatus } from "./useTasksWebProviderStatus";
 
 type AttachedFile = {
   id: string;
@@ -39,7 +40,9 @@ type TasksThreadComposerProps = {
   attachedFiles: AttachedFile[];
   selectedComposerRoleIds: ThreadRoleId[];
   autoSelectedComposerRoleIds?: ThreadRoleId[];
-  composerProviderOverride?: string | null;
+  composerProviderOverrides?: string[];
+  providerStatuses?: TasksWebProviderStatus[];
+  providerStatusPending?: boolean;
   autoSelectedProviderModel?: string | null;
   creativeModeEnabled: boolean;
   composerCoordinationModeOverride: CoordinationMode | null;
@@ -61,12 +64,15 @@ type TasksThreadComposerProps = {
   onComposerDraftChange: (value: string, cursor: number) => void;
   onComposerCursorChange: (cursor: number) => void;
   onOpenAttachmentPicker: () => void;
+  onOpenProviderSession: (provider: string) => void;
+  onRefreshProviderStatuses: () => void;
   onSetModel: (value: string) => void;
   onToggleModelMenu: () => void;
   onSetReasoning: (value: string) => void;
   onToggleReasonMenu: () => void;
-  onClearComposerProviderOverride: () => void;
+  onClearComposerProviderOverrides: () => void;
   onToggleCreativeMode: () => void;
+  onRemoveComposerProvider: (value: string) => void;
   onSubmit: () => void;
   onStop: () => void;
 };
@@ -112,7 +118,7 @@ function composerProviderLabel(value: string): string {
 export function buildSelectedTasksComposerBadges(params: {
   roleIds: ThreadRoleId[];
   autoRoleIds?: ThreadRoleId[];
-  providerValue?: string | null;
+  providerValues?: string[];
   autoProviderValue?: string | null;
   modeOverride: CoordinationMode | null;
 }): SelectedTasksComposerBadge[] {
@@ -133,8 +139,8 @@ export function buildSelectedTasksComposerBadges(params: {
       roleId,
     });
   }
-  const providerValue = String(params.providerValue ?? "").trim();
-  if (providerValue) {
+  const providerValues = [...new Set((params.providerValues ?? []).map((value) => String(value ?? "").trim()).filter(Boolean))];
+  for (const providerValue of providerValues) {
     badges.push({
       key: `provider:${providerValue}`,
       kind: "provider",
@@ -143,7 +149,7 @@ export function buildSelectedTasksComposerBadges(params: {
     });
   }
   const autoProviderValue = String(params.autoProviderValue ?? "").trim();
-  if (autoProviderValue && autoProviderValue !== providerValue) {
+  if (autoProviderValue && !providerValues.includes(autoProviderValue)) {
     badges.push({
       key: `auto-provider:${autoProviderValue}`,
       kind: "auto-provider",
@@ -173,7 +179,7 @@ export function TasksThreadComposer(props: TasksThreadComposerProps) {
   const selectedBadges = buildSelectedTasksComposerBadges({
     roleIds: props.selectedComposerRoleIds,
     autoRoleIds: props.autoSelectedComposerRoleIds ?? [],
-    providerValue: props.composerProviderOverride,
+    providerValues: props.composerProviderOverrides,
     autoProviderValue: props.autoSelectedProviderModel,
     modeOverride: props.composerCoordinationModeOverride,
   });
@@ -203,7 +209,37 @@ export function TasksThreadComposer(props: TasksThreadComposerProps) {
   }, [props.mentionIndex, props.mentionMatch]);
 
   return (
-    <div className="tasks-thread-composer-shell question-input agents-composer">
+    <>
+      {(props.providerStatuses?.length ?? 0) > 0 ? (
+        <div className="tasks-thread-provider-status-strip" data-e2e="tasks-provider-status-strip">
+          {props.providerStatuses?.map((status) => (
+            <div
+              className={`tasks-thread-provider-status-card is-${status.state}`}
+              key={status.provider}
+              title={status.url || status.message}
+            >
+              <strong>{status.label}</strong>
+              <span>{status.message}</span>
+              <div className="tasks-thread-provider-status-actions">
+                <button onClick={() => props.onOpenProviderSession(status.provider)} type="button">
+                  {status.state === "active" ? "세션 열기" : "연결하기"}
+                </button>
+                <button
+                  aria-label="상태 새로고침"
+                  className="tasks-thread-provider-status-refresh"
+                  disabled={props.providerStatusPending}
+                  onClick={props.onRefreshProviderStatuses}
+                  title="상태 새로고침"
+                  type="button"
+                >
+                  <img alt="" aria-hidden="true" src="/reload.svg" />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : null}
+      <div className="tasks-thread-composer-shell question-input agents-composer">
       {props.mentionMatch ? (
         <div
           aria-label={t("tasks.aria.agentMentions")}
@@ -287,7 +323,7 @@ export function TasksThreadComposer(props: TasksThreadComposerProps) {
                       return;
                     }
                     if (badge.kind === "provider") {
-                      props.onClearComposerProviderOverride();
+                      props.onRemoveComposerProvider(badge.value ?? "");
                       return;
                     }
                     props.onClearCoordinationModeOverride();
@@ -300,7 +336,6 @@ export function TasksThreadComposer(props: TasksThreadComposerProps) {
             </span>
           ))}
         </div>
-
       <div className="tasks-thread-composer-input-wrap">
         <textarea
           ref={props.composerRef}
@@ -424,6 +459,7 @@ export function TasksThreadComposer(props: TasksThreadComposerProps) {
           )}
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 }

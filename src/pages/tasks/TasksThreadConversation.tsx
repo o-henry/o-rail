@@ -95,6 +95,34 @@ export function normalizeTasksTimelineCopy(content: string): string {
     .replace(/\bruntime attached\b/gi, "RUNTIME ATTACHED");
 }
 
+function compactDisplayedUrl(rawUrl: string): string {
+  const trimmed = String(rawUrl ?? "").trim();
+  const suffixMatch = trimmed.match(/[),.;:!?]+$/);
+  const suffix = suffixMatch?.[0] ?? "";
+  const candidate = suffix ? trimmed.slice(0, -suffix.length) : trimmed;
+  try {
+    const parsed = new URL(candidate);
+    const base = `${parsed.origin}${parsed.pathname}`;
+    if (candidate.length <= 88) {
+      return `${candidate}${suffix}`;
+    }
+    if (base.length >= 72) {
+      return `${base.slice(0, 69)}...${suffix}`;
+    }
+    const queryMarker = parsed.search ? "?..." : parsed.hash ? "#..." : "";
+    return `${base}${queryMarker}${suffix}`;
+  } catch {
+    if (candidate.length <= 88) {
+      return `${candidate}${suffix}`;
+    }
+    return `${candidate.slice(0, 85)}...${suffix}`;
+  }
+}
+
+export function compactTasksTimelineCopy(content: string): string {
+  return normalizeTasksTimelineCopy(content).replace(/https?:\/\/\S+/g, (url) => compactDisplayedUrl(url));
+}
+
 export function isFinishedThreadMessage(message: ThreadMessage): boolean {
   return message.role === "assistant" && String(message.eventKind ?? "").trim() === "agent_result";
 }
@@ -384,6 +412,7 @@ const StaticTimelineMessageRow = memo(function StaticTimelineMessageRow(props: {
   messageRole: ThreadMessage["role"];
   label: string;
   body: string;
+  interruptionBadge?: boolean;
   renderMarkdown: boolean;
   artifactPath: string;
   createdAt: string;
@@ -427,7 +456,7 @@ const StaticTimelineMessageRow = memo(function StaticTimelineMessageRow(props: {
   return (
     <article className={`tasks-thread-message-row is-${props.messageRole}${isTerminalResult ? " is-terminal-result" : ""}`}>
       {props.label ? <span className="tasks-thread-message-label">{props.label}</span> : null}
-      <div className="tasks-thread-log-line">
+      <div className={`tasks-thread-log-line${props.interruptionBadge ? " is-interruption-badge" : ""}`}>
         {props.renderMarkdown ? <TasksThreadMessageContent content={displayedBody} /> : displayedBody}
       </div>
       {props.showFinish || props.showSuccess || props.showFail ? (
@@ -619,6 +648,8 @@ function TasksThreadConversationImpl(props: TasksThreadConversationProps) {
               failureReason.includes("ROLE_KB_BOOTSTRAP 실패") && recentSourceCount === 0 && String(latestEvent?.stage ?? "").trim().toLowerCase() === "codex"
                 ? t("tasks.live.currentWork.degraded")
                 : latestEvent?.message || entry.agent?.summary || t("tasks.live.working");
+            const displayCurrentWorkLabel = compactTasksTimelineCopy(currentWorkLabel);
+            const displayFailureReason = failureReason ? compactTasksTimelineCopy(failureReason) : "";
             const nextAction = inferNextLiveAction({
               stage: latestEvent?.stage,
               activityState: liveState,
@@ -660,7 +691,7 @@ function TasksThreadConversationImpl(props: TasksThreadConversationProps) {
                 {displayLogLine ? (
                   <div className="tasks-thread-log-line">
                     {latestEvent?.stage ? `[${displayProcessStage(String(latestEvent.stage ?? ""), t)}] ` : ""}
-                    {normalizeTasksTimelineCopy(currentWorkLabel)}
+                    {displayCurrentWorkLabel}
                   </div>
                 ) : null}
                 <div className="tasks-thread-live-detail">
@@ -676,7 +707,7 @@ function TasksThreadConversationImpl(props: TasksThreadConversationProps) {
                   </div>
                   <div>
                     <dt>{t("tasks.live.metric.currentWork")}</dt>
-                    <dd>{currentWorkLabel}</dd>
+                    <dd>{displayCurrentWorkLabel}</dd>
                   </div>
                   <div>
                     <dt>{t("tasks.live.metric.sourcesSeen")}</dt>
@@ -684,7 +715,7 @@ function TasksThreadConversationImpl(props: TasksThreadConversationProps) {
                   </div>
                   <div>
                     <dt>{t("tasks.live.metric.failureReason")}</dt>
-                    <dd>{failureReason || t("tasks.live.metric.none")}</dd>
+                    <dd>{displayFailureReason || t("tasks.live.metric.none")}</dd>
                   </div>
                   <div>
                     <dt>{t("tasks.live.metric.nextAction")}</dt>
@@ -713,6 +744,7 @@ function TasksThreadConversationImpl(props: TasksThreadConversationProps) {
               body={renderedBody}
               conversationRef={props.conversationRef}
               createdAt={parsed.createdAt}
+              interruptionBadge
               key={entry.message.id}
               label={parsed.label}
               messageRole={entry.message.role}

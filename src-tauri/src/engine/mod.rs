@@ -31,6 +31,7 @@ const EVENT_ENGINE_LIFECYCLE: &str = "engine://lifecycle";
 const EVENT_ENGINE_APPROVAL_REQUEST: &str = "engine://approval_request";
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(90);
 const WEB_WORKER_REQUEST_TIMEOUT: Duration = Duration::from_secs(240);
+const WEB_WORKER_REQUEST_GRACE_MS: u64 = 30_000;
 const CHILD_VIEW_LABEL_PREFIX: &str = "provider-child-";
 const CHILD_VIEW_MIN_WIDTH: u32 = 560;
 const CHILD_VIEW_MIN_HEIGHT: u32 = 360;
@@ -986,6 +987,7 @@ impl WebWorkerRuntime {
 
     async fn request(&self, method: &str, params: Value) -> Result<Value, String> {
         let id = self.next_id.fetch_add(1, Ordering::SeqCst);
+        let request_timeout = resolve_web_worker_request_timeout(method, &params);
         let payload = json!({
             "jsonrpc": "2.0",
             "id": id,
@@ -1000,7 +1002,7 @@ impl WebWorkerRuntime {
             return Err(err);
         }
 
-        match timeout(WEB_WORKER_REQUEST_TIMEOUT, rx).await {
+        match timeout(request_timeout, rx).await {
             Ok(Ok(result)) => result,
             Ok(Err(_)) => Err("web worker response channel closed".to_string()),
             Err(_) => {
@@ -1044,6 +1046,15 @@ impl WebWorkerRuntime {
         );
         Ok(())
     }
+}
+
+fn resolve_web_worker_request_timeout(method: &str, params: &Value) -> Duration {
+    if method == "provider/run" {
+        if let Some(timeout_ms) = params.get("timeoutMs").and_then(Value::as_u64) {
+            return Duration::from_millis(timeout_ms.saturating_add(WEB_WORKER_REQUEST_GRACE_MS));
+        }
+    }
+    WEB_WORKER_REQUEST_TIMEOUT
 }
 
 fn resolve_web_worker_script_path(app: &AppHandle) -> Result<PathBuf, String> {
@@ -2615,7 +2626,11 @@ pub async fn ollama_generate(model: String, prompt: String) -> Result<Value, Str
 
 #[cfg(test)]
 mod tests {
-    use super::{build_search_bootstrap_url, extract_first_http_url};
+    use super::{
+        build_search_bootstrap_url, extract_first_http_url, resolve_web_worker_request_timeout,
+        WEB_WORKER_REQUEST_TIMEOUT,
+    };
+    use serde_json::json;
 
     #[test]
     fn extracts_first_http_url_from_prompt_text() {
@@ -2639,5 +2654,17 @@ mod tests {
             build_search_bootstrap_url(prompt).as_deref(),
             Some("https://duckduckgo.com/html/?q=latest+indie+game+retention+ideas")
         );
+    }
+
+    #[test]
+    fn expands_provider_run_timeout_to_requested_deadline_plus_grace() {
+        let timeout = resolve_web_worker_request_timeout("provider/run", &json!({ "timeoutMs": 300_000_u64 }));
+        assert_eq!(timeout, std::time::Duration::from_millis(330_000));
+    }
+
+    #[test]
+    fn keeps_default_web_worker_timeout_for_non_provider_requests() {
+        let timeout = resolve_web_worker_request_timeout("health", &json!({}));
+        assert_eq!(timeout, WEB_WORKER_REQUEST_TIMEOUT);
     }
 }

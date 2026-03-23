@@ -20,6 +20,7 @@ import {
 import { buildThreadFileTree } from "./threadFileTree";
 import { buildLiveAgentCards } from "./liveAgentState";
 import { deriveAutomaticResearchProviderBadge, type ComposerProviderModel, useTasksThreadState } from "./useTasksThreadState";
+import { useTasksWebProviderStatus } from "./useTasksWebProviderStatus";
 import { TasksThreadNavPane } from "./TasksThreadNavPane";
 import { TasksThreadHeaderBar } from "./TasksThreadHeaderBar";
 import { TasksThreadConversation } from "./TasksThreadConversation";
@@ -134,6 +135,17 @@ export default function TasksPage(props: TasksPageProps) {
     }),
     [state.canInterruptCurrentThread, state.composerSubmitPending],
   );
+  const {
+    providerStatuses,
+    providerStatusPending,
+    refreshProviderStatuses,
+    openProviderSession,
+  } = useTasksWebProviderStatus({
+    hasTauriRuntime: props.hasTauriRuntime,
+    invokeFn: props.invokeFn,
+    modelValues: state.composerProviderOverrides,
+    setStatus: props.setStatus,
+  });
   useEffect(() => {
     setThreadTitleDraft(headerTitle);
     setIsEditingThreadTitle(false);
@@ -263,14 +275,14 @@ export default function TasksPage(props: TasksPageProps) {
       currentModel: state.model,
       prompt: deferredComposerDraft,
       taggedRoles: state.selectedComposerRoleIds,
-      preferredProviderModel: state.composerProviderOverride,
+      preferredProviderModels: state.composerProviderOverrides,
       readiness: state.externalProviderReadiness,
     }),
     [
       state.model,
       deferredComposerDraft,
       state.selectedComposerRoleIds,
-      state.composerProviderOverride,
+      state.composerProviderOverrides,
       state.externalProviderReadiness,
     ],
   );
@@ -302,7 +314,7 @@ export default function TasksPage(props: TasksPageProps) {
       const nextValue = stripTaskAgentMentionMatch(state.composerDraft, activeMatch);
       const nextCursor = activeMatch.rangeStart;
       if (option.modelValue) {
-        state.setComposerProviderOverride(option.modelValue as ComposerProviderModel);
+        state.addComposerProviderOverride(option.modelValue as ComposerProviderModel);
       }
       state.setComposerDraft(nextValue);
       setComposerCursor(nextCursor);
@@ -457,8 +469,10 @@ export default function TasksPage(props: TasksPageProps) {
           creativeModeEnabled={state.composerCreativeMode}
           composerCoordinationModeOverride={state.composerCoordinationModeOverride}
           composerDraft={state.composerDraft}
-          composerProviderOverride={state.composerProviderOverride}
+          composerProviderOverrides={state.composerProviderOverrides}
           composerRef={composerRef}
+          providerStatusPending={providerStatusPending}
+          providerStatuses={providerStatuses}
           isModelMenuOpen={isModelMenuOpen}
           isReasonMenuOpen={isReasonMenuOpen}
           mentionIndex={mentionIndex}
@@ -479,9 +493,12 @@ export default function TasksPage(props: TasksPageProps) {
           }}
           onComposerKeyDown={onComposerKeyDown}
           onClearCoordinationModeOverride={() => state.setComposerCoordinationModeOverride(null)}
-          onClearComposerProviderOverride={() => state.setComposerProviderOverride(null)}
+          onClearComposerProviderOverrides={state.clearComposerProviderOverrides}
           onOpenAttachmentPicker={() => void state.openAttachmentPicker()}
+          onOpenProviderSession={(provider) => void openProviderSession(provider as any)}
+          onRefreshProviderStatuses={() => void refreshProviderStatuses()}
           onRemoveAttachedFile={state.removeAttachedFile}
+          onRemoveComposerProvider={state.removeComposerProviderOverride}
           onRemoveComposerRole={state.removeComposerRole}
           onSelectMention={selectMention}
           onSetModel={(value) => {

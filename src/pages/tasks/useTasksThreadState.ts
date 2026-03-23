@@ -22,6 +22,7 @@ import {
 } from "../../features/orchestration/agentic/runtimeLedger";
 import type { KnowledgeFileRef } from "../../features/workflow/types";
 import type { AgenticAction } from "../../features/orchestration/agentic/actionBus";
+import { createRandomIdSuffix } from "../../shared/lib/randomId";
 import {
   getTaskAgentLabel,
   getTaskAgentPresetIdByStudioRoleId,
@@ -86,7 +87,6 @@ import {
 import {
   applyBrowserStoreSnapshot,
   loadThreadState,
-  refreshThreadListSilently,
   refreshThreadStateSilently,
   reloadThreadList,
 } from "./taskThreadRepository";
@@ -231,7 +231,7 @@ function nowIso(): string {
 }
 
 function nextId(prefix: string): string {
-  return `${prefix}_${Math.random().toString(36).slice(2, 10)}_${Date.now().toString(36)}`;
+  return `${prefix}_${createRandomIdSuffix(8)}_${Date.now().toString(36)}`;
 }
 
 export const COMPOSER_PROVIDER_MODEL_VALUES = [
@@ -250,6 +250,21 @@ type ExternalProviderReadiness = {
   steel: boolean;
   lightpanda: boolean;
 };
+
+export function normalizeComposerProviderModels(values: Array<string | null | undefined>): ComposerProviderModel[] {
+  return [...new Set(
+    values
+      .map((value) => String(value ?? "").trim())
+      .filter((value): value is ComposerProviderModel => COMPOSER_PROVIDER_MODEL_VALUES.includes(value as ComposerProviderModel)),
+  )];
+}
+
+export function appendComposerProviderModel(
+  current: ComposerProviderModel[],
+  nextValue: string | null | undefined,
+): ComposerProviderModel[] {
+  return normalizeComposerProviderModels([...current, nextValue]);
+}
 
 export function shouldAutoUseExternalResearchProvider(params: {
   currentModel: string;
@@ -310,16 +325,40 @@ export async function resolveAutomaticResearchModel(params: {
   return params.currentModel;
 }
 
+export async function resolveAutomaticResearchModels(params: {
+  invokeFn: InvokeFn;
+  cwd: string;
+  currentModel: string;
+  prompt: string;
+  taggedRoles: ThreadRoleId[];
+  hasTauriRuntime: boolean;
+  preferredProviderModels?: string[];
+}): Promise<string[]> {
+  const preferredProviderModels = normalizeComposerProviderModels(params.preferredProviderModels ?? []);
+  if (preferredProviderModels.length > 0) {
+    return preferredProviderModels;
+  }
+  const resolvedModel = await resolveAutomaticResearchModel({
+    invokeFn: params.invokeFn,
+    cwd: params.cwd,
+    currentModel: params.currentModel,
+    prompt: params.prompt,
+    taggedRoles: params.taggedRoles,
+    hasTauriRuntime: params.hasTauriRuntime,
+    preferredProviderModel: null,
+  });
+  return [resolvedModel];
+}
+
 export function deriveAutomaticResearchProviderBadge(params: {
   currentModel: string;
   prompt: string;
   taggedRoles: ThreadRoleId[];
-  preferredProviderModel?: string | null;
+  preferredProviderModels?: string[];
   readiness: ExternalProviderReadiness;
 }): ExternalResearchProviderModel | null {
-  const preferredProviderModel = String(params.preferredProviderModel ?? "").trim();
-  if (preferredProviderModel && AUTO_EXTERNAL_PROVIDER_MODEL_VALUES.includes(preferredProviderModel as ExternalResearchProviderModel)) {
-    return preferredProviderModel as ExternalResearchProviderModel;
+  if (normalizeComposerProviderModels(params.preferredProviderModels ?? []).length > 0) {
+    return null;
   }
   if (!shouldAutoUseExternalResearchProvider(params)) {
     return null;
@@ -492,6 +531,17 @@ export function reduceRuntimeTargetsByRole(
   };
 }
 
+export function shouldIgnoreInterruptedThreadEvent(
+  interruptedThreadIds: Partial<Record<string, boolean>>,
+  threadId: string | null | undefined,
+): boolean {
+  const normalizedThreadId = String(threadId ?? "").trim();
+  if (!normalizedThreadId) {
+    return false;
+  }
+  return Boolean(interruptedThreadIds[normalizedThreadId]);
+}
+
 export function isTasksCodexExecutionBlocked(_params: {
   hasTauriRuntime: boolean;
   loginCompleted: boolean;
@@ -600,7 +650,7 @@ export function useTasksThreadState(params: Params) {
   const [loading, setLoading] = useState(false);
   const [composerDraft, setComposerDraft] = useState("");
   const [model, setModel] = useState("GPT-5.4");
-  const [composerProviderOverride, setComposerProviderOverride] = useState<ComposerProviderModel | null>(null);
+  const [composerProviderOverrides, setComposerProviderOverrides] = useState<ComposerProviderModel[]>([]);
   const [composerCreativeMode, setComposerCreativeMode] = useState(false);
   const [reasoning, setReasoning] = useState("중간");
   const [accessMode] = useState("Local");
@@ -632,6 +682,7 @@ export function useTasksThreadState(params: Params) {
   const liveRoleNotesRef = useRef(liveRoleNotes);
   const liveProcessEventsRef = useRef(liveProcessEvents);
   const runtimeTargetsByRoleRef = useRef<Partial<Record<ThreadRoleId, RuntimeTarget>>>({});
+  const interruptedThreadIdsRef = useRef<Partial<Record<string, boolean>>>({});
   const pendingRoleEventsRef = useRef<TasksRoleRuntimeEvent[]>([]);
   const liveRoleEventFlushTimeoutRef = useRef<number | null>(null);
   const refreshThreadTimeoutRef = useRef<number | null>(null);
@@ -1070,17 +1121,6 @@ export function useTasksThreadState(params: Params) {
     }
   }, [activeThreadId, scheduleRefreshCurrentThreadSilently]);
 
-  const refreshThreadListMetadataSilently = useCallback(
-    async () => refreshThreadListSilently({
-      hasTauriRuntime: params.hasTauriRuntime,
-      cwd: params.cwd,
-      projectPath,
-      invokeFn: params.invokeFn,
-      setThreadItems,
-    }),
-    [params, projectPath],
-  );
-
   const loadAgentDetail = useCallback(
     async (threadId: string, agentId: string): Promise<ThreadAgentDetail | null> => loadThreadAgentDetail({
       threadId,
@@ -1148,6 +1188,9 @@ export function useTasksThreadState(params: Params) {
       if (!detail || String(detail.taskId ?? "").trim() !== String(activeThreadId ?? "").trim()) {
         return;
       }
+      if (shouldIgnoreInterruptedThreadEvent(interruptedThreadIdsRef.current, detail.taskId)) {
+        return;
+      }
       runtimeTargetsByRoleRef.current = reduceRuntimeTargetsByRole(runtimeTargetsByRoleRef.current, detail);
       setRuntimeTargetCount(Object.keys(runtimeTargetsByRoleRef.current).length);
       const payload = detail.payload ?? {};
@@ -1196,6 +1239,9 @@ export function useTasksThreadState(params: Params) {
       }>).detail;
       const threadId = String(detail?.taskId ?? "").trim();
       if (!threadId) {
+        return;
+      }
+      if (shouldIgnoreInterruptedThreadEvent(interruptedThreadIdsRef.current, threadId)) {
         return;
       }
       const assignedRoleIds = normalizeResolvedTaskRoleIds(detail?.participantRoleIds ?? []);
@@ -1621,26 +1667,30 @@ export function useTasksThreadState(params: Params) {
     if (!prompt) {
       return;
     }
+    if (activeThread?.thread.threadId) {
+      delete interruptedThreadIdsRef.current[activeThread.thread.threadId];
+    }
     setComposerSubmitPending(true);
     setLatestRunInternalBadges([buildCreativeModeBadge(composerCreativeMode)]);
     const selectedProjectPath = String(projectPath || params.cwd || "/workspace").trim();
     try {
       const promptWithAttachments = await buildPromptWithAttachments(prompt);
       const taggedRoles = [...new Set([...selectedComposerRoleIds, ...parseTaskAgentTags(prompt)])];
-      const resolvedModel = await resolveAutomaticResearchModel({
+      const resolvedModels = await resolveAutomaticResearchModels({
         invokeFn: params.invokeFn,
         cwd: params.cwd,
         currentModel: model,
         prompt,
         taggedRoles,
         hasTauriRuntime: params.hasTauriRuntime,
-        preferredProviderModel: composerProviderOverride,
+        preferredProviderModels: composerProviderOverrides,
       });
+      const primaryResolvedModel = resolvedModels[0] ?? model;
       if (!params.hasTauriRuntime || !params.cwd) {
         const store = cloneStore(browserStoreRef.current);
         const existingDetail = activeThread ? store.details[activeThread.thread.threadId] : undefined;
         const detail: ThreadDetail = existingDetail
-          ?? buildBrowserThread(params.cwd || "/workspace", selectedProjectPath, prompt, resolvedModel, reasoning, accessMode);
+          ?? buildBrowserThread(params.cwd || "/workspace", selectedProjectPath, prompt, primaryResolvedModel, reasoning, accessMode);
         if (!existingDetail) {
           store.details[detail.thread.threadId] = detail;
           store.order = [detail.thread.threadId, ...store.order.filter((id) => id !== detail.thread.threadId)];
@@ -1652,7 +1702,7 @@ export function useTasksThreadState(params: Params) {
         detail.thread.userPrompt = detail.thread.userPrompt || prompt;
         detail.thread.status = "running";
         detail.thread.updatedAt = timestamp;
-        detail.thread.model = resolvedModel;
+        detail.thread.model = primaryResolvedModel;
         detail.thread.reasoning = reasoning;
         detail.thread.accessMode = accessMode;
         detail.task.goal = isPlaceholderTitle(detail.task.goal) ? prompt : detail.task.goal;
@@ -1718,7 +1768,7 @@ export function useTasksThreadState(params: Params) {
         rememberSelectedAgent(detail.thread.threadId, `${detail.thread.threadId}:${executionPlan.participantRoleIds[0]}`);
         rememberSelectedFile(detail.thread.threadId, detail.changedFiles[0] ?? defaultSelectedFile(detail));
         setComposerDraft("");
-        setComposerProviderOverride(null);
+        setComposerProviderOverrides([]);
         setSelectedComposerRoleIds([]);
         setComposerCoordinationModeOverride(null);
         clearAttachedFiles();
@@ -1741,7 +1791,7 @@ export function useTasksThreadState(params: Params) {
           mode: "balanced",
           team: "full-squad",
           isolation: getDefaultTaskCreationIsolation(),
-          model: resolvedModel,
+          model: primaryResolvedModel,
           reasoning,
           accessMode,
         }));
@@ -1798,6 +1848,7 @@ export function useTasksThreadState(params: Params) {
         invokeFn: params.invokeFn,
         hydrateThreadDetail,
         publishAction: params.publishAction,
+        preferredModels: resolvedModels,
       });
       await syncSpawnedThreadSelection(spawned);
       setActiveThread((current) => (
@@ -1825,7 +1876,7 @@ export function useTasksThreadState(params: Params) {
       });
       params.setStatus(`Thread updated: ${truncateTitle(spawned.thread.title)}`);
       setComposerDraft("");
-      setComposerProviderOverride(null);
+      setComposerProviderOverrides([]);
       setSelectedComposerRoleIds([]);
       setComposerCoordinationModeOverride(null);
       clearAttachedFiles();
@@ -1840,7 +1891,7 @@ export function useTasksThreadState(params: Params) {
     } finally {
       setComposerSubmitPending(false);
     }
-  }, [accessMode, activeThread, applyBrowserStore, buildPromptWithAttachments, clearAttachedFiles, composerCoordinationModeOverride, composerCreativeMode, composerDraft, composerProviderOverride, hydrateThreadDetail, model, params, projectPath, reasoning, selectedComposerRoleIds, syncSpawnedThreadSelection, updateThreadCoordination]);
+  }, [accessMode, activeThread, applyBrowserStore, buildPromptWithAttachments, clearAttachedFiles, composerCoordinationModeOverride, composerCreativeMode, composerDraft, composerProviderOverrides, hydrateThreadDetail, model, params, projectPath, reasoning, selectedComposerRoleIds, syncSpawnedThreadSelection, updateThreadCoordination]);
 
   const stopComposerRun = useCallback(async () => {
     if (!activeThread || stoppingComposerRun || !canInterruptCurrentThread) {
@@ -1864,6 +1915,14 @@ export function useTasksThreadState(params: Params) {
     setStoppingComposerRun(true);
     const timestamp = nowIso();
     try {
+      interruptedThreadIdsRef.current[activeThread.thread.threadId] = true;
+      pendingRoleEventsRef.current = pendingRoleEventsRef.current.filter(
+        (detail) => String(detail.taskId ?? "").trim() !== activeThread.thread.threadId,
+      );
+      if (liveRoleEventFlushTimeoutRef.current !== null && typeof window !== "undefined") {
+        window.clearTimeout(liveRoleEventFlushTimeoutRef.current);
+        liveRoleEventFlushTimeoutRef.current = null;
+      }
       if (!params.hasTauriRuntime || !params.cwd) {
         const store = cloneStore(browserStoreRef.current);
         const detail = store.details[activeThread.thread.threadId];
@@ -1929,14 +1988,13 @@ export function useTasksThreadState(params: Params) {
       const runtimeProviders = activeRuntimeTargets
         .flatMap((target) => target?.providers ?? [])
         .filter(Boolean);
-      const threadWebProvider = runtimeProviders[0] || resolveTasksThreadWebProvider(String(activeThread.thread.model ?? model));
+      const threadWebProviders = [...new Set(runtimeProviders)];
+      const threadWebProvider = threadWebProviders[0] || resolveTasksThreadWebProvider(String(activeThread.thread.model ?? model));
       const cancelOperations: Promise<unknown>[] = [
         ...codexThreadIds.map((threadId) => params.invokeFn("turn_interrupt", { threadId })),
       ];
-      if (threadWebProvider) {
-        cancelOperations.push(
-          params.invokeFn("web_provider_cancel", { provider: threadWebProvider }).catch(() => undefined),
-        );
+      for (const provider of threadWebProviders.length > 0 ? threadWebProviders : threadWebProvider ? [threadWebProvider] : []) {
+        cancelOperations.push(params.invokeFn("web_provider_cancel", { provider }).catch(() => undefined));
       }
       if (cancelOperations.length > 0) {
         await Promise.allSettled(cancelOperations);
@@ -2024,6 +2082,7 @@ export function useTasksThreadState(params: Params) {
       if (!activeThread || !activeThreadCoordination) {
         return;
       }
+      delete interruptedThreadIdsRef.current[activeThread.thread.threadId];
       await approveCoordinationPlanAction({
         activeThread,
         activeThreadCoordination,
@@ -2049,6 +2108,7 @@ export function useTasksThreadState(params: Params) {
     if (!activeThread || !activeThreadCoordination) {
       return;
     }
+    interruptedThreadIdsRef.current[activeThread.thread.threadId] = true;
     cancelCoordinationAction({
       activeThread,
       activeThreadCoordination,
@@ -2073,6 +2133,7 @@ export function useTasksThreadState(params: Params) {
       if (!activeThread || !activeThreadCoordination?.resumePointer) {
         return;
       }
+      delete interruptedThreadIdsRef.current[activeThread.thread.threadId];
       await resumeCoordinationAction({
         activeThread,
         activeThreadCoordination,
@@ -2321,9 +2382,8 @@ export function useTasksThreadState(params: Params) {
         if (activeThreadId === targetThreadId && optimistic.nextActiveThreadId) {
           void loadThread(optimistic.nextActiveThreadId);
         }
-        window.setTimeout(() => {
-          void refreshThreadListMetadataSilently();
-        }, 160);
+        // The optimistic state already removed the deleted thread, so avoid an
+        // immediate full thread_list reload that can make delete feel sluggish.
       } catch (error) {
         setThreadItems(threadItems);
         setActiveThread(activeThread);
@@ -2343,7 +2403,6 @@ export function useTasksThreadState(params: Params) {
       composerDraft,
       params,
       projectPath,
-      refreshThreadListMetadataSilently,
       selectedAgentDetail,
       selectedAgentId,
       selectedFileDiff,
@@ -2583,12 +2642,19 @@ export function useTasksThreadState(params: Params) {
     composerCoordinationModeOverride,
     composerCoordinationPreview,
     composerCreativeMode,
-    composerProviderOverride,
+    composerProviderOverrides,
     projectPath,
     composerDraft,
     setComposerDraft,
     setComposerCreativeMode,
-    setComposerProviderOverride,
+    addComposerProviderOverride: (value: ComposerProviderModel) => {
+      setComposerProviderOverrides((current) => appendComposerProviderModel(current, value));
+    },
+    removeComposerProviderOverride: (value: string) => {
+      const normalized = String(value ?? "").trim();
+      setComposerProviderOverrides((current) => current.filter((entry) => entry !== normalized));
+    },
+    clearComposerProviderOverrides: () => setComposerProviderOverrides([]),
     model,
     setModel,
     reasoning,

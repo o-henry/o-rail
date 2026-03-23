@@ -3,6 +3,7 @@ import {
   deriveAutomaticResearchProviderBadge,
   isTasksThreadInterruptible,
   resolveAutomaticResearchModel,
+  resolveAutomaticResearchModels,
   isTasksCodexExecutionBlocked,
   normalizeResolvedTaskRoleIds,
   reduceLiveRoleEventBatch,
@@ -11,6 +12,7 @@ import {
   resolveTasksThreadWebProvider,
   resolveTasksProjectSelection,
   revealTasksProjectPathState,
+  shouldIgnoreInterruptedThreadEvent,
   shouldAutoUseExternalResearchProvider,
 } from "./useTasksThreadState";
 
@@ -255,14 +257,14 @@ describe("resolveAutomaticResearchModel", () => {
 });
 
 describe("deriveAutomaticResearchProviderBadge", () => {
-  it("shows the explicit provider badge when the user picked one", () => {
+  it("suppresses the automatic provider badge when the user already picked providers", () => {
     expect(deriveAutomaticResearchProviderBadge({
       currentModel: "GPT-5.4",
       prompt: "게임 반응을 조사해줘",
       taggedRoles: ["researcher"],
-      preferredProviderModel: "WEB / STEEL",
+      preferredProviderModels: ["WEB / STEEL"],
       readiness: { steel: false, lightpanda: false },
-    })).toBe("WEB / STEEL");
+    })).toBeNull();
   });
 
   it("falls back to the first ready automatic provider for research prompts", () => {
@@ -272,6 +274,21 @@ describe("deriveAutomaticResearchProviderBadge", () => {
       taggedRoles: ["researcher"],
       readiness: { steel: true, lightpanda: true },
     })).toBe("WEB / STEEL");
+  });
+});
+
+describe("resolveAutomaticResearchModels", () => {
+  it("returns every explicit provider override so they can fan out in parallel", async () => {
+    const invokeFn = (async () => ({ ready: false })) as <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
+    await expect(resolveAutomaticResearchModels({
+      invokeFn,
+      cwd: "/repo",
+      currentModel: "GPT-5.4",
+      prompt: "게임 반응을 조사해줘",
+      taggedRoles: ["researcher"],
+      hasTauriRuntime: true,
+      preferredProviderModels: ["Gemini", "Grok"],
+    })).resolves.toEqual(["Gemini", "Grok"]);
   });
 });
 
@@ -399,5 +416,21 @@ describe("reduceRuntimeTargetsByRole", () => {
       studioRoleId: "research_analyst",
       type: "run_done",
     })).toEqual({});
+  });
+});
+
+describe("shouldIgnoreInterruptedThreadEvent", () => {
+  it("drops late runtime events for threads the operator already stopped", () => {
+    expect(shouldIgnoreInterruptedThreadEvent({ "thread-1": true }, "thread-1")).toBe(true);
+    expect(shouldIgnoreInterruptedThreadEvent({ "thread-1": true }, "thread-2")).toBe(false);
+    expect(shouldIgnoreInterruptedThreadEvent({}, "thread-1")).toBe(false);
+  });
+});
+
+describe("shouldIgnoreInterruptedThreadEvent", () => {
+  it("ignores late runtime events once the thread was explicitly interrupted", () => {
+    expect(shouldIgnoreInterruptedThreadEvent({ "thread-1": true }, "thread-1")).toBe(true);
+    expect(shouldIgnoreInterruptedThreadEvent({ "thread-1": true }, "thread-2")).toBe(false);
+    expect(shouldIgnoreInterruptedThreadEvent({}, "")).toBe(false);
   });
 });

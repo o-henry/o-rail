@@ -1,4 +1,5 @@
 import type { TaskTerminalPane } from "../tasks/taskTerminalTypes";
+import { createRandomIdSuffix } from "../../shared/lib/randomId";
 
 export function reorderShellTerminalPanes(
   panes: TaskTerminalPane[],
@@ -47,7 +48,7 @@ export function createShellTerminalPane(input: {
   const threadId = String(input.threadId ?? "").trim();
   const cwd = String(input.cwd ?? "").trim();
   const index = Math.max(1, input.index);
-  const instanceId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  const instanceId = `${Date.now().toString(36)}-${createRandomIdSuffix(8)}`;
   return {
     id: `tasks-shell-terminal:${threadId}:${index}:${instanceId}`,
     title: `TERMINAL ${index}`,

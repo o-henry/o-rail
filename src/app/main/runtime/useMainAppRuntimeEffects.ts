@@ -80,13 +80,7 @@ export function useMainAppRuntimeEffects(params: any) {
       params.setStatus(`${params.webProviderLabel(params.pendingWebTurn.provider)} 외부 런타임이 브라우저 없이 직접 실행됩니다.`);
       return;
     }
-    void params.openUrlFn(homeUrl)
-      .then(() => {
-        params.setStatus(`${params.webProviderLabel(params.pendingWebTurn.provider)} 기본 브라우저 자동 열림`);
-      })
-      .catch((error: unknown) => {
-        params.setError(`${params.webProviderLabel(params.pendingWebTurn.provider)} 브라우저 자동 열기 실패: ${String(error)}`);
-      });
+    params.setStatus(`${params.webProviderLabel(params.pendingWebTurn.provider)} 수동 입력 대기 - 자동 브라우저 열기는 하지 않습니다.`);
   }, [params.pendingWebTurn]);
 
   useEffect(() => {
@@ -99,16 +93,7 @@ export function useMainAppRuntimeEffects(params: any) {
       return;
     }
     params.pendingWebLoginAutoOpenKeyRef.current = key;
-    void params.invokeFn("web_provider_open_session", {
-      provider: params.pendingWebLogin.provider,
-    })
-      .then(() => {
-        params.setStatus(`${params.webProviderLabel(params.pendingWebLogin.provider)} 로그인 세션 자동 열림`);
-        void params.refreshWebWorkerHealth(true);
-      })
-      .catch((error: unknown) => {
-        params.setError(`${params.webProviderLabel(params.pendingWebLogin.provider)} 로그인 브라우저 열기 실패: ${String(error)}`);
-      });
+    params.setStatus(`${params.webProviderLabel(params.pendingWebLogin.provider)} 로그인 필요 - 자동 브라우저 열기는 하지 않습니다.`);
   }, [params.pendingWebLogin]);
 
   useEffect(() => {

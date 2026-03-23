@@ -152,10 +152,42 @@
   background: #e3e3e3;
 }
 
+.approval-modal.knowledge-delete-group-modal {
+  width: min(360px, calc(100vw - 32px));
+  justify-items: center;
+  padding: 18px;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+.knowledge-delete-group-modal h2,
+.knowledge-delete-group-modal p {
+  margin: 0;
+}
+
+.knowledge-delete-group-modal-label {
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.knowledge-delete-group-modal-message {
+  width: 100%;
+}
+
 .knowledge-delete-group-modal .button-row {
-  padding: 8px;
-  border-radius: 6px;
-  background: #f3f5f8;
+  width: 100%;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  display: flex;
+  gap: 8px;
+}
+
+.knowledge-delete-group-modal .button-row button {
+  flex: 1 1 0;
+  min-width: 0;
 }
 
 .knowledge-delete-group-modal .button-row button:first-child {

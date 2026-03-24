@@ -19,6 +19,20 @@ export type LiveAgentCard = {
 };
 
 export type LiveActivityState = "active" | "delayed" | "stalled";
+export type LiveServiceState =
+  | "idle"
+  | "running"
+  | "approval_required"
+  | "failed"
+  | "completed"
+  | "cancelled";
+
+export type LiveServiceStatus = {
+  state: LiveServiceState;
+  detail: string;
+  updatedAt: string;
+};
+
 export type LiveAgentEvent = {
   type: string;
   stage: string;
@@ -129,6 +143,112 @@ export function resolveLiveActivityState(updatedAt: string | null | undefined, n
     return "delayed";
   }
   return "active";
+}
+
+export function shouldShowRelativeLiveSignalAge(params: {
+  activityState: LiveActivityState;
+  signalDisconnected: boolean;
+}): boolean {
+  return params.activityState !== "stalled" && !params.signalDisconnected;
+}
+
+function normalizeRoleExecutionStatus(value: string | null | undefined): string {
+  return String(value ?? "").trim().toLowerCase();
+}
+
+function isRunningRoleExecutionStatus(value: string | null | undefined): boolean {
+  const normalized = normalizeRoleExecutionStatus(value);
+  return normalized === "running" || normalized === "thinking" || normalized === "queued" || normalized === "awaiting_approval";
+}
+
+function isFailedRoleExecutionStatus(value: string | null | undefined): boolean {
+  const normalized = normalizeRoleExecutionStatus(value);
+  return normalized === "error" || normalized === "failed";
+}
+
+function isCompletedRoleExecutionStatus(value: string | null | undefined): boolean {
+  const normalized = normalizeRoleExecutionStatus(value);
+  return normalized === "done" || normalized === "completed";
+}
+
+export function resolveLiveServiceStatus(detail: ThreadDetail | null): LiveServiceStatus | null {
+  if (!detail) {
+    return null;
+  }
+
+  const taskStatus = String(detail.task.status ?? "").trim().toLowerCase();
+  const threadStatus = String(detail.thread.status ?? "").trim().toLowerCase();
+  const pendingApprovalCount = detail.approvals.filter((approval) => approval.status === "pending").length;
+  const enabledRoles = detail.task.roles.filter((role) => role.enabled);
+  const runningRoles = enabledRoles.filter((role) => isRunningRoleExecutionStatus(role.status));
+  const failedRoles = enabledRoles.filter((role) => isFailedRoleExecutionStatus(role.status));
+  const completedRoles = enabledRoles.filter((role) => isCompletedRoleExecutionStatus(role.status));
+  const freshestUpdate = [
+    detail.task.updatedAt,
+    detail.thread.updatedAt,
+    ...enabledRoles.map((role) => role.updatedAt),
+    ...detail.agents.map((agent) => agent.lastUpdatedAt),
+    ...detail.approvals.map((approval) => approval.updatedAt || approval.createdAt),
+  ]
+    .map((value) => String(value ?? "").trim())
+    .filter(Boolean)
+    .sort()
+    .slice(-1)[0] || "";
+
+  if (taskStatus === "completed" || threadStatus === "completed") {
+    return {
+      state: "completed",
+      detail: "서비스 기준으로 실행이 완료되었습니다.",
+      updatedAt: freshestUpdate,
+    };
+  }
+  if (taskStatus === "cancelled" || taskStatus === "archived" || threadStatus === "cancelled") {
+    return {
+      state: "cancelled",
+      detail: "서비스 기준으로 실행이 중단되었거나 종료되었습니다.",
+      updatedAt: freshestUpdate,
+    };
+  }
+  if (pendingApprovalCount > 0) {
+    return {
+      state: "approval_required",
+      detail: `서비스 기준으로 승인 대기 ${pendingApprovalCount}건이 남아 있습니다.`,
+      updatedAt: freshestUpdate,
+    };
+  }
+  if (runningRoles.length > 0) {
+    return {
+      state: "running",
+      detail: `서비스 기준으로 ${runningRoles.map((role) => role.label).join(", ")} 실행 중입니다.`,
+      updatedAt: freshestUpdate,
+    };
+  }
+  if (failedRoles.length === enabledRoles.length && enabledRoles.length > 0) {
+    return {
+      state: "failed",
+      detail: "서비스 기준으로 모든 내부 브리프 또는 역할 실행이 실패했습니다.",
+      updatedAt: freshestUpdate,
+    };
+  }
+  if (failedRoles.length > 0) {
+    return {
+      state: "failed",
+      detail: `서비스 기준으로 ${failedRoles.map((role) => role.label).join(", ")} 실행이 실패했습니다.`,
+      updatedAt: freshestUpdate,
+    };
+  }
+  if (completedRoles.length === enabledRoles.length && enabledRoles.length > 0) {
+    return {
+      state: "completed",
+      detail: "서비스 기준으로 모든 역할 실행이 끝났습니다.",
+      updatedAt: freshestUpdate,
+    };
+  }
+  return {
+    state: "idle",
+    detail: "서비스 기준으로 현재 실행 상태를 갱신 중입니다.",
+    updatedAt: freshestUpdate,
+  };
 }
 
 export function formatRelativeUpdateAge(updatedAt: string | null | undefined, labels: {

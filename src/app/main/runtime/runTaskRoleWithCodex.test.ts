@@ -1,10 +1,15 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { runTaskRoleWithCodex } from "./runTaskRoleWithCodex";
 import { clearTaskRoleLearningDataForTest, recordTaskRoleLearningOutcome } from "../../adaptation/taskRoleLearning";
+import { ENGINE_NOTIFICATION_DOM_EVENT } from "./codexTurnNotifications";
 
 describe("runTaskRoleWithCodex", () => {
   beforeEach(() => {
     clearTaskRoleLearningDataForTest();
+  });
+
+  afterEach(() => {
+    delete (globalThis as { window?: unknown }).window;
   });
 
   it("uses the task prompt pack and writes role artifacts for thread runs", async () => {
@@ -120,6 +125,172 @@ describe("runTaskRoleWithCodex", () => {
     expect(onRuntimeSession).toHaveBeenCalledWith(expect.objectContaining({
       codexThreadId: "thread-codex-early",
     }));
+  });
+
+  it("prefers engine notification output before thread polling when a turn streams a final answer", async () => {
+    const eventWindow = Object.assign(new EventTarget(), {
+      setTimeout: globalThis.setTimeout.bind(globalThis),
+      clearTimeout: globalThis.clearTimeout.bind(globalThis),
+      setInterval: globalThis.setInterval.bind(globalThis),
+      clearInterval: globalThis.clearInterval.bind(globalThis),
+      addEventListener: EventTarget.prototype.addEventListener,
+      removeEventListener: EventTarget.prototype.removeEventListener,
+      dispatchEvent: EventTarget.prototype.dispatchEvent,
+    });
+    (globalThis as { window?: typeof eventWindow }).window = eventWindow;
+
+    const invokeFn = (vi.fn(async (command: string) => {
+      switch (command) {
+        case "task_agent_pack_read":
+          return {
+            id: "unity_implementer",
+            label: "UNITY IMPLEMENTER",
+            studioRoleId: "client_programmer",
+            model: "gpt-5.4-mini",
+            modelReasoningEffort: "medium",
+            sandboxMode: "workspace-write",
+            outputArtifactName: "implementation_report.md",
+            promptDocFile: "unity_implementer.md",
+            developerInstructions: "구현하고 수정 파일을 한국어로 요약하라.",
+          };
+        case "thread_load":
+          return {
+            thread: { model: "GPT-5.4", reasoning: "중간" },
+            task: { workspacePath: "/tmp/mockking", worktreePath: null },
+          };
+        case "thread_start":
+          return { threadId: "thread-codex-stream" };
+        case "turn_start":
+          eventWindow.setTimeout(() => {
+            eventWindow.dispatchEvent(new CustomEvent(ENGINE_NOTIFICATION_DOM_EVENT, {
+              detail: {
+                method: "item/agentMessage/delta",
+                params: {
+                  text: "창의적인 아케이드 아이디어 10개를 정리했습니다.",
+                },
+              },
+            }));
+            eventWindow.dispatchEvent(new CustomEvent(ENGINE_NOTIFICATION_DOM_EVENT, {
+              detail: {
+                method: "turn/completed",
+                params: {
+                  turnId: "turn-stream",
+                  threadId: "thread-codex-stream",
+                  output_text: "창의적인 아케이드 아이디어 10개를 정리했습니다.",
+                },
+              },
+            }));
+          }, 0);
+          return {
+            turn: {
+              id: "turn-stream",
+              status: "inProgress",
+              items: [],
+            },
+          };
+        case "workspace_write_text":
+          return `/tmp/out/${Math.random().toString(36).slice(2)}.md`;
+        case "codex_thread_read":
+          throw new Error("should not poll codex_thread_read when engine notifications produced the answer");
+        default:
+          throw new Error(`unexpected command: ${command}`);
+      }
+    }) as unknown) as <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
+
+    const result = await runTaskRoleWithCodex({
+      invokeFn,
+      storageCwd: "/tmp/rail-storage",
+      taskId: "thread-stream",
+      studioRoleId: "client_programmer",
+      prompt: "창의적인 게임 아이디어를 추천해줘",
+      sourceTab: "tasks-thread",
+      runId: "role-run-stream",
+    });
+
+    expect(result.summary).toContain("창의적인 아케이드 아이디어 10개");
+    expect(invokeFn).not.toHaveBeenCalledWith("codex_thread_read", expect.anything());
+  });
+
+  it("captures final agentMessage text from terminal item notifications without polling", async () => {
+    const eventWindow = Object.assign(new EventTarget(), {
+      setTimeout: globalThis.setTimeout.bind(globalThis),
+      clearTimeout: globalThis.clearTimeout.bind(globalThis),
+      setInterval: globalThis.setInterval.bind(globalThis),
+      clearInterval: globalThis.clearInterval.bind(globalThis),
+      addEventListener: EventTarget.prototype.addEventListener,
+      removeEventListener: EventTarget.prototype.removeEventListener,
+      dispatchEvent: EventTarget.prototype.dispatchEvent,
+    });
+    (globalThis as { window?: typeof eventWindow }).window = eventWindow;
+
+    const invokeFn = (vi.fn(async (command: string) => {
+      switch (command) {
+        case "task_agent_pack_read":
+          return {
+            id: "unity_implementer",
+            label: "UNITY IMPLEMENTER",
+            studioRoleId: "client_programmer",
+            model: "gpt-5.4-mini",
+            modelReasoningEffort: "medium",
+            sandboxMode: "workspace-write",
+            outputArtifactName: "implementation_report.md",
+            promptDocFile: "unity_implementer.md",
+            developerInstructions: "구현하고 수정 파일을 한국어로 요약하라.",
+          };
+        case "thread_load":
+          return {
+            thread: { model: "GPT-5.4", reasoning: "중간" },
+            task: { workspacePath: "/tmp/mockking", worktreePath: null },
+          };
+        case "thread_start":
+          return { threadId: "thread-codex-item-completed" };
+        case "turn_start":
+          eventWindow.setTimeout(() => {
+            eventWindow.dispatchEvent(new CustomEvent(ENGINE_NOTIFICATION_DOM_EVENT, {
+              detail: {
+                method: "item/completed",
+                params: {
+                  threadId: "thread-codex-item-completed",
+                  turnId: "turn-item-completed",
+                  item: {
+                    type: "agentMessage",
+                    phase: "final_answer",
+                    content: [
+                      { type: "output_text", text: "## 최종 응답\n- item/completed 에 최종 답변이 실렸습니다." },
+                    ],
+                  },
+                },
+              },
+            }));
+          }, 0);
+          return {
+            turn: {
+              id: "turn-item-completed",
+              status: "inProgress",
+              items: [],
+            },
+          };
+        case "workspace_write_text":
+          return `/tmp/out/${Math.random().toString(36).slice(2)}.md`;
+        case "codex_thread_read":
+          throw new Error("should not poll codex_thread_read when terminal item notifications include the final agent message");
+        default:
+          throw new Error(`unexpected command: ${command}`);
+      }
+    }) as unknown) as <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
+
+    const result = await runTaskRoleWithCodex({
+      invokeFn,
+      storageCwd: "/tmp/rail-storage",
+      taskId: "thread-item-completed",
+      studioRoleId: "client_programmer",
+      prompt: "최종 응답을 보여줘",
+      sourceTab: "tasks-thread",
+      runId: "role-run-item-completed",
+    });
+
+    expect(result.summary).toContain("item/completed 에 최종 답변이 실렸습니다");
+    expect(invokeFn).not.toHaveBeenCalledWith("codex_thread_read", expect.anything());
   });
 
   it("allows collaboration runs to override the artifact file name", async () => {
@@ -1569,6 +1740,8 @@ describe("runTaskRoleWithCodex", () => {
           return { threadId: "thread-codex-fallback" };
         case "turn_start_blocking":
           return { status: "completed", output: [] };
+        case "codex_thread_read":
+          return { thread: { status: "completed" }, turns: [{ status: "completed", output: [] }] };
         case "workspace_write_text":
           return `${String(args?.cwd)}/${String(args?.name)}`;
         default:
@@ -1584,11 +1757,14 @@ describe("runTaskRoleWithCodex", () => {
       prompt: "@researcher 스팀 장르 평가를 조사해줘",
       sourceTab: "tasks-thread",
       runId: "role-run-fallback",
+      debugTimeoutOverrides: {
+        completedUnreadableRecoveryWindowMs: 1500,
+      },
     })).rejects.toThrow("without a readable response");
     expect(invokeFn).toHaveBeenCalledWith("workspace_write_text", expect.objectContaining({
       name: "research_collection.md",
     }));
-  });
+  }, 15000);
 
   it("fails non-research roles that complete without any readable response body", async () => {
     const invokeFn = (vi.fn(async (command: string, args?: Record<string, unknown>) => {
@@ -1617,6 +1793,16 @@ describe("runTaskRoleWithCodex", () => {
             status: "completed",
             output: [{ kind: "status", value: "done" }],
           };
+        case "codex_thread_read":
+          return {
+            thread: { status: "completed" },
+            turns: [
+              {
+                status: "completed",
+                output: [{ kind: "status", value: "done" }],
+              },
+            ],
+          };
         case "workspace_write_text":
           return `${String(args?.cwd)}/${String(args?.name)}`;
         default:
@@ -1632,8 +1818,11 @@ describe("runTaskRoleWithCodex", () => {
       prompt: "구조 리스크를 검토해줘",
       sourceTab: "tasks-thread",
       runId: "role-run-empty-architect",
+      debugTimeoutOverrides: {
+        completedUnreadableRecoveryWindowMs: 1500,
+      },
     })).rejects.toThrow("without a readable response");
-  });
+  }, 15000);
 
   it("waits for codex_thread_read when Codex starts in progress and later completes", async () => {
     const invokeFn = (vi.fn(async (command: string, args?: Record<string, unknown>) => {
@@ -1730,6 +1919,238 @@ describe("runTaskRoleWithCodex", () => {
       threadId: "thread-codex-pending",
       includeTurns: true,
     });
+  });
+
+  it("prefers turn_start and recovers the final answer through codex_thread_read", async () => {
+    const invokeFn = (vi.fn(async (command: string) => {
+      switch (command) {
+        case "task_agent_pack_read":
+          return {
+            id: "unity_architect",
+            label: "UNITY ARCHITECT",
+            studioRoleId: "system_programmer",
+            model: "gpt-5.4",
+            modelReasoningEffort: "medium",
+            sandboxMode: "workspace-write",
+            outputArtifactName: "architecture_review.md",
+            promptDocFile: "unity_architect.md",
+            developerInstructions: "검토하라.",
+          };
+        case "thread_load":
+          return {
+            thread: { model: "GPT-5.4", reasoning: "중간" },
+            task: { workspacePath: "/tmp/mockking" },
+          };
+        case "thread_start":
+          return { threadId: "thread-turn-start" };
+        case "turn_start":
+          return {
+            turn: {
+              id: "turn-turn-start",
+              items: [],
+              status: "inProgress",
+            },
+          };
+        case "codex_thread_read":
+          return {
+            thread: { status: "completed" },
+            turns: [
+              {
+                id: "turn-turn-start",
+                status: "completed",
+                output: [
+                  {
+                    type: "message",
+                    role: "assistant",
+                    content: [
+                      { type: "output_text", text: "## 최종 정리\n- turn_start 경로에서도 본문을 회수했습니다." },
+                    ],
+                  },
+                ],
+              },
+            ],
+          };
+        case "workspace_write_text":
+          return "/tmp/out/file";
+        default:
+          throw new Error(`unexpected command: ${command}`);
+      }
+    }) as unknown) as <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
+
+    const result = await runTaskRoleWithCodex({
+      invokeFn,
+      storageCwd: "/tmp/rail-storage",
+      taskId: "thread-turn-start",
+      studioRoleId: "system_programmer",
+      prompt: "turn_start 경로 테스트",
+      sourceTab: "tasks-thread",
+      runId: "role-run-turn-start",
+    });
+
+    expect(result.summary).toContain("turn_start 경로에서도 본문을 회수했습니다.");
+    expect(invokeFn).toHaveBeenCalledWith("turn_start", expect.objectContaining({
+      threadId: "thread-turn-start",
+      reasoningEffort: "medium",
+      sandboxMode: "workspace-write",
+    }));
+  });
+
+  it("keeps structured ideation direct prompts compact instead of nesting them under a second user-request wrapper", async () => {
+    let capturedPrompt = "";
+    const invokeFn = (vi.fn(async (command: string, args?: Record<string, unknown>) => {
+      switch (command) {
+        case "task_agent_pack_read":
+          return {
+            id: "game_designer",
+            label: "GAME DESIGNER",
+            studioRoleId: "pm_planner",
+            model: "gpt-5.4",
+            modelReasoningEffort: "medium",
+            sandboxMode: "workspace-write",
+            outputArtifactName: "discussion_direct.md",
+            promptDocFile: "game_designer.md",
+            developerInstructions: "게임 기획 관점에서 핵심 재미와 범위를 정리하라.",
+          };
+        case "thread_load":
+          return {
+            thread: { model: "GPT-5.4", reasoning: "중간" },
+            task: { workspacePath: "/tmp/mockking" },
+          };
+        case "thread_start":
+          return { threadId: "thread-structured-direct" };
+        case "turn_start":
+          capturedPrompt = String(args?.text ?? "");
+          return {
+            turn: {
+              id: "turn-structured-direct",
+              items: [],
+              status: "inProgress",
+            },
+          };
+        case "codex_thread_read":
+          return {
+            thread: { status: "completed" },
+            turns: [
+              {
+                id: "turn-structured-direct",
+                status: "completed",
+                output: [
+                  {
+                    type: "message",
+                    role: "assistant",
+                    content: [
+                      { type: "output_text", text: "아이디어 요약입니다." },
+                    ],
+                  },
+                ],
+              },
+            ],
+          };
+        case "workspace_write_text":
+          return "/tmp/out/file";
+        default:
+          throw new Error(`unexpected command: ${command}`);
+      }
+    }) as unknown) as <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
+
+    await runTaskRoleWithCodex({
+      invokeFn,
+      storageCwd: "/tmp/rail-storage",
+      taskId: "thread-structured-direct",
+      studioRoleId: "pm_planner",
+      prompt: [
+        "# 작업 모드",
+        "역할별 직접 응답",
+        "",
+        "# 역할",
+        "GAME DESIGNER",
+        "",
+        "# 사용자 요청",
+        "창의적인 게임 아이디어 10개를 제안해줘",
+      ].join("\n"),
+      promptMode: "direct",
+      intent: "ideation",
+      sourceTab: "tasks-thread",
+      runId: "role-run-structured-direct",
+    });
+
+    expect(capturedPrompt).toContain("# ROLE\nGAME DESIGNER");
+    expect(capturedPrompt).toContain("# DEVELOPER INSTRUCTIONS");
+    expect(capturedPrompt).toContain("# 작업 모드\n역할별 직접 응답");
+    expect(capturedPrompt).not.toContain("# USER REQUEST\n# 작업 모드");
+  });
+
+  it("passes role execution tuning into ideation direct turn_start calls", async () => {
+    const invokeFn = (vi.fn(async (command: string) => {
+      switch (command) {
+        case "task_agent_pack_read":
+          return {
+            id: "game_designer",
+            label: "GAME DESIGNER",
+            studioRoleId: "pm_planner",
+            model: "gpt-5.4",
+            modelReasoningEffort: "medium",
+            sandboxMode: "workspace-write",
+            outputArtifactName: "discussion_direct.md",
+            promptDocFile: "game_designer.md",
+            developerInstructions: "게임 기획 관점에서 핵심 재미와 범위를 정리하라.",
+          };
+        case "thread_load":
+          return {
+            thread: { model: "GPT-5.4", reasoning: "중간" },
+            task: { workspacePath: "/tmp/mockking" },
+          };
+        case "thread_start":
+          return { threadId: "thread-ideation-tuning" };
+        case "turn_start":
+          return {
+            turn: {
+              id: "turn-ideation-tuning",
+              items: [],
+              status: "inProgress",
+            },
+          };
+        case "codex_thread_read":
+          return {
+            thread: { status: "completed" },
+            turns: [
+              {
+                id: "turn-ideation-tuning",
+                status: "completed",
+                output: [
+                  {
+                    type: "message",
+                    role: "assistant",
+                    content: [{ type: "output_text", text: "1. 아이디어 A" }],
+                  },
+                ],
+              },
+            ],
+          };
+        case "workspace_write_text":
+          return "/tmp/out/file";
+        default:
+          throw new Error(`unexpected command: ${command}`);
+      }
+    }) as unknown) as <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
+
+    await runTaskRoleWithCodex({
+      invokeFn,
+      storageCwd: "/tmp/rail-storage",
+      taskId: "thread-ideation-tuning",
+      studioRoleId: "pm_planner",
+      prompt: "창의적인 게임 아이디어 10개를 제안해줘",
+      promptMode: "direct",
+      intent: "ideation",
+      sourceTab: "tasks-thread",
+      runId: "role-run-ideation-tuning",
+    });
+
+    expect(invokeFn).toHaveBeenCalledWith("turn_start", expect.objectContaining({
+      temperature: 0.48,
+      contextBudget: "wide",
+      maxInputChars: 5600,
+    }));
   });
 
   it("retries codex_thread_read when the thread is not materialized yet", async () => {
@@ -2001,7 +2422,7 @@ describe("runTaskRoleWithCodex", () => {
   });
 
   it("fails completed runs that still do not contain a readable final answer", async () => {
-    const invokeFn = (vi.fn(async (command: string) => {
+    const invokeFn = (vi.fn(async (command: string, args?: Record<string, unknown>) => {
       switch (command) {
         case "task_agent_pack_read":
           return {
@@ -2028,6 +2449,19 @@ describe("runTaskRoleWithCodex", () => {
             status: "completed",
             items: [{ id: "meta", type: "event", content: [] }],
           };
+        case "codex_thread_read":
+          return {
+            thread: { status: "completed" },
+            turns: [
+              {
+                id: "turn-empty",
+                status: "completed",
+                items: [{ id: "meta", type: "event", content: [] }],
+              },
+            ],
+          };
+        case "workspace_write_text":
+          return `${String(args?.cwd)}/${String(args?.name)}`;
         default:
           throw new Error(`unexpected command: ${command}`);
       }
@@ -2041,8 +2475,11 @@ describe("runTaskRoleWithCodex", () => {
       prompt: "본문 없는 완료 응답",
       sourceTab: "tasks-thread",
       runId: "role-run-empty",
+      debugTimeoutOverrides: {
+        completedUnreadableRecoveryWindowMs: 1500,
+      },
     })).rejects.toThrow("without a readable response");
-  });
+  }, 15000);
 
   it("extracts final answer text from nested item content arrays", async () => {
     const invokeFn = (vi.fn(async (command: string, args?: Record<string, unknown>) => {
@@ -2158,7 +2595,7 @@ describe("runTaskRoleWithCodex", () => {
   });
 
   it("does not mistake input-only completed payloads for a readable answer", async () => {
-    const invokeFn = (vi.fn(async (command: string) => {
+    const invokeFn = (vi.fn(async (command: string, args?: Record<string, unknown>) => {
       switch (command) {
         case "task_agent_pack_read":
           return {
@@ -2186,6 +2623,20 @@ describe("runTaskRoleWithCodex", () => {
             text: "사용자 입력 프롬프트",
             input: [{ type: "text", text: "사용자 입력 프롬프트" }],
           };
+        case "codex_thread_read":
+          return {
+            thread: { status: "completed" },
+            turns: [
+              {
+                id: "turn-input-only",
+                status: "completed",
+                text: "사용자 입력 프롬프트",
+                input: [{ type: "text", text: "사용자 입력 프롬프트" }],
+              },
+            ],
+          };
+        case "workspace_write_text":
+          return `${String(args?.cwd)}/${String(args?.name)}`;
         default:
           throw new Error(`unexpected command: ${command}`);
       }
@@ -2199,8 +2650,94 @@ describe("runTaskRoleWithCodex", () => {
       prompt: "사용자 입력 프롬프트",
       sourceTab: "tasks-thread",
       runId: "role-run-input-only",
+      debugTimeoutOverrides: {
+        completedUnreadableRecoveryWindowMs: 1500,
+      },
     })).rejects.toThrow("without a readable response");
   });
+
+  it("writes unreadable debug artifacts when a completed turn still has no assistant text", async () => {
+    const writes: Array<{ name: string; content: string }> = [];
+    const invokeFn = (vi.fn(async (command: string, args?: Record<string, unknown>) => {
+      switch (command) {
+        case "task_agent_pack_read":
+          return {
+            id: "unity_architect",
+            label: "UNITY ARCHITECT",
+            studioRoleId: "system_programmer",
+            model: "gpt-5.4",
+            modelReasoningEffort: "medium",
+            sandboxMode: "workspace-write",
+            outputArtifactName: "architecture_review.md",
+            promptDocFile: "unity_architect.md",
+            developerInstructions: "검토하라.",
+          };
+        case "thread_load":
+          return {
+            thread: { model: "GPT-5.4", reasoning: "중간" },
+            task: { workspacePath: "/tmp/mockking" },
+          };
+        case "thread_start":
+          return { threadId: "thread-user-only-debug" };
+        case "turn_start_blocking":
+          return {
+            id: "turn-user-only-debug",
+            status: "completed",
+            items: [
+              {
+                id: "item-user-message",
+                type: "userMessage",
+                content: [{ type: "text", text: "사용자 프롬프트 원문" }],
+              },
+            ],
+          };
+        case "codex_thread_read":
+          return {
+            thread: { status: "completed" },
+            turns: [
+              {
+                id: "turn-user-only-debug",
+                status: "completed",
+                items: [
+                  {
+                    id: "item-user-message",
+                    type: "userMessage",
+                    content: [{ type: "text", text: "사용자 프롬프트 원문" }],
+                  },
+                ],
+              },
+            ],
+          };
+        case "workspace_write_text":
+          writes.push({
+            name: String(args?.name ?? ""),
+            content: String(args?.content ?? ""),
+          });
+          return `/tmp/out/${String(args?.name ?? "unknown")}`;
+        default:
+          throw new Error(`unexpected command: ${command}`);
+      }
+    }) as unknown) as <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
+
+    await expect(runTaskRoleWithCodex({
+      invokeFn,
+      storageCwd: "/tmp/rail-storage",
+      taskId: "thread-user-only-debug",
+      studioRoleId: "system_programmer",
+      prompt: "사용자 프롬프트 원문",
+      sourceTab: "tasks-thread",
+      runId: "role-run-user-only-debug",
+      debugTimeoutOverrides: {
+        completedUnreadableRecoveryWindowMs: 1500,
+      },
+    })).rejects.toThrow("without a readable response");
+
+    expect(writes.some((entry) => entry.name === "response.unreadable.json")).toBe(true);
+    const debugWrite = writes.find((entry) => entry.name === "response.unreadable.debug.json");
+    expect(debugWrite).toBeTruthy();
+    expect(debugWrite?.content).toContain("\"completedStatus\": \"completed\"");
+    expect(debugWrite?.content).toContain("\"threadReadSnapshots\"");
+  }, 15000);
 
   it("fails fast when thread_start never resolves", async () => {
     vi.useFakeTimers();

@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { t as translate } from "../../../i18n";
+import { dispatchEngineNotificationEvent } from "./codexTurnNotifications";
 
 export function useEngineEventListeners(params: any) {
   useEffect(() => {
@@ -14,6 +15,7 @@ export function useEngineEventListeners(params: any) {
       const unlistenNotification = await params.listenFn("engine://notification", (event: any) => {
         try {
           const payload = event.payload;
+          dispatchEngineNotificationEvent(payload);
 
           if (payload.method === "item/agentMessage/delta") {
             const delta = params.extractDeltaText(payload.params);

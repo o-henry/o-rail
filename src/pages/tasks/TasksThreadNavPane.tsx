@@ -64,10 +64,22 @@ function displayStageStatus(input: string | null | undefined, t: (key: string) =
     completed: t("tasks.stage.done"),
     failed: t("tasks.stage.failed"),
     error: t("tasks.stage.failed"),
+    low_quality: t("tasks.stage.lowQuality"),
+    degraded: t("tasks.stage.lowQuality"),
     thinking: t("tasks.stage.thinking"),
     awaiting_approval: t("tasks.stage.awaitingApproval"),
   };
   return labels[normalized] ?? String(input ?? "").trim().replace(/_/g, " ");
+}
+
+function isThreadListFailureStatus(input: string | null | undefined) {
+  const normalized = String(input ?? "").trim().toLowerCase();
+  return normalized === "failed" || normalized === "error";
+}
+
+function isThreadListDegradedStatus(input: string | null | undefined) {
+  const normalized = String(input ?? "").trim().toLowerCase();
+  return normalized === "low_quality" || normalized === "degraded";
 }
 
 function renderFileTree(
@@ -213,7 +225,14 @@ export function TasksThreadNavPane(props: TasksThreadNavPaneProps) {
                               <span className={`tasks-thread-list-stage is-${item.workflowSummary.status}`}>
                                 {getThreadStageLabel(item.workflowSummary.currentStageId)}
                               </span>
-                              {item.workflowSummary.blocked ? <small>{t("tasks.stage.blocked")}</small> : null}
+                              {item.workflowSummary.degraded || isThreadListDegradedStatus(item.thread.status) ? (
+                                <span className="tasks-thread-list-state-badge is-quality">{t("tasks.stage.lowQuality")}</span>
+                              ) : null}
+                              {item.workflowSummary.failed
+                              || isThreadListFailureStatus(item.thread.status)
+                              || isThreadListFailureStatus(item.workflowSummary.status) ? (
+                                <span className="tasks-thread-list-state-badge is-fail">{t("tasks.stage.failed")}</span>
+                              ) : null}
                             </div>
                           ) : null}
                         </button>

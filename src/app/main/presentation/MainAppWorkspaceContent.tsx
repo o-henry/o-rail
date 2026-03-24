@@ -1,15 +1,15 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Profiler, useCallback, useEffect, useMemo, useState } from "react";
 import AgentsPage from "../../../pages/agents/AgentsPage";
 import AdaptationPage from "./AdaptationPage";
 import BridgePage from "../../../pages/bridge/BridgePage";
 import FeedPage from "../../../pages/feed/FeedPage";
 import KnowledgeBasePage from "../../../pages/knowledge/KnowledgeBasePage";
-import ShellPage from "../../../pages/shell/ShellPage";
 import DashboardIntelligenceSettings from "../../../pages/settings/DashboardIntelligenceSettings";
 import SettingsPage from "../../../pages/settings/SettingsPage";
 import TasksPage from "../../../pages/tasks/TasksPage";
 import VisualizePage from "../../../pages/visualize/VisualizePage";
 import { writeStoredSelectedRunId } from "../../../pages/visualize/visualizeSelection";
+import { emitWorkspaceDiagnostic } from "../runtime/workspaceDiagnosticLog";
 import { WorkspaceTabCache } from "./WorkspaceTabCache";
 
 export function MainAppWorkspaceContent(props: any) {
@@ -97,6 +97,34 @@ export function MainAppWorkspaceContent(props: any) {
     });
   }, [props.publishAction]);
 
+  const handleTasksProfilerRender = useCallback((
+    id: string,
+    phase: "mount" | "update" | "nested-update",
+    actualDuration: number,
+    baseDuration: number,
+    startTime: number,
+    commitTime: number,
+  ) => {
+    if (actualDuration < 24) {
+      return;
+    }
+    emitWorkspaceDiagnostic({
+      at: new Date().toISOString(),
+      kind: "react_profiler_commit",
+      level: actualDuration >= 1_500 ? "error" : "info",
+      tab: "tasks",
+      source: "react",
+      message: `${id} ${phase} ${Math.round(actualDuration)}ms`,
+      payload: {
+        phase,
+        actualDurationMs: Math.round(actualDuration),
+        baseDurationMs: Math.round(baseDuration),
+        startTimeMs: Math.round(startTime),
+        commitTimeMs: Math.round(commitTime),
+      },
+    });
+  }, []);
+
   const feedTabContent = useMemo(() => <FeedPage vm={props.feedPageVm} />, [props.feedPageVm]);
   const knowledgeTabContent = useMemo(() => (
     <KnowledgeBasePage
@@ -163,16 +191,6 @@ export function MainAppWorkspaceContent(props: any) {
     props.publishAction,
     props.setStatus,
   ]);
-  const shellTabContent = useMemo(() => (
-    <ShellPage
-      appendWorkspaceEvent={props.appendWorkspaceEvent}
-      cwd={props.cwd}
-      hasTauriRuntime={props.hasTauriRuntime}
-      invokeFn={props.invokeFn}
-      publishAction={props.publishAction}
-      setStatus={props.setStatus}
-    />
-  ), [props.appendWorkspaceEvent, props.cwd, props.hasTauriRuntime, props.invokeFn, props.publishAction, props.setStatus]);
   const agentsTabContent = useMemo(() => (
     <AgentsPage
       codexMultiAgentMode={props.codexMultiAgentMode}
@@ -311,12 +329,9 @@ export function MainAppWorkspaceContent(props: any) {
       ) : null}
       {mountedTabs.tasks ? (
         <WorkspaceTabCache active={props.workspaceTab === "tasks"}>
-          {tasksTabContent}
-        </WorkspaceTabCache>
-      ) : null}
-      {mountedTabs.shell ? (
-        <WorkspaceTabCache active={props.workspaceTab === "shell"}>
-          {shellTabContent}
+          <Profiler id="tasks-tab" onRender={handleTasksProfilerRender}>
+            {tasksTabContent}
+          </Profiler>
         </WorkspaceTabCache>
       ) : null}
       {mountedTabs.agents ? (

@@ -1,5 +1,11 @@
 export type TaskRolePromptMode = "direct" | "orchestrate" | "brief" | "critique" | "final";
 
-export function shouldDeduplicateTaskRoleRun(mode: TaskRolePromptMode | string | undefined): boolean {
-  return String(mode ?? "direct").trim() === "direct";
+export function shouldDeduplicateTaskRoleRun(params: {
+  mode: TaskRolePromptMode | string | undefined;
+  internal?: boolean;
+}): boolean {
+  if (params.internal) {
+    return false;
+  }
+  return String(params.mode ?? "direct").trim() === "direct";
 }

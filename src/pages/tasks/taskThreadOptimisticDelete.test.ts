@@ -24,6 +24,8 @@ function item(threadId: string, projectPath = "/workspace"): ThreadListItem {
       currentStageId: "brief",
       status: "idle",
       blocked: false,
+      failed: false,
+      degraded: false,
       pendingApprovalCount: 0,
     },
   };

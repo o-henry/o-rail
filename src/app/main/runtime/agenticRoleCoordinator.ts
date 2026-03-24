@@ -51,7 +51,13 @@ export type AgenticRunRoleInput = {
   prompt?: string;
   queue: AgenticQueue;
   invokeFn: InvokeFn;
-  execute: (params: { runId: string; roleId: string; taskId: string; prompt?: string }) => Promise<void>;
+  execute: (params: {
+    runId: string;
+    roleId: string;
+    taskId: string;
+    prompt?: string;
+    onProgress?: (message?: string) => void;
+  }) => Promise<void>;
   appendWorkspaceEvent?: (params: {
     source: string;
     message: string;
@@ -182,22 +188,48 @@ function resolveRoleExecuteTimeoutMs(roleId: string): number {
     : ROLE_EXECUTE_TIMEOUT_MS;
 }
 
-async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
-  let timer: ReturnType<typeof globalThis.setTimeout> | null = null;
-  try {
-    return await Promise.race([
-      promise,
-      new Promise<T>((_, reject) => {
-        timer = globalThis.setTimeout(() => {
-          reject(new Error(`${label} timed out after ${timeoutMs}ms`));
-        }, timeoutMs);
-      }),
-    ]);
-  } finally {
-    if (timer) {
-      globalThis.clearTimeout(timer);
-    }
-  }
+async function withActivityWatchdog<T>(params: {
+  timeoutMs: number;
+  label: string;
+  run: (markProgress: (message?: string) => void) => Promise<T>;
+}): Promise<T> {
+  let idleDeadline = Date.now() + params.timeoutMs;
+  let settled = false;
+  let intervalId: ReturnType<typeof globalThis.setInterval> | null = null;
+
+  return await new Promise<T>((resolve, reject) => {
+    const cleanup = () => {
+      settled = true;
+      if (intervalId) {
+        globalThis.clearInterval(intervalId);
+        intervalId = null;
+      }
+    };
+
+    const failIfExpired = () => {
+      if (!settled && Date.now() >= idleDeadline) {
+        cleanup();
+        reject(new Error(`${params.label} timed out after ${params.timeoutMs}ms of inactivity`));
+      }
+    };
+
+    const markProgress = () => {
+      idleDeadline = Date.now() + params.timeoutMs;
+    };
+
+    intervalId = globalThis.setInterval(failIfExpired, 500);
+
+    void params.run(markProgress).then(
+      (value) => {
+        cleanup();
+        resolve(value);
+      },
+      (error) => {
+        cleanup();
+        reject(error);
+      },
+    );
+  });
 }
 
 export async function runRoleWithCoordinator(input: AgenticRunRoleInput): Promise<AgenticCoordinatorRunResult> {
@@ -425,16 +457,29 @@ export async function runRoleWithCoordinator(input: AgenticRunRoleInput): Promis
     emitRunEvent({ context, type: "stage_started", stage: "codex", message: "역할 실행 시작", onEvent: input.onEvent });
 
     try {
-      await withTimeout(
-        input.execute({
+      await withActivityWatchdog({
+        timeoutMs: resolveRoleExecuteTimeoutMs(input.roleId),
+        label: "role execution",
+        run: async (markProgress) => input.execute({
           runId,
           roleId: input.roleId,
           taskId: input.taskId,
           prompt: effectivePrompt,
+          onProgress: (message) => {
+            markProgress(message);
+            if (message) {
+              context.envelope = patchRunStage(context.envelope, "codex", "running", message);
+              emitRunEvent({
+                context,
+                type: "stage_started",
+                stage: "codex",
+                message,
+                onEvent: input.onEvent,
+              });
+            }
+          },
         }),
-        resolveRoleExecuteTimeoutMs(input.roleId),
-        "role execution",
-      );
+      });
       context.envelope = patchRunStage(context.envelope, "codex", "done", "역할 실행 완료");
       context.envelope = patchRunStage(context.envelope, "save", "done", "저장 완료");
       context.envelope = patchRunStatus(context.envelope, "done");

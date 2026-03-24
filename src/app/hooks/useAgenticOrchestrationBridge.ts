@@ -14,6 +14,7 @@ import { resolveTaskAgentMetadata } from "../../features/studio/taskAgentMetadat
 import type { PresetKind } from "../../features/workflow/domain";
 import type { WorkspaceTab } from "../mainAppGraphHelpers";
 import { runGraphWithCoordinator, runTopicWithCoordinator } from "../main/runtime/agenticCoordinator";
+import { persistAgenticRunEnvelope } from "../main/runtime/agenticRunStore";
 import { runRoleWithCoordinator } from "../main/runtime/agenticRoleCoordinator";
 import { runTaskRoleWithCodex } from "../main/runtime/runTaskRoleWithCodex";
 import { buildTaskThreadContextSummary } from "../main/runtime/taskThreadContextSummary";
@@ -363,32 +364,42 @@ export function useAgenticOrchestrationBridge(params: {
       ...params.envelope.artifacts.map((row) => String(row.path ?? "").trim()).filter(Boolean),
       ...params.artifactPaths,
     ];
+    const summaryText = String(params.summary ?? "").trim();
+    const persistedRunPath = await persistAgenticRunEnvelope({
+      cwd,
+      invokeFn,
+      envelope: params.envelope,
+    }).catch(() => null);
     let roleSummaryArtifactPath = "";
-    try {
-      const artifactDir = `${String(cwd ?? "").trim().replace(/[\\/]+$/, "")}/.rail/studio_runs/${params.runId}/artifacts`;
-      const roleToken = toRoleShortToken(params.roleId);
-      const fileName = `${toCompactTimestamp()}_${roleToken}.json`;
-      roleSummaryArtifactPath = await invokeFn<string>("workspace_write_text", {
-        cwd: artifactDir,
-        name: fileName,
-        content: buildRoleArtifactJson({
-          runId: params.runId,
-          roleId: params.roleId,
-          taskId: params.taskId,
-          prompt: params.prompt,
-          artifactPaths: baseArtifactPaths,
-          internal: params.internal,
-        }),
-      });
-    } catch {
-      roleSummaryArtifactPath = "";
+    if (params.runStatus === "done" && summaryText) {
+      try {
+        const artifactDir = `${String(cwd ?? "").trim().replace(/[\\/]+$/, "")}/.rail/studio_runs/${params.runId}/artifacts`;
+        const roleToken = toRoleShortToken(params.roleId);
+        const fileName = `${toCompactTimestamp()}_${roleToken}.json`;
+        roleSummaryArtifactPath = await invokeFn<string>("workspace_write_text", {
+          cwd: artifactDir,
+          name: fileName,
+          content: buildRoleArtifactJson({
+            runId: params.runId,
+            roleId: params.roleId,
+            taskId: params.taskId,
+            prompt: params.prompt,
+            artifactPaths: baseArtifactPaths,
+            internal: params.internal,
+          }),
+        });
+      } catch {
+        roleSummaryArtifactPath = "";
+      }
     }
-    const artifactPaths = [
-      roleSummaryArtifactPath,
-      ...baseArtifactPaths,
-      `.rail/studio_runs/${params.runId}/run.json`,
-    ];
-    const dedupedArtifactPaths = [...new Set(artifactPaths.map((row) => String(row ?? "").trim()).filter(Boolean))];
+    const surfacedArtifactPaths = params.runStatus === "done"
+      ? [
+          roleSummaryArtifactPath,
+          ...baseArtifactPaths,
+          persistedRunPath || "",
+        ]
+      : baseArtifactPaths;
+    const dedupedArtifactPaths = [...new Set(surfacedArtifactPaths.map((row) => String(row ?? "").trim()).filter(Boolean))];
     await recordTaskRoleLearningOutcome({
       cwd,
       invokeFn,
@@ -447,7 +458,11 @@ export function useAgenticOrchestrationBridge(params: {
     const promptText = String(params.prompt ?? "").trim();
     const requestPromptText = String(params.requestPrompt ?? params.prompt ?? "").trim();
     const promptMode = params.promptMode ?? "direct";
-    if (shouldDeduplicateTaskRoleRun(promptMode) && shouldSkipRecentTaskRoleRun({
+    const effectiveRoleId = toStudioRoleId(params.roleId) ?? params.roleId;
+    if (shouldDeduplicateTaskRoleRun({
+      mode: promptMode,
+      internal: params.internal,
+    }) && shouldSkipRecentTaskRoleRun({
       taskId: params.taskId,
       roleId: params.roleId,
       prompt: promptText,
@@ -456,7 +471,7 @@ export function useAgenticOrchestrationBridge(params: {
       dispatchTasksRoleEvent({
         sourceTab,
         taskId: params.taskId,
-        studioRoleId: params.roleId,
+        studioRoleId: effectiveRoleId,
         type: "stage_done",
         stage: "save",
         message: "같은 역할 요청이 너무 가까워 중복 실행을 건너뛰었습니다.",
@@ -472,8 +487,8 @@ export function useAgenticOrchestrationBridge(params: {
       let inlineEnvelope = createAgenticRunEnvelope({
         runId,
         sourceTab,
-        queueKey: `inline:${promptMode}:${params.roleId}:${params.taskId}`,
-        roleId: params.roleId,
+        queueKey: `inline:${promptMode}:${effectiveRoleId}:${params.taskId}`,
+        roleId: effectiveRoleId,
         taskId: params.taskId,
         approvalState: "pending",
       });
@@ -481,7 +496,7 @@ export function useAgenticOrchestrationBridge(params: {
       dispatchTasksRoleEvent({
         sourceTab,
         taskId: params.taskId,
-        studioRoleId: params.roleId,
+        studioRoleId: effectiveRoleId,
         runId,
         type: "run_started",
         message: "started",
@@ -489,7 +504,7 @@ export function useAgenticOrchestrationBridge(params: {
       dispatchTasksRoleEvent({
         sourceTab,
         taskId: params.taskId,
-        studioRoleId: params.roleId,
+        studioRoleId: effectiveRoleId,
         runId,
         type: "stage_started",
         stage: "codex",
@@ -500,7 +515,7 @@ export function useAgenticOrchestrationBridge(params: {
           invokeFn,
           storageCwd: cwd,
           taskId: params.taskId,
-          studioRoleId: params.roleId,
+          studioRoleId: effectiveRoleId,
           prompt: promptText || undefined,
           model: params.model,
           models: params.models,
@@ -514,7 +529,7 @@ export function useAgenticOrchestrationBridge(params: {
             dispatchTasksRoleEvent({
               sourceTab,
               taskId: params.taskId,
-              studioRoleId: params.roleId,
+              studioRoleId: effectiveRoleId,
               runId,
               type: "runtime_attached",
               stage: "codex",
@@ -539,7 +554,7 @@ export function useAgenticOrchestrationBridge(params: {
         dispatchTasksRoleEvent({
           sourceTab,
           taskId: params.taskId,
-          studioRoleId: params.roleId,
+          studioRoleId: effectiveRoleId,
           runId,
           type: "stage_done",
           stage: "codex",
@@ -548,14 +563,14 @@ export function useAgenticOrchestrationBridge(params: {
         dispatchTasksRoleEvent({
           sourceTab,
           taskId: params.taskId,
-          studioRoleId: params.roleId,
+          studioRoleId: effectiveRoleId,
           runId,
           type: "run_done",
           message: "done",
         });
         await finalizeTaskRoleRun({
           runId,
-          roleId: params.roleId,
+          roleId: effectiveRoleId,
           taskId: params.taskId,
           prompt: params.prompt,
           requestPrompt: requestPromptText || undefined,
@@ -584,7 +599,7 @@ export function useAgenticOrchestrationBridge(params: {
         dispatchTasksRoleEvent({
           sourceTab,
           taskId: params.taskId,
-          studioRoleId: params.roleId,
+          studioRoleId: effectiveRoleId,
           runId,
           type: "stage_error",
           stage: "codex",
@@ -594,7 +609,7 @@ export function useAgenticOrchestrationBridge(params: {
         dispatchTasksRoleEvent({
           sourceTab,
           taskId: params.taskId,
-          studioRoleId: params.roleId,
+          studioRoleId: effectiveRoleId,
           runId,
           type: "run_error",
           message: errorText,
@@ -602,7 +617,7 @@ export function useAgenticOrchestrationBridge(params: {
         });
         await finalizeTaskRoleRun({
           runId,
-          roleId: params.roleId,
+          roleId: effectiveRoleId,
           taskId: params.taskId,
           prompt: params.prompt,
           requestPrompt: requestPromptText || undefined,
@@ -631,12 +646,12 @@ export function useAgenticOrchestrationBridge(params: {
       queueKeyOverride,
       cwd,
       sourceTab,
-      roleId: params.roleId,
+      roleId: effectiveRoleId,
       taskId: params.taskId,
       prompt: promptText || undefined,
       queue,
       invokeFn,
-      execute: async ({ runId, prompt }) => {
+      execute: async ({ runId, prompt, onProgress }) => {
         const nextPrompt = String(prompt ?? "").trim();
         if (nextPrompt) {
           setStatus(`역할 요청: ${nextPrompt.slice(0, 72)}`);
@@ -645,7 +660,7 @@ export function useAgenticOrchestrationBridge(params: {
           invokeFn,
           storageCwd: cwd,
           taskId: params.taskId,
-          studioRoleId: params.roleId,
+          studioRoleId: effectiveRoleId,
           prompt: nextPrompt || undefined,
           model: params.model,
           models: params.models,
@@ -655,11 +670,12 @@ export function useAgenticOrchestrationBridge(params: {
           runId,
           intent: params.intent,
           promptMode: params.promptMode,
+          onProgress,
           onRuntimeSession: (runtime) => {
             dispatchTasksRoleEvent({
               sourceTab,
               taskId: params.taskId,
-              studioRoleId: params.roleId,
+              studioRoleId: effectiveRoleId,
               runId,
               type: "runtime_attached",
               stage: "codex",
@@ -681,7 +697,7 @@ export function useAgenticOrchestrationBridge(params: {
         dispatchTasksRoleEvent({
           sourceTab,
           taskId: params.taskId,
-          studioRoleId: params.roleId,
+          studioRoleId: effectiveRoleId,
           runId: event.runId,
           type: event.type,
           stage: event.stage ?? null,
@@ -741,7 +757,7 @@ export function useAgenticOrchestrationBridge(params: {
 
     await finalizeTaskRoleRun({
       runId: result.runId,
-      roleId: params.roleId,
+      roleId: effectiveRoleId,
       taskId: params.taskId,
       prompt: params.prompt,
       requestPrompt: requestPromptText || undefined,
@@ -857,7 +873,14 @@ export function useAgenticOrchestrationBridge(params: {
           };
         },
         onProgress: (progress) => {
-          const studioRoleId = String(progress.roleId || params.synthesisRoleId || params.primaryRoleId).trim();
+          const studioRoleId = String(
+            toStudioRoleId(String(progress.roleId ?? "").trim())
+              || toStudioRoleId(String(params.synthesisRoleId ?? "").trim())
+              || toStudioRoleId(String(params.primaryRoleId ?? "").trim())
+              || progress.roleId
+              || params.synthesisRoleId
+              || params.primaryRoleId,
+          ).trim();
           if (!studioRoleId) {
             return;
           }
@@ -884,13 +907,27 @@ export function useAgenticOrchestrationBridge(params: {
       setStatus(`멀티에이전트 합성 완료: ${collaboration.finalResult.summary.slice(0, 40)}`);
     } catch (error) {
       const errorText = String(error ?? "멀티에이전트 협업에 실패했습니다.").trim();
+      const terminalStudioRoleId = String(
+        toStudioRoleId(String(params.synthesisRoleId ?? "").trim())
+          || toStudioRoleId(String(params.primaryRoleId ?? "").trim())
+          || params.synthesisRoleId
+          || params.primaryRoleId,
+      ).trim();
       dispatchTasksRoleEvent({
         sourceTab,
         taskId: params.taskId,
-        studioRoleId: params.synthesisRoleId || params.primaryRoleId,
+        studioRoleId: terminalStudioRoleId,
         type: "stage_error",
         stage: "save",
         message: errorText,
+      });
+      dispatchTasksRoleEvent({
+        sourceTab,
+        taskId: params.taskId,
+        studioRoleId: terminalStudioRoleId,
+        type: "run_error",
+        message: errorText,
+        payload: { error: errorText },
       });
       appendWorkspaceEvent({
         source: "agentic",
@@ -1006,6 +1043,11 @@ export function useAgenticOrchestrationBridge(params: {
           : undefined,
       });
       const baseArtifactPaths = result.envelope.artifacts.map((row) => String(row.path ?? "").trim()).filter(Boolean);
+      const persistedRunPath = await persistAgenticRunEnvelope({
+        cwd,
+        invokeFn,
+        envelope: result.envelope,
+      }).catch(() => null);
       let roleSummaryArtifactPath = "";
       try {
         const artifactDir = `${String(cwd ?? "").trim().replace(/[\\/]+$/, "")}/.rail/studio_runs/${result.runId}/artifacts`;
@@ -1028,7 +1070,7 @@ export function useAgenticOrchestrationBridge(params: {
       const artifactPaths = [
         roleSummaryArtifactPath,
         ...baseArtifactPaths,
-        `.rail/studio_runs/${result.runId}/run.json`,
+        persistedRunPath || "",
       ];
       const dedupedArtifactPaths = [...new Set(artifactPaths.map((row) => String(row ?? "").trim()).filter(Boolean))];
       onRoleRunCompleted?.({

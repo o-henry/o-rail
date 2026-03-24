@@ -246,6 +246,8 @@ export function deriveThreadWorkflowSummary(detail: ThreadDetail): ThreadWorkflo
     currentStageId: workflow.currentStageId,
     status: currentStage?.status ?? "idle",
     blocked: workflow.stages.some((stage) => stage.status === "blocked"),
+    failed: currentStage?.status === "failed",
+    degraded: false,
     pendingApprovalCount: pendingApprovalCount(detail.approvals),
   };
 }

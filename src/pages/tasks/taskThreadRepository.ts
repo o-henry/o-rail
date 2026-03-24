@@ -3,7 +3,15 @@ import { defaultSelectedAgent, defaultSelectedFile, toThreadListItem, withDerive
 import { persistBrowserStore, type BrowserStore } from "./taskThreadStorageState";
 import { resolveThreadSelection } from "./threadSelectionState";
 import { filterBrowserThreadIdsByProject, filterThreadListByProject } from "./threadTree";
-import type { ThreadAgentDetail, ThreadDetail, ThreadListItem } from "./threadTypes";
+import type {
+  ApprovalRecord,
+  BackgroundAgentRecord,
+  ThreadAgentDetail,
+  ThreadDetail,
+  ThreadListItem,
+  ThreadRecord,
+  ThreadWorkflow,
+} from "./threadTypes";
 import { withTaskCoordination } from "./taskOrchestrationState";
 import type { AgenticCoordinationState } from "../../features/orchestration/agentic/coordinationTypes";
 
@@ -88,6 +96,7 @@ type ReloadThreadsParams = {
 
 type RefreshCurrentThreadParams = {
   threadId: string;
+  currentDetail: ThreadDetail | null;
   hasTauriRuntime: boolean;
   cwd: string;
   projectPath: string;
@@ -102,6 +111,11 @@ type RefreshCurrentThreadParams = {
   setThreadItems: SetState<ThreadListItem[]>;
 };
 
+export type RefreshThreadStateResult = {
+  ok: boolean;
+  refreshedAt: string;
+};
+
 type RefreshThreadListSilentlyParams = {
   hasTauriRuntime: boolean;
   cwd: string;
@@ -109,6 +123,54 @@ type RefreshThreadListSilentlyParams = {
   invokeFn: InvokeFn;
   setThreadItems: SetState<ThreadListItem[]>;
 };
+
+type ThreadRuntimeSnapshot = {
+  thread: ThreadRecord;
+  task: ThreadDetail["task"];
+  agents: BackgroundAgentRecord[];
+  approvals: ApprovalRecord[];
+  artifacts: ThreadDetail["artifacts"];
+  changedFiles: string[];
+  validationState: string;
+  riskLevel: string;
+  workflow: ThreadWorkflow;
+  messageCount: number;
+};
+
+type ThreadMessageDelta = {
+  messages: ThreadDetail["messages"];
+  totalCount: number;
+  resetRequired: boolean;
+};
+
+function canReuseCurrentDetailForSnapshot(currentDetail: ThreadDetail | null, snapshot: ThreadRuntimeSnapshot) {
+  if (!currentDetail || currentDetail.thread.threadId !== snapshot.thread.threadId) {
+    return false;
+  }
+  return currentDetail.messages.length === snapshot.messageCount;
+}
+
+function mergeSnapshotIntoThreadDetail(currentDetail: ThreadDetail, snapshot: ThreadRuntimeSnapshot): ThreadDetail {
+  return {
+    ...currentDetail,
+    thread: snapshot.thread,
+    task: snapshot.task,
+    agents: snapshot.agents,
+    approvals: snapshot.approvals,
+    artifacts: snapshot.artifacts,
+    changedFiles: snapshot.changedFiles,
+    validationState: snapshot.validationState,
+    riskLevel: snapshot.riskLevel,
+    workflow: snapshot.workflow,
+  };
+}
+
+function mergeMessageDeltaIntoThreadDetail(currentDetail: ThreadDetail, delta: ThreadMessageDelta): ThreadDetail {
+  return {
+    ...currentDetail,
+    messages: [...currentDetail.messages, ...delta.messages],
+  };
+}
 
 function syncSelectedState(params: ThreadSelectionDeps) {
   params.rememberSelectedAgent(
@@ -158,10 +220,8 @@ export function applyBrowserStoreSnapshot(params: ApplyBrowserStoreParams): Thre
     return null;
   }
   const detail = params.hydrateThreadDetail(params.store.details[nextId]) ?? withDerivedWorkflow(params.store.details[nextId]);
-  startTransition(() => {
-    params.setActiveThread(detail);
-    params.setActiveThreadId(nextId);
-  });
+  params.setActiveThread(detail);
+  params.setActiveThreadId(nextId);
   syncSelectedState({
     detail,
     selectedAgentIdsByThread: params.selectedAgentIdsByThread,
@@ -265,26 +325,65 @@ export async function reloadThreadList(params: ReloadThreadsParams) {
   }
 }
 
-export async function refreshThreadStateSilently(params: RefreshCurrentThreadParams) {
+export async function refreshThreadStateSilently(params: RefreshCurrentThreadParams): Promise<RefreshThreadStateResult> {
   const normalizedThreadId = String(params.threadId ?? "").trim();
   if (!normalizedThreadId || !params.hasTauriRuntime || !params.cwd) {
-    return;
+    return { ok: false, refreshedAt: new Date().toISOString() } satisfies RefreshThreadStateResult;
   }
   try {
-    const [items, detail] = await Promise.all([
-      params.invokeFn<ThreadListItem[]>("thread_list", {
+    const snapshot = await params.invokeFn<ThreadRuntimeSnapshot>("thread_runtime_snapshot", {
+      cwd: params.cwd,
+      threadId: normalizedThreadId,
+    });
+    let detail: ThreadDetail;
+    if (canReuseCurrentDetailForSnapshot(params.currentDetail, snapshot)) {
+      detail = mergeSnapshotIntoThreadDetail(params.currentDetail!, snapshot);
+    } else if (
+      params.currentDetail
+      && params.currentDetail.thread.threadId === normalizedThreadId
+      && snapshot.messageCount >= params.currentDetail.messages.length
+    ) {
+      const delta = await params.invokeFn<ThreadMessageDelta>("thread_message_delta", {
         cwd: params.cwd,
-        projectPath: params.projectPath || undefined,
-      }),
-      params.invokeFn<ThreadDetail>("thread_load", { cwd: params.cwd, threadId: normalizedThreadId }),
-    ]);
+        threadId: normalizedThreadId,
+        afterCount: params.currentDetail.messages.length,
+      });
+      detail = delta.resetRequired || delta.totalCount < params.currentDetail.messages.length
+        ? await params.invokeFn<ThreadDetail>("thread_load", {
+            cwd: params.cwd,
+            threadId: normalizedThreadId,
+          })
+        : mergeSnapshotIntoThreadDetail(
+            mergeMessageDeltaIntoThreadDetail(params.currentDetail, delta),
+            snapshot,
+          );
+    } else {
+      detail = await params.invokeFn<ThreadDetail>("thread_load", {
+        cwd: params.cwd,
+        threadId: normalizedThreadId,
+      });
+    }
     const persistedCoordination = await params.hydratePersistedCoordination(normalizedThreadId);
     const nextDetail = detail ? withTaskCoordination(withDerivedWorkflow(detail), persistedCoordination) : null;
     if (!nextDetail) {
-      return;
+      return {
+        ok: false,
+        refreshedAt: new Date().toISOString(),
+      } satisfies RefreshThreadStateResult;
     }
     startTransition(() => {
-      params.setThreadItems(items);
+      params.setThreadItems((current) => {
+        const nextItem = toThreadListItem(nextDetail);
+        let found = false;
+        const nextItems = current.map((item) => {
+          if (item.thread.threadId !== normalizedThreadId) {
+            return item;
+          }
+          found = true;
+          return nextItem;
+        });
+        return found ? nextItems : [nextItem, ...current];
+      });
       params.setActiveThread(nextDetail);
       params.setActiveThreadId(nextDetail.thread.threadId);
     });
@@ -295,8 +394,15 @@ export async function refreshThreadStateSilently(params: RefreshCurrentThreadPar
       rememberSelectedAgent: params.rememberSelectedAgent,
       rememberSelectedFile: params.rememberSelectedFile,
     });
+    return {
+      ok: true,
+      refreshedAt: new Date().toISOString(),
+    } satisfies RefreshThreadStateResult;
   } catch {
-    // silent by design
+    return {
+      ok: false,
+      refreshedAt: new Date().toISOString(),
+    } satisfies RefreshThreadStateResult;
   }
 }
 

@@ -8,6 +8,9 @@ import { prepareResearcherCollectionContext } from "./researcherCollection";
 import { ensureResearcherCollectionArtifacts } from "./researcherCollectionArtifacts";
 import { buildTaskRoleLearningPromptContext } from "../../adaptation/taskRoleLearning";
 import type { WebProviderRunResult } from "../types";
+import { waitForTurnTerminalFromEngineNotifications } from "./codexTurnNotifications";
+import { resolveStudioRoleExecutionConfigPatch } from "./roleExecutionTuning";
+import type { StudioRoleId } from "../../../features/studio/handoffTypes";
 
 type InvokeFn = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
 type ExternalFallbackProvider = "steel" | "lightpanda_experimental";
@@ -75,6 +78,10 @@ type RunTaskRoleWithCodexInput = {
     provider?: string | null;
     providers?: string[];
   }) => void;
+  onProgress?: (message?: string) => void;
+  debugTimeoutOverrides?: {
+    completedUnreadableRecoveryWindowMs?: number;
+  };
 };
 
 export type TaskRoleCodexRunResult = {
@@ -146,13 +153,14 @@ const INCOMPLETE_TURN_STATUSES = new Set([
 ]);
 const FAILED_TURN_STATUSES = new Set(["failed", "error", "cancelled", "rejected"]);
 const POLL_INTERVAL_MS = 1500;
+const NOTIFICATION_RECOVERY_POLL_INTERVAL_MS = 3000;
+const NOTIFICATION_RECOVERY_MAX_POLL_INTERVAL_MS = 6000;
 const POLL_TIMEOUT_MS = 180000;
 const RESEARCH_POLL_TIMEOUT_MS = 600000;
 const IDEATION_POLL_TIMEOUT_MS = 600000;
 const MAX_POLL_READ_ERRORS = 6;
 const MAX_TURN_START_ATTEMPTS = 3;
 const MAX_THREAD_START_ATTEMPTS = 2;
-const TURN_START_RECOVERY_WINDOW_MS = 12000;
 const THREAD_START_TIMEOUT_MS = 45000;
 const TURN_START_TIMEOUT_MS = 30000;
 const THREAD_READ_TIMEOUT_MS = 30000;
@@ -210,6 +218,7 @@ function buildRoleTurnPrompt(
   userPrompt: string,
   projectPath: string,
   promptMode: RunTaskRoleWithCodexInput["promptMode"],
+  intent?: string,
   precollectedContext = "",
 ): string {
   const trimmedPrompt = String(userPrompt ?? "").trim();
@@ -217,6 +226,18 @@ function buildRoleTurnPrompt(
     pack,
     promptMode,
   });
+  if (looksLikeStructuredTaskPrompt(trimmedPrompt)) {
+    return [
+      `# ROLE`,
+      `${pack.label}`,
+      ``,
+      `# DEVELOPER INSTRUCTIONS`,
+      developerInstructions,
+      precollectedContext.trim() ? `\n# PRECOLLECTED CONTEXT\n${precollectedContext.trim()}` : "",
+      "",
+      trimmedPrompt,
+    ].filter(Boolean).join("\n");
+  }
   return [
     `# ROLE`,
     `${pack.label}`,
@@ -232,10 +253,62 @@ function buildRoleTurnPrompt(
     precollectedContext.trim() ? `\n${precollectedContext.trim()}` : "",
     ``,
     `# OUTPUT RULES`,
-    `- 한국어로만 답변한다.`,
-    `- 실제로 수정한 파일이 있으면 파일 경로와 변경 이유를 짧게 적는다.`,
-    `- 작업을 못 했다면 못 한 이유를 숨기지 않는다.`,
+    ...buildRoleOutputRules({
+      promptMode,
+      intent,
+    }),
   ].join("\n");
+}
+
+function buildRoleOutputRules(params: {
+  promptMode: RunTaskRoleWithCodexInput["promptMode"];
+  intent?: string;
+}): string[] {
+  const isIdeation = String(params.intent ?? "").trim().toLowerCase() === "ideation";
+  if (isIdeation && (params.promptMode === "direct" || params.promptMode === "final")) {
+    return [
+      "- 한국어로만 답변한다.",
+      "- 사용자에게 바로 전달할 수 있는 최종 답변만 작성한다.",
+      "- 내부 메타데이터, 파일 수정 보고, handoff 문구를 답변에 섞지 않는다.",
+      "- 아이디어 요청이면 숫자 요구를 채우고, 각 후보의 차별점과 이유를 짧게 포함한다.",
+    ];
+  }
+  return [
+    "- 한국어로만 답변한다.",
+    "- 실제로 수정한 파일이 있으면 파일 경로와 변경 이유를 짧게 적는다.",
+    "- 작업을 못 했다면 못 한 이유를 숨기지 않는다.",
+  ];
+}
+
+function resolveRoleTurnMode(params: {
+  intent?: string;
+  promptMode?: RunTaskRoleWithCodexInput["promptMode"];
+}): "creative" | "logical" {
+  const normalizedIntent = String(params.intent ?? "").trim().toLowerCase();
+  if (
+    normalizedIntent === "ideation" &&
+    (params.promptMode === "direct" || params.promptMode === "final")
+  ) {
+    return "creative";
+  }
+  return "logical";
+}
+
+function looksLikeStructuredTaskPrompt(input: string): boolean {
+  const firstNonEmptyLine = String(input ?? "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find(Boolean);
+  if (!firstNonEmptyLine) {
+    return false;
+  }
+  return [
+    "# 작업 모드",
+    "# 사용자 요청",
+    "# 역할",
+    "# 압축된 스레드 컨텍스트",
+    "# 협업 규칙",
+  ].includes(firstNonEmptyLine);
 }
 
 function extractMarkdownSection(input: string, headings: string[]): string {
@@ -645,6 +718,9 @@ function buildRolePromptContextLayers(params: {
 }
 
 function resolveTurnText(raw: unknown): string {
+  if (isUserOnlyTurn(raw) || isInputOnlyTurnPayload(raw)) {
+    return "";
+  }
   if (raw && typeof raw === "object" && Array.isArray((raw as { items?: unknown[] }).items)) {
     const items = (raw as { items: unknown[] }).items;
     for (let index = items.length - 1; index >= 0; index -= 1) {
@@ -654,7 +730,11 @@ function resolveTurnText(raw: unknown): string {
       }
       const record = item as Record<string, unknown>;
       const type = String(record.type ?? "").trim().toLowerCase();
+      const role = String(record.role ?? record.author ?? record.sender ?? "").trim().toLowerCase();
       const phase = String(record.phase ?? "").trim().toLowerCase();
+      if (type === "usermessage" || role === "user") {
+        continue;
+      }
       const text = String(record.text ?? "").trim() || [...new Set(collectNestedText(record.content))].join("\n").trim();
       if (!text) {
         continue;
@@ -669,9 +749,6 @@ function resolveTurnText(raw: unknown): string {
     .find(Boolean);
   if (structuredText) {
     return structuredText;
-  }
-  if (isInputOnlyTurnPayload(raw)) {
-    return "";
   }
   return (
     extractFinalAnswer(raw) ||
@@ -697,6 +774,10 @@ function resolveTurnText(raw: unknown): string {
       "response.text",
     ]) ?? extractDeltaText(raw))
   ).trim();
+}
+
+function hasReadableTurnText(raw: unknown): boolean {
+  return resolveTurnText(raw).trim().length > 0;
 }
 
 function isInputOnlyTurnPayload(raw: unknown): boolean {
@@ -812,7 +893,15 @@ function collectReadableTurnCandidates(input: unknown, depth = 0, path: string[]
     type === "usage" ||
     type === "reasoning" ||
     type === "system";
+  const isUserLike =
+    role === "user" ||
+    type === "usermessage" ||
+    type === "input_text" ||
+    type === "input";
   if (isMetaLike) {
+    return [];
+  }
+  if (isUserLike) {
     return [];
   }
   const isAssistantLike =
@@ -938,6 +1027,11 @@ function isRetryableTurnStartError(error: unknown): boolean {
   );
 }
 
+function isUnsupportedTurnStartCommandError(error: unknown): boolean {
+  const text = normalizeErrorText(error);
+  return text.includes("unknown command") || text.includes("unexpected command");
+}
+
 function resolveTurnStatus(raw: unknown): string | null {
   const completedStatus = extractCompletedStatus(raw);
   if (completedStatus) {
@@ -954,6 +1048,49 @@ function resolveTurnStatus(raw: unknown): string | null {
   );
 }
 
+function isUserOnlyTurn(raw: unknown): boolean {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return false;
+  }
+  const record = raw as Record<string, unknown>;
+  const type = String(record.type ?? "").trim().toLowerCase();
+  const role = String(record.role ?? record.author ?? record.sender ?? "").trim().toLowerCase();
+  if (type === "usermessage" || role === "user") {
+    return true;
+  }
+  if (!Array.isArray(record.items) || record.items.length === 0) {
+    return false;
+  }
+  return record.items.every((item) => {
+    if (!item || typeof item !== "object") {
+      return false;
+    }
+    const itemRecord = item as Record<string, unknown>;
+    const itemType = String(itemRecord.type ?? "").trim().toLowerCase();
+    const itemRole = String(itemRecord.role ?? itemRecord.author ?? itemRecord.sender ?? "").trim().toLowerCase();
+    return itemType === "usermessage" || itemRole === "user";
+  });
+}
+
+function scoreTurnCandidate(raw: unknown, index: number): number {
+  const status = resolveTurnStatus(raw) ?? "";
+  const text = resolveTurnText(raw);
+  let score = index;
+  if (text) {
+    score += 10_000 + text.length;
+  }
+  if (status && !INCOMPLETE_TURN_STATUSES.has(status)) {
+    score += 2_000;
+  }
+  if (FAILED_TURN_STATUSES.has(status)) {
+    score += 500;
+  }
+  if (isUserOnlyTurn(raw)) {
+    score -= 20_000;
+  }
+  return score;
+}
+
 function extractLatestTurn(raw: unknown): unknown {
   if (!raw || typeof raw !== "object") {
     return raw;
@@ -967,10 +1104,63 @@ function extractLatestTurn(raw: unknown): unknown {
   ];
   for (const value of candidates) {
     if (Array.isArray(value) && value.length > 0) {
-      return value[value.length - 1];
+      let bestCandidate = value[0];
+      let bestScore = Number.NEGATIVE_INFINITY;
+      value.forEach((candidate, index) => {
+        const score = scoreTurnCandidate(candidate, index);
+        if (score > bestScore) {
+          bestScore = score;
+          bestCandidate = candidate;
+        }
+      });
+      return bestCandidate;
     }
   }
   return raw;
+}
+
+function buildTurnProgressSignature(raw: unknown): string {
+  const latestTurn = extractLatestTurn(raw);
+  const target = latestTurn && latestTurn !== raw ? latestTurn : raw;
+  const turnId = extractStringByPaths(target, ["id", "turnId", "turn_id", "response.id"]) ?? "";
+  const status = resolveTurnStatus(target) ?? resolveTurnStatus(raw) ?? "";
+  const completedStatus = extractCompletedStatus(target) || extractCompletedStatus(raw);
+  const readableText = resolveTurnText(target) || resolveTurnText(raw);
+  const deltaText = extractDeltaText(target) || extractDeltaText(raw);
+  return JSON.stringify({
+    turnId,
+    status,
+    completedStatus,
+    readableText,
+    deltaText,
+  });
+}
+
+function shouldExtendTurnCompletionWatch(params: {
+  previousRaw: unknown;
+  nextRaw: unknown;
+}): boolean {
+  const previousTurn = extractLatestTurn(params.previousRaw);
+  const nextTurn = extractLatestTurn(params.nextRaw);
+  const previousStatus = resolveTurnStatus(previousTurn) ?? resolveTurnStatus(params.previousRaw) ?? "";
+  const nextStatus = resolveTurnStatus(nextTurn) ?? resolveTurnStatus(params.nextRaw) ?? "";
+  const previousReadable = resolveTurnText(previousTurn) || resolveTurnText(params.previousRaw);
+  const nextReadable = resolveTurnText(nextTurn) || resolveTurnText(params.nextRaw);
+  const previousDelta = extractDeltaText(previousTurn) || extractDeltaText(params.previousRaw);
+  const nextDelta = extractDeltaText(nextTurn) || extractDeltaText(params.nextRaw);
+  const previousTurnId = extractStringByPaths(previousTurn, ["id", "turnId", "turn_id", "response.id"]) ?? "";
+  const nextTurnId = extractStringByPaths(nextTurn, ["id", "turnId", "turn_id", "response.id"]) ?? "";
+
+  if (nextReadable && nextReadable !== previousReadable) {
+    return true;
+  }
+  if (nextDelta && nextDelta !== previousDelta) {
+    return true;
+  }
+  if (INCOMPLETE_TURN_STATUSES.has(nextStatus)) {
+    return nextStatus !== previousStatus || nextTurnId !== previousTurnId || nextDelta !== previousDelta;
+  }
+  return false;
 }
 
 async function sleep(ms: number): Promise<void> {
@@ -1027,10 +1217,13 @@ async function startCodexThreadWithRecovery(params: {
 async function recoverThreadStateAfterTurnStartError(params: {
   invokeFn: InvokeFn;
   threadId: string;
+  idleTimeoutMs: number;
+  onProgress?: (message?: string) => void;
 }): Promise<unknown | null> {
-  const deadline = Date.now() + TURN_START_RECOVERY_WINDOW_MS;
+  let idleDeadline = Date.now() + Math.max(params.idleTimeoutMs, POLL_INTERVAL_MS);
   let readErrors = 0;
-  while (Date.now() < deadline) {
+  let previousState: unknown = null;
+  while (Date.now() < idleDeadline) {
     await sleep(POLL_INTERVAL_MS);
     try {
       const threadState = await withTimeout(
@@ -1042,6 +1235,17 @@ async function recoverThreadStateAfterTurnStartError(params: {
         "codex_thread_read",
       );
       const latestTurn = extractLatestTurn(threadState);
+      if (
+        previousState &&
+        shouldExtendTurnCompletionWatch({
+          previousRaw: previousState,
+          nextRaw: threadState,
+        })
+      ) {
+        idleDeadline = Date.now() + params.idleTimeoutMs;
+        params.onProgress?.("코덱스 실행 시작 상태를 다시 확인하는 중");
+      }
+      previousState = threadState;
       const recoveredStatus = resolveTurnStatus(latestTurn) ?? resolveTurnStatus(threadState) ?? "";
       const recoveredText = resolveTurnText(latestTurn) || resolveTurnText(threadState);
       if (recoveredStatus || recoveredText) {
@@ -1063,6 +1267,9 @@ async function startCodexTurnWithRecovery(params: {
   text: string;
   reasoningEffort: string;
   sandboxMode: "read-only" | "workspace-write" | "danger-full-access";
+  executionConfigPatch?: Record<string, unknown>;
+  pollTimeoutMs: number;
+  onProgress?: (message?: string) => void;
 }): Promise<{
   rawResponse: unknown;
   turnError: unknown;
@@ -1070,16 +1277,35 @@ async function startCodexTurnWithRecovery(params: {
   let lastError: unknown = null;
   for (let attempt = 1; attempt <= MAX_TURN_START_ATTEMPTS; attempt += 1) {
     try {
-      const rawResponse = await withTimeout(
-        params.invokeFn<unknown>("turn_start_blocking", {
-          threadId: params.threadId,
-          text: params.text,
-          reasoningEffort: params.reasoningEffort,
-          sandboxMode: params.sandboxMode,
-        }),
-        TURN_START_TIMEOUT_MS,
-        "turn_start_blocking",
-      );
+      let rawResponse: unknown;
+      try {
+        rawResponse = await withTimeout(
+          params.invokeFn<unknown>("turn_start", {
+            threadId: params.threadId,
+            text: params.text,
+            reasoningEffort: params.reasoningEffort,
+            sandboxMode: params.sandboxMode,
+            ...params.executionConfigPatch,
+          }),
+          TURN_START_TIMEOUT_MS,
+          "turn_start",
+        );
+      } catch (error) {
+        if (!isUnsupportedTurnStartCommandError(error)) {
+          throw error;
+        }
+        rawResponse = await withTimeout(
+          params.invokeFn<unknown>("turn_start_blocking", {
+            threadId: params.threadId,
+            text: params.text,
+            reasoningEffort: params.reasoningEffort,
+            sandboxMode: params.sandboxMode,
+            ...params.executionConfigPatch,
+          }),
+          TURN_START_TIMEOUT_MS,
+          "turn_start_blocking",
+        );
+      }
       return {
         rawResponse,
         turnError: null,
@@ -1095,6 +1321,8 @@ async function startCodexTurnWithRecovery(params: {
       const recoveredState = await recoverThreadStateAfterTurnStartError({
         invokeFn: params.invokeFn,
         threadId: params.threadId,
+        idleTimeoutMs: params.pollTimeoutMs,
+        onProgress: params.onProgress,
       });
       if (recoveredState) {
         return {
@@ -1116,25 +1344,64 @@ async function startCodexTurnWithRecovery(params: {
 async function waitForCodexTurnCompletion(params: {
   invokeFn: InvokeFn;
   threadId: string;
+  turnId?: string;
   initialResponse: unknown;
   pollTimeoutMs: number;
+  completedUnreadableRecoveryWindowMs?: number;
+  onProgress?: (message?: string) => void;
+  onThreadReadSnapshot?: (snapshot: {
+    threadState: unknown;
+    latestTurn: unknown;
+    status: string;
+    hasReadableText: boolean;
+  }) => void;
 }): Promise<{
   raw: unknown;
   completedStatus: string;
 }> {
   let currentRaw = params.initialResponse;
   let currentStatus = resolveTurnStatus(extractLatestTurn(currentRaw)) ?? resolveTurnStatus(currentRaw) ?? "";
-  if (!INCOMPLETE_TURN_STATUSES.has(currentStatus)) {
+  if (!INCOMPLETE_TURN_STATUSES.has(currentStatus) && (FAILED_TURN_STATUSES.has(currentStatus) || hasReadableTurnText(currentRaw))) {
     return {
       raw: currentRaw,
       completedStatus: currentStatus || "done",
     };
   }
 
-  const deadline = Date.now() + params.pollTimeoutMs;
+  const notificationResult = await waitForTurnTerminalFromEngineNotifications({
+    threadId: params.threadId,
+    turnId: params.turnId,
+    idleTimeoutMs: Math.min(params.pollTimeoutMs, 10_000),
+    onProgress: params.onProgress,
+  });
+  if (notificationResult) {
+    currentRaw = notificationResult.raw;
+    currentStatus = notificationResult.status || currentStatus;
+    if (FAILED_TURN_STATUSES.has(currentStatus) || hasReadableTurnText(currentRaw)) {
+      return {
+        raw: currentRaw,
+        completedStatus: currentStatus || "done",
+      };
+    }
+  }
+
+  const initialCompletedUnreadable =
+    Boolean(currentStatus) &&
+    !INCOMPLETE_TURN_STATUSES.has(currentStatus) &&
+    !FAILED_TURN_STATUSES.has(currentStatus) &&
+    !hasReadableTurnText(currentRaw);
+  let idleDeadline = Date.now() + (
+    initialCompletedUnreadable
+      ? Math.max(params.completedUnreadableRecoveryWindowMs ?? params.pollTimeoutMs, POLL_INTERVAL_MS)
+      : params.pollTimeoutMs
+  );
+  let nextPollDelayMs = notificationResult
+    ? NOTIFICATION_RECOVERY_POLL_INTERVAL_MS
+    : POLL_INTERVAL_MS;
+  let lastProgressSignature = buildTurnProgressSignature(currentRaw);
   let readErrors = 0;
-  while (Date.now() < deadline) {
-    await sleep(POLL_INTERVAL_MS);
+  while (Date.now() < idleDeadline) {
+    await sleep(nextPollDelayMs);
     let threadState: unknown;
     try {
       threadState = await withTimeout(
@@ -1156,6 +1423,33 @@ async function waitForCodexTurnCompletion(params: {
     const latestTurn = extractLatestTurn(threadState);
     const nextStatus = resolveTurnStatus(latestTurn) ?? resolveTurnStatus(threadState) ?? currentStatus;
     const nextText = resolveTurnText(latestTurn) || resolveTurnText(threadState);
+    params.onThreadReadSnapshot?.({
+      threadState,
+      latestTurn,
+      status: nextStatus,
+      hasReadableText: Boolean(nextText),
+    });
+    const previousRaw = currentRaw;
+    const nextProgressSignature = buildTurnProgressSignature(threadState);
+    if (
+      nextProgressSignature !== lastProgressSignature &&
+      shouldExtendTurnCompletionWatch({
+        previousRaw,
+        nextRaw: threadState,
+      })
+    ) {
+      lastProgressSignature = nextProgressSignature;
+      idleDeadline = Date.now() + params.pollTimeoutMs;
+      nextPollDelayMs = notificationResult
+        ? NOTIFICATION_RECOVERY_POLL_INTERVAL_MS
+        : POLL_INTERVAL_MS;
+      params.onProgress?.("코덱스 응답 진행 확인 중");
+    } else if (notificationResult) {
+      nextPollDelayMs = Math.min(
+        Math.round(nextPollDelayMs * 1.5),
+        NOTIFICATION_RECOVERY_MAX_POLL_INTERVAL_MS,
+      );
+    }
     currentRaw = latestTurn === threadState ? threadState : latestTurn;
     currentStatus = nextStatus;
     if (FAILED_TURN_STATUSES.has(currentStatus)) {
@@ -1164,7 +1458,7 @@ async function waitForCodexTurnCompletion(params: {
         completedStatus: currentStatus,
       };
     }
-    if (!INCOMPLETE_TURN_STATUSES.has(currentStatus) && (nextText || currentStatus)) {
+    if (!INCOMPLETE_TURN_STATUSES.has(currentStatus) && (FAILED_TURN_STATUSES.has(currentStatus) || nextText)) {
       return {
         raw: currentRaw,
         completedStatus: currentStatus,
@@ -1172,7 +1466,56 @@ async function waitForCodexTurnCompletion(params: {
     }
   }
 
+  if (currentStatus && !INCOMPLETE_TURN_STATUSES.has(currentStatus)) {
+    return {
+      raw: currentRaw,
+      completedStatus: currentStatus,
+    };
+  }
+
   throw new Error(`Codex turn did not complete (${currentStatus || "timeout"})`);
+}
+
+async function writeUnreadableCodexDebugArtifacts(params: {
+  invokeFn: InvokeFn;
+  artifactDir: string;
+  taskId: string;
+  studioRoleId: string;
+  codexThreadId?: string;
+  codexTurnId?: string;
+  completedStatus: string;
+  turnError: unknown;
+  turnStartRaw: unknown;
+  finalRaw: unknown;
+  threadReadSnapshots: Array<{
+    status: string;
+    hasReadableText: boolean;
+    latestTurn: unknown;
+    threadState: unknown;
+  }>;
+}): Promise<void> {
+  const debugPayload = {
+    taskId: params.taskId,
+    studioRoleId: params.studioRoleId,
+    codexThreadId: params.codexThreadId ?? null,
+    codexTurnId: params.codexTurnId ?? null,
+    completedStatus: params.completedStatus,
+    turnError: params.turnError instanceof Error ? params.turnError.message : params.turnError ?? null,
+    turnStartRaw: params.turnStartRaw,
+    finalRaw: params.finalRaw,
+    threadReadSnapshots: params.threadReadSnapshots.map((snapshot, index) => ({
+      index,
+      status: snapshot.status,
+      hasReadableText: snapshot.hasReadableText,
+      latestTurn: snapshot.latestTurn,
+      threadState: snapshot.threadState,
+    })),
+  };
+  await params.invokeFn<string>("workspace_write_text", {
+    cwd: params.artifactDir,
+    name: "response.unreadable.debug.json",
+    content: `${JSON.stringify(debugPayload, null, 2)}\n`,
+  });
 }
 
 async function resolveTaskRunContext(input: RunTaskRoleWithCodexInput): Promise<{
@@ -1239,11 +1582,17 @@ export async function runTaskRoleWithCodex(input: RunTaskRoleWithCodexInput): Pr
   const reasoningEffort = toTurnReasoningEffort(
     input.reasoning || context.threadReasoning || pack.modelReasoningEffort || "중간",
   );
-  const learningPromptContext = buildTaskRoleLearningPromptContext({
-    cwd: input.storageCwd,
-    roleId: pack.studioRoleId || input.studioRoleId,
-    prompt: input.prompt ?? "",
-  });
+  const shouldIncludeLearningPromptContext = !(
+    String(input.intent ?? "").trim().toLowerCase() === "ideation" &&
+    (input.promptMode === "direct" || input.promptMode === "final")
+  );
+  const learningPromptContext = shouldIncludeLearningPromptContext
+    ? buildTaskRoleLearningPromptContext({
+      cwd: input.storageCwd,
+      roleId: pack.studioRoleId || input.studioRoleId,
+      prompt: input.prompt ?? "",
+    })
+    : "";
   const layeredPromptContext = buildRolePromptContextLayers({
     roleId: pack.studioRoleId || input.studioRoleId,
     researchPromptContext: researcherCollection.promptContext,
@@ -1254,6 +1603,7 @@ export async function runTaskRoleWithCodex(input: RunTaskRoleWithCodexInput): Pr
     input.prompt ?? "",
     context.projectPath,
     input.promptMode,
+    input.intent,
     layeredPromptContext,
   );
   const webPromptText = buildWebProviderPrompt({
@@ -1273,6 +1623,13 @@ export async function runTaskRoleWithCodex(input: RunTaskRoleWithCodexInput): Pr
     intent: input.intent,
     promptMode: input.promptMode,
   });
+  const executionConfigPatch = resolveStudioRoleExecutionConfigPatch(
+    (pack.studioRoleId || input.studioRoleId) as StudioRoleId,
+    resolveRoleTurnMode({
+      intent: input.intent,
+      promptMode: input.promptMode,
+    }),
+  );
 
   let rawResponse: unknown = null;
   let turnError: unknown = null;
@@ -1281,6 +1638,13 @@ export async function runTaskRoleWithCodex(input: RunTaskRoleWithCodexInput): Pr
   let codexThreadId: string | undefined;
   let codexTurnId: string | undefined;
   let webRunDocuments: WebRunDocument[] = [];
+  let turnStartRawResponse: unknown = null;
+  const codexThreadReadSnapshots: Array<{
+    status: string;
+    hasReadableText: boolean;
+    latestTurn: unknown;
+    threadState: unknown;
+  }> = [];
 
   if (webProviders.length > 1) {
     const providerNames = webProviders.map((entry) => entry.provider);
@@ -1392,6 +1756,7 @@ export async function runTaskRoleWithCodex(input: RunTaskRoleWithCodexInput): Pr
     summary = webRunDocument.text;
     completedStatus = "completed";
   } else {
+    input.onProgress?.("코덱스 스레드를 준비하는 중");
     const threadStart = await startCodexThreadWithRecovery({
       invokeFn: input.invokeFn,
       model: modelEngine,
@@ -1402,26 +1767,47 @@ export async function runTaskRoleWithCodex(input: RunTaskRoleWithCodexInput): Pr
     input.onRuntimeSession?.({
       codexThreadId,
       codexTurnId: null,
-        provider: null,
-        providers: [],
-      });
+      provider: null,
+      providers: [],
+    });
+    input.onProgress?.("코덱스 요청을 전송하는 중");
     const turnStart = await startCodexTurnWithRecovery({
       invokeFn: input.invokeFn,
       threadId: threadStart.threadId,
       text: promptText,
       reasoningEffort,
       sandboxMode,
+      executionConfigPatch,
+      pollTimeoutMs,
+      onProgress: input.onProgress,
     });
     rawResponse = turnStart.rawResponse;
+    turnStartRawResponse = turnStart.rawResponse;
     turnError = turnStart.turnError;
 
     completedStatus = turnError ? "error" : (resolveTurnStatus(rawResponse) ?? "done");
-    if (!turnError && INCOMPLETE_TURN_STATUSES.has(completedStatus)) {
+    const needsCompletionWait =
+      !turnError &&
+      (INCOMPLETE_TURN_STATUSES.has(completedStatus) ||
+        (!FAILED_TURN_STATUSES.has(completedStatus) && !hasReadableTurnText(rawResponse)));
+    if (needsCompletionWait) {
+      input.onProgress?.("코덱스 응답을 확인하는 중");
       const completion = await waitForCodexTurnCompletion({
         invokeFn: input.invokeFn,
         threadId: threadStart.threadId,
+        turnId: extractStringByPaths(rawResponse, ["turnId", "turn_id", "id", "turn.id", "response.id"]) ?? undefined,
         initialResponse: rawResponse,
         pollTimeoutMs,
+        completedUnreadableRecoveryWindowMs: input.debugTimeoutOverrides?.completedUnreadableRecoveryWindowMs,
+        onProgress: input.onProgress,
+        onThreadReadSnapshot: (snapshot) => {
+          codexThreadReadSnapshots.push({
+            status: snapshot.status,
+            hasReadableText: snapshot.hasReadableText,
+            latestTurn: snapshot.latestTurn,
+            threadState: snapshot.threadState,
+          });
+        },
       });
       rawResponse = completion.raw;
       completedStatus = completion.completedStatus;
@@ -1443,6 +1829,19 @@ export async function runTaskRoleWithCodex(input: RunTaskRoleWithCodexInput): Pr
           cwd: artifactDir,
           name: "response.unreadable.json",
           content: `${JSON.stringify(rawResponse, null, 2)}\n`,
+        });
+        await writeUnreadableCodexDebugArtifacts({
+          invokeFn: input.invokeFn,
+          artifactDir,
+          taskId: input.taskId,
+          studioRoleId: input.studioRoleId,
+          codexThreadId,
+          codexTurnId,
+          completedStatus,
+          turnError,
+          turnStartRaw: turnStartRawResponse,
+          finalRaw: rawResponse,
+          threadReadSnapshots: codexThreadReadSnapshots,
         });
       } catch {
         // best-effort debug artifact only

@@ -184,7 +184,7 @@
   display: inline-flex;
   align-items: center;
   min-height: 18px;
-  padding: 0 7px;
+  padding: 4px 7px;
   border-radius: 999px;
   background: #ebedf0;
   color: var(--text-muted);
@@ -452,7 +452,7 @@
 }
 
 .knowledge-row.is-selected {
-  background: #eceff3;
+  background: #f6f6f6;
 }
 
 .knowledge-row strong {

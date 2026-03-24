@@ -29,6 +29,8 @@ import { useDashboardIntelligenceRunner } from "./hooks/useDashboardIntelligence
 import { DASHBOARD_TOPIC_IDS } from "../features/dashboard/intelligence";
 import { useWorkspaceNavigation } from "./hooks/useWorkspaceNavigation";
 import { useWorkspaceQuickPanel } from "./hooks/useWorkspaceQuickPanel";
+import { useMainThreadStallMonitor } from "./hooks/useMainThreadStallMonitor";
+import { useRendererPerformanceDiagnostics } from "./hooks/useRendererPerformanceDiagnostics";
 import { useDashboardAgentBridge } from "./hooks/useDashboardAgentBridge";
 import { useAgenticOrchestrationBridge } from "./hooks/useAgenticOrchestrationBridge";
 import { useGraphResearchKnowledgeSync } from "./hooks/useGraphResearchKnowledgeSync";
@@ -329,7 +331,6 @@ function App() {
   const workspaceTopbarTabs = useMemo<Array<{ tab: WorkspaceTab; label: string }>>(
     () => [
       { tab: "tasks", label: "TASKS" },
-      { tab: "shell", label: "SHELL" },
       { tab: "workflow", label: t("nav.workflow.title") },
       { tab: "knowledge", label: t("nav.knowledge") },
       { tab: "visualize", label: t("nav.visualize") },
@@ -339,6 +340,12 @@ function App() {
     [t],
   );
   const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>(DEFAULT_WORKSPACE_TAB);
+  useEffect(() => {
+    if (workspaceTab === "shell") {
+      setWorkspaceTab("tasks");
+    }
+  }, [workspaceTab]);
+
   const [tasksLeftNavHidden, setTasksLeftNavHidden] = useState(false);
   const [workflowRoleId, setWorkflowRoleId] = useState<StudioRoleId>("pm_planner");
   const [, setWorkflowRoleTaskId] = useState("TASK-001");
@@ -834,6 +841,15 @@ function App() {
       setWorkspaceEvents((prev) => [next, ...prev].slice(0, 300));
     });
   }, []);
+  useMainThreadStallMonitor({
+    enabled: true,
+    workspaceTab,
+    appendWorkspaceEvent,
+  });
+  useRendererPerformanceDiagnostics({
+    enabled: true,
+    workspaceTab,
+  });
   const missionControl = useMissionControl({
     cwd,
     hasTauriRuntime,
@@ -2712,6 +2728,7 @@ function App() {
     workspaceEvents,
     cwd,
     hasTauriRuntime,
+    workspaceTab,
     invokeFn: invoke,
   });
   return (

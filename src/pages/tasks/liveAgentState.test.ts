@@ -5,10 +5,12 @@ import {
   displayArtifactName,
   formatRelativeUpdateAge,
   inferNextLiveAction,
+  resolveLiveStageProgress,
+  resolveLiveServiceStatus,
   resolveLatestFailureReason,
   resolveLiveActivityState,
   resolveRecentSourceCount,
-  resolveLiveStageProgress,
+  shouldShowRelativeLiveSignalAge,
 } from "./liveAgentState";
 import type { ThreadDetail } from "./threadTypes";
 
@@ -187,6 +189,30 @@ describe("buildLiveAgentCards", () => {
   });
 });
 
+describe("shouldShowRelativeLiveSignalAge", () => {
+  it("hides stale or disconnected signal ages", () => {
+    expect(shouldShowRelativeLiveSignalAge({
+      activityState: "stalled",
+      signalDisconnected: false,
+    })).toBe(false);
+    expect(shouldShowRelativeLiveSignalAge({
+      activityState: "active",
+      signalDisconnected: true,
+    })).toBe(false);
+  });
+
+  it("shows relative ages only while signals are still active or merely delayed", () => {
+    expect(shouldShowRelativeLiveSignalAge({
+      activityState: "active",
+      signalDisconnected: false,
+    })).toBe(true);
+    expect(shouldShowRelativeLiveSignalAge({
+      activityState: "delayed",
+      signalDisconnected: false,
+    })).toBe(true);
+  });
+});
+
 describe("displayArtifactName", () => {
   it("returns the file name from a path", () => {
     expect(displayArtifactName(".rail/tasks/thread-1/findings.md")).toBe("findings.md");
@@ -204,6 +230,31 @@ describe("resolveLiveActivityState", () => {
 
   it("marks long pauses as stalled", () => {
     expect(resolveLiveActivityState("2026-03-21T00:00:00.000Z", Date.parse("2026-03-21T00:02:10.000Z"))).toBe("stalled");
+  });
+});
+
+describe("resolveLiveServiceStatus", () => {
+  it("reports running roles from the latest backend-backed thread detail", () => {
+    const detail = buildDetail();
+    const status = resolveLiveServiceStatus(detail);
+    expect(status).toMatchObject({
+      state: "running",
+      detail: "서비스 기준으로 GAME DESIGNER 실행 중입니다.",
+    });
+  });
+
+  it("reports failed service state when every enabled role failed", () => {
+    const detail = buildDetail();
+    detail.task.roles = detail.task.roles.map((role) => ({
+      ...role,
+      status: "error",
+    }));
+
+    const status = resolveLiveServiceStatus(detail);
+    expect(status).toMatchObject({
+      state: "failed",
+      detail: "서비스 기준으로 모든 내부 브리프 또는 역할 실행이 실패했습니다.",
+    });
   });
 });
 

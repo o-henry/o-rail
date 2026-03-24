@@ -254,6 +254,8 @@ pub struct ThreadWorkflowSummary {
     current_stage_id: String,
     status: String,
     blocked: bool,
+    failed: bool,
+    degraded: bool,
     pending_approval_count: usize,
 }
 
@@ -273,22 +275,37 @@ pub struct ThreadDetail {
     workflow: ThreadWorkflow,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ThreadRuntimeSnapshot {
+    thread: ThreadRecord,
+    task: TaskRecordView,
+    agents: Vec<BackgroundAgentRecord>,
+    approvals: Vec<ApprovalRecord>,
+    artifacts: BTreeMap<String, String>,
+    changed_files: Vec<String>,
+    validation_state: String,
+    risk_level: String,
+    workflow: ThreadWorkflow,
+    message_count: usize,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ThreadMessageDelta {
+    messages: Vec<ThreadMessage>,
+    total_count: usize,
+    reset_required: bool,
+}
+
 fn task_detail_view(value: storage::TaskDetail) -> Result<TaskDetailView, String> {
     serde_json::from_value(serde_json::to_value(value).map_err(|error| format!("failed to encode task detail: {error}"))?)
         .map_err(|error| format!("failed to decode task detail: {error}"))
 }
 
-fn task_list_view(value: Vec<storage::TaskListItem>) -> Result<Vec<TaskRecordView>, String> {
-    #[derive(Debug, Serialize, Deserialize)]
-    #[serde(rename_all = "camelCase")]
-    struct TaskListItemView {
-        record: TaskRecordView,
-    }
-    let rows: Vec<TaskListItemView> = serde_json::from_value(
-        serde_json::to_value(value).map_err(|error| format!("failed to encode task list: {error}"))?,
-    )
-    .map_err(|error| format!("failed to decode task list: {error}"))?;
-    Ok(rows.into_iter().map(|row| row.record).collect())
+fn task_record_view(value: storage::TaskRecord) -> Result<TaskRecordView, String> {
+    serde_json::from_value(serde_json::to_value(value).map_err(|error| format!("failed to encode task record: {error}"))?)
+        .map_err(|error| format!("failed to decode task record: {error}"))
 }
 
 fn truncate_text(input: &str, max_len: usize) -> String {
@@ -709,6 +726,164 @@ fn build_thread_detail(
     })
 }
 
+fn build_thread_runtime_snapshot(
+    task_dir: &Path,
+    task: TaskDetailView,
+    model: &str,
+    reasoning: &str,
+    access_mode: &str,
+) -> Result<ThreadRuntimeSnapshot, String> {
+    let (thread, messages, agents, approvals) = ensure_thread_state(task_dir, &task.record, model, reasoning, access_mode)?;
+    let workflow = derive_thread_workflow(&thread, &task.record, &agents, &approvals, &task.artifacts, &task.changed_files, &task.validation_state);
+    Ok(ThreadRuntimeSnapshot {
+        thread,
+        task: task.record,
+        agents,
+        approvals,
+        artifacts: task.artifacts,
+        changed_files: task.changed_files,
+        validation_state: task.validation_state,
+        risk_level: task.risk_level,
+        workflow,
+        message_count: messages.len(),
+    })
+}
+
+fn ensure_thread_list_state(
+    task_dir: &Path,
+    task: &TaskRecordView,
+    model: &str,
+    reasoning: &str,
+    access_mode: &str,
+) -> Result<(ThreadRecord, Vec<BackgroundAgentRecord>, Vec<ApprovalRecord>), String> {
+    let mut thread = read_json_or_default(
+        &thread_record_path(task_dir),
+        default_thread_record(task, model, reasoning, access_mode),
+    )?;
+    thread.cwd = task.workspace_path.clone();
+    thread.branch_label = task.branch_name.clone().or_else(|| Some(task.isolation_resolved.clone()));
+    if thread.status.trim().is_empty() || is_terminal_thread_status(&task.status) {
+        thread.status = task.status.clone();
+    }
+    if thread.updated_at.trim().is_empty() || task.updated_at > thread.updated_at {
+        thread.updated_at = task.updated_at.clone();
+    }
+
+    let mut agents = read_json_or_default(&thread_agents_path(task_dir), default_agents(&thread, task))?;
+    let approvals = read_json_or_default(&thread_approvals_path(task_dir), Vec::<ApprovalRecord>::new())?;
+    let enabled_role_ids = enabled_roles(task);
+    agents = agents
+        .into_iter()
+        .filter_map(|mut agent| {
+            let canonical = task_presets::canonical_task_agent_id(&agent.role_id)?;
+            agent.role_id = canonical.to_string();
+            agent.label = task_presets::task_agent_label(canonical);
+            if agent.summary.is_none() {
+                agent.summary = Some(role_summary(canonical));
+            }
+            Some(agent)
+        })
+        .collect();
+    agents.retain(|agent| enabled_role_ids.iter().any(|role_id| role_id == &agent.role_id));
+
+    for role in task.roles.iter().filter(|role| role.enabled) {
+        if let Some(agent) = agents.iter_mut().find(|agent| agent.role_id == role.id) {
+            agent.label = role.label.clone();
+            agent.worktree_path = task.worktree_path.clone().or_else(|| Some(task.workspace_path.clone()));
+            if agent.summary.as_ref().map(|value| value.trim().is_empty()).unwrap_or(true) {
+                agent.summary = Some(role_summary(&role.id));
+            }
+        } else {
+            agents.push(BackgroundAgentRecord {
+                id: format!("{}:{}", thread.thread_id, role.id),
+                thread_id: thread.thread_id.clone(),
+                label: role.label.clone(),
+                role_id: role.id.clone(),
+                status: "idle".to_string(),
+                summary: Some(role_summary(&role.id)),
+                worktree_path: task.worktree_path.clone().or_else(|| Some(task.workspace_path.clone())),
+                last_updated_at: now_iso(),
+            });
+        }
+    }
+    Ok((thread, agents, approvals))
+}
+
+fn thread_workflow_summary_for_list(
+    thread: &ThreadRecord,
+    task: &TaskRecordView,
+    agents: &[BackgroundAgentRecord],
+    approvals: &[ApprovalRecord],
+) -> ThreadWorkflowSummary {
+    let pending_approval_count = approvals
+        .iter()
+        .filter(|approval| approval.status == "pending")
+        .count();
+    let degraded = task
+        .roles
+        .iter()
+        .filter(|role| role.enabled)
+        .any(|role| matches!(role.status.trim().to_ascii_lowercase().as_str(), "low_quality" | "degraded"));
+    let failed = task
+        .roles
+        .iter()
+        .filter(|role| role.enabled)
+        .any(|role| matches!(role.status.trim().to_ascii_lowercase().as_str(), "failed" | "error"));
+    let blocked = pending_approval_count > 0 || failed;
+    let has_any_active = has_active_stage_activity(task, agents, &["researcher", "game_designer"])
+        || has_active_stage_activity(task, agents, &["game_designer", "level_designer", "unity_architect", "unity_refactor_specialist"])
+        || has_active_stage_activity(task, agents, &["unity_implementer", "unity_refactor_specialist", "unity_editor_tools"])
+        || has_active_stage_activity(task, agents, &["qa_playtester"])
+        || has_active_stage_activity(task, agents, &["handoff_writer", "release_steward"]);
+    let has_any_evidence = has_stage_activity(task, agents, &["researcher", "game_designer"])
+        || has_stage_activity(task, agents, &["game_designer", "level_designer", "unity_architect", "unity_refactor_specialist"])
+        || has_stage_activity(task, agents, &["unity_implementer", "unity_refactor_specialist", "unity_editor_tools"])
+        || has_stage_activity(task, agents, &["qa_playtester"])
+        || has_stage_activity(task, agents, &["handoff_writer", "release_steward"]);
+    let current_stage_id = if blocked {
+        "integrate"
+    } else if has_active_stage_activity(task, agents, &["handoff_writer", "release_steward"]) {
+        "lock"
+    } else if has_active_stage_activity(task, agents, &["qa_playtester"]) {
+        "playtest"
+    } else if has_active_stage_activity(task, agents, &["unity_implementer", "unity_refactor_specialist", "unity_editor_tools"]) {
+        "implement"
+    } else if has_active_stage_activity(task, agents, &["game_designer", "level_designer", "unity_architect", "unity_refactor_specialist"]) {
+        "design"
+    } else if has_active_stage_activity(task, agents, &["researcher", "game_designer"]) {
+        "brief"
+    } else if has_stage_activity(task, agents, &["handoff_writer", "release_steward"]) {
+        "lock"
+    } else if has_stage_activity(task, agents, &["qa_playtester"]) {
+        "playtest"
+    } else if has_stage_activity(task, agents, &["unity_implementer", "unity_refactor_specialist", "unity_editor_tools"]) {
+        "implement"
+    } else if has_stage_activity(task, agents, &["game_designer", "level_designer", "unity_architect", "unity_refactor_specialist"]) {
+        "design"
+    } else {
+        "brief"
+    };
+    let status = if blocked {
+        "blocked"
+    } else if is_terminal_thread_status(&thread.status) {
+        "done"
+    } else if has_any_active {
+        "active"
+    } else if has_any_evidence {
+        "done"
+    } else {
+        "idle"
+    };
+    ThreadWorkflowSummary {
+        current_stage_id: current_stage_id.to_string(),
+        status: status.to_string(),
+        blocked,
+        failed,
+        degraded,
+        pending_approval_count,
+    }
+}
+
 fn artifact_has_user_content(content: &str) -> bool {
     content
         .lines()
@@ -988,21 +1163,6 @@ fn derive_thread_workflow(
     }
 }
 
-fn workflow_summary(workflow: &ThreadWorkflow, pending_approval_count: usize) -> ThreadWorkflowSummary {
-    let current_stage = workflow
-        .stages
-        .iter()
-        .find(|stage| stage.id == workflow.current_stage_id)
-        .cloned()
-        .unwrap_or_else(|| workflow.stages[0].clone());
-    ThreadWorkflowSummary {
-        current_stage_id: workflow.current_stage_id.clone(),
-        status: current_stage.status,
-        blocked: workflow.stages.iter().any(|stage| stage.status == "blocked"),
-        pending_approval_count,
-    }
-}
-
 fn normalize_project_path(input: &str) -> String {
     let trimmed = input.trim();
     if trimmed.is_empty() {
@@ -1077,24 +1237,32 @@ fn create_approval_record(thread_id: &str, agent_id: &str, kind: &str, summary: 
 #[tauri::command]
 pub fn thread_list(cwd: String, project_path: Option<String>) -> Result<Vec<ThreadListItem>, String> {
     let workspace = normalize_workspace_root(&cwd)?;
-    let task_records = task_list_view(storage::task_list(cwd.clone())?)?
+    let task_records = storage::task_record_list(cwd.clone())?
+        .into_iter()
+        .map(task_record_view)
+        .collect::<Result<Vec<_>, _>>()?
         .into_iter()
         .filter(|task| task.status != "archived")
         .filter(|task| task_matches_project(task, project_path.as_deref()))
         .collect::<Vec<_>>();
     let mut threads = Vec::new();
     for task in task_records {
-        let detail = build_thread_detail(&task_dir(&workspace, &task.task_id), task_detail_view(storage::task_load(cwd.clone(), task.task_id.clone())?)?, "5.4", "중간", "Local")?;
+        let task_path = task_dir(&workspace, &task.task_id);
+        let (thread, agents, approvals) = ensure_thread_list_state(&task_path, &task, "5.4", "중간", "Local")?;
+        let pending_approval_count = approvals
+            .iter()
+            .filter(|approval| approval.status == "pending")
+            .count();
         threads.push(ThreadListItem {
-            project_path: if detail.task.project_path.trim().is_empty() {
-                detail.task.workspace_path.clone()
+            project_path: if task.project_path.trim().is_empty() {
+                task.workspace_path.clone()
             } else {
-                detail.task.project_path.clone()
+                task.project_path.clone()
             },
-            pending_approval_count: detail.approvals.iter().filter(|approval| approval.status == "pending").count(),
-            agent_count: detail.agents.len(),
-            workflow_summary: workflow_summary(&detail.workflow, detail.approvals.iter().filter(|approval| approval.status == "pending").count()),
-            thread: detail.thread,
+            pending_approval_count,
+            agent_count: agents.len(),
+            workflow_summary: thread_workflow_summary_for_list(&thread, &task, &agents, &approvals),
+            thread,
         });
     }
     threads.sort_by(|left, right| right.thread.updated_at.cmp(&left.thread.updated_at));
@@ -1271,6 +1439,36 @@ pub fn thread_load(cwd: String, thread_id: String) -> Result<ThreadDetail, Strin
     let thread_id = thread_id.trim().to_string();
     let task = task_detail_view(storage::task_load(cwd.clone(), thread_id.clone())?)?;
     build_thread_detail(&task_dir(&workspace, &thread_id), task, "5.4", "MEDIUM", "Local")
+}
+
+#[tauri::command]
+pub fn thread_runtime_snapshot(cwd: String, thread_id: String) -> Result<ThreadRuntimeSnapshot, String> {
+    let workspace = normalize_workspace_root(&cwd)?;
+    let thread_id = thread_id.trim().to_string();
+    let task = task_detail_view(storage::task_load(cwd.clone(), thread_id.clone())?)?;
+    build_thread_runtime_snapshot(&task_dir(&workspace, &thread_id), task, "5.4", "MEDIUM", "Local")
+}
+
+#[tauri::command]
+pub fn thread_message_delta(cwd: String, thread_id: String, after_count: usize) -> Result<ThreadMessageDelta, String> {
+    let workspace = normalize_workspace_root(&cwd)?;
+    let thread_id = thread_id.trim().to_string();
+    let task = task_detail_view(storage::task_load(cwd.clone(), thread_id.clone())?)?;
+    let task_path = task_dir(&workspace, &thread_id);
+    let (_, messages, _, _) = ensure_thread_state(&task_path, &task.record, "5.4", "MEDIUM", "Local")?;
+    let total_count = messages.len();
+    if after_count > messages.len() {
+        return Ok(ThreadMessageDelta {
+            messages,
+            total_count,
+            reset_required: true,
+        });
+    }
+    Ok(ThreadMessageDelta {
+        messages: messages.into_iter().skip(after_count).collect(),
+        total_count,
+        reset_required: false,
+    })
 }
 
 #[tauri::command]
@@ -1643,10 +1841,16 @@ pub fn thread_record_role_result(
     let workspace = normalize_workspace_root(&cwd)?;
     let thread_id = thread_id.trim().to_string();
     let normalized_run_status = run_status.trim().to_ascii_lowercase();
+    let normalized_studio_role_id = task_presets::task_agent_studio_role_id(studio_role_id.trim())
+        .unwrap_or_else(|| studio_role_id.trim().to_string());
+    let run_succeeded = matches!(
+        normalized_run_status.as_str(),
+        "done" | "completed" | "low_quality" | "degraded"
+    );
     if !storage::task_record_role_result(
         cwd.clone(),
         thread_id.clone(),
-        studio_role_id.clone(),
+        normalized_studio_role_id.clone(),
         run_id.clone(),
         run_status.clone(),
         artifact_paths.clone(),
@@ -1661,7 +1865,7 @@ pub fn thread_record_role_result(
     let should_finalize_thread = !internal.unwrap_or(false)
         && matches!(normalized_prompt_mode.as_str(), "direct" | "final");
     if should_finalize_thread {
-        let next_status = if normalized_run_status == "done" {
+        let next_status = if matches!(normalized_run_status.as_str(), "done" | "completed" | "low_quality" | "degraded") {
             "completed"
         } else {
             "failed"
@@ -1684,14 +1888,14 @@ pub fn thread_record_role_result(
                 .map(looks_like_internal_prompt_dump)
                 .unwrap_or(false);
 
-    let Some(task_role) = task.record.roles.iter().find(|role| role.studio_role_id == studio_role_id.trim()) else {
-        return Ok(true);
+    let Some(task_role) = task.record.roles.iter().find(|role| role.studio_role_id == normalized_studio_role_id) else {
+        return Ok(false);
     };
 
     let agent_id = format!("{}:{}", thread.thread_id, task_role.id);
     for agent in agents.iter_mut() {
         if agent.id == agent_id {
-            agent.status = if normalized_run_status == "done" {
+            agent.status = if run_succeeded {
                 "done".to_string()
             } else {
                 "failed".to_string()
@@ -1721,7 +1925,7 @@ pub fn thread_record_role_result(
                 format!(
                     "{} {}.",
                     task_role.label,
-                    if normalized_run_status == "done" {
+                    if run_succeeded {
                         "completed"
                     } else {
                         "failed"
@@ -1731,7 +1935,7 @@ pub fn thread_record_role_result(
             Some(agent_id.as_str()),
             Some(task_role.label.as_str()),
             Some(task_role.id.as_str()),
-            Some(if normalized_run_status == "done" {
+            Some(if run_succeeded {
                 "agent_result"
             } else {
                 "agent_failed"
@@ -1740,7 +1944,7 @@ pub fn thread_record_role_result(
         );
     }
 
-    if normalized_run_status == "done" && !is_internal && !is_ideation && !should_finalize_thread {
+    if run_succeeded && !is_internal && !is_ideation && !should_finalize_thread {
         let mut created_handoff = false;
         if let Some(target_role) = next_handoff_target(&task.record, &task_role.id) {
             let target_already_started = task
@@ -2109,6 +2313,67 @@ mod tests {
     }
 
     #[test]
+    fn thread_runtime_snapshot_reports_runtime_metadata_without_full_message_payload() {
+        let workspace = temp_workspace("runtime-snapshot");
+        let cwd = workspace.to_string_lossy().to_string();
+        let detail = thread_create(
+            cwd.clone(),
+            None,
+            "inspect repo".to_string(),
+            None,
+            Some("full-squad".to_string()),
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        let appended = thread_append_message(
+            cwd.clone(),
+            detail.thread.thread_id.clone(),
+            "assistant".to_string(),
+            "runtime heartbeat".to_string(),
+        )
+        .unwrap();
+
+        let snapshot = thread_runtime_snapshot(cwd, appended.thread.thread_id.clone()).unwrap();
+        assert_eq!(snapshot.thread.thread_id, appended.thread.thread_id);
+        assert_eq!(snapshot.message_count, appended.messages.len());
+        assert_eq!(snapshot.changed_files, appended.changed_files);
+    }
+
+    #[test]
+    fn thread_message_delta_returns_only_messages_after_the_requested_offset() {
+        let workspace = temp_workspace("message-delta");
+        let cwd = workspace.to_string_lossy().to_string();
+        let detail = thread_create(
+            cwd.clone(),
+            None,
+            "inspect repo".to_string(),
+            None,
+            Some("full-squad".to_string()),
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        let appended = thread_append_message(
+            cwd.clone(),
+            detail.thread.thread_id.clone(),
+            "assistant".to_string(),
+            "runtime heartbeat".to_string(),
+        )
+        .unwrap();
+
+        let delta = thread_message_delta(cwd, appended.thread.thread_id.clone(), 2).unwrap();
+        assert!(!delta.reset_required);
+        assert_eq!(delta.total_count, appended.messages.len());
+        assert_eq!(delta.messages.len(), 1);
+        assert_eq!(delta.messages[0].content, "runtime heartbeat");
+    }
+
+    #[test]
     fn thread_rename_persists_custom_title_across_user_messages() {
         let workspace = temp_workspace("rename");
         let detail = thread_create(
@@ -2236,6 +2501,47 @@ mod tests {
 
         let loaded = thread_load(cwd, detail.thread.thread_id.clone()).unwrap();
         assert!(loaded.approvals.is_empty());
+    }
+
+    #[test]
+    fn thread_record_role_result_marks_low_quality_runs_as_degraded_in_list_summary() {
+        let workspace = temp_workspace("low-quality-role-result");
+        let cwd = workspace.to_string_lossy().to_string();
+        let detail = thread_create(
+            cwd.clone(),
+            None,
+            "inspect repo".to_string(),
+            None,
+            Some("full-squad".to_string()),
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+
+        let recorded = thread_record_role_result(
+            cwd.clone(),
+            detail.thread.thread_id.clone(),
+            "pm_planner".to_string(),
+            "run-low-quality".to_string(),
+            "low_quality".to_string(),
+            vec![],
+            Some("품질 게이트 미달 초안".to_string()),
+            Some(false),
+            Some("final".to_string()),
+            Some("planning".to_string()),
+        )
+        .unwrap();
+        assert!(recorded);
+
+        let items = thread_list(cwd, None).unwrap();
+        let item = items
+            .into_iter()
+            .find(|row| row.thread.thread_id == detail.thread.thread_id)
+            .unwrap();
+        assert!(item.workflow_summary.degraded);
+        assert_eq!(item.thread.status, "completed");
     }
 
     #[test]
@@ -2455,6 +2761,47 @@ mod tests {
         let loaded = thread_load(cwd.clone(), detail.thread.thread_id.clone()).unwrap();
         assert_eq!(loaded.thread.status, "completed");
         assert_eq!(loaded.task.status, "completed");
+    }
+
+    #[test]
+    fn thread_record_role_result_accepts_completed_status_and_task_agent_alias_as_success() {
+        let workspace = temp_workspace("direct-completed-alias");
+        let cwd = workspace.to_string_lossy().to_string();
+        let detail = thread_create(
+            cwd.clone(),
+            None,
+            "바로 답변해줘".to_string(),
+            None,
+            Some("full-squad".to_string()),
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+
+        let recorded = thread_record_role_result(
+            cwd.clone(),
+            detail.thread.thread_id.clone(),
+            "game_designer".to_string(),
+            "run-direct-completed".to_string(),
+            "completed".to_string(),
+            vec![],
+            Some("정상 완료".to_string()),
+            Some(false),
+            Some("direct".to_string()),
+            None,
+        )
+        .unwrap();
+        assert!(recorded);
+
+        let loaded = thread_load(cwd, detail.thread.thread_id.clone()).unwrap();
+        assert_eq!(loaded.thread.status, "completed");
+        assert_eq!(loaded.task.status, "completed");
+        assert!(loaded
+            .messages
+            .iter()
+            .any(|message| message.event_kind.as_deref() == Some("agent_result")));
     }
 
     #[test]

@@ -38,6 +38,8 @@ export type ThreadWorkflowSummary = {
   currentStageId: ThreadStageId;
   status: ThreadStageStatus;
   blocked: boolean;
+  failed: boolean;
+  degraded: boolean;
   pendingApprovalCount: number;
 };
 

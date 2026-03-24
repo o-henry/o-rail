@@ -19,6 +19,36 @@ export const STUDIO_ROLE_PROMPTS: Record<StudioRoleId, string> = {
 
 export function toStudioRoleId(value: string): StudioRoleId | null {
   const normalized = String(value ?? "").trim();
+  if (normalized === "game_designer") {
+    return "pm_planner";
+  }
+  if (normalized === "level_designer") {
+    return "pm_creative_director";
+  }
+  if (normalized === "researcher") {
+    return "research_analyst";
+  }
+  if (normalized === "unity_architect" || normalized === "unity_refactor_specialist") {
+    return "system_programmer";
+  }
+  if (normalized === "unity_implementer") {
+    return "client_programmer";
+  }
+  if (normalized === "technical_artist") {
+    return "art_pipeline";
+  }
+  if (normalized === "unity_editor_tools") {
+    return "tooling_engineer";
+  }
+  if (normalized === "qa_playtester") {
+    return "qa_engineer";
+  }
+  if (normalized === "release_steward") {
+    return "build_release";
+  }
+  if (normalized === "handoff_writer") {
+    return "technical_writer";
+  }
   if (
     normalized === "pm_planner" ||
     normalized === "pm_creative_director" ||

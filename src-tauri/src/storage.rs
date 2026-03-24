@@ -5,7 +5,7 @@ use serde_json::Value;
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
-    io::{Read, Seek, SeekFrom},
+    io::{Read, Seek, SeekFrom, Write},
     path::{Path, PathBuf},
     process::Command,
     time::SystemTime,
@@ -1054,6 +1054,11 @@ pub fn task_list(cwd: String) -> Result<Vec<TaskListItem>, String> {
         .collect())
 }
 
+pub fn task_record_list(cwd: String) -> Result<Vec<TaskRecord>, String> {
+    let workspace = normalize_workspace_root(&cwd)?;
+    collect_task_records(&workspace)
+}
+
 #[tauri::command]
 pub fn task_load(cwd: String, task_id: String) -> Result<TaskDetail, String> {
     let workspace = normalize_workspace_root(&cwd)?;
@@ -1194,11 +1199,12 @@ pub fn task_record_role_result(
     if !task_path.exists() {
         return Ok(false);
     }
-    let normalized_studio_role_id = studio_role_id.trim().to_string();
-    let normalized_run_status = if run_status.trim().eq_ignore_ascii_case("done") {
-        "done".to_string()
-    } else {
-        "error".to_string()
+    let normalized_studio_role_id = task_presets::task_agent_studio_role_id(studio_role_id.trim())
+        .unwrap_or_else(|| studio_role_id.trim().to_string());
+    let normalized_run_status = match run_status.trim().to_ascii_lowercase().as_str() {
+        "done" | "completed" => "done".to_string(),
+        "low_quality" | "degraded" => "low_quality".to_string(),
+        _ => "error".to_string(),
     };
     let deduped_artifacts = artifact_paths
         .into_iter()
@@ -1207,6 +1213,7 @@ pub fn task_record_role_result(
         .collect::<BTreeSet<_>>()
         .into_iter()
         .collect::<Vec<_>>();
+    let mut updated = false;
     update_task_record(&workspace, task_id.trim(), |record| {
         let Some(role) = record.roles.iter_mut().find(|role| role.studio_role_id == normalized_studio_role_id) else {
             return Ok(());
@@ -1215,10 +1222,11 @@ pub fn task_record_role_result(
         role.last_run_id = Some(run_id.trim().to_string());
         role.artifact_paths = deduped_artifacts.clone();
         role.updated_at = now_iso();
+        updated = true;
         Ok(())
     })?;
     cleanup_workspace_runtime_noise(&workspace)?;
-    Ok(true)
+    Ok(updated)
 }
 
 #[tauri::command]
@@ -1285,6 +1293,31 @@ pub fn workspace_write_text(cwd: String, name: String, content: String) -> Resul
 
     let target = path.join(normalized_name);
     fs::write(&target, content).map_err(|e| format!("failed to write text file: {e}"))?;
+    Ok(target.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+pub fn workspace_append_log_line(cwd: String, name: String, line: String) -> Result<String, String> {
+    let cwd_trimmed = cwd.trim();
+    if cwd_trimmed.is_empty() {
+        return Err("cwd is required".to_string());
+    }
+    let path = PathBuf::from(cwd_trimmed);
+    let normalized_name = normalize_text_file_name(&name)?;
+
+    fs::create_dir_all(&path).map_err(|e| format!("failed to create workspace directory: {e}"))?;
+    if !path.is_dir() {
+        return Err("workspace path is not a directory".to_string());
+    }
+
+    let target = path.join(normalized_name);
+    let mut file = fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&target)
+        .map_err(|e| format!("failed to open log file for append: {e}"))?;
+    let line = line.trim_end_matches(['\r', '\n']);
+    writeln!(file, "{line}").map_err(|e| format!("failed to append log line: {e}"))?;
     Ok(target.to_string_lossy().to_string())
 }
 
@@ -1524,5 +1557,74 @@ mod tests {
 
         let _ = fs::remove_dir_all(workspace);
         let _ = fs::remove_file(outside);
+    }
+
+    #[test]
+    fn workspace_append_log_line_appends_without_overwriting_previous_lines() {
+        let workspace = temp_workspace("workspace-append-log");
+        let file_path = workspace_append_log_line(
+            workspace.to_string_lossy().to_string(),
+            "diagnostics.log".to_string(),
+            "{\"kind\":\"first\"}".to_string(),
+        )
+        .unwrap();
+        workspace_append_log_line(
+            workspace.to_string_lossy().to_string(),
+            "diagnostics.log".to_string(),
+            "{\"kind\":\"second\"}".to_string(),
+        )
+        .unwrap();
+
+        let content = fs::read_to_string(&file_path).unwrap();
+        assert_eq!(content, "{\"kind\":\"first\"}\n{\"kind\":\"second\"}\n");
+
+        let _ = fs::remove_dir_all(workspace);
+    }
+
+    #[test]
+    fn task_record_role_result_accepts_task_agent_alias_and_returns_false_for_unknown_role() {
+        let workspace = temp_workspace("task-record-role-result");
+        let cwd = workspace.to_string_lossy().to_string();
+        let detail = task_create(
+            cwd.clone(),
+            None,
+            "boss arena".to_string(),
+            Some("balanced".to_string()),
+            Some("full-squad".to_string()),
+            Some("current-repo".to_string()),
+        )
+        .unwrap();
+
+        let updated = task_record_role_result(
+            cwd.clone(),
+            detail.record.task_id.clone(),
+            "game_designer".to_string(),
+            "run-123".to_string(),
+            "completed".to_string(),
+            vec!["/tmp/out.md".to_string()],
+        )
+        .unwrap();
+        assert!(updated);
+
+        let loaded = task_load(cwd.clone(), detail.record.task_id.clone()).unwrap();
+        let role = loaded
+            .record
+            .roles
+            .iter()
+            .find(|role| role.id == "game_designer")
+            .unwrap();
+        assert_eq!(role.status, "done");
+        assert_eq!(role.last_run_id.as_deref(), Some("run-123"));
+
+        let missing = task_record_role_result(
+            cwd,
+            detail.record.task_id.clone(),
+            "missing_role".to_string(),
+            "run-404".to_string(),
+            "done".to_string(),
+            vec![],
+        )
+        .unwrap();
+        assert!(!missing);
     }
 }

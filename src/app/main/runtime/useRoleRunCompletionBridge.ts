@@ -14,6 +14,11 @@ type Params = {
   workflowHandoffPanel: { createAutoHandoff: (input: any) => void };
 };
 
+export function shouldForwardRoleRunToMissionControl(sourceTab: unknown): boolean {
+  const normalized = String(sourceTab ?? "").trim();
+  return normalized === "agents" || normalized === "workflow" || normalized === "workbench";
+}
+
 export function buildKnowledgeEntriesFromRoleRunCompletion(params: {
   cwd: string;
   payload: {
@@ -82,7 +87,9 @@ export function useRoleRunCompletionBridge(params: Params) {
   const { cwd, invokeFn, missionControl, setWorkflowRoleRuntimeStateByRole, workflowHandoffPanel } = params;
 
   return useCallback((payload: any) => {
-    missionControl.onRoleRunCompleted(payload);
+    if (shouldForwardRoleRunToMissionControl(payload.sourceTab)) {
+      missionControl.onRoleRunCompleted(payload);
+    }
     const roleId = toStudioRoleId(payload.roleId);
     if (roleId) {
       setWorkflowRoleRuntimeStateByRole((prev) => ({

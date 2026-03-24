@@ -123,4 +123,32 @@ describe("agenticRoleCoordinator", () => {
     expect(result.envelope.record.status).toBe("error");
     expect(result.events.some((event) => String(event.message ?? "").includes("300000ms"))).toBe(true);
   });
+
+  it("extends the watchdog while execute reports progress", async () => {
+    vi.useFakeTimers();
+    const queue = createAgenticQueue();
+    const invokeFn = (vi.fn(async () => "/tmp/write") as unknown) as InvokeFn;
+
+    const runPromise = runRoleWithCoordinator({
+      cwd: "/tmp/workspace",
+      sourceTab: "tasks-thread",
+      roleId: "client_programmer",
+      taskId: "THREAD-PROGRESS",
+      queue,
+      invokeFn,
+      execute: async ({ onProgress }) => {
+        onProgress?.("첫 진행 신호");
+        await new Promise((resolve) => setTimeout(resolve, 250_000));
+        onProgress?.("두 번째 진행 신호");
+        await new Promise((resolve) => setTimeout(resolve, 250_000));
+      },
+    });
+
+    await vi.advanceTimersByTimeAsync(550_000);
+    const result = await runPromise;
+
+    expect(result.envelope.record.status).toBe("done");
+    expect(result.events.some((event) => String(event.message ?? "").includes("첫 진행 신호"))).toBe(true);
+    expect(result.events.some((event) => String(event.message ?? "").includes("두 번째 진행 신호"))).toBe(true);
+  });
 });

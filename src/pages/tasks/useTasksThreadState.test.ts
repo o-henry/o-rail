@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  deriveAutomaticResearchProviderBadge,
   isTasksThreadInterruptible,
-  resolveAutomaticResearchModel,
-  resolveAutomaticResearchModels,
   isTasksCodexExecutionBlocked,
   normalizeResolvedTaskRoleIds,
   reduceLiveRoleEventBatch,
@@ -12,8 +9,8 @@ import {
   resolveTasksThreadWebProvider,
   resolveTasksProjectSelection,
   revealTasksProjectPathState,
+  shouldPollCurrentThreadSilently,
   shouldIgnoreInterruptedThreadEvent,
-  shouldAutoUseExternalResearchProvider,
 } from "./useTasksThreadState";
 
 describe("rememberTasksProjectPath", () => {
@@ -126,21 +123,41 @@ describe("isTasksThreadInterruptible", () => {
   });
 });
 
-describe("shouldAutoUseExternalResearchProvider", () => {
-  it("turns on for researcher-tagged prompts on codex models", () => {
-    expect(shouldAutoUseExternalResearchProvider({
-      currentModel: "GPT-5.4",
-      prompt: "게임 반응을 조사해줘",
-      taggedRoles: ["researcher"],
+describe("shouldPollCurrentThreadSilently", () => {
+  it("skips polling while fresh live signals are still arriving", () => {
+    expect(shouldPollCurrentThreadSilently({
+      hasLiveAgents: true,
+      coordinationStatus: "running",
+      activeThreadId: "thread-1",
+      hasTauriRuntime: true,
+      cwd: "/repo",
+      freshestLiveSignalAt: "2026-03-24T01:00:05.000Z",
+      nowMs: Date.parse("2026-03-24T01:00:10.000Z"),
+    })).toBe(false);
+  });
+
+  it("polls when live execution has gone quiet for a while", () => {
+    expect(shouldPollCurrentThreadSilently({
+      hasLiveAgents: true,
+      coordinationStatus: "running",
+      activeThreadId: "thread-1",
+      hasTauriRuntime: true,
+      cwd: "/repo",
+      freshestLiveSignalAt: "2026-03-24T01:00:00.000Z",
+      nowMs: Date.parse("2026-03-24T01:00:10.000Z"),
     })).toBe(true);
   });
 
-  it("stays off when the user already picked a non-codex runtime", () => {
-    expect(shouldAutoUseExternalResearchProvider({
-      currentModel: "GPT-Web",
-      prompt: "게임 반응을 조사해줘",
-      taggedRoles: ["researcher"],
-    })).toBe(false);
+  it("polls when there is no live signal yet but a run is active", () => {
+    expect(shouldPollCurrentThreadSilently({
+      hasLiveAgents: true,
+      coordinationStatus: "running",
+      activeThreadId: "thread-1",
+      hasTauriRuntime: true,
+      cwd: "/repo",
+      freshestLiveSignalAt: "",
+      nowMs: Date.parse("2026-03-24T01:00:10.000Z"),
+    })).toBe(true);
   });
 });
 
@@ -199,96 +216,6 @@ describe("normalizeResolvedTaskRoleIds", () => {
       "game_designer",
       "researcher",
     ]);
-  });
-});
-
-describe("resolveAutomaticResearchModel", () => {
-  it("honors an explicit provider override without mutating the base model", async () => {
-    const invokeFn = (async () => ({ ready: false })) as <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
-    await expect(resolveAutomaticResearchModel({
-      invokeFn,
-      cwd: "/repo",
-      currentModel: "GPT-5.4",
-      prompt: "최근 인디게임 시장 반응을 조사해줘",
-      taggedRoles: ["researcher"],
-      hasTauriRuntime: true,
-      preferredProviderModel: "WEB / LIGHTPANDA",
-    })).resolves.toBe("WEB / LIGHTPANDA");
-  });
-
-  it("prefers WEB / STEEL when researcher-style requests have a ready steel runtime", async () => {
-    const invokeFn = (async (_command: string, args?: Record<string, unknown>) => {
-      const provider = String(args?.provider ?? "");
-      if (provider === "steel") {
-        return { ready: true };
-      }
-      return { ready: false };
-    }) as <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
-    await expect(resolveAutomaticResearchModel({
-      invokeFn,
-      cwd: "/repo",
-      currentModel: "GPT-5.4",
-      prompt: "최근 인디게임 시장 반응을 조사해줘",
-      taggedRoles: ["researcher"],
-      hasTauriRuntime: true,
-    })).resolves.toBe("WEB / STEEL");
-  });
-
-  it("falls back to WEB / LIGHTPANDA when steel is unavailable", async () => {
-    const invokeFn = (async (_command: string, args?: Record<string, unknown>) => {
-      const provider = String(args?.provider ?? "");
-      if (provider === "steel") {
-        return { ready: false };
-      }
-      if (provider === "lightpanda_experimental") {
-        return { ready: true };
-      }
-      return { ready: false };
-    }) as <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
-    await expect(resolveAutomaticResearchModel({
-      invokeFn,
-      cwd: "/repo",
-      currentModel: "GPT-5.4",
-      prompt: "최근 인디게임 시장 반응을 조사해줘",
-      taggedRoles: ["researcher"],
-      hasTauriRuntime: true,
-    })).resolves.toBe("WEB / LIGHTPANDA");
-  });
-});
-
-describe("deriveAutomaticResearchProviderBadge", () => {
-  it("suppresses the automatic provider badge when the user already picked providers", () => {
-    expect(deriveAutomaticResearchProviderBadge({
-      currentModel: "GPT-5.4",
-      prompt: "게임 반응을 조사해줘",
-      taggedRoles: ["researcher"],
-      preferredProviderModels: ["WEB / STEEL"],
-      readiness: { steel: false, lightpanda: false },
-    })).toBeNull();
-  });
-
-  it("falls back to the first ready automatic provider for research prompts", () => {
-    expect(deriveAutomaticResearchProviderBadge({
-      currentModel: "GPT-5.4",
-      prompt: "게임 반응을 조사해줘",
-      taggedRoles: ["researcher"],
-      readiness: { steel: true, lightpanda: true },
-    })).toBe("WEB / STEEL");
-  });
-});
-
-describe("resolveAutomaticResearchModels", () => {
-  it("returns every explicit provider override so they can fan out in parallel", async () => {
-    const invokeFn = (async () => ({ ready: false })) as <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
-    await expect(resolveAutomaticResearchModels({
-      invokeFn,
-      cwd: "/repo",
-      currentModel: "GPT-5.4",
-      prompt: "게임 반응을 조사해줘",
-      taggedRoles: ["researcher"],
-      hasTauriRuntime: true,
-      preferredProviderModels: ["Gemini", "Grok"],
-    })).resolves.toEqual(["Gemini", "Grok"]);
   });
 });
 

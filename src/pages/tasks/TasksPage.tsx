@@ -18,8 +18,8 @@ import {
   type TaskAgentMentionOption,
 } from "./taskAgentMentions";
 import { buildThreadFileTree } from "./threadFileTree";
-import { buildLiveAgentCards } from "./liveAgentState";
-import { deriveAutomaticResearchProviderBadge, type ComposerProviderModel, useTasksThreadState } from "./useTasksThreadState";
+import { buildLiveAgentCards, resolveLiveServiceStatus } from "./liveAgentState";
+import { type ComposerProviderModel, useTasksThreadState } from "./useTasksThreadState";
 import { useTasksWebProviderStatus } from "./useTasksWebProviderStatus";
 import { TasksThreadNavPane } from "./TasksThreadNavPane";
 import { TasksThreadHeaderBar } from "./TasksThreadHeaderBar";
@@ -111,7 +111,6 @@ export default function TasksPage(props: TasksPageProps) {
   const [isMainSurfaceFullscreen, setIsMainSurfaceFullscreen] = useState(false);
   const [isThreadNavHidden, setIsThreadNavHidden] = useState(false);
   const [isReviewPaneOpen, setIsReviewPaneOpen] = useState(false);
-  const deferredComposerDraft = useDeferredValue(state.composerDraft);
   const title = useMemo(() => displayThreadTitle(state.activeThread?.thread.title), [state.activeThread]);
   const headerTitle = state.activeThread ? title : "";
   const selectedModelOption = useMemo(
@@ -258,7 +257,8 @@ export default function TasksPage(props: TasksPageProps) {
     [state.activeThread?.agents],
   );
   const liveAgents = useMemo(() => buildLiveAgentCards(state.activeThread, state.liveRoleNotes), [state.activeThread, state.liveRoleNotes]);
-  const deferredMessages = useDeferredValue(state.activeThread?.messages ?? EMPTY_THREAD_MESSAGES);
+  const runtimeServiceStatus = useMemo(() => resolveLiveServiceStatus(state.activeThread), [state.activeThread]);
+  const conversationMessages = state.activeThread?.messages ?? EMPTY_THREAD_MESSAGES;
   const deferredPendingApprovals = useDeferredValue(state.pendingApprovals ?? EMPTY_APPROVALS);
   const deferredLiveAgents = useDeferredValue(liveAgents);
   const deferredLiveProcessEvents = useDeferredValue(state.liveProcessEvents ?? EMPTY_LIVE_EVENTS);
@@ -270,22 +270,7 @@ export default function TasksPage(props: TasksPageProps) {
   const recentRuntimeSessions = useMemo(() => state.searchRuntimeSessions(""), [state.searchRuntimeSessions]);
   const deferredRecentRuntimeSessions = useDeferredValue(recentRuntimeSessions ?? EMPTY_RUNTIME_SESSIONS);
   const autoSelectedComposerRoleIds = useMemo(() => [], []);
-  const autoSelectedProviderModel = useMemo(
-    () => deriveAutomaticResearchProviderBadge({
-      currentModel: state.model,
-      prompt: deferredComposerDraft,
-      taggedRoles: state.selectedComposerRoleIds,
-      preferredProviderModels: state.composerProviderOverrides,
-      readiness: state.externalProviderReadiness,
-    }),
-    [
-      state.model,
-      deferredComposerDraft,
-      state.selectedComposerRoleIds,
-      state.composerProviderOverrides,
-      state.externalProviderReadiness,
-    ],
-  );
+  const autoSelectedProviderModel = null;
 
   useEffect(() => {
     setMentionIndex(0);
@@ -348,7 +333,7 @@ export default function TasksPage(props: TasksPageProps) {
       return;
     }
     node.scrollTop = node.scrollHeight;
-  }, [deferredMessages.length, deferredLiveAgents.length, deferredPendingApprovals.length, state.selectedFileDiff]);
+  }, [conversationMessages.length, deferredLiveAgents.length, deferredPendingApprovals.length, state.selectedFileDiff]);
 
   return (
     <section
@@ -449,9 +434,12 @@ export default function TasksPage(props: TasksPageProps) {
             liveAgents={deferredLiveAgents}
             liveProcessEvents={deferredLiveProcessEvents}
             latestRunInternalBadges={state.latestRunInternalBadges}
-            messages={deferredMessages}
+            messages={conversationMessages}
             orchestration={state.activeThreadCoordination}
             recentRuntimeSessions={deferredRecentRuntimeSessions}
+            runtimeHeartbeatAt={state.runtimeHeartbeatAt}
+            runtimeHeartbeatState={state.runtimeHeartbeatState}
+            runtimeServiceStatus={runtimeServiceStatus}
             visibleAgentLabels={visibleAgentLabels}
             onApprovePlan={state.approveActiveCoordinationPlan}
             onCancelOrchestration={state.cancelActiveCoordination}

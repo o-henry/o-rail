@@ -3,7 +3,7 @@ import type { AgenticCoordinationState, SessionIndexEntry } from "../../features
 import { useI18n } from "../../i18n";
 import { TasksThreadOrchestrationCard } from "./TasksThreadOrchestrationCard";
 import { TasksThreadMessageContent } from "./TasksThreadMessageContent";
-import { getTaskAgentLabel, orderedTaskAgentPresetIds } from "./taskAgentPresets";
+import { getTaskAgentLabel } from "./taskAgentPresets";
 import {
   describeLiveCurrentWork,
   formatRelativeUpdateAge,
@@ -11,8 +11,23 @@ import {
   resolveLatestFailureReason,
   resolveLiveActivityState,
   resolveRecentSourceCount,
+  shouldShowRelativeLiveSignalAge,
+  type LiveServiceStatus,
   type LiveAgentCard,
 } from "./liveAgentState";
+import {
+  buildTimelineRenderEntries,
+  compactTasksTimelineCopy,
+  isFailedThreadMessage,
+  isFinishedThreadMessage,
+  normalizeTasksTimelineCopy,
+  resolveLatestRunParticipationBadges,
+  resolveThreadParticipationBadgeRoleIds,
+  resolveTimelineMessage,
+  shouldKeepPrimaryTimelineMessage,
+  shouldRenderMessageMarkdown,
+  type TimelineRenderEntry,
+} from "./taskThreadConversationHelpers";
 import type { ApprovalRecord, ThreadMessage, ThreadRoleId } from "./threadTypes";
 
 type LiveProcessEvent = {
@@ -33,9 +48,49 @@ type LiveConversationEntry = {
   latestEvent: LiveProcessEvent | null;
 };
 
-type TimelineRenderEntry =
-  | { kind: "single"; message: ThreadMessage }
-  | { kind: "group"; id: string; messages: ThreadMessage[] };
+type PreparedLiveConversationEntry = {
+  roleId: ThreadRoleId;
+  label: string;
+  agent: LiveAgentCard | null;
+  latestEvent: LiveProcessEvent | null;
+  freshestAt: string;
+  recentSourceCount: number | null;
+  failureReason: string;
+  currentWorkDetail: string;
+  displayCurrentWorkLabel: string;
+  displayFailureReason: string;
+  eventBadgeLabel: string;
+  stageLabel: string;
+};
+
+type PreparedTimelineSingleEntry = {
+  kind: "single";
+  id: string;
+  messageRole: ThreadMessage["role"];
+  label: string;
+  body: string;
+  artifactPath: string;
+  createdAt: string;
+  renderMarkdown: boolean;
+  showFinish: boolean;
+  showSuccess: boolean;
+  showFail: boolean;
+  showParticipantBadges: boolean;
+};
+
+type PreparedTimelineGroupEntry = {
+  kind: "group";
+  id: string;
+  text: string;
+};
+
+type PreparedTimelineEntry = PreparedTimelineSingleEntry | PreparedTimelineGroupEntry;
+
+type ConversationParticipationBadge = {
+  key: string;
+  label: string;
+  kind: "agent" | "provider" | "internal";
+};
 
 type TasksThreadConversationProps = {
   orchestration: AgenticCoordinationState | null;
@@ -46,6 +101,9 @@ type TasksThreadConversationProps = {
   liveProcessEvents: LiveProcessEvent[];
   latestRunInternalBadges: Array<{ key: string; label: string; kind: "internal" | "provider" }>;
   approvals: ApprovalRecord[];
+  runtimeHeartbeatAt: string;
+  runtimeHeartbeatState: "idle" | "alive" | "error";
+  runtimeServiceStatus: LiveServiceStatus | null;
   conversationRef: React.RefObject<HTMLDivElement | null>;
   onApprovePlan: () => void;
   onCancelOrchestration: () => void;
@@ -56,265 +114,69 @@ type TasksThreadConversationProps = {
   onVerifyReview: () => void;
 };
 
-function parseTimelineMessage(content: string, agentLabels: string[]) {
-  const text = String(content ?? "").trim();
-  for (const label of agentLabels) {
-    if (text.startsWith(`${label}:`)) {
-      return {
-        label,
-        body: text.slice(label.length + 1).trim(),
-      };
-    }
-    if (text.startsWith(`Created ${label} `) || text.includes(` ${label} is `)) {
-      return {
-        label,
-        body: text,
-      };
-    }
-  }
-  return {
-    label: "",
-    body: text,
-  };
+function hasFreshRuntimeHeartbeat(input: string, nowMs: number, windowMs = 20_000): boolean {
+  const parsed = Date.parse(String(input ?? "").trim());
+  return Number.isFinite(parsed) && nowMs - parsed <= windowMs;
 }
 
-function resolveTimelineMessage(message: ThreadMessage, agentLabels: string[]) {
-  const parsed = parseTimelineMessage(message.content, agentLabels);
-  return {
-    label: String(message.agentLabel ?? "").trim() || parsed.label,
-    body: parsed.body,
-    artifactPath: String(message.artifactPath ?? "").trim(),
-    createdAt: String(message.createdAt ?? "").trim(),
-  };
-}
-
-const INTERNAL_PROMPT_DUMP_MARKERS = [
-  "Formatting re-enabled",
-  "<role_profile>",
-  "</role_profile>",
-  "<operating_rules>",
-  "</operating_rules>",
-  "<response_contract>",
-  "</response_contract>",
-  "<task_request>",
-  "</task_request>",
-  "[ROLE_KB_INJECT]",
-  "[/ROLE_KB_INJECT]",
-];
-
-function looksLikeInternalPromptDump(content: string): boolean {
-  const normalized = String(content ?? "").trim();
-  if (!normalized) {
-    return false;
-  }
-  return INTERNAL_PROMPT_DUMP_MARKERS.some((marker) => normalized.includes(marker));
-}
-
-export function normalizeTasksTimelineCopy(content: string): string {
-  if (looksLikeInternalPromptDump(content)) {
-    return "내부 역할 프롬프트와 역할 지식을 준비했습니다.";
-  }
-  return String(content ?? "")
-    .replace(/\bCreated\b/g, "CREATED")
-    .replace(/\[(?:Codex|코덱스) 실행\]/g, "[코덱스 실행]")
-    .replace(/\bCodex\b/g, "코덱스")
-    .replace(/ROLE_KB_BOOTSTRAP 실행 중/g, "외부 근거 수집 중")
-    .replace(/ROLE_KB_BOOTSTRAP 완료/g, "외부 근거 수집 완료")
-    .replace(/ROLE_KB_BOOTSTRAP 실패/g, "외부 근거 수집 실패")
-    .replace(/ROLE_KB_STORE 실행 중/g, "역할 지식 정리 중")
-    .replace(/ROLE_KB_STORE 완료/g, "역할 지식 정리 완료")
-    .replace(/ROLE_KB_STORE 실패/g, "역할 지식 정리 실패")
-    .replace(/ROLE_KB_INJECT 실행 중/g, "역할 지식 주입 중")
-    .replace(/ROLE_KB_INJECT 완료/g, "역할 지식 주입 완료")
-    .replace(/ROLE_KB_INJECT 실패/g, "역할 지식 주입 실패")
-    .replace(/\bruntime attached\b/gi, "실행 세션 연결됨")
-    .replace(/\bruntime session\b/gi, "실행 세션");
-}
-
-function compactDisplayedUrl(rawUrl: string): string {
-  const trimmed = String(rawUrl ?? "").trim();
-  const suffixMatch = trimmed.match(/[),.;:!?]+$/);
-  const suffix = suffixMatch?.[0] ?? "";
-  const candidate = suffix ? trimmed.slice(0, -suffix.length) : trimmed;
-  try {
-    const parsed = new URL(candidate);
-    const base = `${parsed.origin}${parsed.pathname}`;
-    if (candidate.length <= 88) {
-      return `${candidate}${suffix}`;
-    }
-    if (base.length >= 72) {
-      return `${base.slice(0, 69)}...${suffix}`;
-    }
-    const queryMarker = parsed.search ? "?..." : parsed.hash ? "#..." : "";
-    return `${base}${queryMarker}${suffix}`;
-  } catch {
-    if (candidate.length <= 88) {
-      return `${candidate}${suffix}`;
-    }
-    return `${candidate.slice(0, 85)}...${suffix}`;
-  }
-}
-
-export function compactTasksTimelineCopy(content: string): string {
-  return normalizeTasksTimelineCopy(content).replace(/https?:\/\/\S+/g, (url) => compactDisplayedUrl(url));
-}
-
-export function isFinishedThreadMessage(message: ThreadMessage): boolean {
-  return message.role === "assistant" && String(message.eventKind ?? "").trim() === "agent_result";
-}
-
-export function isFailedThreadMessage(message: ThreadMessage): boolean {
-  return message.role === "assistant" && String(message.eventKind ?? "").trim() === "agent_failed";
-}
-
-function shouldRenderMessageMarkdown(message: ThreadMessage): boolean {
-  return isFinishedThreadMessage(message) || isFailedThreadMessage(message);
-}
-
-function shouldHideTimelineMessage(message: ThreadMessage, assignedRoleIds: ThreadRoleId[]): boolean {
-  const eventKind = String(message.eventKind ?? "").trim();
-  if (eventKind === "agent_created") {
-    return true;
-  }
-  if (
-    assignedRoleIds.length > 0 &&
-    (eventKind === "agent_status" || eventKind === "agent_result" || eventKind === "agent_failed") &&
-    message.sourceRoleId &&
-    !assignedRoleIds.includes(message.sourceRoleId)
-  ) {
-    return true;
-  }
-  return false;
-}
-
-function shouldGroupTimelineMessage(message: ThreadMessage): boolean {
-  const eventKind = String(message.eventKind ?? "").trim();
-  if (eventKind === "run_interrupted") {
-    return false;
-  }
-  return !shouldRenderMessageMarkdown(message) && (message.role === "assistant" || message.role === "system");
-}
-
-export function buildTimelineRenderEntries(messages: ThreadMessage[], assignedRoleIds: ThreadRoleId[] = []): TimelineRenderEntry[] {
-  const entries: TimelineRenderEntry[] = [];
-  let currentGroup: ThreadMessage[] = [];
-
-  const flushGroup = () => {
-    if (currentGroup.length === 0) {
-      return;
-    }
-    entries.push({
-      kind: "group",
-      id: currentGroup.map((message) => String(message.id ?? "").trim()).filter(Boolean).join(":"),
-      messages: currentGroup,
-    });
-    currentGroup = [];
-  };
-
-  for (const message of messages) {
-    if (shouldHideTimelineMessage(message, assignedRoleIds)) {
-      continue;
-    }
-    if (shouldGroupTimelineMessage(message)) {
-      currentGroup.push(message);
-      continue;
-    }
-    flushGroup();
-    entries.push({ kind: "single", message });
-  }
-  flushGroup();
-  return entries;
-}
-
-function latestUserMessageId(messages: ThreadMessage[]): string {
+function splitMessagesForTimeline(messages: ThreadMessage[]) {
+  let latestUserIndex = -1;
   for (let index = messages.length - 1; index >= 0; index -= 1) {
-    const message = messages[index];
-    if (message?.role === "user") {
-      return String(message.id ?? "").trim();
+    if (messages[index]?.role === "user") {
+      latestUserIndex = index;
+      break;
     }
   }
-  return "";
+  if (latestUserIndex < 0) {
+    return {
+      latestUserPromptMessageId: "",
+      historicalMessages: messages,
+      activeRunMessages: [] as ThreadMessage[],
+    };
+  }
+  return {
+    latestUserPromptMessageId: String(messages[latestUserIndex]?.id ?? "").trim(),
+    historicalMessages: messages.slice(0, latestUserIndex),
+    activeRunMessages: messages.slice(latestUserIndex),
+  };
 }
 
-export function resolveThreadParticipationBadgeRoleIds(orchestration: AgenticCoordinationState | null): ThreadRoleId[] {
-  const orchestrationRoleIds = orderedTaskAgentPresetIds(
-    orchestration?.assignedRoleIds?.length
-      ? orchestration.assignedRoleIds
-      : (orchestration?.requestedRoleIds ?? []),
-  );
-  if (orchestrationRoleIds.length > 0) {
-    return orchestrationRoleIds;
-  }
-  return [];
-}
-
-export function resolveLatestRunParticipationBadgeRoleIds(params: {
-  orchestration: AgenticCoordinationState | null;
-  messages: ThreadMessage[];
-  liveAgents: LiveAgentCard[];
-}): ThreadRoleId[] {
-  const latestUserId = latestUserMessageId(params.messages);
-  const latestUserIndex = latestUserId
-    ? params.messages.findIndex((message) => String(message.id ?? "").trim() === latestUserId)
-    : -1;
-  const latestRunMessages = latestUserIndex >= 0 ? params.messages.slice(latestUserIndex + 1) : [];
-  const emittedRoleIds = orderedTaskAgentPresetIds(
-    latestRunMessages
-      .filter((message) => String(message.eventKind ?? "").trim() !== "agent_created")
-      .map((message) => message.sourceRoleId)
-      .filter((roleId): roleId is ThreadRoleId => Boolean(roleId)),
-  );
-  if (emittedRoleIds.length > 0) {
-    return emittedRoleIds;
-  }
-  const liveRoleIds = orderedTaskAgentPresetIds(params.liveAgents.map((agent) => agent.roleId));
-  if (liveRoleIds.length > 0) {
-    return liveRoleIds;
-  }
-  const orchestrationRoleIds = resolveThreadParticipationBadgeRoleIds(params.orchestration);
-  if (orchestrationRoleIds.length > 0) {
-    return orchestrationRoleIds;
-  }
-  return orderedTaskAgentPresetIds(
-    latestRunMessages
-      .map((message) => message.sourceRoleId)
-      .filter((roleId): roleId is ThreadRoleId => Boolean(roleId)),
-  );
-}
-
-type ConversationParticipationBadge = {
-  key: string;
-  label: string;
-  kind: "agent" | "provider" | "internal";
-};
-
-export function resolveLatestRunParticipationBadges(params: {
-  orchestration: AgenticCoordinationState | null;
-  messages: ThreadMessage[];
-  liveAgents: LiveAgentCard[];
-  internalBadges: Array<{ key: string; label: string; kind: "internal" | "provider" }>;
-}): ConversationParticipationBadge[] {
-  const roleBadges = resolveLatestRunParticipationBadgeRoleIds({
-    orchestration: params.orchestration,
-    messages: params.messages,
-    liveAgents: params.liveAgents,
-  }).map((roleId) => ({
-    key: `agent:${roleId}`,
-    label: getTaskAgentLabel(roleId),
-    kind: "agent" as const,
-  }));
-  const internalBadges = params.internalBadges.map((badge) => ({
-    key: badge.key,
-    label: badge.label,
-    kind: badge.kind,
-  }));
-  return [...roleBadges, ...internalBadges];
-}
-
-export function shouldProgressivelyRevealMessage(message: ThreadMessage, body: string): boolean {
-  void message;
-  void body;
-  return false;
+function prepareTimelineEntries(params: {
+  entries: TimelineRenderEntry[];
+  visibleAgentLabels: string[];
+  latestUserPromptMessageId: string;
+}): PreparedTimelineEntry[] {
+  return params.entries.map((entry) => {
+    if (entry.kind === "group") {
+      return {
+        kind: "group",
+        id: entry.id,
+        text: entry.messages
+          .map((message) => {
+            const parsed = resolveTimelineMessage(message, params.visibleAgentLabels);
+            const body = normalizeTasksTimelineCopy(parsed.body);
+            return parsed.label ? `${parsed.label}\n${body}` : body;
+          })
+          .filter(Boolean)
+          .join("\n\n"),
+      };
+    }
+    const parsed = resolveTimelineMessage(entry.message, params.visibleAgentLabels);
+    return {
+      kind: "single",
+      id: String(entry.message.id ?? "").trim(),
+      messageRole: entry.message.role,
+      label: parsed.label,
+      body: normalizeTasksTimelineCopy(parsed.body),
+      artifactPath: parsed.artifactPath,
+      createdAt: parsed.createdAt,
+      renderMarkdown: shouldRenderMessageMarkdown(entry.message),
+      showFinish: isFinishedThreadMessage(entry.message),
+      showSuccess: isFinishedThreadMessage(entry.message),
+      showFail: isFailedThreadMessage(entry.message),
+      showParticipantBadges: String(entry.message.id ?? "").trim() === params.latestUserPromptMessageId,
+    };
+  });
 }
 
 function formatArtifactStamp(input: string) {
@@ -350,6 +212,7 @@ function displayProcessEventBadgeLabel(type: string, t: (key: string) => string)
   if (normalized === "run_queued") return t("tasks.processEvent.queued");
   if (normalized === "run_started") return t("tasks.processEvent.started");
   if (normalized === "stage_started") return "";
+  if (normalized === "item/completed" || normalized === "turn/completed") return "";
   if (normalized === "stage_done") return t("tasks.processEvent.done");
   if (normalized === "run_done") return t("tasks.processEvent.finished");
   if (normalized === "run_error" || normalized === "stage_error") return t("tasks.processEvent.failed");
@@ -378,6 +241,49 @@ function buildRoleEventsByRole(events: LiveProcessEvent[]) {
     grouped.set(event.roleId, [event]);
   }
   return grouped;
+}
+
+function prepareLiveConversationEntries(params: {
+  entries: LiveConversationEntry[];
+  latestProcessEventByRole: Map<ThreadRoleId, LiveProcessEvent>;
+  roleEventsByRole: Map<ThreadRoleId, LiveProcessEvent[]>;
+  t: (key: string, vars?: Record<string, string | number>) => string;
+}): PreparedLiveConversationEntry[] {
+  return params.entries.map((entry) => {
+    const roleEvents = params.roleEventsByRole.get(entry.roleId) ?? [];
+    const latestEvent = entry.latestEvent ?? params.latestProcessEventByRole.get(entry.roleId) ?? null;
+    const freshestAt = String(latestEvent?.at ?? entry.agent?.updatedAt ?? "").trim();
+    const recentSourceCount = resolveRecentSourceCount(roleEvents);
+    const failureReason = resolveLatestFailureReason(roleEvents);
+    const currentWorkLabel =
+      failureReason.includes("ROLE_KB_BOOTSTRAP 실패") && recentSourceCount === 0 && String(latestEvent?.stage ?? "").trim().toLowerCase() === "codex"
+        ? params.t("tasks.live.currentWork.degraded")
+        : latestEvent?.message || entry.agent?.summary || params.t("tasks.live.working");
+    const currentWorkDetail = describeLiveCurrentWork({
+      stage: latestEvent?.stage,
+      eventType: latestEvent?.type,
+      failureReason,
+      recentSourceCount,
+    });
+    return {
+      roleId: entry.roleId,
+      label: entry.label,
+      agent: entry.agent,
+      latestEvent,
+      freshestAt,
+      recentSourceCount,
+      failureReason,
+      currentWorkDetail,
+      displayCurrentWorkLabel: compactTasksTimelineCopy(currentWorkLabel),
+      displayFailureReason: failureReason ? compactTasksTimelineCopy(failureReason) : "",
+      eventBadgeLabel: latestEvent?.type
+        ? displayProcessEventBadgeLabel(latestEvent.type, params.t)
+        : "",
+      stageLabel: latestEvent?.stage
+        ? displayProcessStage(String(latestEvent.stage ?? ""), params.t)
+        : params.t("tasks.live.metric.pending"),
+    };
+  });
 }
 
 export function resolveLiveConversationEntries(params: {
@@ -437,16 +343,7 @@ const StaticTimelineMessageRow = memo(function StaticTimelineMessageRow(props: {
   showFinish: boolean;
   showSuccess: boolean;
   showFail: boolean;
-  conversationRef: React.RefObject<HTMLDivElement | null>;
 }) {
-  useEffect(() => {
-    const element = props.conversationRef.current;
-    if (!element) {
-      return;
-    }
-    element.scrollTop = element.scrollHeight;
-  }, [props.body, props.conversationRef]);
-
   const displayedBody = props.body;
   const isTerminalResult = props.showFinish || props.showSuccess || props.showFail;
   const handleOpenKnowledgeArtifact = () => {
@@ -499,9 +396,242 @@ const GroupedTimelineLogRow = memo(function GroupedTimelineLogRow(props: {
   );
 });
 
+const TimelineEntryRows = memo(function TimelineEntryRows(props: {
+  entries: PreparedTimelineEntry[];
+  currentRunBadges: ConversationParticipationBadge[];
+}) {
+  return (
+    <>
+      {props.entries.map((entry) => {
+        if (entry.kind === "group") {
+          return (
+            <GroupedTimelineLogRow key={entry.id} text={entry.text} />
+          );
+        }
+        return (
+          <Fragment key={entry.id}>
+            <StaticTimelineMessageRow
+              artifactPath={entry.artifactPath}
+              body={entry.body}
+              createdAt={entry.createdAt}
+              label={entry.label}
+              messageRole={entry.messageRole}
+              renderMarkdown={entry.renderMarkdown}
+              showFail={entry.showFail}
+              showFinish={entry.showFinish}
+              showSuccess={entry.showSuccess}
+            />
+            {entry.showParticipantBadges ? (
+              <>
+                {props.currentRunBadges.length > 0 ? (
+                  <article
+                    aria-label="이번 실행 참여 에이전트와 provider"
+                    className="tasks-thread-message-row is-assistant is-participant-summary"
+                    key={`${entry.id}:participants`}
+                  >
+                    <div className="tasks-thread-message-agent-list">
+                      {props.currentRunBadges.map((badge) => (
+                        <span
+                          className={`tasks-thread-message-agent-chip${badge.kind === "provider" ? " is-provider" : ""}${badge.kind === "internal" ? " is-internal" : ""}`}
+                          key={`${entry.id}:${badge.key}`}
+                        >
+                          {badge.label}
+                        </span>
+                      ))}
+                    </div>
+                  </article>
+                ) : null}
+              </>
+            ) : null}
+          </Fragment>
+        );
+      })}
+    </>
+  );
+});
+
+const LiveConversationRows = memo(function LiveConversationRows(props: {
+  entries: PreparedLiveConversationEntry[];
+  runtimeHeartbeatAt: string;
+  runtimeHeartbeatState: "idle" | "alive" | "error";
+  runtimeServiceStatus: LiveServiceStatus | null;
+  t: (key: string, vars?: Record<string, string | number>) => string;
+}) {
+  const [liveNowMs, setLiveNowMs] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (props.entries.length === 0) {
+      return;
+    }
+    const intervalId = window.setInterval(() => {
+      setLiveNowMs(Date.now());
+    }, 10_000);
+    return () => window.clearInterval(intervalId);
+  }, [props.entries.length]);
+
+  return (
+    <>
+      {props.entries.map((entry) => {
+        const liveState = resolveLiveActivityState(entry.freshestAt, liveNowMs);
+        const serviceResponsiveWhileStalled =
+          liveState === "stalled"
+          && props.runtimeHeartbeatState === "alive"
+          && hasFreshRuntimeHeartbeat(props.runtimeHeartbeatAt, liveNowMs);
+        const signalDisconnected =
+          liveState === "stalled"
+          && props.runtimeHeartbeatState === "error";
+        const serviceStateLabel =
+          props.runtimeServiceStatus?.state === "failed"
+            ? "실패"
+            : props.runtimeServiceStatus?.state === "completed"
+              ? "완료"
+              : props.runtimeServiceStatus?.state === "approval_required"
+                ? "승인 대기"
+                : props.runtimeServiceStatus?.state === "cancelled"
+                  ? "중단됨"
+                  : props.runtimeServiceStatus?.state === "running"
+                    ? "실행 중"
+                    : "상태 확인 중";
+        const stateLabel =
+          entry.failureReason.includes("ROLE_KB_BOOTSTRAP 실패") && entry.recentSourceCount === 0
+            ? props.t("tasks.live.state.degraded")
+            : serviceResponsiveWhileStalled
+              ? serviceStateLabel
+              : signalDisconnected
+                ? props.t("tasks.live.state.disconnected")
+                : liveState === "stalled"
+                  ? serviceStateLabel
+                  : liveState === "delayed"
+                    ? props.t("tasks.live.state.delayed")
+                    : props.t("tasks.live.state.active");
+        const stateClassName = serviceResponsiveWhileStalled
+          ? "waiting"
+          : signalDisconnected
+            ? "disconnected"
+            : liveState;
+        const nextAction = inferNextLiveAction({
+          stage: entry.latestEvent?.stage,
+          activityState: liveState,
+          failureReason: entry.failureReason,
+          interrupted: (entry.agent?.summary || "").includes("중단"),
+          recentSourceCount: entry.recentSourceCount,
+        });
+        const liveSignalLabel =
+          !shouldShowRelativeLiveSignalAge({
+            activityState: liveState,
+            signalDisconnected,
+          })
+            ? props.t("tasks.live.noRecentSignal")
+            : props.t("tasks.live.lastUpdate", {
+                value: formatRelativeUpdateAge(entry.freshestAt, {
+                  justNow: props.t("time.justNow"),
+                  minutesAgo: (value) => props.t("time.minutesAgo", { value }),
+                  hoursAgo: (value) => props.t("time.hoursAgo", { value }),
+                  daysAgo: (value) => props.t("time.daysAgo", { value }),
+                }),
+              });
+
+        return (
+          <article
+            aria-label={`${entry.label} 실시간 상태`}
+            className="tasks-thread-message-row is-assistant is-live-placeholder"
+            key={`live:${entry.roleId}`}
+          >
+            <div className="tasks-thread-live-header">
+              <span className="tasks-thread-message-label">{entry.label}</span>
+              {entry.latestEvent?.stage ? (
+                <span className="tasks-thread-live-stage-label">
+                  {`${props.t("tasks.live.metric.stage")}: ${entry.stageLabel}`}
+                </span>
+              ) : null}
+              <span className={`tasks-thread-live-state is-${stateClassName}`}>{stateLabel}</span>
+              {shouldShowLiveDots(entry.latestEvent?.type ?? "", liveState) ? (
+                <span aria-hidden="true" className="tasks-thread-live-dots">
+                  <span className="tasks-thread-live-dot" />
+                  <span className="tasks-thread-live-dot" />
+                  <span className="tasks-thread-live-dot" />
+                </span>
+              ) : null}
+              {entry.eventBadgeLabel ? (
+                <span className="tasks-thread-live-event">
+                  {entry.eventBadgeLabel}
+                </span>
+              ) : null}
+            </div>
+            {entry.currentWorkDetail ? (
+              <div className="tasks-thread-live-detail is-explanation">
+                {entry.currentWorkDetail}
+              </div>
+            ) : null}
+            {serviceResponsiveWhileStalled ? (
+              <div className="tasks-thread-live-detail is-warning">
+                {props.runtimeServiceStatus?.detail || props.t("tasks.live.statusDetail.waitingLong")}
+              </div>
+            ) : signalDisconnected ? (
+              <div className="tasks-thread-live-detail is-warning">
+                {props.t("tasks.live.statusDetail.disconnected")}
+              </div>
+            ) : liveState === "stalled" ? (
+              <div className="tasks-thread-live-detail is-warning">
+                {props.runtimeServiceStatus?.detail || props.t("tasks.live.statusDetail.waitingLong")}
+              </div>
+            ) : null}
+            <div className="tasks-thread-live-detail">{liveSignalLabel}</div>
+            {entry.agent?.summary && entry.latestEvent?.message && entry.latestEvent.message !== entry.agent.summary ? (
+              <div className="tasks-thread-live-detail">{entry.agent.summary}</div>
+            ) : null}
+            <dl className="tasks-thread-live-metrics">
+              <div>
+                <dt>{props.t("tasks.live.metric.stage")}</dt>
+                <dd>{entry.stageLabel}</dd>
+              </div>
+              <div>
+                <dt>{props.t("tasks.live.metric.currentWork")}</dt>
+                <dd>
+                  {entry.displayCurrentWorkLabel}
+                  {entry.currentWorkDetail ? <span className="tasks-thread-live-metric-subcopy">{entry.currentWorkDetail}</span> : null}
+                </dd>
+              </div>
+              <div>
+                <dt>{props.t("tasks.live.metric.sourcesSeen")}</dt>
+                <dd>{entry.recentSourceCount != null ? props.t("tasks.live.metric.sourcesSeenValue", { value: entry.recentSourceCount }) : props.t("tasks.live.metric.pending")}</dd>
+              </div>
+              <div>
+                <dt>{props.t("tasks.live.metric.failureReason")}</dt>
+                <dd>{entry.displayFailureReason || props.t("tasks.live.metric.none")}</dd>
+              </div>
+              <div>
+                <dt>{props.t("tasks.live.metric.nextAction")}</dt>
+                <dd>{nextAction}</dd>
+              </div>
+            </dl>
+            {entry.agent?.latestArtifactPath ? (
+              <div className="tasks-thread-message-meta">
+                <small className="tasks-thread-message-artifact">{entry.agent.latestArtifactPath}</small>
+                {entry.agent.updatedAt ? <small className="tasks-thread-message-time">{formatArtifactStamp(entry.agent.updatedAt)}</small> : null}
+              </div>
+            ) : null}
+          </article>
+        );
+      })}
+    </>
+  );
+});
+
 function TasksThreadConversationImpl(props: TasksThreadConversationProps) {
   const { t } = useI18n();
-  const [liveNowMs, setLiveNowMs] = useState(() => Date.now());
+  const assignedRoleIds = useMemo(
+    () => resolveThreadParticipationBadgeRoleIds(props.orchestration),
+    [props.orchestration],
+  );
+  const {
+    latestUserPromptMessageId,
+    historicalMessages,
+    activeRunMessages,
+  } = useMemo(
+    () => splitMessagesForTimeline(props.messages),
+    [props.messages],
+  );
   const latestProcessEventByRole = useMemo(
     () => buildLatestProcessEventByRole(props.liveProcessEvents),
     [props.liveProcessEvents],
@@ -520,40 +650,75 @@ function TasksThreadConversationImpl(props: TasksThreadConversationProps) {
   const currentRunBadges = useMemo(
     () => resolveLatestRunParticipationBadges({
       orchestration: props.orchestration,
-      messages: props.messages,
+      messages: activeRunMessages,
       liveAgents: props.liveAgents,
       internalBadges: props.latestRunInternalBadges,
     }),
-    [props.latestRunInternalBadges, props.liveAgents, props.messages, props.orchestration],
+    [activeRunMessages, props.latestRunInternalBadges, props.liveAgents, props.orchestration],
   );
-  const latestUserPromptMessageId = useMemo(
-    () => latestUserMessageId(props.messages),
-    [props.messages],
-  );
-  const timelineEntries = useMemo(
+  const historicalTimelineEntries = useMemo(
     () => buildTimelineRenderEntries(
-      props.messages,
-      resolveThreadParticipationBadgeRoleIds(props.orchestration),
+      historicalMessages,
+      assignedRoleIds,
     ),
-    [props.messages, props.orchestration],
+    [assignedRoleIds, historicalMessages],
+  );
+  const activeRunTimelineEntries = useMemo(
+    () => buildTimelineRenderEntries(
+      activeRunMessages,
+      assignedRoleIds,
+    ),
+    [activeRunMessages, assignedRoleIds],
+  );
+  const historicalPrimaryTimelineEntries = useMemo(
+    () => historicalTimelineEntries.filter((entry) => entry.kind === "single" && shouldKeepPrimaryTimelineMessage(entry.message)),
+    [historicalTimelineEntries],
+  );
+  const activeRunPrimaryTimelineEntries = useMemo(
+    () => activeRunTimelineEntries.filter((entry) => entry.kind === "single" && shouldKeepPrimaryTimelineMessage(entry.message)),
+    [activeRunTimelineEntries],
   );
   const interruptedTimelineEntries = useMemo(
-    () => timelineEntries.filter((entry) => entry.kind === "single" && String(entry.message.eventKind ?? "").trim() === "run_interrupted"),
-    [timelineEntries],
+    () => [...historicalTimelineEntries, ...activeRunTimelineEntries].filter((entry) => entry.kind === "single" && String(entry.message.eventKind ?? "").trim() === "run_interrupted"),
+    [activeRunTimelineEntries, historicalTimelineEntries],
   );
-  const primaryTimelineEntries = useMemo(
-    () => timelineEntries.filter((entry) => !(entry.kind === "single" && String(entry.message.eventKind ?? "").trim() === "run_interrupted")),
-    [timelineEntries],
+  const preparedHistoricalTimelineEntries = useMemo(
+    () => prepareTimelineEntries({
+      entries: historicalPrimaryTimelineEntries,
+      visibleAgentLabels: props.visibleAgentLabels,
+      latestUserPromptMessageId: "",
+    }),
+    [historicalPrimaryTimelineEntries, props.visibleAgentLabels],
   );
-  useEffect(() => {
-    if (props.liveAgents.length === 0 && props.liveProcessEvents.length === 0) {
-      return;
-    }
-    const intervalId = window.setInterval(() => {
-      setLiveNowMs(Date.now());
-    }, 10_000);
-    return () => window.clearInterval(intervalId);
-  }, [props.liveAgents.length, props.liveProcessEvents.length]);
+  const preparedActiveRunTimelineEntries = useMemo(
+    () => prepareTimelineEntries({
+      entries: activeRunPrimaryTimelineEntries,
+      visibleAgentLabels: props.visibleAgentLabels,
+      latestUserPromptMessageId,
+    }),
+    [activeRunPrimaryTimelineEntries, latestUserPromptMessageId, props.visibleAgentLabels],
+  );
+  const preparedInterruptedTimelineEntries = useMemo(
+    () => prepareTimelineEntries({
+      entries: interruptedTimelineEntries,
+      visibleAgentLabels: props.visibleAgentLabels,
+      latestUserPromptMessageId,
+    }),
+    [interruptedTimelineEntries, latestUserPromptMessageId, props.visibleAgentLabels],
+  );
+  const preparedCombinedTimelineEntries = useMemo(
+    () => [...preparedHistoricalTimelineEntries, ...preparedActiveRunTimelineEntries],
+    [preparedActiveRunTimelineEntries, preparedHistoricalTimelineEntries],
+  );
+  const preparedLiveConversationEntries = useMemo(
+    () => prepareLiveConversationEntries({
+      entries: liveConversationEntries,
+      latestProcessEventByRole,
+      roleEventsByRole,
+      t,
+    }),
+    [latestProcessEventByRole, liveConversationEntries, roleEventsByRole, t],
+  );
 
   return (
     <div aria-label="Tasks 대화 스크롤 영역" className="tasks-thread-conversation-scroll" ref={props.conversationRef}>
@@ -568,202 +733,30 @@ function TasksThreadConversationImpl(props: TasksThreadConversationProps) {
         onVerifyReview={props.onVerifyReview}
       />
       <section aria-label="대화 타임라인" className="tasks-thread-timeline" role="log">
-        {primaryTimelineEntries.map((entry) => {
-          if (entry.kind === "group") {
-            const groupText = entry.messages
-              .map((message) => {
-                const parsed = resolveTimelineMessage(message, props.visibleAgentLabels);
-                const body = normalizeTasksTimelineCopy(parsed.body);
-                return parsed.label ? `${parsed.label}\n${body}` : body;
-              })
-              .filter(Boolean)
-              .join("\n\n");
-            return (
-              <GroupedTimelineLogRow key={entry.id} text={groupText} />
-            );
-          }
-          const { message } = entry;
-          const parsed = resolveTimelineMessage(message, props.visibleAgentLabels);
-          const renderedBody = normalizeTasksTimelineCopy(parsed.body);
-          return (
-            <Fragment key={message.id}>
-              <StaticTimelineMessageRow
-                artifactPath={parsed.artifactPath}
-                body={renderedBody}
-                conversationRef={props.conversationRef}
-                createdAt={parsed.createdAt}
-                label={parsed.label}
-                messageRole={message.role}
-                renderMarkdown={shouldRenderMessageMarkdown(message)}
-                showFail={isFailedThreadMessage(message)}
-                showFinish={isFinishedThreadMessage(message)}
-                showSuccess={isFinishedThreadMessage(message)}
-              />
-              {String(message.id ?? "").trim() === latestUserPromptMessageId ? (
-                <>
-                  {currentRunBadges.length > 0 ? (
-                    <article
-                      aria-label="이번 실행 참여 에이전트와 provider"
-                      className="tasks-thread-message-row is-assistant is-participant-summary"
-                      key={`${message.id}:participants`}
-                    >
-                      <div className="tasks-thread-message-agent-list">
-                        {currentRunBadges.map((badge) => (
-                          <span
-                            className={`tasks-thread-message-agent-chip${badge.kind === "provider" ? " is-provider" : ""}${badge.kind === "internal" ? " is-internal" : ""}`}
-                            key={`${message.id}:${badge.key}`}
-                          >
-                            {badge.label}
-                          </span>
-                        ))}
-                      </div>
-                    </article>
-                  ) : null}
-                </>
-              ) : null}
-            </Fragment>
-          );
-        })}
-        {liveConversationEntries.map((entry) => (
-          (() => {
-            const roleEvents = roleEventsByRole.get(entry.roleId) ?? [];
-            const latestEvent = entry.latestEvent ?? latestProcessEventByRole.get(entry.roleId) ?? null;
-            const freshestAt = String(latestEvent?.at ?? entry.agent?.updatedAt ?? "").trim();
-            const liveState = resolveLiveActivityState(freshestAt, liveNowMs);
-            const recentSourceCount = resolveRecentSourceCount(roleEvents);
-            const failureReason = resolveLatestFailureReason(roleEvents);
-            const lastSeenLabel = formatRelativeUpdateAge(freshestAt, {
-              justNow: t("time.justNow"),
-              minutesAgo: (value) => t("time.minutesAgo", { value }),
-              hoursAgo: (value) => t("time.hoursAgo", { value }),
-              daysAgo: (value) => t("time.daysAgo", { value }),
-            });
-            const stateLabel =
-              failureReason.includes("ROLE_KB_BOOTSTRAP 실패") && recentSourceCount === 0
-                ? t("tasks.live.state.degraded")
-                : liveState === "stalled"
-                ? t("tasks.live.state.stalled")
-                : liveState === "delayed"
-                  ? t("tasks.live.state.delayed")
-                  : t("tasks.live.state.active");
-            const currentWorkLabel =
-              failureReason.includes("ROLE_KB_BOOTSTRAP 실패") && recentSourceCount === 0 && String(latestEvent?.stage ?? "").trim().toLowerCase() === "codex"
-                ? t("tasks.live.currentWork.degraded")
-                : latestEvent?.message || entry.agent?.summary || t("tasks.live.working");
-            const displayCurrentWorkLabel = compactTasksTimelineCopy(currentWorkLabel);
-            const displayFailureReason = failureReason ? compactTasksTimelineCopy(failureReason) : "";
-            const nextAction = inferNextLiveAction({
-              stage: latestEvent?.stage,
-              activityState: liveState,
-              failureReason,
-              interrupted: (entry.agent?.summary || "").includes("중단"),
-              recentSourceCount,
-            });
-            const currentWorkDetail = describeLiveCurrentWork({
-              stage: latestEvent?.stage,
-              eventType: latestEvent?.type,
-              failureReason,
-              recentSourceCount,
-            });
-            const eventBadgeLabel = latestEvent?.type
-              ? displayProcessEventBadgeLabel(latestEvent.type, t)
-              : "";
-            return (
-              <article
-                aria-label={`${entry.label} 실시간 상태`}
-                className="tasks-thread-message-row is-assistant is-live-placeholder"
-                key={`live:${entry.roleId}`}
-              >
-                <div className="tasks-thread-live-header">
-                  <span className="tasks-thread-message-label">{entry.label}</span>
-                  {latestEvent?.stage ? (
-                    <span className="tasks-thread-live-stage-label">
-                      {`${t("tasks.live.metric.stage")}: ${displayProcessStage(String(latestEvent.stage ?? ""), t)}`}
-                    </span>
-                  ) : null}
-                  <span className={`tasks-thread-live-state is-${liveState}`}>
-                    {stateLabel}
-                  </span>
-                  {shouldShowLiveDots(latestEvent?.type ?? "", liveState) ? (
-                    <span aria-hidden="true" className="tasks-thread-live-dots">
-                      <span className="tasks-thread-live-dot" />
-                      <span className="tasks-thread-live-dot" />
-                      <span className="tasks-thread-live-dot" />
-                    </span>
-                  ) : null}
-                  {eventBadgeLabel ? (
-                    <span className="tasks-thread-live-event">
-                      {eventBadgeLabel}
-                    </span>
-                  ) : null}
-                </div>
-                {currentWorkDetail ? (
-                  <div className="tasks-thread-live-detail is-explanation">
-                    {currentWorkDetail}
-                  </div>
-                ) : null}
-                {liveState === "stalled" ? (
-                  <div className="tasks-thread-live-detail is-warning">
-                    {t("tasks.live.stalledWarning")}
-                  </div>
-                ) : null}
-                <div className="tasks-thread-live-detail">
-                  {t("tasks.live.lastUpdate", { value: lastSeenLabel })}
-                </div>
-                {entry.agent?.summary && latestEvent?.message && latestEvent.message !== entry.agent.summary ? (
-                  <div className="tasks-thread-live-detail">{entry.agent.summary}</div>
-                ) : null}
-                <dl className="tasks-thread-live-metrics">
-                  <div>
-                    <dt>{t("tasks.live.metric.stage")}</dt>
-                    <dd>{latestEvent?.stage ? displayProcessStage(String(latestEvent.stage ?? ""), t) : t("tasks.live.metric.pending")}</dd>
-                  </div>
-                  <div>
-                    <dt>{t("tasks.live.metric.currentWork")}</dt>
-                    <dd>
-                      {displayCurrentWorkLabel}
-                      {currentWorkDetail ? <span className="tasks-thread-live-metric-subcopy">{currentWorkDetail}</span> : null}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>{t("tasks.live.metric.sourcesSeen")}</dt>
-                    <dd>{recentSourceCount != null ? t("tasks.live.metric.sourcesSeenValue", { value: recentSourceCount }) : t("tasks.live.metric.pending")}</dd>
-                  </div>
-                  <div>
-                    <dt>{t("tasks.live.metric.failureReason")}</dt>
-                    <dd>{displayFailureReason || t("tasks.live.metric.none")}</dd>
-                  </div>
-                  <div>
-                    <dt>{t("tasks.live.metric.nextAction")}</dt>
-                    <dd>{nextAction}</dd>
-                  </div>
-                </dl>
-                {entry.agent?.latestArtifactPath ? (
-                  <div className="tasks-thread-message-meta">
-                    <small className="tasks-thread-message-artifact">{entry.agent.latestArtifactPath}</small>
-                    {entry.agent.updatedAt ? <small className="tasks-thread-message-time">{formatArtifactStamp(entry.agent.updatedAt)}</small> : null}
-                  </div>
-                ) : null}
-              </article>
-            );
-          })()
-        ))}
-        {interruptedTimelineEntries.map((entry) => {
+        <TimelineEntryRows
+          currentRunBadges={currentRunBadges}
+          entries={preparedCombinedTimelineEntries}
+        />
+        <LiveConversationRows
+          entries={preparedLiveConversationEntries}
+          runtimeHeartbeatAt={props.runtimeHeartbeatAt}
+          runtimeHeartbeatState={props.runtimeHeartbeatState}
+          runtimeServiceStatus={props.runtimeServiceStatus}
+          t={t}
+        />
+        {preparedInterruptedTimelineEntries.map((entry) => {
           if (entry.kind !== "single") {
             return null;
           }
-          const parsed = resolveTimelineMessage(entry.message, props.visibleAgentLabels);
-          const renderedBody = normalizeTasksTimelineCopy(parsed.body);
           return (
             <StaticTimelineMessageRow
-              artifactPath={parsed.artifactPath}
-              body={renderedBody}
-              conversationRef={props.conversationRef}
-              createdAt={parsed.createdAt}
+              artifactPath={entry.artifactPath}
+              body={entry.body}
+              createdAt={entry.createdAt}
               interruptionBadge
-              key={entry.message.id}
-              label={parsed.label}
-              messageRole={entry.message.role}
+              key={entry.id}
+              label={entry.label}
+              messageRole={entry.messageRole}
               renderMarkdown={false}
               showFail={false}
               showFinish={false}

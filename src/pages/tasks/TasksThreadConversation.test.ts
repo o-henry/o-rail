@@ -1,16 +1,19 @@
 import { describe, expect, it } from "vitest";
 import {
+  resolveLiveConversationEntries,
+} from "./TasksThreadConversation";
+import {
   buildTimelineRenderEntries,
   compactTasksTimelineCopy,
   isFailedThreadMessage,
   isFinishedThreadMessage,
   normalizeTasksTimelineCopy,
-  resolveLiveConversationEntries,
   resolveLatestRunParticipationBadges,
   resolveLatestRunParticipationBadgeRoleIds,
   resolveThreadParticipationBadgeRoleIds,
+  shouldKeepPrimaryTimelineMessage,
   shouldProgressivelyRevealMessage,
-} from "./TasksThreadConversation";
+} from "./taskThreadConversationHelpers";
 
 describe("isFinishedThreadMessage", () => {
   it("returns true for completed assistant result messages", () => {
@@ -72,6 +75,11 @@ describe("normalizeTasksTimelineCopy", () => {
   it("normalizes timeline-only system copy without touching markdown rendering paths", () => {
     expect(normalizeTasksTimelineCopy("Created UNITY ARCHITECT")).toBe("CREATED UNITY ARCHITECT");
     expect(normalizeTasksTimelineCopy("[Codex 실행] runtime attached")).toBe("[코덱스 실행] 실행 세션 연결됨");
+  });
+
+  it("hides raw engine completion tokens from timeline copy", () => {
+    expect(normalizeTasksTimelineCopy("item/completed")).toBe("");
+    expect(normalizeTasksTimelineCopy("turn/completed")).toBe("");
   });
 
   it("collapses internal prompt dump text in timeline logs", () => {
@@ -182,6 +190,64 @@ describe("buildTimelineRenderEntries", () => {
         ],
       }),
     ]);
+  });
+
+  it("keeps final non-assigned role results visible in the main surface", () => {
+    expect(buildTimelineRenderEntries([
+      {
+        id: "assistant-1",
+        threadId: "thread-1",
+        role: "assistant",
+        content: "최종 합성 결과입니다.",
+        eventKind: "agent_result",
+        sourceRoleId: "researcher",
+        createdAt: "2026-03-22T00:00:03Z",
+      },
+    ], ["game_designer", "unity_architect"])).toEqual([
+      expect.objectContaining({
+        kind: "single",
+        message: expect.objectContaining({ id: "assistant-1" }),
+      }),
+    ]);
+  });
+});
+
+describe("shouldKeepPrimaryTimelineMessage", () => {
+  it("keeps user prompts and terminal results on the main surface", () => {
+    expect(shouldKeepPrimaryTimelineMessage({
+      id: "user-1",
+      threadId: "thread-1",
+      role: "user",
+      content: "아이디어 10개 추천해줘",
+      createdAt: "2026-03-22T00:00:01Z",
+    })).toBe(true);
+    expect(shouldKeepPrimaryTimelineMessage({
+      id: "assistant-1",
+      threadId: "thread-1",
+      role: "assistant",
+      content: "1. 아이디어 A",
+      eventKind: "agent_result",
+      createdAt: "2026-03-22T00:00:02Z",
+    })).toBe(true);
+  });
+
+  it("drops intermediate setup and status chatter from the primary surface", () => {
+    expect(shouldKeepPrimaryTimelineMessage({
+      id: "assistant-2",
+      threadId: "thread-1",
+      role: "assistant",
+      content: "GAME DESIGNER: 아이디어를 정리하고 있습니다.",
+      eventKind: "agent_status",
+      createdAt: "2026-03-22T00:00:02Z",
+    })).toBe(false);
+    expect(shouldKeepPrimaryTimelineMessage({
+      id: "system-1",
+      threadId: "thread-1",
+      role: "system",
+      content: "Approval required",
+      eventKind: "handoff_required",
+      createdAt: "2026-03-22T00:00:03Z",
+    })).toBe(false);
   });
 });
 

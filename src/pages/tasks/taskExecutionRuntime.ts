@@ -13,6 +13,35 @@ import { deriveThreadWorkflow } from "./threadWorkflow";
 
 type InvokeFn = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
 
+function cloneThreadDetail(detail: ThreadDetail): ThreadDetail {
+  return {
+    ...detail,
+    thread: { ...detail.thread },
+    task: {
+      ...detail.task,
+      roles: detail.task.roles.map((role) => ({ ...role })),
+      prompts: detail.task.prompts.map((prompt) => ({ ...prompt })),
+    },
+    messages: detail.messages.map((message) => ({ ...message })),
+    agents: detail.agents.map((agent) => ({ ...agent })),
+    approvals: detail.approvals.map((approval) => ({
+      ...approval,
+      payload: approval.payload && typeof approval.payload === "object"
+        ? { ...approval.payload }
+        : approval.payload,
+    })),
+    agentDetail: detail.agentDetail,
+    artifacts: { ...detail.artifacts },
+    changedFiles: [...detail.changedFiles],
+    files: detail.files.map((file) => ({ ...file })),
+    workflow: {
+      ...detail.workflow,
+      stages: detail.workflow.stages.map((stage) => ({ ...stage })),
+    },
+    orchestration: detail.orchestration ? { ...detail.orchestration } : null,
+  };
+}
+
 function preferOrchestratorFirstPlan(params: {
   plan: TaskExecutionPlan;
   requestedRoleIds: string[];
@@ -71,7 +100,7 @@ export function deriveExecutionPlan(params: {
     ...basePlan,
     mode: "single",
     participantRoleIds: [basePlan.primaryRoleId],
-    useAdaptiveOrchestrator: false,
+    useAdaptiveOrchestrator: true,
   };
 }
 
@@ -95,7 +124,7 @@ export function dispatchTaskExecutionPlan(params: {
   publishAction: (action: AgenticAction) => void;
   preferredModels?: string[];
 }) {
-  if (params.plan.mode === "single") {
+  if (params.plan.mode === "single" && !params.plan.useAdaptiveOrchestrator) {
     const roleId = params.plan.participantRoleIds[0];
     const studioRoleId = getTaskAgentStudioRoleId(roleId);
     if (!studioRoleId) {
@@ -117,12 +146,11 @@ export function dispatchTaskExecutionPlan(params: {
 
   const rolePrompts = Object.fromEntries(
     params.plan.candidateRoleIds.flatMap((roleId) => {
-      const studioRoleId = getTaskAgentStudioRoleId(roleId);
       const prompt = params.plan.rolePrompts[roleId];
-      if (!studioRoleId || !prompt) {
+      if (!prompt) {
         return [];
       }
-      return [[studioRoleId, prompt] as const];
+      return [[roleId, prompt] as const];
     }),
   );
 
@@ -132,15 +160,15 @@ export function dispatchTaskExecutionPlan(params: {
         taskId: params.detail.task.taskId,
         prompt: params.prompt,
         sourceTab: "tasks-thread",
-        roleIds: params.plan.participantRoleIds.map((roleId) => getTaskAgentStudioRoleId(roleId)).filter(Boolean) as string[],
-        candidateRoleIds: params.plan.candidateRoleIds.map((roleId) => getTaskAgentStudioRoleId(roleId)).filter(Boolean) as string[],
-        requestedRoleIds: params.plan.requestedRoleIds.map((roleId) => getTaskAgentStudioRoleId(roleId)).filter(Boolean) as string[],
+        roleIds: [...params.plan.participantRoleIds],
+        candidateRoleIds: [...params.plan.candidateRoleIds],
+        requestedRoleIds: [...params.plan.requestedRoleIds],
         rolePrompts,
         intent: params.plan.intent,
         creativeMode: params.plan.creativeMode,
-        primaryRoleId: String(getTaskAgentStudioRoleId(params.plan.primaryRoleId) ?? "").trim(),
-        synthesisRoleId: String(getTaskAgentStudioRoleId(params.plan.synthesisRoleId) ?? "").trim(),
-        criticRoleId: String(getTaskAgentStudioRoleId(params.plan.criticRoleId ?? "") ?? "").trim() || undefined,
+        primaryRoleId: params.plan.primaryRoleId,
+        synthesisRoleId: params.plan.synthesisRoleId,
+        criticRoleId: params.plan.criticRoleId || undefined,
         cappedParticipantCount: params.plan.cappedParticipantCount,
         useAdaptiveOrchestrator: params.plan.useAdaptiveOrchestrator,
         preferredModels: params.preferredModels,
@@ -252,6 +280,69 @@ export function runBrowserExecutionPlan(params: {
   };
   detail.workflow = deriveThreadWorkflow(detail);
   return detail;
+}
+
+export function completeBrowserExecutionPlan(params: {
+  detail: ThreadDetail;
+  plan: TaskExecutionPlan;
+  timestamp: string;
+  finalSummary: string;
+  artifactPath?: string | null;
+}) {
+  const synthesisRoleId = params.plan.synthesisRoleId || params.plan.primaryRoleId;
+  params.detail.thread.status = "completed";
+  params.detail.thread.updatedAt = params.timestamp;
+  params.detail.task.status = "completed";
+  params.detail.task.updatedAt = params.timestamp;
+  params.detail.agents = params.detail.agents.map((agent) => (
+    params.plan.participantRoleIds.includes(agent.roleId)
+      ? { ...agent, status: "done", lastUpdatedAt: params.timestamp }
+      : agent
+  ));
+  params.detail.messages.push(
+    createBrowserMessage(
+      params.detail.thread.threadId,
+      "assistant",
+      params.finalSummary,
+      params.timestamp,
+      {
+        agentId: `${params.detail.thread.threadId}:${synthesisRoleId}`,
+        agentLabel: getTaskAgentLabel(synthesisRoleId),
+        sourceRoleId: synthesisRoleId,
+        eventKind: "agent_result",
+        artifactPath: String(params.artifactPath ?? "").trim() || undefined,
+      },
+    ),
+  );
+  if (params.artifactPath) {
+    params.detail.artifacts = {
+      ...params.detail.artifacts,
+      final: params.artifactPath,
+    };
+  }
+  params.detail.workflow = deriveThreadWorkflow(params.detail);
+  return params.detail;
+}
+
+export function buildOptimisticRuntimeExecutionDetail(params: {
+  detail: ThreadDetail;
+  prompt: string;
+  plan: TaskExecutionPlan;
+  timestamp: string;
+  createId: (prefix: string) => string;
+}): ThreadDetail {
+  const optimistic = cloneThreadDetail(params.detail);
+  optimistic.thread.status = "running";
+  optimistic.thread.updatedAt = params.timestamp;
+  optimistic.task.updatedAt = params.timestamp;
+  optimistic.task.status = "active";
+  return runBrowserExecutionPlan({
+    detail: optimistic,
+    prompt: params.prompt,
+    plan: params.plan,
+    timestamp: params.timestamp,
+    createId: params.createId,
+  });
 }
 
 export async function runRuntimeExecutionPlan(params: {

@@ -52,6 +52,16 @@ function includesPattern(prompt: string, patterns: RegExp[]): boolean {
   return patterns.some((pattern) => pattern.test(prompt));
 }
 
+const IDEATION_SIGNAL_PATTERNS = [
+  /\b(idea|ideas|brainstorm|concept|hook|pitch)\b/i,
+  /(아이디어|브레인스토밍|컨셉|후크)/i,
+];
+
+const RESEARCH_SIGNAL_PATTERNS = [
+  /\b(research|search|source|reference|crawl|scrape|trend|market|community|steam|metacritic|reddit)\b/i,
+  /(조사|검색|자료|레퍼런스|시장|트렌드|크롤링|스크래핑|커뮤니티|스팀|메타크리틱|레딧)/i,
+];
+
 export function inferTaskPromptIntent(prompt: string): TaskPromptIntent {
   const normalized = String(prompt ?? "").trim();
   if (!normalized) {
@@ -63,10 +73,10 @@ export function inferTaskPromptIntent(prompt: string): TaskPromptIntent {
   if (includesPattern(normalized, [/\b(test|qa|verify|validation|regression)\b/i, /(재현|검증|테스트|회귀)/i])) {
     return "validation";
   }
-  if (includesPattern(normalized, [/\b(idea|ideas|brainstorm|concept|hook|pitch)\b/i, /(아이디어|브레인스토밍|컨셉|후크)/i])) {
+  if (includesPattern(normalized, IDEATION_SIGNAL_PATTERNS)) {
     return "ideation";
   }
-  if (includesPattern(normalized, [/\b(research|search|source|reference|crawl|scrape|trend|market)\b/i, /(조사|검색|자료|레퍼런스|시장|트렌드|크롤링|스크래핑)/i])) {
+  if (includesPattern(normalized, RESEARCH_SIGNAL_PATTERNS)) {
     return "research";
   }
   if (includesPattern(normalized, [/\b(review|architecture|architect|compare|trade-?off)\b/i, /(검토|아키텍처|비교|트레이드오프|구조)/i])) {
@@ -82,13 +92,6 @@ function uniqueRoleIds(ids: Iterable<string>): TaskAgentPresetId[] {
   return orderedTaskAgentPresetIds(ids);
 }
 
-function clauseCount(prompt: string): number {
-  return String(prompt ?? "")
-    .split(/[\n.!?。！？]+/g)
-    .map((part) => part.trim())
-    .filter(Boolean).length;
-}
-
 function buildCandidateRoleIds(params: {
   enabledRoleIds: TaskAgentPresetId[];
   requestedRoleIds: TaskAgentPresetId[];
@@ -99,35 +102,6 @@ function buildCandidateRoleIds(params: {
     ...params.requestedRoleIds,
     ...params.enabledRoleIds,
   ]);
-}
-
-function shouldUseAdaptiveOrchestrator(params: {
-  intent: TaskPromptIntent;
-  prompt: string;
-  requestedRoleIds: TaskAgentPresetId[];
-  participantRoleIds: TaskAgentPresetId[];
-  creativeMode?: boolean;
-}): boolean {
-  const normalizedPrompt = String(params.prompt ?? "").trim();
-  if (params.intent === "ideation" && params.creativeMode) {
-    return true;
-  }
-  if (params.requestedRoleIds.length === 0) {
-    return true;
-  }
-  if (params.requestedRoleIds.length >= 2) {
-    return true;
-  }
-  if (/\b(fanout|team|debate|discuss|compare|cross-check)\b/i.test(normalizedPrompt)) {
-    return true;
-  }
-  if (/(서로|같이|토론|논의|교차검토|합의|선정|너희들끼리)/i.test(normalizedPrompt)) {
-    return true;
-  }
-  if (normalizedPrompt.length >= 220 || clauseCount(normalizedPrompt) >= 4) {
-    return params.participantRoleIds.length > 1 || params.intent === "planning" || params.intent === "review";
-  }
-  return false;
 }
 
 function desiredParticipantCount(params: {
@@ -372,15 +346,7 @@ export function orchestrateTaskPrompt(params: {
     requestedRoleIds,
     primaryRoleId: picked.primaryRoleId,
   });
-  const useAdaptiveOrchestrator = requestedRoleIds.length === 0
-    ? true
-      : shouldUseAdaptiveOrchestrator({
-        intent: fallbackIntent,
-        prompt: params.prompt,
-        requestedRoleIds,
-        participantRoleIds: picked.participantRoleIds,
-        creativeMode: params.creativeMode,
-      });
+  const useAdaptiveOrchestrator = true;
   const rolePrompts = Object.fromEntries(
     candidateRoleIds.map((roleId) => [
       roleId,

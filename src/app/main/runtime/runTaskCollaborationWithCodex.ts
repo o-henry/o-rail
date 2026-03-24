@@ -16,7 +16,7 @@ type CollaborationRoleRunResult = {
 type ExecuteRoleRun = (params: {
   roleId: string;
   prompt: string;
-  promptMode: "orchestrate" | "brief" | "critique" | "final";
+  promptMode: "direct" | "orchestrate" | "brief" | "critique" | "final";
   intent?: string;
   internal: boolean;
   model?: string;
@@ -31,6 +31,8 @@ type CollaborationProgress = {
   stage: "codex" | "critic" | "save";
   message: string;
 };
+
+type ParticipantPromptMode = "direct" | "brief";
 
 export type TaskCollaborationResult = {
   participantResults: CollaborationRoleRunResult[];
@@ -104,11 +106,40 @@ function resolveStageRuntime(params: {
   };
 }
 
+function resolveSharedWebRuntime(params: {
+  collectExternalWebResearch: boolean;
+  preferredModel?: string;
+  preferredModels?: string[];
+  preferredReasoning?: string;
+}): { model?: string; models?: string[]; reasoning?: string } | null {
+  if (!params.collectExternalWebResearch) {
+    return null;
+  }
+  if (hasPreferredWebRuntime({
+    preferredModel: params.preferredModel,
+    preferredModels: params.preferredModels,
+  })) {
+    return resolveStageRuntime({
+      preferredModel: params.preferredModel,
+      preferredModels: params.preferredModels,
+      preferredReasoning: params.preferredReasoning,
+      fallbackModel: BRIEF_MODEL,
+      fallbackReasoning: BRIEF_REASONING,
+      allowExternalWeb: true,
+    });
+  }
+  return {
+    model: "GPT-Web",
+    reasoning: String(params.preferredReasoning ?? "").trim() || "중간",
+  };
+}
+
 function buildSharedWebPerspectivePrompt(params: {
   prompt: string;
   intent?: string;
   contextSummary: string;
   creativeMode?: boolean;
+  researchFocus?: string;
 }): string {
   const isIdeation = String(params.intent ?? "").trim().toLowerCase() === "ideation";
   return [
@@ -121,6 +152,9 @@ function buildSharedWebPerspectivePrompt(params: {
     "# 압축된 스레드 컨텍스트",
     params.contextSummary.trim() || "없음",
     "",
+    params.researchFocus?.trim() ? "# 외부 조사 포커스" : "",
+    params.researchFocus?.trim() || "",
+    params.researchFocus?.trim() ? "" : "",
     "# 출력 규칙",
     "- 최종 사용자 답변을 그대로 작성하지 않는다.",
     "- 아래 요청에 대해 외부 AI 관점에서 참고할 만한 핵심 포인트만 정리한다.",
@@ -141,6 +175,139 @@ function clip(value: string, maxChars: number): string {
     return normalized;
   }
   return `${normalized.slice(0, Math.max(0, maxChars - 1)).trim()}…`;
+}
+
+function extractSectionBetweenMarkers(params: {
+  input: string;
+  startMarker: string;
+  endMarkers?: string[];
+}): string {
+  const source = String(params.input ?? "").trim();
+  if (!source) {
+    return "";
+  }
+  const startIndex = source.indexOf(params.startMarker);
+  if (startIndex < 0) {
+    return "";
+  }
+  const start = startIndex + params.startMarker.length;
+  const tail = source.slice(start);
+  const endIndex = (params.endMarkers ?? [])
+    .map((marker) => tail.indexOf(marker))
+    .filter((index) => index >= 0)
+    .sort((left, right) => left - right)[0];
+  return (endIndex == null ? tail : tail.slice(0, endIndex)).trim();
+}
+
+function extractRoleSpecificGoals(participantPrompt: string): string[] {
+  return extractSectionBetweenMarkers({
+    input: participantPrompt,
+    startMarker: "# ROLE-SPECIFIC GOALS",
+    endMarkers: ["# USER REQUEST"],
+  })
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith("-"))
+    .map((line) => line.replace(/^-+\s*/, "").trim())
+    .filter(Boolean)
+    .slice(0, 6);
+}
+
+function extractAssignedRoleLabel(participantPrompt: string): string {
+  const section = extractSectionBetweenMarkers({
+    input: participantPrompt,
+    startMarker: "# ORCHESTRATION",
+    endMarkers: ["# ROLE-SPECIFIC GOALS"],
+  });
+  const roleLine = section
+    .split("\n")
+    .map((line) => line.trim())
+    .find((line) => line.startsWith("당신의 역할:"));
+  return clip(roleLine?.slice("당신의 역할:".length).trim() || "", 120);
+}
+
+function buildCompactContextSummary(params: {
+  contextSummary: string;
+  intent?: string;
+  directPass?: boolean;
+}): string {
+  const normalized = String(params.contextSummary ?? "").trim();
+  if (!normalized) {
+    return "";
+  }
+  const limit = params.directPass && String(params.intent ?? "").trim().toLowerCase() === "ideation"
+    ? 500
+    : 1200;
+  return clip(normalized, limit);
+}
+
+function takeBulletLines(section: string, maxLines: number): string[] {
+  return String(section ?? "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith("-"))
+    .map((line) => line.slice(1).trim())
+    .filter(Boolean)
+    .slice(0, maxLines);
+}
+
+function buildIdeationDirectReferenceContext(contextSummary: string): string {
+  const normalized = String(contextSummary ?? "").trim();
+  if (!normalized) {
+    return "";
+  }
+  const sections = [
+    {
+      title: "외부 관점 핵심",
+      rows: takeBulletLines(
+        extractSectionBetweenMarkers({
+          input: normalized,
+          startMarker: "## claims",
+          endMarkers: ["## ideas", "## risks", "## disagreements", "## novelty_signals", "# 외부 웹 AI 원문"],
+        }),
+        3,
+      ),
+    },
+    {
+      title: "후보 아이디어 힌트",
+      rows: takeBulletLines(
+        extractSectionBetweenMarkers({
+          input: normalized,
+          startMarker: "## ideas",
+          endMarkers: ["## risks", "## disagreements", "## novelty_signals", "# 외부 웹 AI 원문"],
+        }),
+        4,
+      ),
+    },
+    {
+      title: "차별화 신호",
+      rows: takeBulletLines(
+        extractSectionBetweenMarkers({
+          input: normalized,
+          startMarker: "## novelty_signals",
+          endMarkers: ["# 외부 웹 AI 원문"],
+        }),
+        3,
+      ),
+    },
+    {
+      title: "주의할 함정",
+      rows: takeBulletLines(
+        extractSectionBetweenMarkers({
+          input: normalized,
+          startMarker: "## risks",
+          endMarkers: ["## disagreements", "## novelty_signals", "# 외부 웹 AI 원문"],
+        }),
+        3,
+      ),
+    },
+  ].filter((section) => section.rows.length > 0);
+  if (sections.length === 0) {
+    return "";
+  }
+  return sections
+    .map((section) => [`### ${section.title}`, ...section.rows.map((row) => `- ${row}`)].join("\n"))
+    .join("\n\n");
 }
 
 function buildRawExternalWebPerspective(summary: string): string {
@@ -164,6 +331,7 @@ function buildBriefPrompt(params: {
   creativeMode?: boolean;
   participantPrompt: string;
   contextSummary: string;
+  priorRoleSummaries?: CollaborationRoleRunResult[];
   participantRoleIds: string[];
   cappedParticipantCount: boolean;
 }): string {
@@ -179,6 +347,11 @@ function buildBriefPrompt(params: {
     "# 역할별 배정",
     params.participantPrompt.trim() || params.prompt.trim(),
     "",
+    params.priorRoleSummaries?.length ? "# 이전 역할 결과" : "",
+    params.priorRoleSummaries?.length
+      ? params.priorRoleSummaries.map(renderRoleSummary).join("\n\n")
+      : "",
+    params.priorRoleSummaries?.length ? "" : "",
     "# 압축된 스레드 컨텍스트",
     params.contextSummary.trim() || "없음",
     "",
@@ -200,6 +373,66 @@ function buildBriefPrompt(params: {
     "- 불필요한 서론 없이 6개 이하 bullet로 답한다.",
     "- 추정과 사실을 구분한다.",
   ].join("\n");
+}
+
+function buildDirectParticipantPrompt(params: {
+  prompt: string;
+  intent?: string;
+  creativeMode?: boolean;
+  participantPrompt: string;
+  contextSummary: string;
+  priorRoleSummaries?: CollaborationRoleRunResult[];
+  participantRoleIds: string[];
+  cappedParticipantCount: boolean;
+}): string {
+  const isIdeation = String(params.intent ?? "").trim().toLowerCase() === "ideation";
+  const creativeMode = Boolean(params.creativeMode) && isIdeation;
+  const roleLabel = extractAssignedRoleLabel(params.participantPrompt);
+  const roleSpecificGoals = extractRoleSpecificGoals(params.participantPrompt);
+  const directReferenceContext = isIdeation
+    ? buildIdeationDirectReferenceContext(params.contextSummary)
+    : buildCompactContextSummary({
+        contextSummary: params.contextSummary,
+        intent: params.intent,
+        directPass: true,
+      });
+  return [
+    "# 작업 모드",
+    "역할별 직접 응답",
+    "",
+    roleLabel ? "# 역할" : "",
+    roleLabel || "",
+    roleLabel ? "" : "",
+    "# 사용자 요청",
+    params.prompt.trim(),
+    "",
+    roleSpecificGoals.length > 0 ? "# 역할별 목표" : "",
+    ...roleSpecificGoals.map((goal) => `- ${goal}`),
+    roleSpecificGoals.length > 0 ? "" : "",
+    params.priorRoleSummaries?.length ? "# 이전 역할 결과" : "",
+    params.priorRoleSummaries?.length
+      ? params.priorRoleSummaries.map(renderRoleSummary).join("\n\n")
+      : "",
+    params.priorRoleSummaries?.length ? "" : "",
+    directReferenceContext ? "# 외부 참고 요약" : "",
+    directReferenceContext || "",
+    directReferenceContext ? "" : "",
+    "# 협업 규칙",
+    `- 참여 에이전트 수: ${params.participantRoleIds.length}${params.cappedParticipantCount ? " (상한 적용)" : ""}`,
+    "- 내부 브리프나 handoff 문서 형식으로 답하지 않는다.",
+    "- 자기 역할 관점에서 바로 최종 합성에 쓸 수 있는 실질 재료만 남긴다.",
+    ...(creativeMode
+      ? [
+          "- Creative Mode가 켜져 있다. 가장 무난한 평균 답을 경계하고, 기억에 남는 후보와 탈락 이유를 우선 남긴다.",
+          "- 상투적인 조합, 대표작 짜깁기, 설명만 화려한 후보는 스스로 제외한다.",
+        ]
+      : []),
+    isIdeation
+      ? "- 아이디어 후보, 훅, 핵심 루프, 리텐션 포인트, 아류작 냄새가 약한 이유를 우선 남긴다."
+      : "- 핵심 사실, 리스크, 구현 포인트, 놓치면 안 되는 검증 항목만 남긴다.",
+    "- 불필요한 서론 없이 6개 이하 bullet 또는 짧은 문단으로 답한다.",
+    "- 추정과 사실을 구분한다.",
+  ].filter(Boolean).join("\n");
 }
 
 function buildCritiquePrompt(params: {
@@ -246,6 +479,11 @@ function buildFinalPrompt(params: {
 }): string {
   const isIdeation = String(params.intent ?? "").trim().toLowerCase() === "ideation";
   const creativeMode = Boolean(params.creativeMode) && isIdeation;
+  const compactContextSummary = buildCompactContextSummary({
+    contextSummary: params.contextSummary,
+    intent: params.intent,
+    directPass: isIdeation,
+  });
   return [
     "# 작업 모드",
     "최종 합성 답변",
@@ -254,7 +492,7 @@ function buildFinalPrompt(params: {
     params.prompt.trim(),
     "",
     "# 압축된 스레드 컨텍스트",
-    params.contextSummary.trim() || "없음",
+    compactContextSummary || "없음",
     "",
     "# 참여 에이전트 브리프",
     params.roleSummaries.map(renderRoleSummary).join("\n\n"),
@@ -286,6 +524,54 @@ function buildFinalPrompt(params: {
       ? "- 각 아이디어마다 한 줄 훅, 핵심 루프, 왜 지금 먹히는지, 왜 아류작 냄새가 약한지까지 포함한다."
       : "",
     "- 일부 참여 에이전트가 실패했다면 그 한계를 숨기지 말고 답변에 짧게 명시한다.",
+  ].filter(Boolean).join("\n");
+}
+
+function buildFallbackFinalPrompt(params: {
+  prompt: string;
+  intent?: string;
+  creativeMode?: boolean;
+  contextSummary: string;
+  failedRoleIds?: string[];
+}): string {
+  const isIdeation = String(params.intent ?? "").trim().toLowerCase() === "ideation";
+  const creativeMode = Boolean(params.creativeMode) && isIdeation;
+  const compactContextSummary = buildCompactContextSummary({
+    contextSummary: params.contextSummary,
+    intent: params.intent,
+    directPass: isIdeation,
+  });
+  return [
+    "# 작업 모드",
+    "최종 답변 직접 생성",
+    "",
+    "# 사용자 요청",
+    params.prompt.trim(),
+    "",
+    "# 압축된 스레드 컨텍스트",
+    compactContextSummary || "없음",
+    params.failedRoleIds?.length
+      ? ["", "# 실패한 참여 에이전트", params.failedRoleIds.map((roleId) => `- ${roleId}`).join("\n")].join("\n")
+      : "",
+    "",
+    "# 출력 규칙",
+    "- 한국어로 최종 답변을 작성한다.",
+    ...(creativeMode
+      ? [
+          "- Creative Mode가 켜져 있다. 무난한 평균 답보다 기억에 남는 후보를 우선한다.",
+          "- 상투적인 조합, 대표작 짜깁기, 설명만 화려한 후보는 스스로 제외한다.",
+        ]
+      : []),
+    isIdeation
+      ? "- 지금 바로 사용자에게 전달할 아이디어 답변만 작성한다."
+      : "- 필요한 경우 핵심 리스크와 다음 행동을 짧게 정리한다.",
+    isIdeation
+      ? "- 사용자 요청에 숫자 요구가 있으면 그 수를 충족하도록 번호 목록으로 제시한다."
+      : "",
+    isIdeation
+      ? "- 각 아이디어마다 한 줄 훅, 핵심 루프, 왜 지금 먹히는지, 왜 아류작 냄새가 약한지까지 포함한다."
+      : "",
+    "- 내부 브리프, handoff, 파일 수정 보고, 메타데이터를 답변에 섞지 않는다.",
   ].filter(Boolean).join("\n");
 }
 
@@ -322,6 +608,8 @@ function isUserInterruptedError(error: unknown): boolean {
 function isRetryableStageError(error: unknown): boolean {
   const text = normalizeErrorText(error);
   return (
+    text.includes("readable response") ||
+    text.includes("응답 본문이 없었습니다") ||
     text.includes("did not complete") ||
     text.includes("not materialized yet") ||
     text.includes("includeturns is unavailable") ||
@@ -336,11 +624,29 @@ function isRetryableStageError(error: unknown): boolean {
   );
 }
 
+function isUnreadableResponseError(error: unknown): boolean {
+  const text = normalizeErrorText(error);
+  return (
+    text.includes("readable response") ||
+    text.includes("응답 본문이 없었습니다") ||
+    text.includes("last_agent_message") ||
+    text.includes("usermessage")
+  );
+}
+
+function shouldPreferDirectParticipantPass(params: {
+  intent?: string;
+  creativeMode?: boolean;
+}): boolean {
+  const intent = String(params.intent ?? "").trim().toLowerCase();
+  return intent === "ideation" || Boolean(params.creativeMode);
+}
+
 async function executeRoleRunWithRetry(params: {
   executeRoleRun: ExecuteRoleRun;
   roleId: string;
   prompt: string;
-  promptMode: "orchestrate" | "brief" | "critique" | "final";
+  promptMode: "direct" | "orchestrate" | "brief" | "critique" | "final";
   intent?: string;
   internal: boolean;
   model?: string;
@@ -371,7 +677,11 @@ async function executeRoleRunWithRetry(params: {
         throw error instanceof Error ? error : new Error(String(error ?? "cancelled"));
       }
       lastError = error;
-      const canRetry = attempt < params.maxAttempts && isRetryableStageError(error);
+      const unreadableResponse = isUnreadableResponseError(error);
+      const allowUnreadableRetry =
+        unreadableResponse &&
+        (params.promptMode === "direct" || params.promptMode === "final" || params.promptMode === "brief");
+      const canRetry = attempt < params.maxAttempts && (allowUnreadableRetry || isRetryableStageError(error));
       if (canRetry) {
         params.onRetryMessage?.(`${params.roleId} ${params.promptMode} 실패: ${String(error ?? "unknown error")} (재시도 ${attempt}/${params.maxAttempts - 1})`);
         continue;
@@ -407,6 +717,10 @@ export async function runTaskCollaborationWithCodex(params: {
     orchestrationSummary: string;
   }) => void;
 }): Promise<TaskCollaborationResult> {
+  const preferDirectParticipantPass = shouldPreferDirectParticipantPass({
+    intent: params.intent,
+    creativeMode: params.creativeMode,
+  });
   let participantRoleIds = [...params.participantRoleIds];
   let synthesisRoleId = params.synthesisRoleId;
   let criticRoleId = params.criticRoleId;
@@ -415,67 +729,11 @@ export async function runTaskCollaborationWithCodex(params: {
   const failedRoleIds: string[] = [];
   let resolvedOrchestrationSummary = "";
   let enrichedContextSummary = params.contextSummary;
-
-  if (hasPreferredWebRuntime({
+  let collectExternalWebResearch = hasPreferredWebRuntime({
     preferredModel: params.preferredModel,
     preferredModels: params.preferredModels,
-  })) {
-    const sharedWebRuntime = resolveStageRuntime({
-      preferredModel: params.preferredModel,
-      preferredModels: params.preferredModels,
-      preferredReasoning: params.preferredReasoning,
-      fallbackModel: BRIEF_MODEL,
-      fallbackReasoning: BRIEF_REASONING,
-      allowExternalWeb: true,
-    });
-    params.onProgress?.({
-      roleId: synthesisRoleId,
-      stage: "codex",
-      message: "외부 웹 AI 관점을 한 번 수집합니다.",
-    });
-    try {
-      const sharedWebResult = await executeRoleRunWithRetry({
-        executeRoleRun: params.executeRoleRun,
-        roleId: synthesisRoleId,
-        prompt: buildSharedWebPerspectivePrompt({
-          prompt: params.prompt,
-          intent: params.intent,
-          contextSummary: params.contextSummary,
-          creativeMode: params.creativeMode,
-        }),
-        promptMode: "brief",
-        intent: params.intent,
-        internal: true,
-        model: sharedWebRuntime.model,
-        models: sharedWebRuntime.models,
-        reasoning: sharedWebRuntime.reasoning,
-        outputArtifactName: "shared_web_perspective.md",
-        includeRoleKnowledge: false,
-        maxAttempts: BRIEF_MAX_ATTEMPTS,
-        onRetryMessage: (message) => params.onProgress?.({
-          roleId: synthesisRoleId,
-          stage: "codex",
-          message,
-        }),
-      });
-      const structuredWebPerspective = buildStructuredExternalWebPerspective(sharedWebResult.summary);
-      const rawWebPerspective = buildRawExternalWebPerspective(sharedWebResult.summary);
-      enrichedContextSummary = [
-        params.contextSummary.trim(),
-        structuredWebPerspective,
-        rawWebPerspective,
-      ].filter(Boolean).join("\n\n");
-    } catch (error) {
-      if (isUserInterruptedError(error)) {
-        throw error;
-      }
-      params.onProgress?.({
-        roleId: synthesisRoleId,
-        stage: "codex",
-        message: `외부 웹 AI 관점 수집 실패, 내부 협업만으로 계속 진행합니다: ${String(error ?? "unknown error")}`,
-      });
-    }
-  }
+  });
+  let externalWebResearchFocus = "";
 
   if (params.useAdaptiveOrchestrator) {
     const allowedRoleIds = [...new Set((params.candidateRoleIds ?? participantRoleIds).map((roleId) => String(roleId ?? "").trim()).filter(Boolean))];
@@ -535,6 +793,8 @@ export async function runTaskCollaborationWithCodex(params: {
           participantRoleIds = adaptivePlan.participantRoleIds;
           synthesisRoleId = adaptivePlan.primaryRoleId;
           criticRoleId = adaptivePlan.criticRoleId;
+          collectExternalWebResearch = adaptivePlan.collectExternalWebResearch || collectExternalWebResearch;
+          externalWebResearchFocus = adaptivePlan.externalWebResearchFocus || externalWebResearchFocus;
           participantPrompts = {
             ...participantPrompts,
             ...adaptivePlan.rolePrompts,
@@ -566,42 +826,112 @@ export async function runTaskCollaborationWithCodex(params: {
     orchestrationSummary: resolvedOrchestrationSummary || `${participantRoleIds.join(", ")} assigned`,
   });
 
+  const sharedWebRuntime = resolveSharedWebRuntime({
+    collectExternalWebResearch,
+    preferredModel: params.preferredModel,
+    preferredModels: params.preferredModels,
+    preferredReasoning: params.preferredReasoning,
+  });
+  if (sharedWebRuntime) {
+    params.onProgress?.({
+      roleId: synthesisRoleId,
+      stage: "codex",
+      message: "오케스트레이터 결정 이후 외부 웹 AI 관점을 한 번 수집합니다.",
+    });
+    try {
+      const sharedWebResult = await executeRoleRunWithRetry({
+        executeRoleRun: params.executeRoleRun,
+        roleId: synthesisRoleId,
+        prompt: buildSharedWebPerspectivePrompt({
+          prompt: params.prompt,
+          intent: params.intent,
+          contextSummary: enrichedContextSummary,
+          creativeMode: params.creativeMode,
+          researchFocus: externalWebResearchFocus,
+        }),
+        promptMode: "brief",
+        intent: params.intent,
+        internal: true,
+        model: sharedWebRuntime.model,
+        models: sharedWebRuntime.models,
+        reasoning: sharedWebRuntime.reasoning,
+        outputArtifactName: "shared_web_perspective.md",
+        includeRoleKnowledge: false,
+        maxAttempts: BRIEF_MAX_ATTEMPTS,
+        onRetryMessage: (message) => params.onProgress?.({
+          roleId: synthesisRoleId,
+          stage: "codex",
+          message,
+        }),
+      });
+      const structuredWebPerspective = buildStructuredExternalWebPerspective(sharedWebResult.summary);
+      const rawWebPerspective = buildRawExternalWebPerspective(sharedWebResult.summary);
+      enrichedContextSummary = [
+        enrichedContextSummary.trim(),
+        structuredWebPerspective,
+        rawWebPerspective,
+      ].filter(Boolean).join("\n\n");
+    } catch (error) {
+      if (isUserInterruptedError(error)) {
+        throw error;
+      }
+      params.onProgress?.({
+        roleId: synthesisRoleId,
+        stage: "codex",
+        message: `외부 웹 AI 관점 수집 실패, 내부 협업만으로 계속 진행합니다: ${String(error ?? "unknown error")}`,
+      });
+    }
+  }
+
   for (const roleId of participantRoleIds) {
     const participantPrompt = String(participantPrompts[roleId] ?? params.prompt).trim();
-    const briefRuntime = resolveStageRuntime({
+    const participantPromptMode: ParticipantPromptMode = preferDirectParticipantPass ? "direct" : "brief";
+    const participantRuntime = resolveStageRuntime({
       preferredModel: params.preferredModel,
       preferredModels: params.preferredModels,
       preferredReasoning: params.preferredReasoning,
-      fallbackModel: BRIEF_MODEL,
-      fallbackReasoning: BRIEF_REASONING,
+      fallbackModel: participantPromptMode === "direct" ? FINAL_MODEL : BRIEF_MODEL,
+      fallbackReasoning: participantPromptMode === "direct" ? FINAL_REASONING : BRIEF_REASONING,
       allowExternalWeb: false,
     });
     params.onProgress?.({
       roleId,
       stage: "codex",
-      message: `${roleId} 브리프 생성`,
+      message: participantPromptMode === "direct" ? `${roleId} 역할 응답 생성` : `${roleId} 브리프 생성`,
     });
     let lastError: unknown = null;
     try {
       participantResults.push(await executeRoleRunWithRetry({
         executeRoleRun: params.executeRoleRun,
         roleId,
-          prompt: buildBriefPrompt({
-            prompt: params.prompt,
-            intent: params.intent,
-            creativeMode: params.creativeMode,
-            participantPrompt,
-            contextSummary: enrichedContextSummary,
-            participantRoleIds,
-            cappedParticipantCount: params.cappedParticipantCount,
-          }),
-        promptMode: "brief",
+        prompt: participantPromptMode === "direct"
+          ? buildDirectParticipantPrompt({
+              prompt: params.prompt,
+              intent: params.intent,
+              creativeMode: params.creativeMode,
+              participantPrompt,
+              contextSummary: enrichedContextSummary,
+              priorRoleSummaries: participantResults,
+              participantRoleIds,
+              cappedParticipantCount: params.cappedParticipantCount,
+            })
+          : buildBriefPrompt({
+              prompt: params.prompt,
+              intent: params.intent,
+              creativeMode: params.creativeMode,
+              participantPrompt,
+              contextSummary: enrichedContextSummary,
+              priorRoleSummaries: participantResults,
+              participantRoleIds,
+              cappedParticipantCount: params.cappedParticipantCount,
+            }),
+        promptMode: participantPromptMode,
         intent: params.intent,
         internal: true,
-        model: briefRuntime.model,
-        models: briefRuntime.models,
-        reasoning: briefRuntime.reasoning,
-        outputArtifactName: "discussion_brief.md",
+        model: participantRuntime.model,
+        models: participantRuntime.models,
+        reasoning: participantRuntime.reasoning,
+        outputArtifactName: participantPromptMode === "direct" ? "discussion_direct.md" : "discussion_brief.md",
         includeRoleKnowledge: false,
         maxAttempts: BRIEF_MAX_ATTEMPTS,
         onRetryMessage: (message) => params.onProgress?.({
@@ -616,11 +946,60 @@ export async function runTaskCollaborationWithCodex(params: {
         throw error;
       }
       lastError = error;
-      params.onProgress?.({
-        roleId,
-        stage: "codex",
-        message: `${roleId} 브리프 실패: ${formatCollaborationErrorMessage(error)}`,
-      });
+      if (!preferDirectParticipantPass && isUnreadableResponseError(error)) {
+        params.onProgress?.({
+          roleId,
+          stage: "codex",
+          message: `${roleId} 브리프 실패, 직접 역할 응답으로 우회합니다.`,
+        });
+        try {
+          participantResults.push(await executeRoleRunWithRetry({
+            executeRoleRun: params.executeRoleRun,
+            roleId,
+            prompt: buildDirectParticipantPrompt({
+              prompt: params.prompt,
+              intent: params.intent,
+              creativeMode: params.creativeMode,
+              participantPrompt,
+              contextSummary: enrichedContextSummary,
+              priorRoleSummaries: participantResults,
+              participantRoleIds,
+              cappedParticipantCount: params.cappedParticipantCount,
+            }),
+            promptMode: "direct",
+            intent: params.intent,
+            internal: true,
+            model: participantRuntime.model,
+            models: participantRuntime.models,
+            reasoning: participantRuntime.reasoning,
+            outputArtifactName: "discussion_direct.md",
+            includeRoleKnowledge: false,
+            maxAttempts: BRIEF_MAX_ATTEMPTS,
+            onRetryMessage: (message) => params.onProgress?.({
+              roleId,
+              stage: "codex",
+              message,
+            }),
+          }));
+          lastError = null;
+        } catch (fallbackError) {
+          if (isUserInterruptedError(fallbackError)) {
+            throw fallbackError;
+          }
+          lastError = fallbackError;
+          params.onProgress?.({
+            roleId,
+            stage: "codex",
+            message: `${roleId} 직접 역할 응답도 실패: ${formatCollaborationErrorMessage(fallbackError)}`,
+          });
+        }
+      } else {
+        params.onProgress?.({
+          roleId,
+          stage: "codex",
+          message: `${roleId} ${participantPromptMode === "direct" ? "역할 응답" : "브리프"} 실패: ${formatCollaborationErrorMessage(error)}`,
+        });
+      }
     }
     if (lastError) {
       failedRoleIds.push(roleId);
@@ -629,7 +1008,7 @@ export async function runTaskCollaborationWithCodex(params: {
   }
 
   let criticResult: CollaborationRoleRunResult | undefined;
-  if (criticRoleId && criticRoleId !== synthesisRoleId && participantResults.length > 1) {
+  if (!preferDirectParticipantPass && criticRoleId && criticRoleId !== synthesisRoleId && participantResults.length > 1) {
     const critiqueRuntime = resolveStageRuntime({
       preferredModel: params.preferredModel,
       preferredModels: params.preferredModels,
@@ -694,7 +1073,46 @@ export async function runTaskCollaborationWithCodex(params: {
     allowExternalWeb: false,
   });
   if (participantResults.length === 0) {
-    throw new Error("모든 내부 브리프가 실패해 최종 합성을 진행할 수 없습니다.");
+    params.onProgress?.({
+      roleId: synthesisRoleId,
+      stage: "save",
+      message: "참여 역할 결과가 없어, 원 질문과 수집된 컨텍스트만으로 최종 답변을 직접 생성합니다.",
+    });
+    const fallbackFinalResult = await executeRoleRunWithRetry({
+      executeRoleRun: params.executeRoleRun,
+      roleId: synthesisRoleId,
+      prompt: buildFallbackFinalPrompt({
+        prompt: params.prompt,
+        intent: params.intent,
+        creativeMode: params.creativeMode,
+        contextSummary: enrichedContextSummary,
+        failedRoleIds,
+      }),
+      promptMode: "final",
+      intent: params.intent,
+      internal: false,
+      model: finalRuntime.model,
+      models: finalRuntime.models,
+      reasoning: finalRuntime.reasoning,
+      outputArtifactName: "final_response.md",
+      includeRoleKnowledge: false,
+      maxAttempts: FINAL_MAX_ATTEMPTS,
+      onRetryMessage: (message) => params.onProgress?.({
+        roleId: synthesisRoleId,
+        stage: "save",
+        message,
+      }),
+    });
+    if (!String(fallbackFinalResult.summary ?? "").trim()) {
+      throw new Error(preferDirectParticipantPass
+        ? "모든 역할 응답이 실패해 최종 답변을 생성하지 못했습니다."
+        : "모든 내부 브리프가 실패해 최종 답변을 생성하지 못했습니다.");
+    }
+    return {
+      participantResults,
+      criticResult,
+      finalResult: fallbackFinalResult,
+    };
   }
   const finalResult = await executeRoleRunWithRetry({
     executeRoleRun: params.executeRoleRun,
@@ -715,7 +1133,7 @@ export async function runTaskCollaborationWithCodex(params: {
     models: finalRuntime.models,
     reasoning: finalRuntime.reasoning,
     outputArtifactName: "final_response.md",
-    includeRoleKnowledge: true,
+    includeRoleKnowledge: String(params.intent ?? "").trim().toLowerCase() !== "ideation",
     maxAttempts: FINAL_MAX_ATTEMPTS,
     onRetryMessage: (message) => params.onProgress?.({
       roleId: synthesisRoleId,

@@ -1,6 +1,7 @@
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   blockCoordinationRun,
+  completeCoordinationRun,
   completeDelegateTask,
   createCoordinationState,
   createRuntimeLedgerEvent,
@@ -34,12 +35,13 @@ import {
   stripCoordinationModeTags,
 } from "./taskAgentPresets";
 import {
+  buildOptimisticRuntimeExecutionDetail,
+  completeBrowserExecutionPlan,
   dispatchTaskExecutionPlan,
   deriveExecutionPlan,
   runBrowserExecutionPlan,
   runRuntimeExecutionPlan,
 } from "./taskExecutionRuntime";
-import { inferTaskPromptIntent } from "./taskPromptOrchestration";
 import {
   approveCoordinationPlanAction,
   cancelCoordinationAction,
@@ -81,6 +83,7 @@ import {
   defaultSelectedFile,
   isPlaceholderTitle,
   shouldAutoReplaceTitle,
+  toThreadListItem,
   truncateTitle,
   withDerivedWorkflow,
 } from "./taskThreadBrowserState";
@@ -119,8 +122,9 @@ import { findRuntimeModelOption } from "../../features/workflow/runtimeModelOpti
 import { getWebProviderFromExecutor } from "../../features/workflow/domain";
 
 type InvokeFn = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
-const LIVE_ROLE_EVENT_FLUSH_MS = 120;
-const LIVE_ROLE_EVENT_REFRESH_DEBOUNCE_MS = 220;
+const LIVE_THREAD_POLL_IDLE_MS = 8_000;
+const LIVE_THREAD_POLL_INTERVAL_MS = 4_000;
+const TASK_ACTION_SLOW_MS = 900;
 
 type Params = {
   cwd: string;
@@ -192,6 +196,31 @@ export function normalizeResolvedTaskRoleIds(roleIds: string[]): ThreadRoleId[] 
   )];
 }
 
+export function shouldPollCurrentThreadSilently(params: {
+  hasLiveAgents: boolean;
+  coordinationStatus: string | null | undefined;
+  activeThreadId: string | null | undefined;
+  hasTauriRuntime: boolean;
+  cwd: string | null | undefined;
+  freshestLiveSignalAt?: string | null | undefined;
+  nowMs?: number;
+}): boolean {
+  if (
+    !params.hasLiveAgents
+    || String(params.coordinationStatus ?? "").trim().toLowerCase() !== "running"
+    || !String(params.activeThreadId ?? "").trim()
+    || !params.hasTauriRuntime
+    || !String(params.cwd ?? "").trim()
+  ) {
+    return false;
+  }
+  const parsed = Date.parse(String(params.freshestLiveSignalAt ?? "").trim());
+  if (!Number.isFinite(parsed)) {
+    return true;
+  }
+  return (params.nowMs ?? Date.now()) - parsed >= LIVE_THREAD_POLL_IDLE_MS;
+}
+
 function formatRuntimeProviderBadgeLabel(raw: string): string {
   const normalized = String(raw ?? "").trim().toLowerCase();
   if (!normalized) {
@@ -230,8 +259,44 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 
+function appendTimedWorkspaceEvent(params: {
+  appendWorkspaceEvent: Params["appendWorkspaceEvent"];
+  source: string;
+  label: string;
+  startedAt: number;
+}) {
+  const durationMs = Math.max(0, Math.round(performance.now() - params.startedAt));
+  params.appendWorkspaceEvent({
+    source: params.source,
+    actor: "system",
+    level: durationMs >= TASK_ACTION_SLOW_MS ? "error" : "info",
+    message: `${params.label}: ${durationMs}ms`,
+  });
+}
+
 function nextId(prefix: string): string {
   return `${prefix}_${createRandomIdSuffix(8)}_${Date.now().toString(36)}`;
+}
+
+function shouldUseTasksE2EMockRuntime(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  const params = new URLSearchParams(window.location.search);
+  const raw = String(params.get("tasks_mock_runtime") ?? "").trim().toLowerCase();
+  return raw === "1" || raw === "true" || raw === "yes";
+}
+
+function buildTasksE2EMockFinalSummary(prompt: string): string {
+  const topic = truncateTitle(prompt).replace(/\s+/g, " ").trim();
+  return [
+    "1. 감정선 낚시터",
+    `짧은 훅: ${topic || "질문"}에 맞춰, 플레이어 감정 곡선을 수집해 다음 라운드 규칙이 바뀌는 캐주얼 루프입니다.`,
+    "2. 30초 유령 상점",
+    "짧은 훅: 매 판 30초 동안만 열리는 상점을 운영하며, 플레이 로그로 다음 손님 욕망이 진화하는 아케이드 운영 게임입니다.",
+    "3. 반응형 레벨 큐레이터",
+    "짧은 훅: 직전 플레이 실패 원인을 학습해 다음 스테이지 구조가 계속 재편되는 원터치 액션 실험입니다.",
+  ].join("\n");
 }
 
 export const COMPOSER_PROVIDER_MODEL_VALUES = [
@@ -264,112 +329,6 @@ export function appendComposerProviderModel(
   nextValue: string | null | undefined,
 ): ComposerProviderModel[] {
   return normalizeComposerProviderModels([...current, nextValue]);
-}
-
-export function shouldAutoUseExternalResearchProvider(params: {
-  currentModel: string;
-  prompt: string;
-  taggedRoles: ThreadRoleId[];
-}): boolean {
-  const currentExecutor = findRuntimeModelOption(params.currentModel).executor;
-  if (currentExecutor !== "codex") {
-    return false;
-  }
-  if (params.taggedRoles.includes("researcher")) {
-    return true;
-  }
-  return inferTaskPromptIntent(params.prompt) === "research";
-}
-
-export async function resolveAutomaticResearchModel(params: {
-  invokeFn: InvokeFn;
-  cwd: string;
-  currentModel: string;
-  prompt: string;
-  taggedRoles: ThreadRoleId[];
-  hasTauriRuntime: boolean;
-  preferredProviderModel?: string | null;
-}): Promise<string> {
-  const preferredProviderModel = String(params.preferredProviderModel ?? "").trim();
-  if (preferredProviderModel && COMPOSER_PROVIDER_MODEL_VALUES.includes(preferredProviderModel as ComposerProviderModel)) {
-    return preferredProviderModel;
-  }
-  if (!params.hasTauriRuntime || !params.cwd) {
-    return params.currentModel;
-  }
-  if (!shouldAutoUseExternalResearchProvider(params)) {
-    return params.currentModel;
-  }
-  try {
-    const steelHealth = await params.invokeFn<{ ready?: boolean }>("dashboard_crawl_provider_health", {
-      cwd: params.cwd,
-      provider: "steel",
-    });
-    if (steelHealth?.ready) {
-      return "WEB / STEEL";
-    }
-  } catch {
-    // Ignore provider probe failures and keep falling back.
-  }
-  try {
-    const lightpandaHealth = await params.invokeFn<{ ready?: boolean }>("dashboard_crawl_provider_health", {
-      cwd: params.cwd,
-      provider: "lightpanda_experimental",
-    });
-    if (lightpandaHealth?.ready) {
-      return "WEB / LIGHTPANDA";
-    }
-  } catch {
-    // Ignore provider probe failures and keep the current model.
-  }
-  return params.currentModel;
-}
-
-export async function resolveAutomaticResearchModels(params: {
-  invokeFn: InvokeFn;
-  cwd: string;
-  currentModel: string;
-  prompt: string;
-  taggedRoles: ThreadRoleId[];
-  hasTauriRuntime: boolean;
-  preferredProviderModels?: string[];
-}): Promise<string[]> {
-  const preferredProviderModels = normalizeComposerProviderModels(params.preferredProviderModels ?? []);
-  if (preferredProviderModels.length > 0) {
-    return preferredProviderModels;
-  }
-  const resolvedModel = await resolveAutomaticResearchModel({
-    invokeFn: params.invokeFn,
-    cwd: params.cwd,
-    currentModel: params.currentModel,
-    prompt: params.prompt,
-    taggedRoles: params.taggedRoles,
-    hasTauriRuntime: params.hasTauriRuntime,
-    preferredProviderModel: null,
-  });
-  return [resolvedModel];
-}
-
-export function deriveAutomaticResearchProviderBadge(params: {
-  currentModel: string;
-  prompt: string;
-  taggedRoles: ThreadRoleId[];
-  preferredProviderModels?: string[];
-  readiness: ExternalProviderReadiness;
-}): ExternalResearchProviderModel | null {
-  if (normalizeComposerProviderModels(params.preferredProviderModels ?? []).length > 0) {
-    return null;
-  }
-  if (!shouldAutoUseExternalResearchProvider(params)) {
-    return null;
-  }
-  if (params.readiness.steel) {
-    return "WEB / STEEL";
-  }
-  if (params.readiness.lightpanda) {
-    return "WEB / LIGHTPANDA";
-  }
-  return null;
 }
 
 export function resolveTasksThreadWebProvider(model: string): string | null {
@@ -668,6 +627,8 @@ export function useTasksThreadState(params: Params) {
   const [hiddenProjectPaths, setHiddenProjectPaths] = useState<string[]>(initialHiddenProjectList);
   const [liveRoleNotes, setLiveRoleNotes] = useState<Partial<Record<ThreadRoleId, { message: string; updatedAt: string }>>>({});
   const [liveProcessEvents, setLiveProcessEvents] = useState<LiveProcessEvent[]>([]);
+  const [runtimeHeartbeatAt, setRuntimeHeartbeatAt] = useState("");
+  const [runtimeHeartbeatState, setRuntimeHeartbeatState] = useState<"idle" | "alive" | "error">("idle");
   const [latestRunInternalBadges, setLatestRunInternalBadges] = useState<InternalRunBadge[]>([]);
   const [runtimeTargetCount, setRuntimeTargetCount] = useState(0);
   const [stoppingComposerRun, setStoppingComposerRun] = useState(false);
@@ -684,8 +645,9 @@ export function useTasksThreadState(params: Params) {
   const runtimeTargetsByRoleRef = useRef<Partial<Record<ThreadRoleId, RuntimeTarget>>>({});
   const interruptedThreadIdsRef = useRef<Partial<Record<string, boolean>>>({});
   const pendingRoleEventsRef = useRef<TasksRoleRuntimeEvent[]>([]);
-  const liveRoleEventFlushTimeoutRef = useRef<number | null>(null);
-  const refreshThreadTimeoutRef = useRef<number | null>(null);
+  const liveRoleEventFlushFrameRef = useRef<number | null>(null);
+  const refreshThreadInFlightRef = useRef(false);
+  const queuedRefreshThreadIdRef = useRef<string | null>(null);
   const visibleThreadItems = useMemo(
     () => threadItems.filter((item) => !hiddenProjectPaths.includes(normalizeTasksProjectPath(item.projectPath || item.thread.cwd || ""))),
     [hiddenProjectPaths, threadItems],
@@ -910,11 +872,8 @@ export function useTasksThreadState(params: Params) {
 
   useEffect(() => () => {
     if (typeof window !== "undefined") {
-      if (liveRoleEventFlushTimeoutRef.current !== null) {
-        window.clearTimeout(liveRoleEventFlushTimeoutRef.current);
-      }
-      if (refreshThreadTimeoutRef.current !== null) {
-        window.clearTimeout(refreshThreadTimeoutRef.current);
+      if (liveRoleEventFlushFrameRef.current !== null) {
+        window.cancelAnimationFrame(liveRoleEventFlushFrameRef.current);
       }
     }
   }, []);
@@ -1060,42 +1019,65 @@ export function useTasksThreadState(params: Params) {
   );
 
   const refreshCurrentThreadSilently = useCallback(
-    async (threadId: string) => refreshThreadStateSilently({
-      threadId,
-      hasTauriRuntime: params.hasTauriRuntime,
-      cwd: params.cwd,
-      projectPath,
-      invokeFn: params.invokeFn,
-      hydratePersistedCoordination,
-      selectedAgentIdsByThread,
-      selectedFilePathsByThread,
-      rememberSelectedAgent,
-      rememberSelectedFile,
-      setActiveThread,
-      setActiveThreadId,
-      setThreadItems,
-    }),
-    [hydratePersistedCoordination, params, projectPath, rememberSelectedAgent, rememberSelectedFile, selectedAgentIdsByThread, selectedFilePathsByThread],
+    async (threadId: string) => {
+      const result = await refreshThreadStateSilently({
+        threadId,
+        currentDetail: activeThread,
+        hasTauriRuntime: params.hasTauriRuntime,
+        cwd: params.cwd,
+        projectPath,
+        invokeFn: params.invokeFn,
+        hydratePersistedCoordination,
+        selectedAgentIdsByThread,
+        selectedFilePathsByThread,
+        rememberSelectedAgent,
+        rememberSelectedFile,
+        setActiveThread,
+        setActiveThreadId,
+        setThreadItems,
+      });
+      if (result.ok) {
+        setRuntimeHeartbeatAt(result.refreshedAt);
+        setRuntimeHeartbeatState("alive");
+      } else {
+        setRuntimeHeartbeatState("error");
+      }
+      return result;
+    },
+    [activeThread, hydratePersistedCoordination, params, projectPath, rememberSelectedAgent, rememberSelectedFile, selectedAgentIdsByThread, selectedFilePathsByThread],
   );
 
   const scheduleRefreshCurrentThreadSilently = useCallback((threadId: string) => {
     const normalizedThreadId = String(threadId ?? "").trim();
-    if (!normalizedThreadId || typeof window === "undefined") {
+    if (!normalizedThreadId) {
       return;
     }
-    if (refreshThreadTimeoutRef.current !== null) {
-      window.clearTimeout(refreshThreadTimeoutRef.current);
+    queuedRefreshThreadIdRef.current = normalizedThreadId;
+    if (refreshThreadInFlightRef.current) {
+      return;
     }
-    refreshThreadTimeoutRef.current = window.setTimeout(() => {
-      refreshThreadTimeoutRef.current = null;
-      void refreshCurrentThreadSilently(normalizedThreadId);
-    }, LIVE_ROLE_EVENT_REFRESH_DEBOUNCE_MS);
+    refreshThreadInFlightRef.current = true;
+    const drainQueuedRefreshes = async () => {
+      try {
+        while (queuedRefreshThreadIdRef.current) {
+          const nextThreadId = queuedRefreshThreadIdRef.current;
+          queuedRefreshThreadIdRef.current = null;
+          await refreshCurrentThreadSilently(nextThreadId);
+        }
+      } finally {
+        refreshThreadInFlightRef.current = false;
+        if (queuedRefreshThreadIdRef.current) {
+          scheduleRefreshCurrentThreadSilently(queuedRefreshThreadIdRef.current);
+        }
+      }
+    };
+    void drainQueuedRefreshes();
   }, [refreshCurrentThreadSilently]);
 
   const flushPendingRoleEvents = useCallback(() => {
-    if (liveRoleEventFlushTimeoutRef.current !== null && typeof window !== "undefined") {
-      window.clearTimeout(liveRoleEventFlushTimeoutRef.current);
-      liveRoleEventFlushTimeoutRef.current = null;
+    if (liveRoleEventFlushFrameRef.current !== null && typeof window !== "undefined") {
+      window.cancelAnimationFrame(liveRoleEventFlushFrameRef.current);
+      liveRoleEventFlushFrameRef.current = null;
     }
     const pending = pendingRoleEventsRef.current;
     if (pending.length === 0) {
@@ -1192,7 +1174,8 @@ export function useTasksThreadState(params: Params) {
         return;
       }
       runtimeTargetsByRoleRef.current = reduceRuntimeTargetsByRole(runtimeTargetsByRoleRef.current, detail);
-      setRuntimeTargetCount(Object.keys(runtimeTargetsByRoleRef.current).length);
+      const nextRuntimeTargetCount = Object.keys(runtimeTargetsByRoleRef.current).length;
+      setRuntimeTargetCount((current) => (current === nextRuntimeTargetCount ? current : nextRuntimeTargetCount));
       const payload = detail.payload ?? {};
       const providerLabels = [
         String(payload.provider ?? "").trim(),
@@ -1200,7 +1183,7 @@ export function useTasksThreadState(params: Params) {
       ]
         .map((value) => formatRuntimeProviderBadgeLabel(value))
         .filter(Boolean);
-      if (providerLabels.length > 0) {
+    if (providerLabels.length > 0) {
         setLatestRunInternalBadges((current) => providerLabels.reduce(
           (badges, label) => appendInternalRunBadge(badges, {
             key: `provider:${label}`,
@@ -1210,20 +1193,20 @@ export function useTasksThreadState(params: Params) {
           current,
         ));
       }
-      pendingRoleEventsRef.current = [...pendingRoleEventsRef.current, detail];
-      if (liveRoleEventFlushTimeoutRef.current !== null) {
+      pendingRoleEventsRef.current.push(detail);
+      if (liveRoleEventFlushFrameRef.current !== null || typeof window === "undefined") {
         return;
       }
-      liveRoleEventFlushTimeoutRef.current = window.setTimeout(() => {
+      liveRoleEventFlushFrameRef.current = window.requestAnimationFrame(() => {
         flushPendingRoleEvents();
-      }, LIVE_ROLE_EVENT_FLUSH_MS);
+      });
     };
     window.addEventListener("rail:tasks-role-event", handler as EventListener);
     return () => {
       window.removeEventListener("rail:tasks-role-event", handler as EventListener);
-      if (liveRoleEventFlushTimeoutRef.current !== null) {
-        window.clearTimeout(liveRoleEventFlushTimeoutRef.current);
-        liveRoleEventFlushTimeoutRef.current = null;
+      if (liveRoleEventFlushFrameRef.current !== null) {
+        window.cancelAnimationFrame(liveRoleEventFlushFrameRef.current);
+        liveRoleEventFlushFrameRef.current = null;
       }
     };
   }, [activeThreadId, flushPendingRoleEvents]);
@@ -1321,10 +1304,7 @@ export function useTasksThreadState(params: Params) {
     setLiveProcessEvents([]);
     runtimeTargetsByRoleRef.current = {};
     setRuntimeTargetCount(0);
-    if (typeof window !== "undefined" && refreshThreadTimeoutRef.current !== null) {
-      window.clearTimeout(refreshThreadTimeoutRef.current);
-      refreshThreadTimeoutRef.current = null;
-    }
+    queuedRefreshThreadIdRef.current = null;
   }, [activeThreadId]);
 
   useEffect(() => {
@@ -1366,6 +1346,8 @@ export function useTasksThreadState(params: Params) {
 
   useEffect(() => {
     if (!activeThread || !activeThreadCoordination || activeThreadCoordination.status !== "running") {
+      setRuntimeHeartbeatAt("");
+      setRuntimeHeartbeatState("idle");
       return;
     }
     const settlement = settleRunningCoordinationRun(activeThread, activeThreadCoordination);
@@ -1408,20 +1390,31 @@ export function useTasksThreadState(params: Params) {
 
   useEffect(() => {
     const hasLiveAgents = (activeThread?.agents ?? []).some((agent) => isLiveBackgroundAgentStatus(agent.status));
-    if (
-      !hasLiveAgents
-      || activeThreadCoordination?.status !== "running"
-      || !activeThreadId
-      || !params.hasTauriRuntime
-      || !params.cwd
-    ) {
+    const freshestLiveSignalAt = [
+      ...liveProcessEvents
+        .map((event) => String(event.at ?? "").trim())
+        .filter(Boolean),
+      ...((activeThread?.agents ?? [])
+        .filter((agent) => isLiveBackgroundAgentStatus(agent.status))
+        .map((agent) => String(agent.lastUpdatedAt ?? "").trim())
+        .filter(Boolean)),
+    ]
+      .sort((left, right) => Date.parse(right) - Date.parse(left))[0] ?? "";
+    if (!shouldPollCurrentThreadSilently({
+      hasLiveAgents,
+      coordinationStatus: activeThreadCoordination?.status,
+      activeThreadId,
+      hasTauriRuntime: params.hasTauriRuntime,
+      cwd: params.cwd,
+      freshestLiveSignalAt,
+    })) {
       return;
     }
     const intervalId = window.setInterval(() => {
       void refreshCurrentThreadSilently(activeThreadId);
-    }, 2000);
+    }, LIVE_THREAD_POLL_INTERVAL_MS);
     return () => window.clearInterval(intervalId);
-  }, [activeThread?.agents, activeThreadCoordination?.status, activeThreadId, params, refreshCurrentThreadSilently]);
+  }, [activeThread?.agents, activeThreadCoordination?.status, activeThreadId, liveProcessEvents, params.cwd, params.hasTauriRuntime, refreshCurrentThreadSilently]);
 
   useEffect(() => {
     if (!activeThread || !selectedAgentId) {
@@ -1568,6 +1561,7 @@ export function useTasksThreadState(params: Params) {
   }, [attachedFiles, params]);
 
   const openNewThread = useCallback(async () => {
+    const startedAt = performance.now();
     setComposerDraft("");
     setSelectedComposerRoleIds([]);
     setComposerCoordinationModeOverride(null);
@@ -1601,10 +1595,20 @@ export function useTasksThreadState(params: Params) {
       }));
       setActiveThread(detail);
       setActiveThreadId(detail.thread.threadId);
+      setThreadItems((current) => {
+        const nextItem = toThreadListItem(detail);
+        const remaining = current.filter((item) => item.thread.threadId !== nextItem.thread.threadId);
+        return filterThreadListByProject([nextItem, ...remaining], selectedProjectPath);
+      });
       rememberSelectedAgent(detail.thread.threadId, defaultSelectedAgent(detail));
       rememberSelectedFile(detail.thread.threadId, defaultSelectedFile(detail));
-      await reloadThreads(detail.thread.threadId);
       params.setStatus(`${translate("tasks.thread.new")}: ${truncateTitle(detail.thread.title)}`);
+      appendTimedWorkspaceEvent({
+        appendWorkspaceEvent: params.appendWorkspaceEvent,
+        source: "tasks-thread",
+        label: "새 스레드 생성",
+        startedAt,
+      });
     } catch (error) {
       setActiveThread(null);
       setActiveThreadId("");
@@ -1636,6 +1640,11 @@ export function useTasksThreadState(params: Params) {
   const syncSpawnedThreadSelection = useCallback(async (detail: ThreadDetail) => {
     setActiveThread(detail);
     setActiveThreadId(detail.thread.threadId);
+    setThreadItems((current) => {
+      const nextItem = toThreadListItem(detail);
+      const remaining = current.filter((item) => item.thread.threadId !== nextItem.thread.threadId);
+      return filterThreadListByProject([nextItem, ...remaining], projectPath);
+    });
     rememberSelectedAgent(
       detail.thread.threadId,
       resolveThreadSelection(
@@ -1654,14 +1663,14 @@ export function useTasksThreadState(params: Params) {
         defaultSelectedFile(detail),
       ),
     );
-    await reloadThreads(detail.thread.threadId);
-  }, [reloadThreads, rememberSelectedAgent, rememberSelectedFile, selectedAgentIdsByThread, selectedFilePathsByThread]);
+  }, [projectPath, rememberSelectedAgent, rememberSelectedFile, selectedAgentIdsByThread, selectedFilePathsByThread]);
 
   const submitComposer = useCallback(async () => {
     const rawPrompt = composerDraft.trim();
     if (!rawPrompt) {
       return;
     }
+    const startedAt = performance.now();
     const modeTagOverride = composerCoordinationModeOverride ?? parseCoordinationModeTag(rawPrompt);
     const prompt = stripCoordinationModeTags(rawPrompt);
     if (!prompt) {
@@ -1676,15 +1685,9 @@ export function useTasksThreadState(params: Params) {
     try {
       const promptWithAttachments = await buildPromptWithAttachments(prompt);
       const taggedRoles = [...new Set([...selectedComposerRoleIds, ...parseTaskAgentTags(prompt)])];
-      const resolvedModels = await resolveAutomaticResearchModels({
-        invokeFn: params.invokeFn,
-        cwd: params.cwd,
-        currentModel: model,
-        prompt,
-        taggedRoles,
-        hasTauriRuntime: params.hasTauriRuntime,
-        preferredProviderModels: composerProviderOverrides,
-      });
+      const resolvedModels = normalizeComposerProviderModels(composerProviderOverrides).length > 0
+        ? normalizeComposerProviderModels(composerProviderOverrides)
+        : [model];
       const primaryResolvedModel = resolvedModels[0] ?? model;
       if (!params.hasTauriRuntime || !params.cwd) {
         const store = cloneStore(browserStoreRef.current);
@@ -1765,6 +1768,33 @@ export function useTasksThreadState(params: Params) {
         detail.orchestration = runningCoordination;
         store.details[detail.thread.threadId] = withTaskCoordination(detail, detail.orchestration);
         applyBrowserStore(store, detail.thread.threadId);
+        if (shouldUseTasksE2EMockRuntime()) {
+          const mockThreadId = detail.thread.threadId;
+          const mockPlan = executionPlan;
+          window.setTimeout(() => {
+            const nextStore = cloneStore(browserStoreRef.current);
+            const nextDetail = nextStore.details[mockThreadId];
+            if (!nextDetail) {
+              return;
+            }
+            const completionTimestamp = nowIso();
+            const completedCoordination = updateThreadCoordination(
+              mockThreadId,
+              (current) => (current ? completeCoordinationRun(current, completionTimestamp) : current),
+              { kind: "run_completed", summary: "Mock runtime completed" },
+            ) ?? nextDetail.orchestration ?? null;
+            completeBrowserExecutionPlan({
+              detail: nextDetail,
+              plan: mockPlan,
+              timestamp: completionTimestamp,
+              finalSummary: buildTasksE2EMockFinalSummary(prompt),
+              artifactPath: "/mock/tasks-e2e-final.md",
+            });
+            nextDetail.orchestration = completedCoordination;
+            nextStore.details[mockThreadId] = withTaskCoordination(nextDetail, completedCoordination);
+            applyBrowserStore(nextStore, mockThreadId);
+          }, 1_200);
+        }
         rememberSelectedAgent(detail.thread.threadId, `${detail.thread.threadId}:${executionPlan.participantRoleIds[0]}`);
         rememberSelectedFile(detail.thread.threadId, detail.changedFiles[0] ?? defaultSelectedFile(detail));
         setComposerDraft("");
@@ -1772,6 +1802,12 @@ export function useTasksThreadState(params: Params) {
         setSelectedComposerRoleIds([]);
         setComposerCoordinationModeOverride(null);
         clearAttachedFiles();
+        appendTimedWorkspaceEvent({
+          appendWorkspaceEvent: params.appendWorkspaceEvent,
+          source: "tasks-thread",
+          label: "브라우저 Tasks 요청 준비",
+          startedAt,
+        });
         params.appendWorkspaceEvent({
           source: "tasks-thread",
           actor: "user",
@@ -1795,9 +1831,14 @@ export function useTasksThreadState(params: Params) {
           reasoning,
           accessMode,
         }));
+        const createdDetail = detail;
         setActiveThread(detail);
         setActiveThreadId(detail.thread.threadId);
-        await reloadThreads(detail.thread.threadId);
+        setThreadItems((current) => {
+          const nextItem = toThreadListItem(createdDetail);
+          const remaining = current.filter((item) => item.thread.threadId !== nextItem.thread.threadId);
+          return filterThreadListByProject([nextItem, ...remaining], selectedProjectPath);
+        });
       } else {
         detail = withDerivedWorkflow(await params.invokeFn<ThreadDetail>("thread_append_message", {
           cwd: params.cwd,
@@ -1831,7 +1872,6 @@ export function useTasksThreadState(params: Params) {
       const rolesToRun = executionPlan.participantRoleIds;
       if (rolesToRun.length === 0) {
         setActiveThread(detail);
-        await reloadThreads(detail.thread.threadId);
         params.setStatus("No task agents selected. Add an agent or use @researcher, @designer, @architect, @implementer, @playtest, and related tags.");
         return;
       }
@@ -1840,6 +1880,25 @@ export function useTasksThreadState(params: Params) {
         () => startCoordinationRun(executableCoordination),
         { kind: "run_started", summary: `Started ${coordination.mode} run` },
       ) ?? executableCoordination;
+      const optimisticRunningDetail = withTaskCoordination(
+        buildOptimisticRuntimeExecutionDetail({
+          detail,
+          prompt: promptWithAttachments,
+          plan: executionPlan,
+          timestamp: nowIso(),
+          createId: nextId,
+        }),
+        runningCoordination,
+      );
+      setActiveThread(optimisticRunningDetail);
+      rememberSelectedAgent(
+        optimisticRunningDetail.thread.threadId,
+        `${optimisticRunningDetail.thread.threadId}:${executionPlan.participantRoleIds[0]}`,
+      );
+      rememberSelectedFile(
+        optimisticRunningDetail.thread.threadId,
+        optimisticRunningDetail.changedFiles[0] ?? defaultSelectedFile(optimisticRunningDetail),
+      );
       const spawned = await runRuntimeExecutionPlan({
         detail,
         prompt: promptWithAttachments,
@@ -1875,6 +1934,12 @@ export function useTasksThreadState(params: Params) {
         message: `Thread ${spawned.thread.threadId} · ${rolesToRun.map((roleId) => getTaskAgentLabel(roleId)).join(", ")} dispatched${executionPlan.cappedParticipantCount ? " (participant cap applied)" : ""}`,
       });
       params.setStatus(`Thread updated: ${truncateTitle(spawned.thread.title)}`);
+      appendTimedWorkspaceEvent({
+        appendWorkspaceEvent: params.appendWorkspaceEvent,
+        source: "tasks-thread",
+        label: "Tasks 요청 전송",
+        startedAt,
+      });
       setComposerDraft("");
       setComposerProviderOverrides([]);
       setSelectedComposerRoleIds([]);
@@ -1919,9 +1984,9 @@ export function useTasksThreadState(params: Params) {
       pendingRoleEventsRef.current = pendingRoleEventsRef.current.filter(
         (detail) => String(detail.taskId ?? "").trim() !== activeThread.thread.threadId,
       );
-      if (liveRoleEventFlushTimeoutRef.current !== null && typeof window !== "undefined") {
-        window.clearTimeout(liveRoleEventFlushTimeoutRef.current);
-        liveRoleEventFlushTimeoutRef.current = null;
+      if (liveRoleEventFlushFrameRef.current !== null && typeof window !== "undefined") {
+        window.cancelAnimationFrame(liveRoleEventFlushFrameRef.current);
+        liveRoleEventFlushFrameRef.current = null;
       }
       if (!params.hasTauriRuntime || !params.cwd) {
         const store = cloneStore(browserStoreRef.current);
@@ -2341,6 +2406,7 @@ export function useTasksThreadState(params: Params) {
 
   const deleteThread = useCallback(
     async (threadId?: string) => {
+      const startedAt = performance.now();
       const targetThreadId = String(threadId ?? activeThreadId).trim();
       if (!targetThreadId) {
         return;
@@ -2382,6 +2448,12 @@ export function useTasksThreadState(params: Params) {
         if (activeThreadId === targetThreadId && optimistic.nextActiveThreadId) {
           void loadThread(optimistic.nextActiveThreadId);
         }
+        appendTimedWorkspaceEvent({
+          appendWorkspaceEvent: params.appendWorkspaceEvent,
+          source: "tasks-thread",
+          label: "스레드 삭제",
+          startedAt,
+        });
         // The optimistic state already removed the deleted thread, so avoid an
         // immediate full thread_list reload that can make delete feel sluggish.
       } catch (error) {
@@ -2691,6 +2763,8 @@ export function useTasksThreadState(params: Params) {
     selectProject,
     searchRuntimeSessions,
     externalProviderReadiness,
+    runtimeHeartbeatAt,
+    runtimeHeartbeatState,
     selectThread,
     submitComposer,
     stopComposerRun,

@@ -678,6 +678,31 @@
   line-height: 1.2;
 }
 
+.tasks-thread-list-state-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 18px;
+  padding: 0 6px;
+  border-radius: 4px;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.tasks-thread-list-state-badge.is-fail {
+  background: #d1242f;
+  color: #ffffff;
+}
+
+.tasks-thread-list-state-badge.is-quality {
+  background: color-mix(in srgb, rgb(238, 241, 244) 82%, rgb(196, 207, 223));
+  color: #1f344c;
+}
+
 .tasks-thread-list-stage.is-blocked,
 .tasks-thread-stage-chip.is-blocked {
   background: color-mix(in srgb, #f1c6c6 52%, var(--surface-elevated));
@@ -1146,6 +1171,39 @@
   font-size: 11px;
 }
 
+.tasks-thread-message-markdown-fallback {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  font: inherit;
+  color: inherit;
+}
+
+.tasks-thread-message-preview-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.tasks-thread-message-preview-note {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.tasks-thread-message-preview-button {
+  border: 1px solid color-mix(in srgb, var(--line-soft) 84%, #cad4df);
+  border-radius: 999px;
+  background: color-mix(in srgb, #ffffff 80%, var(--surface-soft));
+  color: var(--text-main);
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
 .tasks-thread-message-row {
   display: grid;
   gap: 4px;
@@ -1265,6 +1323,16 @@
 }
 
 .tasks-thread-live-state.is-stalled {
+  background: rgba(255, 236, 236, 1);
+  color: #b42318;
+}
+
+.tasks-thread-live-state.is-waiting {
+  background: rgba(255, 244, 224, 1);
+  color: #9a5d00;
+}
+
+.tasks-thread-live-state.is-disconnected {
   background: rgba(255, 236, 236, 1);
   color: #b42318;
 }

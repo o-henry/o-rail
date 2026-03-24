@@ -11,6 +11,8 @@ type AdaptiveTaskOrchestrationPlan = {
   criticRoleId?: string;
   rolePrompts: Record<string, string>;
   orchestrationSummary: string;
+  collectExternalWebResearch: boolean;
+  externalWebResearchFocus: string;
 };
 
 function clip(value: string, maxChars: number): string {
@@ -186,10 +188,12 @@ export function buildAdaptiveOrchestrationPrompt(params: {
     "- researcher 단독 조사 요청이면 researcher만 유지한다.",
     "- unity_architect는 현실성/기술 리스크/범위 검토를 맡기고, 아이디어 발산의 주역으로 쓰지 않는다.",
     "- 각 역할 지시는 서로 겹치지 않게 구체적으로 나눈다.",
+    "- 외부 웹 조사/커뮤니티 반응/시장 근거/레퍼런스 수집이 답의 품질에 실질적으로 중요하면 collect_external_web_research를 true로 설정한다.",
+    "- collect_external_web_research가 true면 external_web_research_focus에 무엇을 조사해야 하는지 한 줄로 적는다. 필요 없으면 빈 문자열로 둔다.",
     "",
     "# 출력 형식",
     "반드시 아래 JSON 객체만 출력한다. 설명 문장이나 코드펜스는 금지한다.",
-    `{"participant_role_ids":["role_a"],"primary_role_id":"role_a","critic_role_id":"role_b 또는 빈 문자열","orchestration_summary":"한 줄 요약","role_assignments":{"role_a":"역할별 지시","role_b":"역할별 지시"}}`,
+    `{"participant_role_ids":["role_a"],"primary_role_id":"role_a","critic_role_id":"role_b 또는 빈 문자열","collect_external_web_research":true,"external_web_research_focus":"조사 포커스 또는 빈 문자열","orchestration_summary":"한 줄 요약","role_assignments":{"role_a":"역할별 지시","role_b":"역할별 지시"}}`,
   ].join("\n");
 }
 
@@ -254,6 +258,8 @@ export function parseAdaptiveOrchestrationPlan(params: {
     ) as Record<string, string>;
     const orchestrationSummary = clip(String(parsed.orchestration_summary ?? "").trim(), 280)
       || `메인 오케스트레이터가 ${participantRoleIds.join(", ")} 조합으로 재배치했습니다.`;
+    const collectExternalWebResearch = Boolean(parsed.collect_external_web_research);
+    const externalWebResearchFocus = clip(String(parsed.external_web_research_focus ?? "").trim(), 240);
     return {
       participantRoleIds: [
         primaryRoleId,
@@ -263,6 +269,8 @@ export function parseAdaptiveOrchestrationPlan(params: {
       criticRoleId,
       rolePrompts,
       orchestrationSummary,
+      collectExternalWebResearch,
+      externalWebResearchFocus,
     };
   } catch {
     return null;

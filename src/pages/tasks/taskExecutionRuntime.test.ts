@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import type { AgenticCoordinationState } from "../../features/orchestration/agentic/coordinationTypes";
 import {
+  buildOptimisticRuntimeExecutionDetail,
+  completeBrowserExecutionPlan,
   buildExecutionPlanFromCoordination,
   deriveExecutionPlan,
   dispatchTaskExecutionPlan,
@@ -127,6 +129,7 @@ describe("taskExecutionRuntime", () => {
     });
     expect(plan.mode).toBe("single");
     expect(plan.participantRoleIds).toHaveLength(1);
+    expect(plan.useAdaptiveOrchestrator).toBe(true);
   });
 
   it("builds coordination execution plan respecting quick mode", () => {
@@ -136,6 +139,7 @@ describe("taskExecutionRuntime", () => {
     );
     expect(plan.mode).toBe("single");
     expect(plan.participantRoleIds).toEqual(["unity_architect"]);
+    expect(plan.useAdaptiveOrchestrator).toBe(true);
   });
 
   it("dispatches a collaboration action for discussion plans", () => {
@@ -200,6 +204,43 @@ describe("taskExecutionRuntime", () => {
     });
   });
 
+  it("dispatches a collaboration action even for single-role plans when orchestrator-first mode is enabled", () => {
+    const publishAction = vi.fn();
+    dispatchTaskExecutionPlan({
+      detail: buildThreadDetail(),
+      prompt: "구조를 검토해줘",
+      plan: {
+        mode: "single",
+        intent: "review",
+        creativeMode: false,
+        candidateRoleIds: ["unity_architect"],
+        participantRoleIds: ["unity_architect"],
+        requestedRoleIds: ["unity_architect"],
+        primaryRoleId: "unity_architect",
+        synthesisRoleId: "unity_architect",
+        criticRoleId: undefined,
+        maxParticipants: 1,
+        maxRounds: 1,
+        cappedParticipantCount: false,
+        rolePrompts: {
+          unity_architect: "아키텍처 경계를 점검해줘",
+        },
+        orchestrationSummary: "",
+        useAdaptiveOrchestrator: true,
+      },
+      publishAction,
+    });
+
+    expect(publishAction).toHaveBeenCalledWith(expect.objectContaining({
+      type: "run_task_collaboration",
+      payload: expect.objectContaining({
+        roleIds: ["unity_architect"],
+        primaryRoleId: "unity_architect",
+        useAdaptiveOrchestrator: true,
+      }),
+    }));
+  });
+
   it("runs the runtime collaboration flow end-to-end with add-agent, spawn, and collaboration dispatch", async () => {
     const publishAction = vi.fn();
     const invokeFn = vi.fn(async (command: string, args?: Record<string, unknown>) => {
@@ -262,11 +303,11 @@ describe("taskExecutionRuntime", () => {
       payload: expect.objectContaining({
         taskId: "task_1",
         sourceTab: "tasks-thread",
-        roleIds: ["research_analyst", "system_programmer"],
-        candidateRoleIds: expect.arrayContaining(["research_analyst", "system_programmer"]),
-        requestedRoleIds: ["research_analyst", "system_programmer"],
-        primaryRoleId: "research_analyst",
-        synthesisRoleId: "research_analyst",
+        roleIds: ["researcher", "unity_architect"],
+        candidateRoleIds: expect.arrayContaining(["researcher", "unity_architect"]),
+        requestedRoleIds: ["researcher", "unity_architect"],
+        primaryRoleId: "researcher",
+        synthesisRoleId: "researcher",
       }),
     }));
   });
@@ -352,5 +393,63 @@ describe("taskExecutionRuntime", () => {
     });
     expect(detail.approvals).toHaveLength(1);
     expect(detail.messages.some((entry) => entry.eventKind === "agent_batch_running")).toBe(true);
+  });
+
+  it("builds an optimistic runtime detail without mutating the original detail", () => {
+    const original = buildThreadDetail();
+    const plan = deriveExecutionPlan({
+      enabledRoleIds: ["researcher", "unity_architect"],
+      requestedRoleIds: ["researcher", "unity_architect"],
+      prompt: "시장성과 구조를 같이 검토해줘",
+    });
+
+    const optimistic = buildOptimisticRuntimeExecutionDetail({
+      detail: original,
+      prompt: "시장성과 구조를 같이 검토해줘",
+      plan,
+      timestamp: "2026-03-20T00:01:00.000Z",
+      createId: (prefix) => `${prefix}_1`,
+    });
+
+    expect(original.thread.status).toBe("idle");
+    expect(original.messages).toHaveLength(0);
+    expect(optimistic.thread.status).toBe("running");
+    expect(optimistic.messages.some((entry) => entry.eventKind === "agent_batch_running")).toBe(true);
+    expect(optimistic.agents.some((agent) => agent.status !== "idle")).toBe(true);
+  });
+
+  it("completes a browser execution plan with a final assistant result", () => {
+    const detail = buildThreadDetail();
+    const plan = deriveExecutionPlan({
+      enabledRoleIds: ["researcher", "unity_architect"],
+      requestedRoleIds: ["researcher", "unity_architect"],
+      prompt: "시장성과 구조를 같이 검토해줘",
+    });
+
+    runBrowserExecutionPlan({
+      detail,
+      prompt: "시장성과 구조를 같이 검토해줘",
+      plan,
+      timestamp: "2026-03-20T00:01:00.000Z",
+      createId: (prefix) => `${prefix}_1`,
+    });
+
+    completeBrowserExecutionPlan({
+      detail,
+      plan,
+      timestamp: "2026-03-20T00:02:00.000Z",
+      finalSummary: "1. 아이디어 A\n2. 아이디어 B\n3. 아이디어 C",
+      artifactPath: "/mock/final.md",
+    });
+
+    expect(detail.thread.status).toBe("completed");
+    expect(detail.task.status).toBe("completed");
+    expect(detail.agents.every((agent) => agent.status === "done")).toBe(true);
+    expect(detail.messages[detail.messages.length - 1]).toEqual(expect.objectContaining({
+      role: "assistant",
+      eventKind: "agent_result",
+      artifactPath: "/mock/final.md",
+    }));
+    expect(detail.artifacts.final).toBe("/mock/final.md");
   });
 });

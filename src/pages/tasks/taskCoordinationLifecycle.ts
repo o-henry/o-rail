@@ -78,6 +78,27 @@ function staleRuntimeSummary(
   };
 }
 
+function hasTerminalRunEvidence(thread: ThreadDetail): boolean {
+  const threadStatus = String(thread.thread.status ?? "").trim().toLowerCase();
+  const taskStatus = String(thread.task.status ?? "").trim().toLowerCase();
+  if (["completed", "failed", "error", "cancelled", "archived"].includes(threadStatus)) {
+    return true;
+  }
+  if (["completed", "failed", "error", "cancelled", "archived"].includes(taskStatus)) {
+    return true;
+  }
+  if (thread.agents.some((agent) => {
+    const status = String(agent.status ?? "").trim().toLowerCase();
+    return status === "done" || status === "failed";
+  })) {
+    return true;
+  }
+  return thread.messages.some((message) => {
+    const eventKind = String(message.eventKind ?? "").trim().toLowerCase();
+    return eventKind === "agent_result" || eventKind === "agent_failed" || eventKind === "run_interrupted";
+  });
+}
+
 export function settleRunningCoordinationRun(
   thread: ThreadDetail | null | undefined,
   coordination: AgenticCoordinationState | null | undefined,
@@ -94,6 +115,9 @@ export function settleRunningCoordinationRun(
     return { kind: "pending" };
   }
   if (thread.approvals.some((approval) => approval.status === "pending")) {
+    return { kind: "pending" };
+  }
+  if (!hasTerminalRunEvidence(thread)) {
     return { kind: "pending" };
   }
   return failedAgentSummary(thread) ?? failedThreadSummary(thread) ?? {

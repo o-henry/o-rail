@@ -8,7 +8,6 @@ import {
   resolveLiveConversationEntries,
   resolveLatestRunParticipationBadges,
   resolveLatestRunParticipationBadgeRoleIds,
-  resolveProgressiveRevealStep,
   resolveThreadParticipationBadgeRoleIds,
   shouldProgressivelyRevealMessage,
 } from "./TasksThreadConversation";
@@ -435,18 +434,8 @@ describe("resolveLiveConversationEntries", () => {
   });
 });
 
-describe("resolveProgressiveRevealStep", () => {
-  it("keeps a sensible minimum chunk size for short answers", () => {
-    expect(resolveProgressiveRevealStep(12)).toBe(48);
-  });
-
-  it("caps chunk size for large answers", () => {
-    expect(resolveProgressiveRevealStep(20000)).toBe(220);
-  });
-});
-
 describe("shouldProgressivelyRevealMessage", () => {
-  it("reveals large assistant logs progressively", () => {
+  it("does not progressively reveal large logs anymore", () => {
     expect(shouldProgressivelyRevealMessage({
       id: "1",
       threadId: "thread-1",
@@ -454,7 +443,7 @@ describe("shouldProgressivelyRevealMessage", () => {
       content: "",
       eventKind: "agent_created",
       createdAt: "2026-03-22T00:00:00Z",
-    }, "x".repeat(240))).toBe(true);
+    }, "x".repeat(240))).toBe(false);
   });
 
   it("skips short system interruptions", () => {

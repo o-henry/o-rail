@@ -311,23 +311,10 @@ export function resolveLatestRunParticipationBadges(params: {
   return [...roleBadges, ...internalBadges];
 }
 
-export function resolveProgressiveRevealStep(contentLength: number): number {
-  if (contentLength <= 0) {
-    return 0;
-  }
-  return Math.max(48, Math.min(220, Math.ceil(contentLength / 36)));
-}
-
 export function shouldProgressivelyRevealMessage(message: ThreadMessage, body: string): boolean {
-  const contentLength = body.trim().length;
-  if (contentLength < 180) {
-    return false;
-  }
-  const eventKind = String(message.eventKind ?? "").trim();
-  if (message.role === "assistant") {
-    return true;
-  }
-  return message.role === "system" && eventKind !== "run_interrupted";
+  void message;
+  void body;
+  return false;
 }
 
 function formatArtifactStamp(input: string) {
@@ -367,11 +354,6 @@ function displayProcessEventBadgeLabel(type: string, t: (key: string) => string)
   if (normalized === "run_done") return t("tasks.processEvent.finished");
   if (normalized === "run_error" || normalized === "stage_error") return t("tasks.processEvent.failed");
   return "";
-}
-
-function shouldHideBareLiveStatusMessage(message: string) {
-  const normalized = String(message ?? "").trim().toLowerCase();
-  return ["queued", "started", "done", "failed", "error"].includes(normalized);
 }
 
 function buildLatestProcessEventByRole(events: LiveProcessEvent[]) {
@@ -455,39 +437,17 @@ const StaticTimelineMessageRow = memo(function StaticTimelineMessageRow(props: {
   showFinish: boolean;
   showSuccess: boolean;
   showFail: boolean;
-  progressivelyReveal: boolean;
-  progressiveStep: number;
   conversationRef: React.RefObject<HTMLDivElement | null>;
 }) {
-  const [visibleChars, setVisibleChars] = useState(() => (
-    props.progressivelyReveal ? Math.min(props.progressiveStep, props.body.length) : props.body.length
-  ));
-
-  useEffect(() => {
-    setVisibleChars(props.progressivelyReveal ? Math.min(props.progressiveStep, props.body.length) : props.body.length);
-  }, [props.body, props.progressiveStep, props.progressivelyReveal]);
-
-  useEffect(() => {
-    if (!props.progressivelyReveal || visibleChars >= props.body.length) {
-      return;
-    }
-    const intervalId = window.setInterval(() => {
-      setVisibleChars((current) => Math.min(props.body.length, current + props.progressiveStep));
-    }, 45);
-    return () => window.clearInterval(intervalId);
-  }, [props.body.length, props.progressiveStep, props.progressivelyReveal, visibleChars]);
-
   useEffect(() => {
     const element = props.conversationRef.current;
     if (!element) {
       return;
     }
     element.scrollTop = element.scrollHeight;
-  }, [props.conversationRef, visibleChars]);
+  }, [props.body, props.conversationRef]);
 
-  const displayedBody = props.progressivelyReveal
-    ? props.body.slice(0, Math.min(props.body.length, visibleChars))
-    : props.body;
+  const displayedBody = props.body;
   const isTerminalResult = props.showFinish || props.showSuccess || props.showFail;
   const handleOpenKnowledgeArtifact = () => {
     const artifactPath = String(props.artifactPath ?? "").trim();
@@ -585,18 +545,6 @@ function TasksThreadConversationImpl(props: TasksThreadConversationProps) {
     () => timelineEntries.filter((entry) => !(entry.kind === "single" && String(entry.message.eventKind ?? "").trim() === "run_interrupted")),
     [timelineEntries],
   );
-  const latestProgressiveMessageId = useMemo(() => {
-    for (let index = props.messages.length - 1; index >= 0; index -= 1) {
-      const message = props.messages[index];
-      const body = resolveTimelineMessage(message, props.visibleAgentLabels).body;
-      if (!String(message.id ?? "").trim() || !shouldProgressivelyRevealMessage(message, body)) {
-        continue;
-      }
-      return String(message.id ?? "").trim();
-    }
-    return "";
-  }, [props.messages, props.visibleAgentLabels]);
-
   useEffect(() => {
     if (props.liveAgents.length === 0 && props.liveProcessEvents.length === 0) {
       return;
@@ -636,12 +584,7 @@ function TasksThreadConversationImpl(props: TasksThreadConversationProps) {
           }
           const { message } = entry;
           const parsed = resolveTimelineMessage(message, props.visibleAgentLabels);
-          const messageId = String(message.id ?? "").trim();
           const renderedBody = normalizeTasksTimelineCopy(parsed.body);
-          const progressivelyReveal = !shouldRenderMessageMarkdown(message)
-            && messageId === latestProgressiveMessageId
-            && shouldProgressivelyRevealMessage(message, parsed.body);
-          const progressiveStep = resolveProgressiveRevealStep(renderedBody.length);
           return (
             <Fragment key={message.id}>
               <StaticTimelineMessageRow
@@ -651,30 +594,32 @@ function TasksThreadConversationImpl(props: TasksThreadConversationProps) {
                 createdAt={parsed.createdAt}
                 label={parsed.label}
                 messageRole={message.role}
-                progressiveStep={progressiveStep}
-                progressivelyReveal={progressivelyReveal}
                 renderMarkdown={shouldRenderMessageMarkdown(message)}
                 showFail={isFailedThreadMessage(message)}
                 showFinish={isFinishedThreadMessage(message)}
                 showSuccess={isFinishedThreadMessage(message)}
               />
-              {String(message.id ?? "").trim() === latestUserPromptMessageId && currentRunBadges.length > 0 ? (
-                <article
-                  aria-label="이번 실행 참여 에이전트와 provider"
-                  className="tasks-thread-message-row is-assistant is-participant-summary"
-                  key={`${message.id}:participants`}
-                >
-                  <div className="tasks-thread-message-agent-list">
-                    {currentRunBadges.map((badge) => (
-                      <span
-                        className={`tasks-thread-message-agent-chip${badge.kind === "provider" ? " is-provider" : ""}${badge.kind === "internal" ? " is-internal" : ""}`}
-                        key={`${message.id}:${badge.key}`}
-                      >
-                        {badge.label}
-                      </span>
-                    ))}
-                  </div>
-                </article>
+              {String(message.id ?? "").trim() === latestUserPromptMessageId ? (
+                <>
+                  {currentRunBadges.length > 0 ? (
+                    <article
+                      aria-label="이번 실행 참여 에이전트와 provider"
+                      className="tasks-thread-message-row is-assistant is-participant-summary"
+                      key={`${message.id}:participants`}
+                    >
+                      <div className="tasks-thread-message-agent-list">
+                        {currentRunBadges.map((badge) => (
+                          <span
+                            className={`tasks-thread-message-agent-chip${badge.kind === "provider" ? " is-provider" : ""}${badge.kind === "internal" ? " is-internal" : ""}`}
+                            key={`${message.id}:${badge.key}`}
+                          >
+                            {badge.label}
+                          </span>
+                        ))}
+                      </div>
+                    </article>
+                  ) : null}
+                </>
               ) : null}
             </Fragment>
           );
@@ -723,9 +668,6 @@ function TasksThreadConversationImpl(props: TasksThreadConversationProps) {
             const eventBadgeLabel = latestEvent?.type
               ? displayProcessEventBadgeLabel(latestEvent.type, t)
               : "";
-            const displayLogLine =
-              !(eventBadgeLabel && shouldHideBareLiveStatusMessage(currentWorkLabel))
-              || Boolean(latestEvent?.stage);
             return (
               <article
                 aria-label={`${entry.label} 실시간 상태`}
@@ -755,12 +697,6 @@ function TasksThreadConversationImpl(props: TasksThreadConversationProps) {
                     </span>
                   ) : null}
                 </div>
-                {displayLogLine ? (
-                  <div className="tasks-thread-live-log-line">
-                    {latestEvent?.stage ? `[${displayProcessStage(String(latestEvent.stage ?? ""), t)}] ` : ""}
-                    {displayCurrentWorkLabel}
-                  </div>
-                ) : null}
                 {currentWorkDetail ? (
                   <div className="tasks-thread-live-detail is-explanation">
                     {currentWorkDetail}
@@ -828,8 +764,6 @@ function TasksThreadConversationImpl(props: TasksThreadConversationProps) {
               key={entry.message.id}
               label={parsed.label}
               messageRole={entry.message.role}
-              progressiveStep={resolveProgressiveRevealStep(renderedBody.length)}
-              progressivelyReveal={false}
               renderMarkdown={false}
               showFail={false}
               showFinish={false}

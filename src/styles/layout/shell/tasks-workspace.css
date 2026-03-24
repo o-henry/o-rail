@@ -1203,17 +1203,6 @@
   letter-spacing: 0.03em;
 }
 
-.tasks-thread-live-log-line {
-  width: min(100%, 820px);
-  max-width: min(100%, 820px);
-  min-width: 0;
-  color: var(--text-main);
-  font-size: 12px;
-  line-height: 1.5;
-  overflow-wrap: anywhere;
-  word-break: break-word;
-}
-
 .tasks-thread-live-stage-label {
   display: inline-flex;
   align-items: center;

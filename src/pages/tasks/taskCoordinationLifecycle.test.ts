@@ -111,8 +111,21 @@ describe("settleRunningCoordinationRun", () => {
     });
   });
 
-  it("completes only when nothing is pending or failed", () => {
+  it("stays pending when runtime has started but no terminal evidence exists yet", () => {
     const settlement = settleRunningCoordinationRun(buildThread(), buildCoordinationState());
+    expect(settlement).toEqual({ kind: "pending" });
+  });
+
+  it("completes only after terminal evidence exists", () => {
+    const settlement = settleRunningCoordinationRun(
+      buildThread({
+        thread: {
+          ...buildThread().thread,
+          status: "completed",
+        },
+      }),
+      buildCoordinationState(),
+    );
     expect(settlement).toEqual({
       kind: "completed",
       summary: "Runtime session completed",

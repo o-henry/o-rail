@@ -294,6 +294,49 @@ describe("reduceLiveRoleEventBatch", () => {
     expect(reduced.shouldRefresh).toBe(true);
   });
 
+  it("hides internal terminal errors without promoting them to a thread refresh", () => {
+    const reduced = reduceLiveRoleEventBatch({
+      activeThreadId: "thread-1",
+      currentNotes: {
+        researcher: {
+          message: "자료 조사 중",
+          updatedAt: "2026-03-22T00:00:00.000Z",
+        },
+      },
+      currentEvents: [
+        {
+          id: "event-1",
+          runId: "run-1",
+          roleId: "researcher",
+          agentLabel: "RESEARCHER",
+          type: "stage_started",
+          stage: "codex",
+          message: "역할 실행 시작",
+          at: "2026-03-22T00:00:00.000Z",
+        },
+      ],
+      details: [
+        {
+          taskId: "thread-1",
+          runId: "run-1",
+          studioRoleId: "research_analyst",
+          type: "run_error",
+          stage: "codex",
+          message: "internal brief failed",
+          at: "2026-03-22T00:00:01.000Z",
+          payload: {
+            internal: true,
+            promptMode: "brief",
+          },
+        },
+      ],
+    });
+
+    expect(reduced.nextNotes.researcher).toBeUndefined();
+    expect(reduced.nextEvents).toEqual([]);
+    expect(reduced.shouldRefresh).toBe(false);
+  });
+
   it("does not churn live notes when only repeated progress timestamps change", () => {
     const currentNotes = {
       researcher: {

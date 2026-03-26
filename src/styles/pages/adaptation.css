@@ -128,6 +128,7 @@
 .adaptation-table td {
   padding: 9px 10px;
   text-align: left;
+  text-transform: uppercase;
   vertical-align: middle;
   border-bottom: 1px solid #d7dee7;
   border-right: 1px solid #d7dee7;

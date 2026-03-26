@@ -3,13 +3,27 @@ import {
   buildKnowledgeEntriesFromRoleRunCompletion,
   filterUserFacingRoleArtifactPaths,
   isUserFacingRoleArtifactPath,
+  shouldPersistTasksRoleRunResult,
 } from "./useRoleRunCompletionBridge";
 
 describe("useRoleRunCompletionBridge artifact filtering", () => {
+  it("skips persisting internal task/thread role runs", () => {
+    expect(shouldPersistTasksRoleRunResult({
+      sourceTab: "tasks-thread",
+      internal: true,
+    })).toBe(false);
+    expect(shouldPersistTasksRoleRunResult({
+      sourceTab: "tasks",
+      internal: false,
+    })).toBe(true);
+  });
+
   it("hides internal runtime artifacts from user-facing role results", () => {
     expect(filterUserFacingRoleArtifactPaths([
       "/tmp/task/prompt.md",
       "/tmp/task/response.json",
+      "/tmp/task/run.diagnostics.json",
+      "/tmp/task/run.error.json",
       "/tmp/task/run.json",
       "/tmp/task/orchestration_plan.json",
       "/tmp/task/discussion_direct.md",

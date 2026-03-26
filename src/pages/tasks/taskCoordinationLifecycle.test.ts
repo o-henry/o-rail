@@ -98,17 +98,14 @@ describe("settleRunningCoordinationRun", () => {
     });
   });
 
-  it("blocks when any agent failed", () => {
+  it("stays pending when only an internal agent failed but the thread is not terminal", () => {
     const settlement = settleRunningCoordinationRun(
       buildThread({
         agents: [{ id: "a1", threadId: "thread-1", label: "RESEARCHER", roleId: "researcher", status: "failed", lastUpdatedAt: "2026-03-21T00:00:01.000Z" }],
       }),
       buildCoordinationState(),
     );
-    expect(settlement.kind).toBe("blocked");
-    expect(settlement).toMatchObject({
-      reason: "RESEARCHER failed.",
-    });
+    expect(settlement).toEqual({ kind: "pending" });
   });
 
   it("stays pending when runtime has started but no terminal evidence exists yet", () => {

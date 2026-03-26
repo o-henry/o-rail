@@ -10,26 +10,6 @@ export type CoordinationRunSettlement =
   | { kind: "completed"; summary: string }
   | { kind: "blocked"; reason: string; nextAction: string; summary: string };
 
-function failedAgentSummary(thread: ThreadDetail): CoordinationRunSettlement | null {
-  const failedAgents = thread.agents.filter((agent) => String(agent.status ?? "").trim().toLowerCase() === "failed");
-  if (failedAgents.length === 0) {
-    return null;
-  }
-  const labels = failedAgents
-    .map((agent) => String(agent.label || agent.roleId || "agent").trim())
-    .filter(Boolean);
-  const preview = labels.slice(0, 2).join(", ");
-  return {
-    kind: "blocked",
-    reason:
-      failedAgents.length === 1
-        ? `${preview || "A background agent"} failed.`
-        : `${failedAgents.length} background agents failed${preview ? `: ${preview}` : ""}.`,
-    nextAction: "Review the failed agent output, then retry or adjust the request.",
-    summary: "Runtime session blocked because one or more agent runs failed",
-  };
-}
-
 function failedThreadSummary(thread: ThreadDetail): CoordinationRunSettlement | null {
   const normalizedStatus = String(thread.thread.status ?? "").trim().toLowerCase();
   if (!normalizedStatus || (normalizedStatus !== "failed" && normalizedStatus !== "error" && normalizedStatus !== "cancelled")) {
@@ -89,13 +69,13 @@ function hasTerminalRunEvidence(thread: ThreadDetail): boolean {
   }
   if (thread.agents.some((agent) => {
     const status = String(agent.status ?? "").trim().toLowerCase();
-    return status === "done" || status === "failed";
+    return status === "done";
   })) {
     return true;
   }
   return thread.messages.some((message) => {
     const eventKind = String(message.eventKind ?? "").trim().toLowerCase();
-    return eventKind === "agent_result" || eventKind === "agent_failed" || eventKind === "run_interrupted";
+    return eventKind === "agent_result" || eventKind === "run_interrupted";
   });
 }
 
@@ -120,7 +100,7 @@ export function settleRunningCoordinationRun(
   if (!hasTerminalRunEvidence(thread)) {
     return { kind: "pending" };
   }
-  return failedAgentSummary(thread) ?? failedThreadSummary(thread) ?? {
+  return failedThreadSummary(thread) ?? {
     kind: "completed",
     summary: "Runtime session completed",
   };

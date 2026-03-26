@@ -158,6 +158,12 @@ type LiveProcessEvent = {
   at: string;
 };
 
+type TasksRoleRuntimeEventPayload = {
+  internal?: boolean | null;
+  promptMode?: string | null;
+  [key: string]: unknown;
+};
+
 type TasksRoleRuntimeEvent = {
   taskId?: string;
   runId?: string;
@@ -165,7 +171,7 @@ type TasksRoleRuntimeEvent = {
   type?: string;
   stage?: string | null;
   message?: string;
-  payload?: Record<string, unknown> | null;
+  payload?: TasksRoleRuntimeEventPayload | null;
   at?: string;
 };
 
@@ -260,6 +266,23 @@ function formatError(error: unknown): string {
 
 function nowIso(): string {
   return new Date().toISOString();
+}
+
+function normalizeTasksRoleRuntimeEventType(value: string | null | undefined): string {
+  return String(value ?? "").trim().toLowerCase();
+}
+
+function readTasksRoleRuntimePayload(detail: TasksRoleRuntimeEvent): TasksRoleRuntimeEventPayload {
+  return (detail.payload ?? {}) as TasksRoleRuntimeEventPayload;
+}
+
+function isInternalTasksRoleRuntimeEvent(detail: TasksRoleRuntimeEvent): boolean {
+  return Boolean(readTasksRoleRuntimePayload(detail).internal);
+}
+
+function isTerminalTasksRoleRuntimeEvent(detail: TasksRoleRuntimeEvent): boolean {
+  const eventType = normalizeTasksRoleRuntimeEventType(detail.type);
+  return eventType === "run_done" || eventType === "run_error";
 }
 
 function shouldRefreshLiveRoleNote(params: {
@@ -392,11 +415,13 @@ export function reduceLiveRoleEventBatch(params: {
       continue;
     }
     const eventType = String(detail.type ?? "").trim();
+    const isTerminalEvent = isTerminalTasksRoleRuntimeEvent(detail);
+    const isInternalEvent = isInternalTasksRoleRuntimeEvent(detail);
     const stageLabel = String(detail.stage ?? "").trim();
     const message = String(detail.message ?? "").trim() || (stageLabel ? `${stageLabel} 진행 중` : "작업 중");
     const updatedAt = String(detail.at ?? "").trim() || nowIso();
 
-    if (eventType === "run_done" || eventType === "run_error") {
+    if (isTerminalEvent) {
       if (Object.prototype.hasOwnProperty.call(nextNotes, roleId)) {
         if (!notesChanged) {
           nextNotes = { ...nextNotes };
@@ -409,7 +434,9 @@ export function reduceLiveRoleEventBatch(params: {
         nextEvents = filteredEvents;
         eventsChanged = true;
       }
-      shouldRefresh = true;
+      if (!isInternalEvent) {
+        shouldRefresh = true;
+      }
       continue;
     } else {
       const previous = nextNotes[roleId];
@@ -1221,7 +1248,7 @@ export function useTasksThreadState(params: Params) {
       runtimeTargetsByRoleRef.current = reduceRuntimeTargetsByRole(runtimeTargetsByRoleRef.current, detail);
       const nextRuntimeTargetCount = Object.keys(runtimeTargetsByRoleRef.current).length;
       setRuntimeTargetCount((current) => (current === nextRuntimeTargetCount ? current : nextRuntimeTargetCount));
-      const payload = detail.payload ?? {};
+      const payload = readTasksRoleRuntimePayload(detail);
       const providerLabels = [
         String(payload.provider ?? "").trim(),
         ...(Array.isArray(payload.providers) ? payload.providers.map((value) => String(value ?? "").trim()) : []),
@@ -1238,10 +1265,11 @@ export function useTasksThreadState(params: Params) {
           current,
         ));
       }
-      const normalizedType = String(detail.type ?? "").trim().toLowerCase();
+      const normalizedType = normalizeTasksRoleRuntimeEventType(detail.type);
+      const isInternalEvent = isInternalTasksRoleRuntimeEvent(detail);
       const nextTerminalStatus =
-        normalizedType === "run_done" ? "done"
-          : normalizedType === "run_error" ? "failed"
+        !isInternalEvent && normalizedType === "run_done" ? "done"
+          : !isInternalEvent && normalizedType === "run_error" ? "failed"
             : "";
       if (nextTerminalStatus) {
         const roleId = getTaskAgentPresetIdByStudioRoleId(String(detail.studioRoleId ?? "").trim());
@@ -1254,12 +1282,13 @@ export function useTasksThreadState(params: Params) {
             return {
               ...current,
               task: {
-                ...current.task,
-                roles: current.task.roles.map((role) => (
-                  role.id === roleId
-                    ? {
-                        ...role,
-                        status: nextTerminalStatus,
+              ...current.task,
+              status: nextTerminalStatus === "done" ? "completed" : "failed",
+              roles: current.task.roles.map((role) => (
+                role.id === roleId
+                  ? {
+                      ...role,
+                      status: nextTerminalStatus,
                         lastRunId: String(detail.runId ?? "").trim() || role.lastRunId,
                         updatedAt: terminalAt,
                       }
@@ -1275,6 +1304,11 @@ export function useTasksThreadState(params: Params) {
                     }
                   : agent
               )),
+              thread: {
+                ...current.thread,
+                status: nextTerminalStatus === "done" ? "completed" : "failed",
+                updatedAt: terminalAt,
+              },
             };
           });
         }

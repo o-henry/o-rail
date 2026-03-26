@@ -71,7 +71,7 @@ type RunTaskRoleWithCodexInput = {
   sourceTab: "tasks" | "tasks-thread";
   runId: string;
   intent?: string;
-  promptMode?: "direct" | "orchestrate" | "brief" | "critique" | "final";
+  promptMode?: "direct" | "orchestrate" | "brief" | "critique" | "judge" | "verify" | "final";
   onRuntimeSession?: (runtime: {
     codexThreadId?: string | null;
     codexTurnId?: string | null;
@@ -91,6 +91,37 @@ export type TaskRoleCodexRunResult = {
   codexThreadId?: string;
   codexTurnId?: string;
 };
+
+export class TaskRoleCodexRunError extends Error {
+  artifactPaths: string[];
+
+  codexThreadId?: string;
+
+  codexTurnId?: string;
+
+  completedStatus?: string;
+
+  constructor(message: string, options?: {
+    artifactPaths?: string[];
+    codexThreadId?: string;
+    codexTurnId?: string;
+    completedStatus?: string;
+  }) {
+    super(message);
+    this.name = "TaskRoleCodexRunError";
+    this.artifactPaths = [...new Set((options?.artifactPaths ?? []).map((value) => String(value ?? "").trim()).filter(Boolean))];
+    this.codexThreadId = options?.codexThreadId;
+    this.codexTurnId = options?.codexTurnId;
+    this.completedStatus = options?.completedStatus;
+  }
+}
+
+export function extractTaskRoleCodexRunArtifactPaths(error: unknown): string[] {
+  if (error instanceof TaskRoleCodexRunError) {
+    return [...error.artifactPaths];
+  }
+  return [];
+}
 
 function resolvePreferredRuntimeModel(params: {
   inputModel?: string;
@@ -121,13 +152,18 @@ function resolvePreferredRuntimeModels(params: {
 function resolveRolePollTimeoutMs(params: {
   studioRoleId: string;
   intent?: string;
-  promptMode?: "direct" | "orchestrate" | "brief" | "critique" | "final";
+  promptMode?: "direct" | "orchestrate" | "brief" | "critique" | "judge" | "verify" | "final";
 }): number {
   if (params.studioRoleId === "research_analyst") {
     return RESEARCH_POLL_TIMEOUT_MS;
   }
   if (String(params.intent ?? "").trim().toLowerCase() === "ideation") {
-    if (params.promptMode === "brief" || params.promptMode === "final") {
+    if (
+      params.promptMode === "brief"
+      || params.promptMode === "judge"
+      || params.promptMode === "verify"
+      || params.promptMode === "final"
+    ) {
       return IDEATION_POLL_TIMEOUT_MS;
     }
   }
@@ -399,7 +435,7 @@ function isIdeationWebPrompt(params: {
 
 function buildWebProviderIntentInstructions(params: {
   intent?: string;
-  promptMode?: "direct" | "orchestrate" | "brief" | "critique" | "final";
+  promptMode?: "direct" | "orchestrate" | "brief" | "critique" | "judge" | "verify" | "final";
   request: string;
   promptText: string;
 }): string[] {
@@ -415,6 +451,18 @@ function buildWebProviderIntentInstructions(params: {
     return [
       "이 요청은 외부 시각에서 허점과 누락을 찾기 위한 검토 단계다.",
       "좋아 보이는 말보다 충돌, 빠진 검증 포인트, 구현 리스크를 우선 적는다.",
+    ];
+  }
+  if (params.promptMode === "judge") {
+    return [
+      "이 요청은 멀티에이전트 결과의 품질 판정을 위한 단계다.",
+      "좋고 나쁨의 감상보다 누락, 리스크, 보정 필요 여부를 구조적으로 판단한다.",
+    ];
+  }
+  if (params.promptMode === "verify") {
+    return [
+      "이 요청은 최종 답변의 보수적 검증 단계다.",
+      "과장, 근거 약한 주장, 제거해야 할 부분을 우선 찾는다.",
     ];
   }
   if (params.promptMode === "final") {
@@ -433,7 +481,7 @@ function buildWebProviderPrompt(params: {
   pack: TaskAgentPromptPack;
   promptText: string;
   intent?: string;
-  promptMode?: "direct" | "orchestrate" | "brief" | "critique" | "final";
+  promptMode?: "direct" | "orchestrate" | "brief" | "critique" | "judge" | "verify" | "final";
 }): string {
   const request = extractWebPromptRequest(params.promptText);
   const guidelines = extractWebPromptGuidelines(params.promptText);
@@ -678,6 +726,22 @@ function resolvePromptModeDeveloperInstructions(params: {
       "- 아래 출력 규칙을 우선한다.",
     ].join("\n");
   }
+  if (promptMode === "judge") {
+    return [
+      "당신은 멀티에이전트 결과의 품질 판정자다.",
+      "- 참여 결과가 사용자 요청을 충족하는지 pass, repair, fallback 관점에서 냉정하게 평가한다.",
+      "- 글을 멋지게 쓰는 것보다 누락과 리스크를 구조적으로 남긴다.",
+      "- 아래 출력 규칙을 우선한다.",
+    ].join("\n");
+  }
+  if (promptMode === "verify") {
+    return [
+      "당신은 최종 답변 검증자다.",
+      "- 과장된 주장, 근거 약한 문장, 제거해야 할 부분을 먼저 찾는다.",
+      "- 필요하면 더 보수적인 보정 방향만 제시한다.",
+      "- 아래 출력 규칙을 우선한다.",
+    ].join("\n");
+  }
   if (promptMode === "final") {
     return [
       "당신은 최종 합성 담당자다.",
@@ -823,6 +887,7 @@ function isInputOnlyTurnPayload(raw: unknown): boolean {
 type TurnTextCandidate = {
   text: string;
   score: number;
+  path: string[];
 };
 
 function collectReadableTurnCandidates(input: unknown, depth = 0, path: string[] = []): TurnTextCandidate[] {
@@ -879,7 +944,7 @@ function collectReadableTurnCandidates(input: unknown, depth = 0, path: string[]
     if (text.includes("\n")) {
       score += 80;
     }
-    return [{ text, score }];
+    return [{ text, score, path: [...path] }];
   }
   if (Array.isArray(input)) {
     return input.flatMap((item, index) => collectReadableTurnCandidates(item, depth + 1, [...path, String(index)]));
@@ -932,10 +997,11 @@ function collectReadableTurnCandidates(input: unknown, depth = 0, path: string[]
       continue;
     }
     visited.add(key);
-    const nested = collectReadableTurnCandidates(record[key], depth + 1, [...path, key]).map((entry) => ({
-      text: entry.text,
-      score: entry.score + (isAssistantLike ? 180 : 0),
-    }));
+      const nested = collectReadableTurnCandidates(record[key], depth + 1, [...path, key]).map((entry) => ({
+        text: entry.text,
+        score: entry.score + (isAssistantLike ? 180 : 0),
+        path: entry.path,
+      }));
     candidates.push(...nested);
   }
 
@@ -986,6 +1052,35 @@ function collectNestedText(input: unknown, depth = 0): string[] {
   const nestedKeys = ["output", "outputs", "content", "response", "result", "turn", "completion", "data"];
   const nested = nestedKeys.flatMap((key) => collectNestedText(record[key], depth + 1));
   return [...direct, ...nested];
+}
+
+function previewDiagnosticText(value: unknown, maxChars = 240): string {
+  const normalized = String(value ?? "").trim();
+  if (!normalized) {
+    return "";
+  }
+  if (normalized.length <= maxChars) {
+    return normalized;
+  }
+  return `${normalized.slice(0, maxChars - 1).trimEnd()}…`;
+}
+
+function summarizeTurnTextCandidates(raw: unknown, limit = 8): Array<{
+  rank: number;
+  score: number;
+  path: string;
+  textLength: number;
+  textPreview: string;
+}> {
+  return collectReadableTurnCandidates(raw)
+    .slice(0, limit)
+    .map((candidate, index) => ({
+      rank: index + 1,
+      score: candidate.score,
+      path: candidate.path.join("."),
+      textLength: candidate.text.length,
+      textPreview: previewDiagnosticText(candidate.text),
+    }));
 }
 
 function normalizeTurnStatus(value: unknown): string | null {
@@ -1502,6 +1597,13 @@ async function writeUnreadableCodexDebugArtifacts(params: {
     latestTurn: unknown;
     threadState: unknown;
   }>;
+  turnTextCandidates: Array<{
+    rank: number;
+    score: number;
+    path: string;
+    textLength: number;
+    textPreview: string;
+  }>;
 }): Promise<void> {
   const debugPayload = {
     taskId: params.taskId,
@@ -1519,12 +1621,149 @@ async function writeUnreadableCodexDebugArtifacts(params: {
       latestTurn: snapshot.latestTurn,
       threadState: snapshot.threadState,
     })),
+    turnTextCandidates: params.turnTextCandidates,
   };
   await params.invokeFn<string>("workspace_write_text", {
     cwd: params.artifactDir,
     name: "response.unreadable.debug.json",
     content: `${JSON.stringify(debugPayload, null, 2)}\n`,
   });
+}
+
+type TaskRoleRunDiagnosticSnapshot = {
+  status: string;
+  hasReadableText: boolean;
+  latestTurn: unknown;
+  threadState: unknown;
+};
+
+type TaskRoleRunDiagnosticPayload = {
+  phase: "success" | "error";
+  taskId: string;
+  runId: string;
+  studioRoleId: string;
+  promptMode: string;
+  intent: string;
+  projectPath: string;
+  model: string;
+  models: string[];
+  executor: string;
+  webProvider: string | null;
+  webProviders: string[];
+  modelEngine: string | null;
+  reasoningEffort: string;
+  sandboxMode: string;
+  pollTimeoutMs: number;
+  codexThreadId: string | null;
+  codexTurnId: string | null;
+  completedStatus: string;
+  summaryLength: number;
+  summaryPreview: string;
+  hasReadableTurnText: boolean;
+  isUserOnlyTurn: boolean;
+  isInputOnlyTurnPayload: boolean;
+  turnError: string | null;
+  finalError: string | null;
+  turnTextCandidates: Array<{
+    rank: number;
+    score: number;
+    path: string;
+    textLength: number;
+    textPreview: string;
+  }>;
+  threadReadSnapshots: Array<TaskRoleRunDiagnosticSnapshot & { index: number }>;
+  debugArtifactWriteErrors: string[];
+};
+
+async function tryWriteDebugArtifact(params: {
+  invokeFn: InvokeFn;
+  artifactDir: string;
+  name: string;
+  content: string;
+  artifactPaths: string[];
+  writeErrors: string[];
+}): Promise<string> {
+  try {
+    const path = await params.invokeFn<string>("workspace_write_text", {
+      cwd: params.artifactDir,
+      name: params.name,
+      content: params.content,
+    });
+    const normalized = String(path ?? "").trim();
+    if (normalized) {
+      params.artifactPaths.push(normalized);
+    }
+    return normalized;
+  } catch (error) {
+    params.writeErrors.push(`${params.name}: ${String(error ?? "unknown error")}`);
+    return "";
+  }
+}
+
+function buildTaskRoleRunDiagnosticPayload(params: {
+  phase: "success" | "error";
+  taskId: string;
+  runId: string;
+  studioRoleId: string;
+  promptMode?: string;
+  intent?: string;
+  projectPath: string;
+  model: string;
+  models: string[];
+  executor: string;
+  webProvider?: string | null;
+  webProviders: string[];
+  modelEngine?: string | null;
+  reasoningEffort: string;
+  sandboxMode: string;
+  pollTimeoutMs: number;
+  codexThreadId?: string;
+  codexTurnId?: string;
+  completedStatus: string;
+  summary: string;
+  turnError: unknown;
+  finalError?: unknown;
+  finalRaw: unknown;
+  threadReadSnapshots: TaskRoleRunDiagnosticSnapshot[];
+  debugArtifactWriteErrors: string[];
+}): TaskRoleRunDiagnosticPayload {
+  return {
+    phase: params.phase,
+    taskId: params.taskId,
+    runId: params.runId,
+    studioRoleId: params.studioRoleId,
+    promptMode: String(params.promptMode ?? "").trim(),
+    intent: String(params.intent ?? "").trim(),
+    projectPath: params.projectPath,
+    model: params.model,
+    models: [...params.models],
+    executor: params.executor,
+    webProvider: params.webProvider ?? null,
+    webProviders: [...params.webProviders],
+    modelEngine: params.modelEngine ?? null,
+    reasoningEffort: params.reasoningEffort,
+    sandboxMode: params.sandboxMode,
+    pollTimeoutMs: params.pollTimeoutMs,
+    codexThreadId: params.codexThreadId ?? null,
+    codexTurnId: params.codexTurnId ?? null,
+    completedStatus: params.completedStatus,
+    summaryLength: params.summary.length,
+    summaryPreview: previewDiagnosticText(params.summary),
+    hasReadableTurnText: hasReadableTurnText(params.finalRaw),
+    isUserOnlyTurn: isUserOnlyTurn(params.finalRaw),
+    isInputOnlyTurnPayload: isInputOnlyTurnPayload(params.finalRaw),
+    turnError: params.turnError instanceof Error ? params.turnError.message : String(params.turnError ?? "").trim() || null,
+    finalError: params.finalError instanceof Error ? params.finalError.message : String(params.finalError ?? "").trim() || null,
+    turnTextCandidates: summarizeTurnTextCandidates(params.finalRaw),
+    threadReadSnapshots: params.threadReadSnapshots.map((snapshot, index) => ({
+      index,
+      status: snapshot.status,
+      hasReadableText: snapshot.hasReadableText,
+      latestTurn: snapshot.latestTurn,
+      threadState: snapshot.threadState,
+    })),
+    debugArtifactWriteErrors: [...params.debugArtifactWriteErrors],
+  };
 }
 
 async function resolveTaskRunContext(input: RunTaskRoleWithCodexInput): Promise<{
@@ -1654,8 +1893,55 @@ export async function runTaskRoleWithCodex(input: RunTaskRoleWithCodexInput): Pr
     latestTurn: unknown;
     threadState: unknown;
   }> = [];
+  const diagnosticArtifactPaths: string[] = [];
+  const debugArtifactWriteErrors: string[] = [];
+  let promptArtifactPath = "";
+  let responseArtifactPath = "";
+  let responseJsonPath = "";
+  let ensuredResearcherArtifactPaths = [...researcherCollection.artifactPaths];
 
-  if (webProviders.length > 1) {
+  const writeDiagnosticArtifact = async (name: string, content: string) => tryWriteDebugArtifact({
+    invokeFn: input.invokeFn,
+    artifactDir,
+    name,
+    content,
+    artifactPaths: diagnosticArtifactPaths,
+    writeErrors: debugArtifactWriteErrors,
+  });
+
+  const writeRunDiagnostics = async (phase: "success" | "error", finalError?: unknown) => {
+    const payload = buildTaskRoleRunDiagnosticPayload({
+      phase,
+      taskId: input.taskId,
+      runId: input.runId,
+      studioRoleId: input.studioRoleId,
+      promptMode: input.promptMode,
+      intent: input.intent,
+      projectPath: context.projectPath,
+      model: primarySelectedModel,
+      models: selectedModels,
+      executor: runtimeModelOption.executor,
+      webProvider,
+      webProviders: webProviders.map((entry) => entry.provider),
+      modelEngine: webProvider ? null : modelEngine,
+      reasoningEffort,
+      sandboxMode,
+      pollTimeoutMs,
+      codexThreadId,
+      codexTurnId,
+      completedStatus,
+      summary,
+      turnError,
+      finalError,
+      finalRaw: rawResponse,
+      threadReadSnapshots: codexThreadReadSnapshots,
+      debugArtifactWriteErrors,
+    });
+    await writeDiagnosticArtifact("run.diagnostics.json", `${JSON.stringify(payload, null, 2)}\n`);
+  };
+
+  try {
+    if (webProviders.length > 1) {
     const providerNames = webProviders.map((entry) => entry.provider);
     const webTimeoutMs = providerNames.reduce(
       (currentMax, provider) => Math.max(currentMax, resolveWebProviderTimeoutMs(provider, pollTimeoutMs)),
@@ -1833,12 +2119,8 @@ export async function runTaskRoleWithCodex(input: RunTaskRoleWithCodexInput): Pr
       if (turnError instanceof Error) {
         throw turnError;
       }
+      await writeDiagnosticArtifact("response.unreadable.json", `${JSON.stringify(rawResponse, null, 2)}\n`);
       try {
-        await input.invokeFn<string>("workspace_write_text", {
-          cwd: artifactDir,
-          name: "response.unreadable.json",
-          content: `${JSON.stringify(rawResponse, null, 2)}\n`,
-        });
         await writeUnreadableCodexDebugArtifacts({
           invokeFn: input.invokeFn,
           artifactDir,
@@ -1851,9 +2133,11 @@ export async function runTaskRoleWithCodex(input: RunTaskRoleWithCodexInput): Pr
           turnStartRaw: turnStartRawResponse,
           finalRaw: rawResponse,
           threadReadSnapshots: codexThreadReadSnapshots,
+          turnTextCandidates: summarizeTurnTextCandidates(rawResponse),
         });
-      } catch {
-        // best-effort debug artifact only
+        diagnosticArtifactPaths.push(`${artifactDir}/response.unreadable.debug.json`);
+      } catch (error) {
+        debugArtifactWriteErrors.push(`response.unreadable.debug.json: ${String(error ?? "unknown error")}`);
       }
       throw new Error("Codex turn finished without a readable response");
     }
@@ -1866,12 +2150,12 @@ export async function runTaskRoleWithCodex(input: RunTaskRoleWithCodexInput): Pr
     });
   }
 
-  const promptArtifactPath = await input.invokeFn<string>("workspace_write_text", {
+  promptArtifactPath = await input.invokeFn<string>("workspace_write_text", {
     cwd: artifactDir,
     name: "prompt.md",
     content: `${promptText}\n`,
   });
-  const responseArtifactPath = await input.invokeFn<string>("workspace_write_text", {
+  responseArtifactPath = await input.invokeFn<string>("workspace_write_text", {
     cwd: artifactDir,
     name: String(input.outputArtifactName || pack.outputArtifactName || `${pack.id}.md`).trim(),
     content: `${summary}\n`,
@@ -1883,7 +2167,7 @@ export async function runTaskRoleWithCodex(input: RunTaskRoleWithCodexInput): Pr
       documents: webRunDocuments,
     })
     : [];
-  const responseJsonPath = await input.invokeFn<string>("workspace_write_text", {
+  responseJsonPath = await input.invokeFn<string>("workspace_write_text", {
     cwd: artifactDir,
     name: "response.json",
     content: `${JSON.stringify(
@@ -1911,7 +2195,7 @@ export async function runTaskRoleWithCodex(input: RunTaskRoleWithCodexInput): Pr
     )}\n`,
   });
 
-  const ensuredResearcherArtifactPaths =
+  ensuredResearcherArtifactPaths =
     pack.id === "researcher" || pack.studioRoleId === "research_analyst"
       ? await ensureResearcherCollectionArtifacts({
           invokeFn: input.invokeFn,
@@ -1922,11 +2206,49 @@ export async function runTaskRoleWithCodex(input: RunTaskRoleWithCodexInput): Pr
         })
       : researcherCollection.artifactPaths;
 
-  return {
-    summary,
-    artifactPaths: [...ensuredResearcherArtifactPaths, promptArtifactPath, responseArtifactPath, ...webRunArtifactPaths, responseJsonPath],
-    usage: webProvider ? undefined : extractUsageStats(rawResponse),
-    codexThreadId,
-    codexTurnId,
-  };
+    await writeRunDiagnostics("success");
+
+    return {
+      summary,
+      artifactPaths: [
+        ...ensuredResearcherArtifactPaths,
+        promptArtifactPath,
+        responseArtifactPath,
+        ...webRunArtifactPaths,
+        responseJsonPath,
+        ...diagnosticArtifactPaths,
+      ].map((value) => String(value ?? "").trim()).filter(Boolean),
+      usage: webProvider ? undefined : extractUsageStats(rawResponse),
+      codexThreadId,
+      codexTurnId,
+    };
+  } catch (error) {
+    if (!promptArtifactPath && promptText.trim()) {
+      await writeDiagnosticArtifact("prompt.md", `${promptText}\n`);
+    }
+    await writeRunDiagnostics("error", error);
+    await writeDiagnosticArtifact("run.error.json", `${JSON.stringify({
+      taskId: input.taskId,
+      runId: input.runId,
+      studioRoleId: input.studioRoleId,
+      error: error instanceof Error ? error.message : String(error ?? "unknown error"),
+      completedStatus,
+      codexThreadId: codexThreadId ?? null,
+      codexTurnId: codexTurnId ?? null,
+      diagnosticArtifactPaths,
+      debugArtifactWriteErrors,
+    }, null, 2)}\n`);
+    if (error instanceof TaskRoleCodexRunError) {
+      throw error;
+    }
+    throw new TaskRoleCodexRunError(
+      error instanceof Error ? error.message : String(error ?? "unknown error"),
+      {
+        artifactPaths: [...ensuredResearcherArtifactPaths, ...diagnosticArtifactPaths],
+        codexThreadId,
+        codexTurnId,
+        completedStatus,
+      },
+    );
+  }
 }

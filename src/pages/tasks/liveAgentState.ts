@@ -162,11 +162,6 @@ function isRunningRoleExecutionStatus(value: string | null | undefined): boolean
   return normalized === "running" || normalized === "thinking" || normalized === "queued" || normalized === "awaiting_approval";
 }
 
-function isFailedRoleExecutionStatus(value: string | null | undefined): boolean {
-  const normalized = normalizeRoleExecutionStatus(value);
-  return normalized === "error" || normalized === "failed";
-}
-
 function isCompletedRoleExecutionStatus(value: string | null | undefined): boolean {
   const normalized = normalizeRoleExecutionStatus(value);
   return normalized === "done" || normalized === "completed";
@@ -182,7 +177,6 @@ export function resolveLiveServiceStatus(detail: ThreadDetail | null): LiveServi
   const pendingApprovalCount = detail.approvals.filter((approval) => approval.status === "pending").length;
   const enabledRoles = detail.task.roles.filter((role) => role.enabled);
   const runningRoles = enabledRoles.filter((role) => isRunningRoleExecutionStatus(role.status));
-  const failedRoles = enabledRoles.filter((role) => isFailedRoleExecutionStatus(role.status));
   const completedRoles = enabledRoles.filter((role) => isCompletedRoleExecutionStatus(role.status));
   const freshestUpdate = [
     detail.task.updatedAt,
@@ -200,6 +194,13 @@ export function resolveLiveServiceStatus(detail: ThreadDetail | null): LiveServi
     return {
       state: "completed",
       detail: "서비스 기준으로 실행이 완료되었습니다.",
+      updatedAt: freshestUpdate,
+    };
+  }
+  if (taskStatus === "failed" || taskStatus === "error" || threadStatus === "failed" || threadStatus === "error") {
+    return {
+      state: "failed",
+      detail: "서비스 기준으로 최종 문서 생성이 실패했습니다.",
       updatedAt: freshestUpdate,
     };
   }
@@ -221,20 +222,6 @@ export function resolveLiveServiceStatus(detail: ThreadDetail | null): LiveServi
     return {
       state: "running",
       detail: `서비스 기준으로 ${runningRoles.map((role) => role.label).join(", ")} 실행 중입니다.`,
-      updatedAt: freshestUpdate,
-    };
-  }
-  if (failedRoles.length === enabledRoles.length && enabledRoles.length > 0) {
-    return {
-      state: "failed",
-      detail: "서비스 기준으로 모든 내부 브리프 또는 역할 실행이 실패했습니다.",
-      updatedAt: freshestUpdate,
-    };
-  }
-  if (failedRoles.length > 0) {
-    return {
-      state: "failed",
-      detail: `서비스 기준으로 ${failedRoles.map((role) => role.label).join(", ")} 실행이 실패했습니다.`,
       updatedAt: freshestUpdate,
     };
   }

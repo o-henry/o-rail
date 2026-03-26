@@ -100,7 +100,7 @@ describe("tasks request/response flow", () => {
     const executeRoleRun = vi.fn(async (params: {
       roleId: string;
       prompt: string;
-      promptMode: "direct" | "orchestrate" | "brief" | "critique" | "final";
+      promptMode: "direct" | "orchestrate" | "brief" | "critique" | "judge" | "verify" | "final";
       internal: boolean;
     }) => ({
       roleId: params.roleId,

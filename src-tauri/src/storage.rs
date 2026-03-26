@@ -1248,6 +1248,8 @@ fn is_user_facing_task_artifact_path(path: &str) -> bool {
             | "response.json"
             | "response.unreadable.json"
             | "response.unreadable.debug.json"
+            | "run.diagnostics.json"
+            | "run.error.json"
             | "run.json"
             | "orchestration_plan.json"
             | "discussion_brief.md"
@@ -1684,6 +1686,8 @@ mod tests {
             vec![
                 "/tmp/prompt.md".to_string(),
                 "/tmp/response.json".to_string(),
+                "/tmp/run.diagnostics.json".to_string(),
+                "/tmp/run.error.json".to_string(),
                 "/tmp/orchestration_plan.json".to_string(),
                 "/tmp/web_gpt_response.md".to_string(),
                 "/tmp/final_answer.md".to_string(),

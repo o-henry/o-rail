@@ -16,7 +16,7 @@ import type { WorkspaceTab } from "../mainAppGraphHelpers";
 import { runGraphWithCoordinator, runTopicWithCoordinator } from "../main/runtime/agenticCoordinator";
 import { persistAgenticRunEnvelope } from "../main/runtime/agenticRunStore";
 import { runRoleWithCoordinator } from "../main/runtime/agenticRoleCoordinator";
-import { runTaskRoleWithCodex } from "../main/runtime/runTaskRoleWithCodex";
+import { extractTaskRoleCodexRunArtifactPaths, runTaskRoleWithCodex } from "../main/runtime/runTaskRoleWithCodex";
 import { buildTaskThreadContextSummary } from "../main/runtime/taskThreadContextSummary";
 import { runTaskCollaborationWithCodex } from "../main/runtime/runTaskCollaborationWithCodex";
 import { shouldSkipRecentTaskRoleRun } from "../main/runtime/taskRoleRunDeduper";
@@ -161,6 +161,8 @@ function dispatchTasksRoleEvent(params: {
   type: string;
   stage?: string | null;
   message?: string;
+  internal?: boolean;
+  promptMode?: "direct" | "orchestrate" | "brief" | "critique" | "judge" | "verify" | "final";
   payload?: Record<string, unknown>;
 }) {
   if (typeof window === "undefined") {
@@ -175,7 +177,11 @@ function dispatchTasksRoleEvent(params: {
       type: params.type,
       stage: params.stage ?? null,
       message: params.message ?? "",
-      payload: params.payload ?? null,
+      payload: {
+        ...(params.payload ?? {}),
+        internal: Boolean(params.internal),
+        promptMode: params.promptMode ?? null,
+      },
       at: new Date().toISOString(),
     },
   }));
@@ -245,7 +251,7 @@ export function useAgenticOrchestrationBridge(params: {
     requestPrompt?: string;
     summary?: string;
     internal?: boolean;
-    promptMode?: "direct" | "orchestrate" | "brief" | "critique" | "final";
+    promptMode?: "direct" | "orchestrate" | "brief" | "critique" | "judge" | "verify" | "final";
     intent?: string;
     handoffToRole?: string;
     handoffRequest?: string;
@@ -355,7 +361,7 @@ export function useAgenticOrchestrationBridge(params: {
     envelope: AgenticRunEnvelope;
     runStatus: "done" | "error";
     internal?: boolean;
-    promptMode?: "direct" | "orchestrate" | "brief" | "critique" | "final";
+    promptMode?: "direct" | "orchestrate" | "brief" | "critique" | "judge" | "verify" | "final";
     intent?: string;
     handoffToRole?: string;
     handoffRequest?: string;
@@ -452,7 +458,7 @@ export function useAgenticOrchestrationBridge(params: {
     includeRoleKnowledge?: boolean;
     handoffToRole?: string;
     handoffRequest?: string;
-    promptMode?: "direct" | "orchestrate" | "brief" | "critique" | "final";
+    promptMode?: "direct" | "orchestrate" | "brief" | "critique" | "judge" | "verify" | "final";
   }) => {
     const sourceTab = params.sourceTab;
     const promptText = String(params.prompt ?? "").trim();
@@ -500,6 +506,8 @@ export function useAgenticOrchestrationBridge(params: {
         runId,
         type: "run_started",
         message: "started",
+        internal: true,
+        promptMode,
       });
       dispatchTasksRoleEvent({
         sourceTab,
@@ -509,6 +517,8 @@ export function useAgenticOrchestrationBridge(params: {
         type: "stage_started",
         stage: "codex",
         message: "역할 실행 시작",
+        internal: true,
+        promptMode,
       });
       try {
         const codexTaskRun = await runTaskRoleWithCodex({
@@ -534,6 +544,8 @@ export function useAgenticOrchestrationBridge(params: {
               type: "runtime_attached",
               stage: "codex",
               message: "RUNTIME ATTACHED",
+              internal: true,
+              promptMode,
               payload: {
                 codexThreadId: runtime.codexThreadId ?? null,
                 codexTurnId: runtime.codexTurnId ?? null,
@@ -559,6 +571,8 @@ export function useAgenticOrchestrationBridge(params: {
           type: "stage_done",
           stage: "codex",
           message: "역할 실행 완료",
+          internal: true,
+          promptMode,
         });
         dispatchTasksRoleEvent({
           sourceTab,
@@ -567,6 +581,8 @@ export function useAgenticOrchestrationBridge(params: {
           runId,
           type: "run_done",
           message: "done",
+          internal: true,
+          promptMode,
         });
         await finalizeTaskRoleRun({
           runId,
@@ -593,6 +609,7 @@ export function useAgenticOrchestrationBridge(params: {
           runStatus: "done" as const,
         };
       } catch (error) {
+        taskCodexArtifactPaths = extractTaskRoleCodexRunArtifactPaths(error);
         const errorText = String(error ?? "unknown error").trim() || "unknown error";
         inlineEnvelope = patchRunStage(inlineEnvelope, "codex", "error", errorText, errorText);
         inlineEnvelope = patchRunStatus(inlineEnvelope, "error");
@@ -604,6 +621,8 @@ export function useAgenticOrchestrationBridge(params: {
           type: "stage_error",
           stage: "codex",
           message: errorText,
+          internal: true,
+          promptMode,
           payload: { error: errorText },
         });
         dispatchTasksRoleEvent({
@@ -613,6 +632,8 @@ export function useAgenticOrchestrationBridge(params: {
           runId,
           type: "run_error",
           message: errorText,
+          internal: true,
+          promptMode,
           payload: { error: errorText },
         });
         await finalizeTaskRoleRun({
@@ -656,41 +677,46 @@ export function useAgenticOrchestrationBridge(params: {
         if (nextPrompt) {
           setStatus(`역할 요청: ${nextPrompt.slice(0, 72)}`);
         }
-        const codexTaskRun = await runTaskRoleWithCodex({
-          invokeFn,
-          storageCwd: cwd,
-          taskId: params.taskId,
-          studioRoleId: effectiveRoleId,
-          prompt: nextPrompt || undefined,
-          model: params.model,
-          models: params.models,
-          reasoning: params.reasoning,
-          outputArtifactName: params.outputArtifactName,
-          sourceTab,
-          runId,
-          intent: params.intent,
-          promptMode: params.promptMode,
-          onProgress,
-          onRuntimeSession: (runtime) => {
-            dispatchTasksRoleEvent({
-              sourceTab,
-              taskId: params.taskId,
-              studioRoleId: effectiveRoleId,
-              runId,
-              type: "runtime_attached",
-              stage: "codex",
-              message: "RUNTIME ATTACHED",
-              payload: {
-                codexThreadId: runtime.codexThreadId ?? null,
-                codexTurnId: runtime.codexTurnId ?? null,
-                provider: runtime.provider ?? null,
-                providers: runtime.providers ?? [],
-              },
-            });
-          },
-        });
-        taskCodexArtifactPaths = [...codexTaskRun.artifactPaths];
-        taskCodexSummary = codexTaskRun.summary;
+        try {
+          const codexTaskRun = await runTaskRoleWithCodex({
+            invokeFn,
+            storageCwd: cwd,
+            taskId: params.taskId,
+            studioRoleId: effectiveRoleId,
+            prompt: nextPrompt || undefined,
+            model: params.model,
+            models: params.models,
+            reasoning: params.reasoning,
+            outputArtifactName: params.outputArtifactName,
+            sourceTab,
+            runId,
+            intent: params.intent,
+            promptMode: params.promptMode,
+            onProgress,
+            onRuntimeSession: (runtime) => {
+              dispatchTasksRoleEvent({
+                sourceTab,
+                taskId: params.taskId,
+                studioRoleId: effectiveRoleId,
+                runId,
+                type: "runtime_attached",
+                stage: "codex",
+                message: "RUNTIME ATTACHED",
+                payload: {
+                  codexThreadId: runtime.codexThreadId ?? null,
+                  codexTurnId: runtime.codexTurnId ?? null,
+                  provider: runtime.provider ?? null,
+                  providers: runtime.providers ?? [],
+                },
+              });
+            },
+          });
+          taskCodexArtifactPaths = [...codexTaskRun.artifactPaths];
+          taskCodexSummary = codexTaskRun.summary;
+        } catch (error) {
+          taskCodexArtifactPaths = extractTaskRoleCodexRunArtifactPaths(error);
+          throw error;
+        }
       },
       appendWorkspaceEvent,
       onEvent: (event: AgenticRunEvent) => {
@@ -702,6 +728,8 @@ export function useAgenticOrchestrationBridge(params: {
           type: event.type,
           stage: event.stage ?? null,
           message: event.message ?? "",
+          internal: Boolean(params.internal),
+          promptMode,
           payload: event.payload,
         });
       },
@@ -891,6 +919,8 @@ export function useAgenticOrchestrationBridge(params: {
             type: "stage_started",
             stage: progress.stage,
             message: progress.message,
+            internal: true,
+            promptMode: "orchestrate",
           });
         },
         onOrchestrationResolved: (plan) => {
@@ -920,6 +950,8 @@ export function useAgenticOrchestrationBridge(params: {
         type: "stage_error",
         stage: "save",
         message: errorText,
+        internal: false,
+        promptMode: "final",
       });
       dispatchTasksRoleEvent({
         sourceTab,
@@ -927,6 +959,8 @@ export function useAgenticOrchestrationBridge(params: {
         studioRoleId: terminalStudioRoleId,
         type: "run_error",
         message: errorText,
+        internal: false,
+        promptMode: "final",
         payload: { error: errorText },
       });
       appendWorkspaceEvent({

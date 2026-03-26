@@ -253,8 +253,19 @@ describe("resolveLiveServiceStatus", () => {
 
     const status = resolveLiveServiceStatus(detail);
     expect(status).toMatchObject({
+      state: "idle",
+      detail: "서비스 기준으로 현재 실행 상태를 갱신 중입니다.",
+    });
+  });
+
+  it("reports a failed service state only after the thread itself ends in failure", () => {
+    const detail = buildDetail();
+    detail.thread.status = "failed";
+
+    const status = resolveLiveServiceStatus(detail);
+    expect(status).toMatchObject({
       state: "failed",
-      detail: "서비스 기준으로 모든 내부 브리프 또는 역할 실행이 실패했습니다.",
+      detail: "서비스 기준으로 최종 문서 생성이 실패했습니다.",
     });
   });
 });
@@ -322,18 +333,15 @@ describe("resolveLatestFailureReason", () => {
 });
 
 describe("shouldShowTerminalFailureBadge", () => {
-  it("suppresses failure badges while the workflow is still running", () => {
+  it("shows the failure badge only when the thread ends in failure", () => {
+    expect(shouldShowTerminalFailureBadge({
+      threadStatus: "active",
+      workflowStatus: "failed",
+      workflowFailed: true,
+    })).toBe(false);
     expect(shouldShowTerminalFailureBadge({
       threadStatus: "failed",
       workflowStatus: "active",
-      workflowFailed: false,
-    })).toBe(false);
-  });
-
-  it("shows failure badges once the thread is terminally failed", () => {
-    expect(shouldShowTerminalFailureBadge({
-      threadStatus: "failed",
-      workflowStatus: "idle",
       workflowFailed: false,
     })).toBe(true);
   });

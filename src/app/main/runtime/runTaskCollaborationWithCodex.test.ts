@@ -5,7 +5,7 @@ describe("runTaskCollaborationWithCodex", () => {
   it("runs bounded briefs, one critique, then final synthesis", async () => {
     const executeRoleRun = vi.fn(async (params: {
       roleId: string;
-      promptMode: "direct" | "orchestrate" | "brief" | "critique" | "final";
+      promptMode: "direct" | "orchestrate" | "brief" | "critique" | "judge" | "verify" | "final";
       internal: boolean;
     }) => ({
       roleId: params.roleId,
@@ -24,7 +24,7 @@ describe("runTaskCollaborationWithCodex", () => {
       executeRoleRun,
     });
 
-    expect(executeRoleRun).toHaveBeenCalledTimes(5);
+    expect(executeRoleRun).toHaveBeenCalledTimes(7);
     expect(executeRoleRun).toHaveBeenNthCalledWith(1, expect.objectContaining({
       roleId: "unity_implementer",
       promptMode: "brief",
@@ -39,7 +39,7 @@ describe("runTaskCollaborationWithCodex", () => {
       model: "GPT-5.4-Mini",
       reasoning: "중간",
     }));
-    expect(executeRoleRun).toHaveBeenNthCalledWith(5, expect.objectContaining({
+    expect(executeRoleRun).toHaveBeenNthCalledWith(6, expect.objectContaining({
       roleId: "unity_implementer",
       promptMode: "final",
       internal: false,
@@ -52,7 +52,7 @@ describe("runTaskCollaborationWithCodex", () => {
   it("retries a transient participant brief failure once before continuing", async () => {
     const executeRoleRun = vi.fn(async (params: {
       roleId: string;
-      promptMode: "direct" | "orchestrate" | "brief" | "critique" | "final";
+      promptMode: "direct" | "orchestrate" | "brief" | "critique" | "judge" | "verify" | "final";
       internal: boolean;
     }) => {
       if (params.roleId === "researcher" && params.promptMode === "brief") {
@@ -88,10 +88,46 @@ describe("runTaskCollaborationWithCodex", () => {
     expect(result.finalResult.summary).toContain("final");
   });
 
+  it("adds a failure memo to retry prompts so the next attempt can correct the prior error", async () => {
+    const capturedPrompts: string[] = [];
+    const executeRoleRun = vi.fn(async (params: {
+      roleId: string;
+      prompt: string;
+      promptMode: "direct" | "orchestrate" | "brief" | "critique" | "judge" | "verify" | "final";
+      internal: boolean;
+    }) => {
+      if (params.roleId === "researcher" && params.promptMode === "brief") {
+        capturedPrompts.push(params.prompt);
+        if (capturedPrompts.length === 1) {
+          throw new Error("Codex turn finished without a readable response");
+        }
+      }
+      return {
+        roleId: params.roleId,
+        runId: `${params.roleId}-${params.promptMode}`,
+        summary: `${params.roleId}-${params.promptMode}-summary`,
+        artifactPaths: [`/${params.roleId}/${params.promptMode}.md`],
+      };
+    });
+
+    await runTaskCollaborationWithCodex({
+      prompt: "조사해줘",
+      contextSummary: "없음",
+      participantRoleIds: ["researcher"],
+      synthesisRoleId: "researcher",
+      cappedParticipantCount: false,
+      executeRoleRun,
+    });
+
+    expect(capturedPrompts).toHaveLength(2);
+    expect(capturedPrompts[1]).toContain("# 직전 실패 메모");
+    expect(capturedPrompts[1]).toContain("읽을 수 있는 응답 본문이 없었습니다");
+  });
+
   it("retries participant briefs when a materialization RPC error occurs", async () => {
     const executeRoleRun = vi.fn(async (params: {
       roleId: string;
-      promptMode: "direct" | "orchestrate" | "brief" | "critique" | "final";
+      promptMode: "direct" | "orchestrate" | "brief" | "critique" | "judge" | "verify" | "final";
       internal: boolean;
     }) => {
       if (params.roleId === "researcher" && params.promptMode === "brief") {
@@ -129,7 +165,7 @@ describe("runTaskCollaborationWithCodex", () => {
   it("falls back to a direct final answer when every participant brief fails", async () => {
     const executeRoleRun = vi.fn(async (params: {
       roleId: string;
-      promptMode: "direct" | "orchestrate" | "brief" | "critique" | "final";
+      promptMode: "direct" | "orchestrate" | "brief" | "critique" | "judge" | "verify" | "final";
     }) => {
       if (params.promptMode === "brief") {
         throw new Error(`${params.roleId} failed`);
@@ -161,7 +197,7 @@ describe("runTaskCollaborationWithCodex", () => {
   it("aborts the whole collaboration immediately when a participant run is interrupted by the user", async () => {
     const executeRoleRun = vi.fn(async (params: {
       roleId: string;
-      promptMode: "direct" | "orchestrate" | "brief" | "critique" | "final";
+      promptMode: "direct" | "orchestrate" | "brief" | "critique" | "judge" | "verify" | "final";
     }) => {
       if (params.roleId === "researcher" && params.promptMode === "brief") {
         throw new Error("현재 작업을 중단했습니다.");
@@ -194,7 +230,7 @@ describe("runTaskCollaborationWithCodex", () => {
   it("aborts the whole collaboration immediately when a participant run is interrupted by the user", async () => {
     const executeRoleRun = vi.fn(async (params: {
       roleId: string;
-      promptMode: "direct" | "orchestrate" | "brief" | "critique" | "final";
+      promptMode: "direct" | "orchestrate" | "brief" | "critique" | "judge" | "verify" | "final";
     }) => {
       if (params.roleId === "researcher" && params.promptMode === "brief") {
         throw new Error("현재 작업을 중단했습니다.");
@@ -227,7 +263,7 @@ describe("runTaskCollaborationWithCodex", () => {
   it("retries critique and final synthesis on transient RPC errors", async () => {
     const executeRoleRun = vi.fn(async (params: {
       roleId: string;
-      promptMode: "direct" | "orchestrate" | "brief" | "critique" | "final";
+      promptMode: "direct" | "orchestrate" | "brief" | "critique" | "judge" | "verify" | "final";
       internal: boolean;
     }) => {
       const attempts = executeRoleRun.mock.calls.filter(
@@ -266,11 +302,51 @@ describe("runTaskCollaborationWithCodex", () => {
     expect(result.finalResult.summary).toContain("final");
   });
 
+  it("falls back to a conservative final answer when the main final synthesis keeps failing", async () => {
+    const executeRoleRun = vi.fn(async (params: {
+      roleId: string;
+      prompt: string;
+      promptMode: "direct" | "orchestrate" | "brief" | "critique" | "judge" | "verify" | "final";
+      internal: boolean;
+    }) => {
+      const attempts = executeRoleRun.mock.calls.filter(
+        ([call]) => call.roleId === params.roleId && call.promptMode === params.promptMode,
+      ).length;
+      if (params.promptMode === "final" && attempts <= 2 && !params.prompt.includes("# 보수적 복구 지시")) {
+        throw new Error("Codex turn finished without a readable response");
+      }
+      return {
+        roleId: params.roleId,
+        runId: `${params.roleId}-${params.promptMode}`,
+        summary: params.prompt.includes("# 보수적 복구 지시")
+          ? "보수적 최종 답변"
+          : `${params.roleId}-${params.promptMode}-summary`,
+        artifactPaths: [`/${params.roleId}/${params.promptMode}.md`],
+      };
+    });
+
+    const result = await runTaskCollaborationWithCodex({
+      prompt: "정리해줘",
+      contextSummary: "최근 스레드 있음",
+      participantRoleIds: ["researcher", "game_designer"],
+      synthesisRoleId: "researcher",
+      criticRoleId: "game_designer",
+      cappedParticipantCount: false,
+      executeRoleRun,
+    });
+
+    expect(result.finalResult.summary).toBe("보수적 최종 답변");
+    expect(executeRoleRun).toHaveBeenCalledWith(expect.objectContaining({
+      promptMode: "final",
+      prompt: expect.stringContaining("# 보수적 복구 지시"),
+    }));
+  });
+
   it("injects per-role orchestration prompts into participant briefs", async () => {
     const executeRoleRun = vi.fn(async (params: {
       roleId: string;
       prompt: string;
-      promptMode: "direct" | "orchestrate" | "brief" | "critique" | "final";
+      promptMode: "direct" | "orchestrate" | "brief" | "critique" | "judge" | "verify" | "final";
       internal: boolean;
     }) => ({
       roleId: params.roleId,
@@ -309,7 +385,7 @@ describe("runTaskCollaborationWithCodex", () => {
     const executeRoleRun = vi.fn(async (params: {
       roleId: string;
       prompt: string;
-      promptMode: "direct" | "orchestrate" | "brief" | "critique" | "final";
+      promptMode: "direct" | "orchestrate" | "brief" | "critique" | "judge" | "verify" | "final";
       internal: boolean;
     }) => ({
       roleId: params.roleId,
@@ -361,7 +437,7 @@ describe("runTaskCollaborationWithCodex", () => {
     const executeRoleRun = vi.fn(async (params: {
       roleId: string;
       prompt: string;
-      promptMode: "direct" | "orchestrate" | "brief" | "critique" | "final";
+      promptMode: "direct" | "orchestrate" | "brief" | "critique" | "judge" | "verify" | "final";
       internal: boolean;
       outputArtifactName?: string;
     }) => {
@@ -413,7 +489,7 @@ describe("runTaskCollaborationWithCodex", () => {
     const executeRoleRun = vi.fn(async (params: {
       roleId: string;
       prompt: string;
-      promptMode: "direct" | "orchestrate" | "brief" | "critique" | "final";
+      promptMode: "direct" | "orchestrate" | "brief" | "critique" | "judge" | "verify" | "final";
       internal: boolean;
       model?: string;
       reasoning?: string;
@@ -497,7 +573,7 @@ describe("runTaskCollaborationWithCodex", () => {
     const executeRoleRun = vi.fn(async (params: {
       roleId: string;
       prompt: string;
-      promptMode: "direct" | "orchestrate" | "brief" | "critique" | "final";
+      promptMode: "direct" | "orchestrate" | "brief" | "critique" | "judge" | "verify" | "final";
       internal: boolean;
       outputArtifactName?: string;
     }) => {
@@ -533,7 +609,7 @@ describe("runTaskCollaborationWithCodex", () => {
     const executeRoleRun = vi.fn(async (params: {
       roleId: string;
       prompt: string;
-      promptMode: "direct" | "orchestrate" | "brief" | "critique" | "final";
+      promptMode: "direct" | "orchestrate" | "brief" | "critique" | "judge" | "verify" | "final";
       internal: boolean;
     }) => {
       if (params.roleId === "researcher" && params.promptMode === "brief") {
@@ -568,7 +644,7 @@ describe("runTaskCollaborationWithCodex", () => {
     const executeRoleRun = vi.fn(async (params: {
       roleId: string;
       prompt: string;
-      promptMode: "direct" | "orchestrate" | "brief" | "critique" | "final";
+      promptMode: "direct" | "orchestrate" | "brief" | "critique" | "judge" | "verify" | "final";
       internal: boolean;
       model?: string;
       reasoning?: string;
@@ -642,7 +718,7 @@ describe("runTaskCollaborationWithCodex", () => {
     const executeRoleRun = vi.fn(async (params: {
       roleId: string;
       prompt: string;
-      promptMode: "direct" | "orchestrate" | "brief" | "critique" | "final";
+      promptMode: "direct" | "orchestrate" | "brief" | "critique" | "judge" | "verify" | "final";
       internal: boolean;
     }) => {
       if (params.roleId === "researcher" && params.promptMode === "brief") {
@@ -682,7 +758,7 @@ describe("runTaskCollaborationWithCodex", () => {
     const executeRoleRun = vi.fn(async (params: {
       roleId: string;
       prompt: string;
-      promptMode: "direct" | "orchestrate" | "brief" | "critique" | "final";
+      promptMode: "direct" | "orchestrate" | "brief" | "critique" | "judge" | "verify" | "final";
       internal: boolean;
       model?: string;
       includeRoleKnowledge?: boolean;
@@ -730,7 +806,7 @@ describe("runTaskCollaborationWithCodex", () => {
     const executeRoleRun = vi.fn(async (params: {
       roleId: string;
       prompt: string;
-      promptMode: "direct" | "orchestrate" | "brief" | "critique" | "final";
+      promptMode: "direct" | "orchestrate" | "brief" | "critique" | "judge" | "verify" | "final";
       internal: boolean;
     }) => {
       if (params.promptMode === "final") {
@@ -771,7 +847,7 @@ describe("runTaskCollaborationWithCodex", () => {
     const executeRoleRun = vi.fn(async (params: {
       roleId: string;
       prompt: string;
-      promptMode: "direct" | "orchestrate" | "brief" | "critique" | "final";
+      promptMode: "direct" | "orchestrate" | "brief" | "critique" | "judge" | "verify" | "final";
       internal: boolean;
       model?: string;
       reasoning?: string;
@@ -853,7 +929,7 @@ describe("runTaskCollaborationWithCodex", () => {
     const executeRoleRun = vi.fn(async (params: {
       roleId: string;
       prompt: string;
-      promptMode: "direct" | "orchestrate" | "brief" | "critique" | "final";
+      promptMode: "direct" | "orchestrate" | "brief" | "critique" | "judge" | "verify" | "final";
       internal: boolean;
       model?: string;
       reasoning?: string;
@@ -916,7 +992,7 @@ describe("runTaskCollaborationWithCodex", () => {
     const executeRoleRun = vi.fn(async (params: {
       roleId: string;
       prompt: string;
-      promptMode: "direct" | "orchestrate" | "brief" | "critique" | "final";
+      promptMode: "direct" | "orchestrate" | "brief" | "critique" | "judge" | "verify" | "final";
       internal: boolean;
       outputArtifactName?: string;
     }) => {
@@ -977,7 +1053,7 @@ describe("runTaskCollaborationWithCodex", () => {
     const executeRoleRun = vi.fn(async (params: {
       roleId: string;
       prompt: string;
-      promptMode: "direct" | "orchestrate" | "brief" | "critique" | "final";
+      promptMode: "direct" | "orchestrate" | "brief" | "critique" | "judge" | "verify" | "final";
       internal: boolean;
       intent?: string;
     }) => ({
@@ -998,13 +1074,13 @@ describe("runTaskCollaborationWithCodex", () => {
       executeRoleRun,
     });
 
-    expect(executeRoleRun).toHaveBeenLastCalledWith(expect.objectContaining({
+    expect(executeRoleRun).toHaveBeenCalledWith(expect.objectContaining({
       promptMode: "final",
       intent: "ideation",
       includeRoleKnowledge: false,
       prompt: expect.stringContaining("지금 바로 사용자에게 전달할 최종 아이디어 답변만 작성한다."),
     }));
-    expect(executeRoleRun).toHaveBeenLastCalledWith(expect.objectContaining({
+    expect(executeRoleRun).toHaveBeenCalledWith(expect.objectContaining({
       prompt: expect.stringContaining("사용자 요청에 숫자 요구가 있으면 그 수를 충족하도록 번호 목록으로 아이디어를 제시한다."),
     }));
   });
@@ -1013,7 +1089,7 @@ describe("runTaskCollaborationWithCodex", () => {
     const onProgress = vi.fn();
     const executeRoleRun = vi.fn(async (params: {
       roleId: string;
-      promptMode: "direct" | "orchestrate" | "brief" | "critique" | "final";
+      promptMode: "direct" | "orchestrate" | "brief" | "critique" | "judge" | "verify" | "final";
       internal: boolean;
     }) => {
       if (params.promptMode === "orchestrate") {

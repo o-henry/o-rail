@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { resolveTurnText, runTaskRoleWithCodex } from "./runTaskRoleWithCodex";
+import { TaskRoleCodexRunError, resolveTurnText, runTaskRoleWithCodex } from "./runTaskRoleWithCodex";
 import { clearTaskRoleLearningDataForTest, recordTaskRoleLearningOutcome } from "../../adaptation/taskRoleLearning";
 import { ENGINE_NOTIFICATION_DOM_EVENT } from "./codexTurnNotifications";
 
@@ -13,7 +13,7 @@ describe("runTaskRoleWithCodex", () => {
   });
 
   it("uses the task prompt pack and writes role artifacts for thread runs", async () => {
-    const writtenArtifacts = ["prompt.md", "implementation_report.md", "response.json"];
+    const writtenArtifacts = ["prompt.md", "implementation_report.md", "response.json", "run.diagnostics.json"];
     let artifactIndex = 0;
     const invokeFn = (vi.fn(async (command: string) => {
       switch (command) {
@@ -64,6 +64,7 @@ describe("runTaskRoleWithCodex", () => {
       "/tmp/rail-storage/.rail/tasks/thread-1/codex_runs/role-run-1/prompt.md",
       "/tmp/rail-storage/.rail/tasks/thread-1/codex_runs/role-run-1/implementation_report.md",
       "/tmp/rail-storage/.rail/tasks/thread-1/codex_runs/role-run-1/response.json",
+      "/tmp/rail-storage/.rail/tasks/thread-1/codex_runs/role-run-1/run.diagnostics.json",
     ]);
     expect(invokeFn).toHaveBeenCalledWith("thread_start", expect.objectContaining({
       model: "gpt-5.4",
@@ -2736,24 +2737,36 @@ describe("runTaskRoleWithCodex", () => {
       }
     }) as unknown) as <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
 
-    await expect(runTaskRoleWithCodex({
-      invokeFn,
-      storageCwd: "/tmp/rail-storage",
-      taskId: "thread-user-only-debug",
-      studioRoleId: "system_programmer",
-      prompt: "사용자 프롬프트 원문",
-      sourceTab: "tasks-thread",
-      runId: "role-run-user-only-debug",
-      debugTimeoutOverrides: {
-        completedUnreadableRecoveryWindowMs: 1500,
-      },
-    })).rejects.toThrow("without a readable response");
+    let capturedError: unknown = null;
+    try {
+      await runTaskRoleWithCodex({
+        invokeFn,
+        storageCwd: "/tmp/rail-storage",
+        taskId: "thread-user-only-debug",
+        studioRoleId: "system_programmer",
+        prompt: "사용자 프롬프트 원문",
+        sourceTab: "tasks-thread",
+        runId: "role-run-user-only-debug",
+        debugTimeoutOverrides: {
+          completedUnreadableRecoveryWindowMs: 1500,
+        },
+      });
+    } catch (error) {
+      capturedError = error;
+    }
+
+    expect(capturedError).toBeInstanceOf(TaskRoleCodexRunError);
+    expect(String(capturedError)).toContain("without a readable response");
+    expect((capturedError as TaskRoleCodexRunError).artifactPaths.some((path) => path.endsWith("run.diagnostics.json"))).toBe(true);
+    expect((capturedError as TaskRoleCodexRunError).artifactPaths.some((path) => path.endsWith("run.error.json"))).toBe(true);
 
     expect(writes.some((entry) => entry.name === "response.unreadable.json")).toBe(true);
     const debugWrite = writes.find((entry) => entry.name === "response.unreadable.debug.json");
     expect(debugWrite).toBeTruthy();
     expect(debugWrite?.content).toContain("\"completedStatus\": \"completed\"");
     expect(debugWrite?.content).toContain("\"threadReadSnapshots\"");
+    expect(writes.some((entry) => entry.name === "run.diagnostics.json")).toBe(true);
+    expect(writes.some((entry) => entry.name === "run.error.json")).toBe(true);
   }, 15000);
 
   it("fails fast when thread_start never resolves", async () => {

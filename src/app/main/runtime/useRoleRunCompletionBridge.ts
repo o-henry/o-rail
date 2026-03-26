@@ -19,11 +19,24 @@ export function shouldForwardRoleRunToMissionControl(sourceTab: unknown): boolea
   return normalized === "agents" || normalized === "workflow" || normalized === "workbench";
 }
 
+export function shouldPersistTasksRoleRunResult(payload: {
+  sourceTab?: unknown;
+  internal?: unknown;
+}): boolean {
+  const sourceTab = String(payload.sourceTab ?? "").trim();
+  if (sourceTab !== "tasks" && sourceTab !== "tasks-thread") {
+    return true;
+  }
+  return !Boolean(payload.internal);
+}
+
 const HIDDEN_ROLE_ARTIFACT_FILE_NAMES = new Set([
   "prompt.md",
   "response.json",
   "response.unreadable.json",
   "response.unreadable.debug.json",
+  "run.diagnostics.json",
+  "run.error.json",
   "run.json",
   "orchestration_plan.json",
   "discussion_brief.md",
@@ -161,7 +174,7 @@ export function useRoleRunCompletionBridge(params: Params) {
     const requestText =
       String(payload.handoffRequest ?? payload.prompt ?? "").trim() ||
       (roleId ? STUDIO_ROLE_PROMPTS[roleId] : "");
-    if (payload.sourceTab === "tasks") {
+    if (payload.sourceTab === "tasks" && shouldPersistTasksRoleRunResult(payload)) {
       void invokeFn("task_record_role_result", {
         cwd,
         taskId: payload.taskId,
@@ -177,7 +190,7 @@ export function useRoleRunCompletionBridge(params: Params) {
         })
         .catch(() => {});
     }
-    if (payload.sourceTab === "tasks-thread") {
+    if (payload.sourceTab === "tasks-thread" && shouldPersistTasksRoleRunResult(payload)) {
       void invokeFn("thread_record_role_result", {
         cwd,
         threadId: payload.taskId,

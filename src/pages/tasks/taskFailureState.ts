@@ -34,8 +34,5 @@ export function shouldShowTerminalFailureBadge(params: {
   workflowStatus?: string | null;
   workflowFailed?: boolean;
 }): boolean {
-  if (params.workflowFailed || isFailureStatus(params.workflowStatus)) {
-    return true;
-  }
-  return isFailureStatus(params.threadStatus) && !isInFlightStatus(params.workflowStatus);
+  return isFailureStatus(params.threadStatus);
 }

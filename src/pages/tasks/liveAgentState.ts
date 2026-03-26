@@ -1,4 +1,5 @@
 import type { ThreadDetail, ThreadRoleId, BackgroundAgentStatus } from "./threadTypes";
+import { shouldTreatEventAsFailureReason } from "./taskFailureState";
 
 const LIVE_RUNTIME_STALE_WINDOW_MS = 4 * 60 * 1000;
 
@@ -293,15 +294,11 @@ export function resolveRecentSourceCount(events: LiveAgentEvent[]): number | nul
 
 export function resolveLatestFailureReason(events: LiveAgentEvent[]): string {
   for (const event of [...events].reverse()) {
-    const normalizedType = String(event.type ?? "").trim().toLowerCase();
     const message = String(event.message ?? "").trim();
     if (!message) {
       continue;
     }
-    if (normalizedType === "stage_error" || normalizedType === "run_error") {
-      return message;
-    }
-    if (/(retry|재시도|timeout|timed out|unauthorized|failed|error|not materialized|실패)/i.test(message)) {
+    if (shouldTreatEventAsFailureReason(event)) {
       return message;
     }
   }

@@ -245,9 +245,9 @@ export default function AdaptationPage(props: AdaptationPageProps) {
                 </table>
               </div>
             </>
-            
+
           ) : (
-            <div className="adaptation-empty">아직 Tasks 학습 기록이 없습니다.</div>
+            <div className="adaptation-empty">아직 기록이 없습니다.</div>
           )}
         </div>
       </section>

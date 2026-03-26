@@ -1209,7 +1209,7 @@ pub fn task_record_role_result(
     let deduped_artifacts = artifact_paths
         .into_iter()
         .map(|path| path.trim().to_string())
-        .filter(|path| !path.is_empty())
+        .filter(|path| is_user_facing_task_artifact_path(path))
         .collect::<BTreeSet<_>>()
         .into_iter()
         .collect::<Vec<_>>();
@@ -1227,6 +1227,38 @@ pub fn task_record_role_result(
     })?;
     cleanup_workspace_runtime_noise(&workspace)?;
     Ok(updated)
+}
+
+fn is_user_facing_task_artifact_path(path: &str) -> bool {
+    let normalized = path.trim();
+    if normalized.is_empty() {
+        return false;
+    }
+    let file_name = Path::new(normalized)
+        .file_name()
+        .and_then(|value| value.to_str())
+        .map(|value| value.to_ascii_lowercase())
+        .unwrap_or_default();
+    if file_name.is_empty() {
+        return false;
+    }
+    if matches!(
+        file_name.as_str(),
+        "prompt.md"
+            | "response.json"
+            | "response.unreadable.json"
+            | "response.unreadable.debug.json"
+            | "run.json"
+            | "orchestration_plan.json"
+            | "discussion_brief.md"
+            | "discussion_direct.md"
+            | "discussion_critique.md"
+            | "shared_web_perspective.md"
+            | "research_collection.json"
+    ) {
+        return false;
+    }
+    !file_name.starts_with("web_") || !file_name.ends_with("_response.md")
 }
 
 #[tauri::command]
@@ -1615,6 +1647,7 @@ mod tests {
             .unwrap();
         assert_eq!(role.status, "done");
         assert_eq!(role.last_run_id.as_deref(), Some("run-123"));
+        assert_eq!(role.artifact_paths, vec!["/tmp/out.md".to_string()]);
 
         let missing = task_record_role_result(
             cwd,
@@ -1626,5 +1659,46 @@ mod tests {
         )
         .unwrap();
         assert!(!missing);
+    }
+
+    #[test]
+    fn task_record_role_result_filters_internal_runtime_artifacts() {
+        let workspace = temp_workspace("task-record-role-result-filter");
+        let cwd = workspace.to_string_lossy().to_string();
+        let detail = task_create(
+            cwd.clone(),
+            None,
+            "boss arena".to_string(),
+            Some("balanced".to_string()),
+            Some("full-squad".to_string()),
+            Some("current-repo".to_string()),
+        )
+        .unwrap();
+
+        let updated = task_record_role_result(
+            cwd.clone(),
+            detail.record.task_id.clone(),
+            "game_designer".to_string(),
+            "run-124".to_string(),
+            "completed".to_string(),
+            vec![
+                "/tmp/prompt.md".to_string(),
+                "/tmp/response.json".to_string(),
+                "/tmp/orchestration_plan.json".to_string(),
+                "/tmp/web_gpt_response.md".to_string(),
+                "/tmp/final_answer.md".to_string(),
+            ],
+        )
+        .unwrap();
+        assert!(updated);
+
+        let loaded = task_load(cwd, detail.record.task_id.clone()).unwrap();
+        let role = loaded
+            .record
+            .roles
+            .iter()
+            .find(|role| role.id == "game_designer")
+            .unwrap();
+        assert_eq!(role.artifact_paths, vec!["/tmp/final_answer.md".to_string()]);
     }
 }

@@ -124,11 +124,14 @@ import { getWebProviderFromExecutor } from "../../features/workflow/domain";
 type InvokeFn = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
 const LIVE_THREAD_POLL_IDLE_MS = 8_000;
 const LIVE_THREAD_POLL_INTERVAL_MS = 4_000;
+const LIVE_ROLE_EVENT_FLUSH_MS = 120;
+const LIVE_NOTE_SAME_MESSAGE_REFRESH_MS = 10_000;
 const TASK_ACTION_SLOW_MS = 900;
 
 type Params = {
   cwd: string;
   hasTauriRuntime: boolean;
+  isActive?: boolean;
   loginCompleted: boolean;
   codexAuthCheckPending: boolean;
   invokeFn: InvokeFn;
@@ -257,6 +260,25 @@ function formatError(error: unknown): string {
 
 function nowIso(): string {
   return new Date().toISOString();
+}
+
+function shouldRefreshLiveRoleNote(params: {
+  previous?: { message: string; updatedAt: string };
+  nextMessage: string;
+  nextUpdatedAt: string;
+}): boolean {
+  if (!params.previous) {
+    return true;
+  }
+  if (params.previous.message !== params.nextMessage) {
+    return true;
+  }
+  const previousMs = Date.parse(String(params.previous.updatedAt ?? "").trim());
+  const nextMs = Date.parse(String(params.nextUpdatedAt ?? "").trim());
+  if (!Number.isFinite(previousMs) || !Number.isFinite(nextMs)) {
+    return false;
+  }
+  return nextMs - previousMs >= LIVE_NOTE_SAME_MESSAGE_REFRESH_MS;
 }
 
 function appendTimedWorkspaceEvent(params: {
@@ -391,7 +413,11 @@ export function reduceLiveRoleEventBatch(params: {
       continue;
     } else {
       const previous = nextNotes[roleId];
-      if (!previous || previous.message !== message || previous.updatedAt !== updatedAt) {
+      if (shouldRefreshLiveRoleNote({
+        previous,
+        nextMessage: message,
+        nextUpdatedAt: updatedAt,
+      })) {
         if (!notesChanged) {
           nextNotes = { ...nextNotes };
           notesChanged = true;
@@ -592,6 +618,7 @@ async function writeTextByPath(invokeFn: InvokeFn, path: string, content: string
 }
 
 export function useTasksThreadState(params: Params) {
+  const isActive = params.isActive !== false;
   const initialHiddenProjectList = useMemo(() => loadHiddenTasksProjectList(), []);
   const initialProjectList = useMemo(() => loadTasksProjectList(params.cwd), [params.cwd]);
   const initialProjectPath = useMemo(
@@ -873,7 +900,7 @@ export function useTasksThreadState(params: Params) {
   useEffect(() => () => {
     if (typeof window !== "undefined") {
       if (liveRoleEventFlushFrameRef.current !== null) {
-        window.cancelAnimationFrame(liveRoleEventFlushFrameRef.current);
+        window.clearTimeout(liveRoleEventFlushFrameRef.current);
       }
     }
   }, []);
@@ -1076,7 +1103,7 @@ export function useTasksThreadState(params: Params) {
 
   const flushPendingRoleEvents = useCallback(() => {
     if (liveRoleEventFlushFrameRef.current !== null && typeof window !== "undefined") {
-      window.cancelAnimationFrame(liveRoleEventFlushFrameRef.current);
+      window.clearTimeout(liveRoleEventFlushFrameRef.current);
       liveRoleEventFlushFrameRef.current = null;
     }
     const pending = pendingRoleEventsRef.current;
@@ -1115,21 +1142,31 @@ export function useTasksThreadState(params: Params) {
   );
 
   useEffect(() => {
+    if (!isActive) {
+      return;
+    }
     void reloadThreads();
-  }, [reloadThreads]);
+  }, [isActive, reloadThreads]);
 
   useEffect(() => {
+    if (!isActive) {
+      return;
+    }
     const handler = (event: Event) => {
-      const detail = (event as CustomEvent<{ threadId?: string }>).detail;
-      void reloadThreads(detail?.threadId);
+      const detail = (event as CustomEvent<{ threadId?: string; taskId?: string }>).detail;
+      void reloadThreads(detail?.threadId ?? detail?.taskId);
     };
     window.addEventListener("rail:thread-updated", handler as EventListener);
-    return () => window.removeEventListener("rail:thread-updated", handler as EventListener);
-  }, [reloadThreads]);
+    window.addEventListener("rail:task-updated", handler as EventListener);
+    return () => {
+      window.removeEventListener("rail:thread-updated", handler as EventListener);
+      window.removeEventListener("rail:task-updated", handler as EventListener);
+    };
+  }, [isActive, reloadThreads]);
 
   useEffect(() => {
     let cancelled = false;
-    if (!params.hasTauriRuntime || !params.cwd) {
+    if (!isActive || !params.hasTauriRuntime || !params.cwd) {
       setExternalProviderReadiness({ steel: false, lightpanda: false });
       return;
     }
@@ -1162,9 +1199,17 @@ export function useTasksThreadState(params: Params) {
     return () => {
       cancelled = true;
     };
-  }, [params.cwd, params.hasTauriRuntime, params.invokeFn]);
+  }, [isActive, params.cwd, params.hasTauriRuntime, params.invokeFn]);
 
   useEffect(() => {
+    if (!isActive) {
+      pendingRoleEventsRef.current = [];
+      if (liveRoleEventFlushFrameRef.current !== null && typeof window !== "undefined") {
+        window.clearTimeout(liveRoleEventFlushFrameRef.current);
+        liveRoleEventFlushFrameRef.current = null;
+      }
+      return;
+    }
     const handler = (event: Event) => {
       const detail = (event as CustomEvent<TasksRoleRuntimeEvent>).detail;
       if (!detail || String(detail.taskId ?? "").trim() !== String(activeThreadId ?? "").trim()) {
@@ -1183,7 +1228,7 @@ export function useTasksThreadState(params: Params) {
       ]
         .map((value) => formatRuntimeProviderBadgeLabel(value))
         .filter(Boolean);
-    if (providerLabels.length > 0) {
+      if (providerLabels.length > 0) {
         setLatestRunInternalBadges((current) => providerLabels.reduce(
           (badges, label) => appendInternalRunBadge(badges, {
             key: `provider:${label}`,
@@ -1193,25 +1238,69 @@ export function useTasksThreadState(params: Params) {
           current,
         ));
       }
+      const normalizedType = String(detail.type ?? "").trim().toLowerCase();
+      const nextTerminalStatus =
+        normalizedType === "run_done" ? "done"
+          : normalizedType === "run_error" ? "failed"
+            : "";
+      if (nextTerminalStatus) {
+        const roleId = getTaskAgentPresetIdByStudioRoleId(String(detail.studioRoleId ?? "").trim());
+        const terminalAt = String(detail.at ?? "").trim() || nowIso();
+        if (roleId) {
+          setActiveThread((current) => {
+            if (!current || current.thread.threadId !== detail.taskId) {
+              return current;
+            }
+            return {
+              ...current,
+              task: {
+                ...current.task,
+                roles: current.task.roles.map((role) => (
+                  role.id === roleId
+                    ? {
+                        ...role,
+                        status: nextTerminalStatus,
+                        lastRunId: String(detail.runId ?? "").trim() || role.lastRunId,
+                        updatedAt: terminalAt,
+                      }
+                    : role
+                )),
+              },
+              agents: current.agents.map((agent) => (
+                agent.roleId === roleId
+                  ? {
+                      ...agent,
+                      status: nextTerminalStatus,
+                      lastUpdatedAt: terminalAt,
+                    }
+                  : agent
+              )),
+            };
+          });
+        }
+      }
       pendingRoleEventsRef.current.push(detail);
       if (liveRoleEventFlushFrameRef.current !== null || typeof window === "undefined") {
         return;
       }
-      liveRoleEventFlushFrameRef.current = window.requestAnimationFrame(() => {
+      liveRoleEventFlushFrameRef.current = window.setTimeout(() => {
         flushPendingRoleEvents();
-      });
+      }, LIVE_ROLE_EVENT_FLUSH_MS);
     };
     window.addEventListener("rail:tasks-role-event", handler as EventListener);
     return () => {
       window.removeEventListener("rail:tasks-role-event", handler as EventListener);
       if (liveRoleEventFlushFrameRef.current !== null) {
-        window.cancelAnimationFrame(liveRoleEventFlushFrameRef.current);
+        window.clearTimeout(liveRoleEventFlushFrameRef.current);
         liveRoleEventFlushFrameRef.current = null;
       }
     };
-  }, [activeThreadId, flushPendingRoleEvents]);
+  }, [activeThreadId, flushPendingRoleEvents, isActive]);
 
   useEffect(() => {
+    if (!isActive) {
+      return;
+    }
     const handler = (event: Event) => {
       const detail = (event as CustomEvent<{
         taskId?: string;
@@ -1297,7 +1386,7 @@ export function useTasksThreadState(params: Params) {
     };
     window.addEventListener("rail:tasks-orchestration-resolved", handler as EventListener);
     return () => window.removeEventListener("rail:tasks-orchestration-resolved", handler as EventListener);
-  }, [activeThreadId, hydrateThreadDetail, params.cwd, params.hasTauriRuntime, params.invokeFn, updateThreadCoordination]);
+  }, [activeThreadId, hydrateThreadDetail, isActive, params.cwd, params.hasTauriRuntime, params.invokeFn, updateThreadCoordination]);
 
   useEffect(() => {
     pendingRoleEventsRef.current = [];
@@ -1389,6 +1478,9 @@ export function useTasksThreadState(params: Params) {
   }, [activeThread, activeThreadCoordination, updateThreadCoordination]);
 
   useEffect(() => {
+    if (!isActive) {
+      return;
+    }
     const hasLiveAgents = (activeThread?.agents ?? []).some((agent) => isLiveBackgroundAgentStatus(agent.status));
     const freshestLiveSignalAt = [
       ...liveProcessEvents
@@ -1414,7 +1506,7 @@ export function useTasksThreadState(params: Params) {
       void refreshCurrentThreadSilently(activeThreadId);
     }, LIVE_THREAD_POLL_INTERVAL_MS);
     return () => window.clearInterval(intervalId);
-  }, [activeThread?.agents, activeThreadCoordination?.status, activeThreadId, liveProcessEvents, params.cwd, params.hasTauriRuntime, refreshCurrentThreadSilently]);
+  }, [activeThread?.agents, activeThreadCoordination?.status, activeThreadId, isActive, liveProcessEvents, params.cwd, params.hasTauriRuntime, refreshCurrentThreadSilently]);
 
   useEffect(() => {
     if (!activeThread || !selectedAgentId) {
@@ -1985,7 +2077,7 @@ export function useTasksThreadState(params: Params) {
         (detail) => String(detail.taskId ?? "").trim() !== activeThread.thread.threadId,
       );
       if (liveRoleEventFlushFrameRef.current !== null && typeof window !== "undefined") {
-        window.cancelAnimationFrame(liveRoleEventFlushFrameRef.current);
+        window.clearTimeout(liveRoleEventFlushFrameRef.current);
         liveRoleEventFlushFrameRef.current = null;
       }
       if (!params.hasTauriRuntime || !params.cwd) {

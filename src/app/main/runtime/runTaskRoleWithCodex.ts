@@ -717,7 +717,12 @@ function buildRolePromptContextLayers(params: {
   return trimContextLayer(joined, budget.totalChars);
 }
 
-function resolveTurnText(raw: unknown): string {
+export function isCodexCompletionMarkerText(value: unknown): boolean {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  return normalized === "item/completed" || normalized === "turn/completed";
+}
+
+export function resolveTurnText(raw: unknown): string {
   if (isUserOnlyTurn(raw) || isInputOnlyTurnPayload(raw)) {
     return "";
   }
@@ -736,7 +741,7 @@ function resolveTurnText(raw: unknown): string {
         continue;
       }
       const text = String(record.text ?? "").trim() || [...new Set(collectNestedText(record.content))].join("\n").trim();
-      if (!text) {
+      if (!text || isCodexCompletionMarkerText(text)) {
         continue;
       }
       if (type === "agentmessage" || phase === "final_answer") {
@@ -750,7 +755,7 @@ function resolveTurnText(raw: unknown): string {
   if (structuredText) {
     return structuredText;
   }
-  return (
+  const fallbackText = (
     extractFinalAnswer(raw) ||
     (extractStringByPaths(raw, [
       "text",
@@ -774,6 +779,7 @@ function resolveTurnText(raw: unknown): string {
       "response.text",
     ]) ?? extractDeltaText(raw))
   ).trim();
+  return isCodexCompletionMarkerText(fallbackText) ? "" : fallbackText;
 }
 
 function hasReadableTurnText(raw: unknown): boolean {
@@ -825,7 +831,7 @@ function collectReadableTurnCandidates(input: unknown, depth = 0, path: string[]
   }
   if (typeof input === "string") {
     const text = input.trim();
-    if (!text) {
+    if (!text || isCodexCompletionMarkerText(text)) {
       return [];
     }
     const leafKey = String(path[path.length - 1] ?? "").trim().toLowerCase();
@@ -840,6 +846,7 @@ function collectReadableTurnCandidates(input: unknown, depth = 0, path: string[]
       "reasoning",
       "usage",
       "metadata",
+      "phase",
       "status",
       "state",
       "id",
@@ -849,6 +856,8 @@ function collectReadableTurnCandidates(input: unknown, depth = 0, path: string[]
       "model",
       "role",
       "author",
+      "method",
+      "type",
     ]);
     if (normalizedPath.some((segment) => blockedKeys.has(segment))) {
       return [];

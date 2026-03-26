@@ -12,6 +12,7 @@ import {
   resolveRecentSourceCount,
   shouldShowRelativeLiveSignalAge,
 } from "./liveAgentState";
+import { shouldShowTerminalFailureBadge } from "./taskFailureState";
 import type { ThreadDetail } from "./threadTypes";
 
 function buildDetail(): ThreadDetail {
@@ -310,6 +311,31 @@ describe("resolveLatestFailureReason", () => {
     expect(resolveLatestFailureReason([
       { type: "stage_done", stage: "crawler", message: "ROLE_KB_BOOTSTRAP 실패 (0/7)", at: "2026-03-21T00:01:00.000Z" },
     ])).toBe("ROLE_KB_BOOTSTRAP 실패 (0/7)");
+  });
+
+  it("ignores retry progress messages that are not terminal failures", () => {
+    expect(resolveLatestFailureReason([
+      { type: "stage_started", stage: "codex", message: "game_designer direct 실패: Error: Codex turn finished without a readable response (재시도 1/1)", at: "2026-03-21T00:00:30.000Z" },
+      { type: "stage_started", stage: "codex", message: "메인 오케스트레이션 실패, 규칙 기반 계획으로 계속 진행합니다: 코덱스 실행은 끝났지만 읽을 수 있는 응답 본문이 없었습니다.", at: "2026-03-21T00:01:00.000Z" },
+    ])).toBe("");
+  });
+});
+
+describe("shouldShowTerminalFailureBadge", () => {
+  it("suppresses failure badges while the workflow is still running", () => {
+    expect(shouldShowTerminalFailureBadge({
+      threadStatus: "failed",
+      workflowStatus: "active",
+      workflowFailed: false,
+    })).toBe(false);
+  });
+
+  it("shows failure badges once the thread is terminally failed", () => {
+    expect(shouldShowTerminalFailureBadge({
+      threadStatus: "failed",
+      workflowStatus: "idle",
+      workflowFailed: false,
+    })).toBe(true);
   });
 });
 

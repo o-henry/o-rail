@@ -49,7 +49,20 @@ export function isRuntimeNoiseKnowledgeEntry(entry: Partial<Pick<KnowledgeEntry,
   const candidates = [entry.title, entry.markdownPath, entry.jsonPath, entry.sourceFile]
     .map((value) => String(value ?? "").trim().toLowerCase())
     .filter(Boolean);
-  return candidates.some((value) => value.endsWith("run.json"));
+  return candidates.some((value) => (
+    value.endsWith("run.json")
+    || value.endsWith("prompt.md")
+    || value.endsWith("response.json")
+    || value.endsWith("response.unreadable.json")
+    || value.endsWith("response.unreadable.debug.json")
+    || value.endsWith("orchestration_plan.json")
+    || value.endsWith("discussion_brief.md")
+    || value.endsWith("discussion_direct.md")
+    || value.endsWith("discussion_critique.md")
+    || value.endsWith("shared_web_perspective.md")
+    || value.endsWith("research_collection.json")
+    || /web_.+_response\.md$/i.test(value)
+  ));
 }
 
 function findAttachmentPath(post: KnowledgeSourcePost, kind: string): string | undefined {

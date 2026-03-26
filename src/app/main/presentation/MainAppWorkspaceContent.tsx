@@ -105,7 +105,7 @@ export function MainAppWorkspaceContent(props: any) {
     startTime: number,
     commitTime: number,
   ) => {
-    if (actualDuration < 24) {
+    if (actualDuration < 80) {
       return;
     }
     emitWorkspaceDiagnostic({
@@ -174,6 +174,7 @@ export function MainAppWorkspaceContent(props: any) {
       codexAuthCheckPending={props.codexAuthCheckPending}
       cwd={props.cwd}
       hasTauriRuntime={props.hasTauriRuntime}
+      isActive={props.workspaceTab === "tasks"}
       invokeFn={props.invokeFn}
       loginCompleted={props.loginCompleted}
       onOpenSettings={handleOpenSettings}

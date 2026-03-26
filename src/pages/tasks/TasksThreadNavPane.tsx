@@ -4,6 +4,7 @@ import {
   getThreadStageLabel,
   type ThreadStageId,
 } from "./taskAgentPresets";
+import { shouldShowTerminalFailureBadge } from "./taskFailureState";
 import type { ThreadAgentDetail, ThreadDetail } from "./threadTypes";
 import type { ProjectThreadGroup } from "./threadTree";
 import type { ThreadFileTreeNode } from "./threadFileTree";
@@ -70,11 +71,6 @@ function displayStageStatus(input: string | null | undefined, t: (key: string) =
     awaiting_approval: t("tasks.stage.awaitingApproval"),
   };
   return labels[normalized] ?? String(input ?? "").trim().replace(/_/g, " ");
-}
-
-function isThreadListFailureStatus(input: string | null | undefined) {
-  const normalized = String(input ?? "").trim().toLowerCase();
-  return normalized === "failed" || normalized === "error";
 }
 
 function isThreadListDegradedStatus(input: string | null | undefined) {
@@ -228,9 +224,11 @@ export function TasksThreadNavPane(props: TasksThreadNavPaneProps) {
                               {item.workflowSummary.degraded || isThreadListDegradedStatus(item.thread.status) ? (
                                 <span className="tasks-thread-list-state-badge is-quality">{t("tasks.stage.lowQuality")}</span>
                               ) : null}
-                              {item.workflowSummary.failed
-                              || isThreadListFailureStatus(item.thread.status)
-                              || isThreadListFailureStatus(item.workflowSummary.status) ? (
+                              {shouldShowTerminalFailureBadge({
+                                threadStatus: item.thread.status,
+                                workflowStatus: item.workflowSummary.status,
+                                workflowFailed: item.workflowSummary.failed,
+                              }) ? (
                                 <span className="tasks-thread-list-state-badge is-fail">{t("tasks.stage.failed")}</span>
                               ) : null}
                             </div>

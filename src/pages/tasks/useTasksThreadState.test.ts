@@ -293,6 +293,35 @@ describe("reduceLiveRoleEventBatch", () => {
     expect(reduced.nextEvents).toHaveLength(0);
     expect(reduced.shouldRefresh).toBe(true);
   });
+
+  it("does not churn live notes when only repeated progress timestamps change", () => {
+    const currentNotes = {
+      researcher: {
+        message: "자료 조사 중",
+        updatedAt: "2026-03-22T00:00:00.000Z",
+      },
+    } as const;
+    const reduced = reduceLiveRoleEventBatch({
+      activeThreadId: "thread-1",
+      currentNotes,
+      currentEvents: [],
+      details: [
+        {
+          taskId: "thread-1",
+          runId: "run-1",
+          studioRoleId: "research_analyst",
+          type: "run_progress",
+          stage: "search",
+          message: "자료 조사 중",
+          at: "2026-03-22T00:00:03.000Z",
+        },
+      ],
+    });
+
+    expect(reduced.nextNotes).toBe(currentNotes);
+    expect(reduced.nextEvents).toHaveLength(1);
+    expect(reduced.shouldRefresh).toBe(false);
+  });
 });
 
 describe("reduceRuntimeTargetsByRole", () => {

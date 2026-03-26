@@ -19,6 +19,44 @@ export function shouldForwardRoleRunToMissionControl(sourceTab: unknown): boolea
   return normalized === "agents" || normalized === "workflow" || normalized === "workbench";
 }
 
+const HIDDEN_ROLE_ARTIFACT_FILE_NAMES = new Set([
+  "prompt.md",
+  "response.json",
+  "response.unreadable.json",
+  "response.unreadable.debug.json",
+  "run.json",
+  "orchestration_plan.json",
+  "discussion_brief.md",
+  "discussion_direct.md",
+  "discussion_critique.md",
+  "shared_web_perspective.md",
+  "research_collection.json",
+]);
+
+function toArtifactFileName(path: string): string {
+  const normalized = String(path ?? "").trim();
+  return normalized.split(/[\\/]/).filter(Boolean).pop()?.toLowerCase() ?? normalized.toLowerCase();
+}
+
+export function isUserFacingRoleArtifactPath(path: unknown): boolean {
+  const normalized = String(path ?? "").trim();
+  if (!normalized) {
+    return false;
+  }
+  const fileName = toArtifactFileName(normalized);
+  if (!fileName || HIDDEN_ROLE_ARTIFACT_FILE_NAMES.has(fileName)) {
+    return false;
+  }
+  if (/^web_.+_response\.md$/i.test(fileName)) {
+    return false;
+  }
+  return true;
+}
+
+export function filterUserFacingRoleArtifactPaths(paths: unknown[]): string[] {
+  return [...new Set(paths.map((row) => String(row ?? "").trim()).filter(isUserFacingRoleArtifactPath))];
+}
+
 export function buildKnowledgeEntriesFromRoleRunCompletion(params: {
   cwd: string;
   payload: {
@@ -32,7 +70,8 @@ export function buildKnowledgeEntriesFromRoleRunCompletion(params: {
     internal?: boolean;
   };
 }) {
-  const hasWebAiResponseArtifacts = [...new Set((params.payload.artifactPaths ?? []).map((row: unknown) => String(row ?? "").trim()).filter(Boolean))]
+  const filteredArtifactPaths = filterUserFacingRoleArtifactPaths(params.payload.artifactPaths ?? []);
+  const hasWebAiResponseArtifacts = filteredArtifactPaths
     .some((artifactPath) => {
       const fileName = artifactPath.split(/[\\/]/).filter(Boolean).pop() ?? artifactPath;
       return (
@@ -50,10 +89,7 @@ export function buildKnowledgeEntriesFromRoleRunCompletion(params: {
   const requestPrompt = String(params.payload.requestPrompt ?? "").trim();
   const promptSummary = String(params.payload.prompt ?? params.payload.handoffRequest ?? "").trim();
   const requestSummary = extractKnowledgeRequestSummary(requestPrompt || promptSummary) || requestPrompt || promptSummary;
-  const dedupedArtifactPaths = [
-    ...new Set((params.payload.artifactPaths ?? []).map((row: unknown) => String(row ?? "").trim()).filter(Boolean)),
-  ];
-  return dedupedArtifactPaths.map((artifactPath, index) => {
+  return filteredArtifactPaths.map((artifactPath, index) => {
     const fileName = artifactPath.split(/[\\/]/).filter(Boolean).pop() ?? artifactPath;
     const sourceKind =
       fileName === "shared_web_perspective.md"
@@ -87,6 +123,9 @@ export function useRoleRunCompletionBridge(params: Params) {
   const { cwd, invokeFn, missionControl, setWorkflowRoleRuntimeStateByRole, workflowHandoffPanel } = params;
 
   return useCallback((payload: any) => {
+    const filteredArtifactPaths = filterUserFacingRoleArtifactPaths(
+      Array.isArray(payload.artifactPaths) ? payload.artifactPaths : [],
+    );
     if (shouldForwardRoleRunToMissionControl(payload.sourceTab)) {
       missionControl.onRoleRunCompleted(payload);
     }
@@ -129,7 +168,7 @@ export function useRoleRunCompletionBridge(params: Params) {
         studioRoleId: payload.roleId,
         runId: payload.runId,
         runStatus: payload.runStatus,
-        artifactPaths: Array.isArray(payload.artifactPaths) ? payload.artifactPaths : [],
+        artifactPaths: filteredArtifactPaths,
       })
         .then((updated) => {
           if (updated) {
@@ -145,7 +184,7 @@ export function useRoleRunCompletionBridge(params: Params) {
         studioRoleId: payload.roleId,
         runId: payload.runId,
         runStatus: payload.runStatus,
-        artifactPaths: Array.isArray(payload.artifactPaths) ? payload.artifactPaths : [],
+        artifactPaths: filteredArtifactPaths,
         summary: payload.summary ?? payload.envelope?.record?.summary ?? null,
         internal: Boolean(payload.internal),
         promptMode: payload.promptMode ?? null,

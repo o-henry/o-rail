@@ -32,6 +32,7 @@ type InvokeFn = <T>(command: string, args?: Record<string, unknown>) => Promise<
 type TasksPageProps = {
   cwd: string;
   hasTauriRuntime: boolean;
+  isActive?: boolean;
   loginCompleted: boolean;
   codexAuthCheckPending: boolean;
   invokeFn: InvokeFn;

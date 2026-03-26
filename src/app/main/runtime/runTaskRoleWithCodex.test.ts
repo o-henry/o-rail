@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { runTaskRoleWithCodex } from "./runTaskRoleWithCodex";
+import { resolveTurnText, runTaskRoleWithCodex } from "./runTaskRoleWithCodex";
 import { clearTaskRoleLearningDataForTest, recordTaskRoleLearningOutcome } from "../../adaptation/taskRoleLearning";
 import { ENGINE_NOTIFICATION_DOM_EVENT } from "./codexTurnNotifications";
 
@@ -291,6 +291,23 @@ describe("runTaskRoleWithCodex", () => {
 
     expect(result.summary).toContain("item/completed 에 최종 답변이 실렸습니다");
     expect(invokeFn).not.toHaveBeenCalledWith("codex_thread_read", expect.anything());
+  });
+
+  it("ignores bare completion markers when extracting readable turn text", () => {
+    expect(resolveTurnText({
+      status: "completed",
+      method: "item/completed",
+      text: "item/completed",
+    })).toBe("");
+    expect(resolveTurnText({
+      items: [
+        {
+          type: "agentMessage",
+          phase: "final_answer",
+          content: [{ type: "output_text", text: "turn/completed" }],
+        },
+      ],
+    })).toBe("");
   });
 
   it("allows collaboration runs to override the artifact file name", async () => {

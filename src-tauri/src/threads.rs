@@ -503,6 +503,42 @@ fn looks_like_internal_prompt_dump(content: &str) -> bool {
     marker_hits >= 2
 }
 
+fn looks_like_completion_marker(content: &str) -> bool {
+    matches!(content.trim().to_lowercase().as_str(), "item/completed" | "turn/completed")
+}
+
+fn is_user_facing_task_artifact_path(path: &str) -> bool {
+    let normalized = path.trim();
+    if normalized.is_empty() {
+        return false;
+    }
+    let file_name = Path::new(normalized)
+        .file_name()
+        .and_then(|value| value.to_str())
+        .map(|value| value.to_ascii_lowercase())
+        .unwrap_or_default();
+    if file_name.is_empty() {
+        return false;
+    }
+    if matches!(
+        file_name.as_str(),
+        "prompt.md"
+            | "response.json"
+            | "response.unreadable.json"
+            | "response.unreadable.debug.json"
+            | "run.json"
+            | "orchestration_plan.json"
+            | "discussion_brief.md"
+            | "discussion_direct.md"
+            | "discussion_critique.md"
+            | "shared_web_perspective.md"
+            | "research_collection.json"
+    ) {
+        return false;
+    }
+    !file_name.starts_with("web_") || !file_name.ends_with("_response.md")
+}
+
 fn enabled_roles(task: &TaskRecordView) -> Vec<String> {
     task_presets::ordered_task_agent_ids(task.roles
         .iter()
@@ -547,7 +583,11 @@ fn resolve_artifact_preview(
     artifacts: &BTreeMap<String, String>,
     artifact_paths: &[String],
 ) -> (Option<String>, Option<String>) {
-    let Some(latest_artifact_path) = artifact_paths.iter().rev().find(|path| !path.trim().is_empty()) else {
+    let Some(latest_artifact_path) = artifact_paths
+        .iter()
+        .rev()
+        .find(|path| is_user_facing_task_artifact_path(path))
+    else {
         return (None, None);
     };
     let latest_artifact_path = latest_artifact_path.trim().to_string();
@@ -1881,12 +1921,20 @@ pub fn thread_record_role_result(
         .unwrap_or_default()
         .trim()
         .eq_ignore_ascii_case("ideation");
+    let summary_hidden_from_thread = summary
+        .as_deref()
+        .map(|value| looks_like_internal_prompt_dump(value) || looks_like_completion_marker(value))
+        .unwrap_or(false);
+    let sanitized_summary = summary
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .filter(|value| !looks_like_internal_prompt_dump(value))
+        .filter(|value| !looks_like_completion_marker(value))
+        .map(str::to_string);
     let suppress_internal_thread_message =
         (is_internal && matches!(normalized_prompt_mode.as_str(), "orchestrate" | "brief" | "critique"))
-            || summary
-                .as_deref()
-                .map(looks_like_internal_prompt_dump)
-                .unwrap_or(false);
+            || summary_hidden_from_thread;
 
     let Some(task_role) = task.record.roles.iter().find(|role| role.studio_role_id == normalized_studio_role_id) else {
         return Ok(false);
@@ -1900,7 +1948,7 @@ pub fn thread_record_role_result(
             } else {
                 "failed".to_string()
             };
-            agent.summary = Some(summary.clone().unwrap_or_else(|| {
+            agent.summary = Some(sanitized_summary.clone().unwrap_or_else(|| {
                 if artifact_paths.is_empty() {
                     format!("{} completed", task_role.label)
                 } else {
@@ -1914,14 +1962,14 @@ pub fn thread_record_role_result(
     let latest_artifact_path = artifact_paths
         .iter()
         .rev()
-        .find(|path| !path.trim().is_empty())
+        .find(|path| is_user_facing_task_artifact_path(path))
         .map(|path| path.trim().to_string());
     if !suppress_internal_thread_message {
         append_message_with_meta(
             &mut messages,
             &thread.thread_id,
             "assistant",
-            &summary.clone().unwrap_or_else(|| {
+            &sanitized_summary.clone().unwrap_or_else(|| {
                 format!(
                     "{} {}.",
                     task_role.label,
@@ -2650,6 +2698,69 @@ mod tests {
             .messages
             .iter()
             .all(|message| message.content.to_lowercase().contains("formatting re-enabled") == false));
+    }
+
+    #[test]
+    fn thread_record_role_result_hides_completion_markers_and_internal_artifacts() {
+        let workspace = temp_workspace("completion-marker-role-result");
+        let cwd = workspace.to_string_lossy().to_string();
+        let detail = thread_create(
+            cwd.clone(),
+            None,
+            "최종 답변을 작성해줘".to_string(),
+            None,
+            Some("full-squad".to_string()),
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        let artifact_dir = workspace.join(".rail").join("studio_runs").join("run-marker").join("artifacts");
+        fs::create_dir_all(&artifact_dir).unwrap();
+        let hidden_artifact = artifact_dir.join("run.json");
+        let visible_artifact = artifact_dir.join("final_answer.md");
+        fs::write(&hidden_artifact, "{\"status\":\"completed\"}").unwrap();
+        fs::write(&visible_artifact, "# Final\n\n정상 완료").unwrap();
+
+        let recorded = thread_record_role_result(
+            cwd.clone(),
+            detail.thread.thread_id.clone(),
+            "game_designer".to_string(),
+            "run-marker".to_string(),
+            "completed".to_string(),
+            vec![
+                hidden_artifact.to_string_lossy().to_string(),
+                visible_artifact.to_string_lossy().to_string(),
+            ],
+            Some("item/completed".to_string()),
+            Some(false),
+            Some("direct".to_string()),
+            None,
+        )
+        .unwrap();
+        assert!(recorded);
+
+        let loaded = thread_load(cwd.clone(), detail.thread.thread_id.clone()).unwrap();
+        assert!(loaded
+            .messages
+            .iter()
+            .all(|message| message.content.trim().to_lowercase() != "item/completed"));
+        assert!(loaded
+            .messages
+            .iter()
+            .all(|message| message.artifact_path.as_deref() != Some(hidden_artifact.to_string_lossy().as_ref())));
+
+        let agent_detail = thread_open_agent_detail(
+            cwd,
+            detail.thread.thread_id.clone(),
+            format!("{}:game_designer", detail.thread.thread_id),
+        )
+        .unwrap();
+        assert_eq!(
+            agent_detail.latest_artifact_path.as_deref(),
+            Some(visible_artifact.to_string_lossy().as_ref()),
+        );
     }
 
     #[test]

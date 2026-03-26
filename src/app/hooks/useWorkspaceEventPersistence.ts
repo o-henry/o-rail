@@ -32,6 +32,10 @@ type UseWorkspaceEventPersistenceParams = {
   invokeFn: InvokeFn;
 };
 
+function shouldMirrorWorkspaceEventToDiagnostics(entry: WorkspaceEventEntry): boolean {
+  return entry.level === "error";
+}
+
 export function useWorkspaceEventPersistence(params: UseWorkspaceEventPersistenceParams) {
   const workspaceEventPersistTimerRef = useRef<number | null>(null);
   const lastLoggedStatusRef = useRef("");
@@ -104,7 +108,7 @@ export function useWorkspaceEventPersistence(params: UseWorkspaceEventPersistenc
       }).catch(() => {
         // Ignore persistence failures to avoid blocking UI interactions.
       });
-    }, 450);
+    }, 1_200);
     return () => {
       if (workspaceEventPersistTimerRef.current != null) {
         window.clearTimeout(workspaceEventPersistTimerRef.current);
@@ -119,7 +123,8 @@ export function useWorkspaceEventPersistence(params: UseWorkspaceEventPersistenc
     }
     const unseenEntries = [...params.workspaceEvents]
       .reverse()
-      .filter((entry) => !persistedDiagnosticIdsRef.current.has(entry.id));
+      .filter((entry) => !persistedDiagnosticIdsRef.current.has(entry.id))
+      .filter(shouldMirrorWorkspaceEventToDiagnostics);
     if (unseenEntries.length === 0) {
       return;
     }

@@ -27,9 +27,9 @@
     "@tauri-apps/plugin-opener": "^2",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",
-    "playwright-core": "^1.61.1",
-    "react": "^19.2.7",
-    "react-dom": "^19.2.7",
+    "playwright-core": "^1.62.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1"
   },
